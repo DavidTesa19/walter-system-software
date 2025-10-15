@@ -415,7 +415,7 @@ const UsersGrid = () => {
       headerName: "Jméno",
       filter: true,
       editable: true,
-      flex: 2,
+      flex: 1.5,
       minWidth: 120
     },
     { 
@@ -423,7 +423,7 @@ const UsersGrid = () => {
       headerName: "Společnost",
       filter: true,
       editable: true,
-      flex: 2.5,
+      flex: 1.5,
       minWidth: 150
     },
     { 
@@ -431,7 +431,7 @@ const UsersGrid = () => {
       headerName: "Lokalita",
       filter: true,
       editable: true,
-      flex: 1.5,
+      flex: 1,
       minWidth: 100
     },
     { 
@@ -439,7 +439,23 @@ const UsersGrid = () => {
       headerName: "Kontakt",
       editable: true,
       filter: true,
-      flex: 1.5,
+      flex: 1,
+      minWidth: 120
+    }, 
+    {
+      field: "commission", 
+      headerName: "Odměna/Provize",
+      editable: true,
+      filter: true,
+      flex: 1.2,
+      minWidth: 120
+    },
+    {
+      field: "info", 
+      headerName: "Info o společnosti",
+      editable: true,
+      filter: true,
+      flex: 2.5,
       minWidth: 120
     },
   ];
@@ -547,6 +563,14 @@ const UsersGrid = () => {
       headerName: "Jméno",
       filter: true,
       editable: true,
+      flex: 1.5,
+      minWidth: 120
+    },
+    { 
+      field: "field", 
+      headerName: "Specializace/Obor",
+      editable: true,
+      filter: true,
       flex: 2,
       minWidth: 120
     },
@@ -555,7 +579,7 @@ const UsersGrid = () => {
       headerName: "Lokalita",
       filter: true,
       editable: true,
-      flex: 1.5,
+      flex: 1,
       minWidth: 100
     },
     { 
@@ -563,7 +587,7 @@ const UsersGrid = () => {
       headerName: "Kontakt",
       editable: true,
       filter: true,
-      flex: 1.5,
+      flex: 1,
       minWidth: 120
     },
     { 
@@ -571,7 +595,7 @@ const UsersGrid = () => {
       headerName: "Odměna",
       editable: true,
       filter: true,
-      flex: 1.5,
+      flex: 1,
       minWidth: 120
     },
   ];
