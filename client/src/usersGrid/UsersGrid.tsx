@@ -58,12 +58,14 @@ const UsersGrid = () => {
       pinned: 'left',
       sortable: false,
       filter: false,
-      resizable: false
+      resizable: false,
+      suppressSizeToFit: true
     },
     { 
       field: "id", 
       headerName: "ID",
-      width: 70,
+      flex: 0.5,
+      minWidth: 70,
       editable: false 
     },
     { 
@@ -71,27 +73,31 @@ const UsersGrid = () => {
       headerName: "Jméno",
       filter: true,
       editable: true,
-      width: 150
+      flex: 2,
+      minWidth: 120
     },
     { 
       field: "company", 
       headerName: "Společnost",
       filter: true,
       editable: true,
-      width: 200
+      flex: 2.5,
+      minWidth: 150
     },
     { 
       field: "location", 
       headerName: "Lokace",
       filter: true,
       editable: true,
-      width: 130,
+      flex: 1.5,
+      minWidth: 100
     },
     { 
       field: "mobile", 
       headerName: "Telefon",
       editable: true,
-      width: 150
+      flex: 1.5,
+      minWidth: 120
     },
   ]);
 
