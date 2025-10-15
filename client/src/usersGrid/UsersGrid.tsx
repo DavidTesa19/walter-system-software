@@ -18,31 +18,55 @@ const UsersGrid = () => {
   const [usersData, setUsersData] = useState<UserInterface[]>([]);
   const [employeesData, setEmployeesData] = useState<UserInterface[]>([]);
   const [isLoading, setIsLoading] = useState(false);
-  const gridRef = useRef<AgGridReact>(null);
+  const usersGridRef = useRef<AgGridReact>(null);
+  const employeesGridRef = useRef<AgGridReact>(null);
   
   const API_BASE = import.meta.env.VITE_API_URL || "http://localhost:3004";
-  
-  // Get current data based on active table
-  const currentData = activeTable === 'users' ? usersData : employeesData;
-  const setCurrentData = activeTable === 'users' ? setUsersData : setEmployeesData;
-  const currentEndpoint = activeTable === 'users' ? 'users' : 'employees';
 
-  // Delete button component
-  const DeleteButton = (props: any) => {
+  // Fetch users data
+  const fetchUsersData = useCallback(async () => {
+    setIsLoading(true);
+    try {
+      const response = await fetch(`${API_BASE}/users`);
+      const data = await response.json();
+      setUsersData(data);
+    } catch (error) {
+      console.error('Error fetching users:', error);
+    } finally {
+      setIsLoading(false);
+    }
+  }, [API_BASE]);
+
+  // Fetch employees data
+  const fetchEmployeesData = useCallback(async () => {
+    setIsLoading(true);
+    try {
+      const response = await fetch(`${API_BASE}/employees`);
+      const data = await response.json();
+      setEmployeesData(data);
+    } catch (error) {
+      console.error('Error fetching employees:', error);
+    } finally {
+      setIsLoading(false);
+    }
+  }, [API_BASE]);
+
+  // Users Delete button component
+  const UsersDeleteButton = (props: any) => {
     const handleDelete = async () => {
         try {
-          const response = await fetch(`${API_BASE}/${currentEndpoint}/${props.data.id}`, {
+          const response = await fetch(`${API_BASE}/users/${props.data.id}`, {
             method: 'DELETE',
           });
           
           if (response.ok) {
-            fetchCurrentData(); // Refresh the grid
+            fetchUsersData(); // Refresh the users grid
           } else {
-            alert(`Failed to delete ${activeTable.slice(0, -1)}`);
+            alert('Failed to delete user');
           }
         } catch (error) {
-          console.error(`Error deleting ${activeTable.slice(0, -1)}:`, error);
-          alert(`Error deleting ${activeTable.slice(0, -1)}`);
+          console.error('Error deleting user:', error);
+          alert('Error deleting user');
         }
     };
 
@@ -59,10 +83,43 @@ const UsersGrid = () => {
     );
   };
 
-  const [colDefs] = useState<ColDef<UserInterface>[]>([
+  // Employees Delete button component
+  const EmployeesDeleteButton = (props: any) => {
+    const handleDelete = async () => {
+        try {
+          const response = await fetch(`${API_BASE}/employees/${props.data.id}`, {
+            method: 'DELETE',
+          });
+          
+          if (response.ok) {
+            fetchEmployeesData(); // Refresh the employees grid
+          } else {
+            alert('Failed to delete employee');
+          }
+        } catch (error) {
+          console.error('Error deleting employee:', error);
+          alert('Error deleting employee');
+        }
+    };
+
+    return (
+      <button 
+        onClick={handleDelete}
+        className="delete-btn"
+        title="Delete employee"
+      >
+        <svg width="12" height="12" viewBox="0 0 12 12" fill="none" xmlns="http://www.w3.org/2000/svg">
+          <path d="M9 3L3 9M3 3L9 9" stroke="white" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
+        </svg>
+      </button>
+    );
+  };
+
+  // Users column definitions
+  const usersColDefs: ColDef<UserInterface>[] = [
     { 
       headerName: "", 
-      cellRenderer: DeleteButton,
+      cellRenderer: UsersDeleteButton,
       width: 80,
       pinned: 'left',
       sortable: false,
@@ -108,104 +165,169 @@ const UsersGrid = () => {
       flex: 1.5,
       minWidth: 120
     },
-  ]);
+  ];
 
-  const fetchCurrentData = useCallback(async () => {
-    setIsLoading(true);
-    try {
-      const response = await fetch(`${API_BASE}/${currentEndpoint}`);
-      const data = await response.json();
-      setCurrentData(data);
-    } catch (error) {
-      console.error(`Error fetching ${activeTable}:`, error);
-    } finally {
-      setIsLoading(false);
-    }
-  }, [API_BASE, currentEndpoint, activeTable, setCurrentData]);
-  
-  // Fetch data for both tables
-  const fetchAllData = useCallback(async () => {
-    setIsLoading(true);
-    try {
-      const [usersResponse, employeesResponse] = await Promise.all([
-        fetch(`${API_BASE}/users`),
-        fetch(`${API_BASE}/employees`)
-      ]);
-      
-      const users = await usersResponse.json();
-      const employees = await employeesResponse.json();
-      
-      setUsersData(users);
-      setEmployeesData(employees);
-    } catch (error) {
-      console.error('Error fetching data:', error);
-    } finally {
-      setIsLoading(false);
-    }
-  }, [API_BASE]);
+  // Employees column definitions
+  const employeesColDefs: ColDef<UserInterface>[] = [
+    { 
+      headerName: "", 
+      cellRenderer: EmployeesDeleteButton,
+      width: 80,
+      pinned: 'left',
+      sortable: false,
+      filter: false,
+      resizable: false,
+      suppressSizeToFit: true
+    },
+    { 
+      field: "id", 
+      headerName: "ID",
+      flex: 0.5,
+      minWidth: 70,
+      editable: false 
+    },
+    { 
+      field: "name", 
+      headerName: "Jméno",
+      filter: true,
+      editable: true,
+      flex: 2,
+      minWidth: 120
+    },
+    { 
+      field: "company", 
+      headerName: "Společnost",
+      filter: true,
+      editable: true,
+      flex: 2.5,
+      minWidth: 150
+    },
+    { 
+      field: "location", 
+      headerName: "Lokace",
+      filter: true,
+      editable: true,
+      flex: 1.5,
+      minWidth: 100
+    },
+    { 
+      field: "mobile", 
+      headerName: "Telefon",
+      editable: true,
+      flex: 1.5,
+      minWidth: 120
+    },
+  ];
 
+  // Initialize data on component mount
   useEffect(() => {
-    fetchAllData();
-  }, [fetchAllData]);
-  
-  // Fetch current table data when active table changes
-  useEffect(() => {
-    if (usersData.length === 0 && employeesData.length === 0) {
-      return; // Initial load will handle this
-    }
-    fetchCurrentData();
-  }, [activeTable, fetchCurrentData]);
+    fetchUsersData();
+    fetchEmployeesData();
+  }, [fetchUsersData, fetchEmployeesData]);
 
-  // Handle cell value changes (editing)
-  const onCellValueChanged = useCallback(async (params: any) => {
+  // Handle cell value changes for users
+  const onUsersCellValueChanged = useCallback(async (params: any) => {
     try {
-      const updatedItem = { ...params.data };
+      const updatedUser = { ...params.data };
       
-      const response = await fetch(`${API_BASE}/${currentEndpoint}/${updatedItem.id}`, {
+      const response = await fetch(`${API_BASE}/users/${updatedUser.id}`, {
         method: 'PUT',
         headers: {
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify(updatedItem),
+        body: JSON.stringify(updatedUser),
       });
 
       if (!response.ok) {
-        alert(`Failed to update ${activeTable.slice(0, -1)}`);
-        fetchCurrentData(); // Revert changes by refreshing
+        alert('Failed to update user');
+        fetchUsersData(); // Revert changes by refreshing
       }
     } catch (error) {
-      console.error(`Error updating ${activeTable.slice(0, -1)}:`, error);
-      alert(`Error updating ${activeTable.slice(0, -1)}`);
-      fetchCurrentData(); // Revert changes by refreshing
+      console.error('Error updating user:', error);
+      alert('Error updating user');
+      fetchUsersData(); // Revert changes by refreshing
     }
-  }, [API_BASE, currentEndpoint, activeTable, fetchCurrentData]);
+  }, [API_BASE, fetchUsersData]);
 
-  // Add new item to current table
-  const handleAddItem = async () => {
-    const newItem = {
-      name: activeTable === 'users' ? "Nový Uživatel" : "Nový Zaměstnanec",
+  // Handle cell value changes for employees
+  const onEmployeesCellValueChanged = useCallback(async (params: any) => {
+    try {
+      const updatedEmployee = { ...params.data };
+      
+      const response = await fetch(`${API_BASE}/employees/${updatedEmployee.id}`, {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(updatedEmployee),
+      });
+
+      if (!response.ok) {
+        alert('Failed to update employee');
+        fetchEmployeesData(); // Revert changes by refreshing
+      }
+    } catch (error) {
+      console.error('Error updating employee:', error);
+      alert('Error updating employee');
+      fetchEmployeesData(); // Revert changes by refreshing
+    }
+  }, [API_BASE, fetchEmployeesData]);
+
+  // Add new user
+  const handleAddUser = async () => {
+    const newUser = {
+      name: "Nový Uživatel",
       company: "Nová Společnost",
       location: "Nová Lokace",
       mobile: "000 000 000"
     };
 
     try {
-      const response = await fetch(`${API_BASE}/${currentEndpoint}`, {
+      const response = await fetch(`${API_BASE}/users`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify(newItem),
+        body: JSON.stringify(newUser),
       });
 
       if (response.ok) {
-        fetchCurrentData(); // Refresh the grid
+        fetchUsersData(); // Refresh the grid
       } else {
-        alert(`Failed to add ${activeTable.slice(0, -1)}`);
+        alert('Failed to add user');
       }
     } catch (error) {
-      console.error(`Error adding ${activeTable.slice(0, -1)}:`, error);
-      alert(`Error adding ${activeTable.slice(0, -1)}`);
+      console.error('Error adding user:', error);
+      alert('Error adding user');
+    }
+  };
+
+  // Add new employee
+  const handleAddEmployee = async () => {
+    const newEmployee = {
+      name: "Nový Zaměstnanec",
+      company: "Nová Společnost",
+      location: "Nová Lokace",
+      mobile: "000 000 000"
+    };
+
+    try {
+      const response = await fetch(`${API_BASE}/employees`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(newEmployee),
+      });
+
+      if (response.ok) {
+        fetchEmployeesData(); // Refresh the grid
+      } else {
+        alert('Failed to add employee');
+      }
+    } catch (error) {
+      console.error('Error adding employee:', error);
+      alert('Error adding employee');
     }
   };
 
@@ -228,7 +350,7 @@ const UsersGrid = () => {
           </button>
         </div>
         <button 
-          onClick={handleAddItem} 
+          onClick={activeTable === 'users' ? handleAddUser : handleAddEmployee} 
           className="add-user-btn"
           disabled={isLoading}
         >
@@ -238,23 +360,44 @@ const UsersGrid = () => {
       
       <div className="table-section">
         <h2 className="table-title">
-          {activeTable === 'users' ? '🏢 Partneři' : '👥 Klienti'}
+          {activeTable === 'users' ? '' : ''}
         </h2>
         
-        <div className="grid-wrapper ag-theme-quartz" style={{ height: 500, width: "100%" }}>
-          <AgGridReact
-            ref={gridRef}
-            rowData={currentData}
-            columnDefs={colDefs}
-            onCellValueChanged={onCellValueChanged}
-            defaultColDef={{
-              resizable: true,
-              sortable: true,
-            }}
-            suppressRowClickSelection={true}
-            loading={isLoading}
-          />
-        </div>
+        {/* Users Table */}
+        {activeTable === 'users' && (
+          <div className="grid-wrapper ag-theme-quartz" style={{ height: 500, width: "100%" }}>
+            <AgGridReact
+              ref={usersGridRef}
+              rowData={usersData}
+              columnDefs={usersColDefs}
+              onCellValueChanged={onUsersCellValueChanged}
+              defaultColDef={{
+                resizable: true,
+                sortable: true,
+              }}
+              suppressRowClickSelection={true}
+              loading={isLoading}
+            />
+          </div>
+        )}
+        
+        {/* Employees Table */}
+        {activeTable === 'employees' && (
+          <div className="grid-wrapper ag-theme-quartz" style={{ height: 500, width: "100%" }}>
+            <AgGridReact
+              ref={employeesGridRef}
+              rowData={employeesData}
+              columnDefs={employeesColDefs}
+              onCellValueChanged={onEmployeesCellValueChanged}
+              defaultColDef={{
+                resizable: true,
+                sortable: true,
+              }}
+              suppressRowClickSelection={true}
+              loading={isLoading}
+            />
+          </div>
+        )}
       </div>
       
       <div className="instructions">
