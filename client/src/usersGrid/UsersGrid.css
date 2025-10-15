@@ -1,0 +1,29 @@
+/* Styles for UsersGrid page */
+.page-container {
+  padding: 4rem 6rem;
+  background: transparent;
+  color: #222;
+  text-align: center;
+}
+
+.page-title {
+  font-family: 'Georgia', 'Times New Roman', serif;
+  font-weight: 700;
+  font-size: 2.25rem;
+  margin: 0 0 1.25rem 0;
+  color: #111;
+}
+
+.grid-wrapper {
+  background: #fff;
+  border-radius: 8px;
+  padding: 1rem 1rem 2rem 1rem;
+  box-shadow: 0 6px 18px rgba(14, 30, 37, 0.08);
+  margin: 0 auto;
+  max-width: 1200px;
+}
+
+/* Make the grid headers a bit darker for contrast */
+.ag-header-cell-label {
+  color: rgba(0,0,0,0.7);
+}
