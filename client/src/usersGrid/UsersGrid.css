@@ -10,6 +10,7 @@
   display: flex;
   justify-content: space-between;
   align-items: center;
+  text-align: center;
   margin-bottom: 1.25rem;
 }
 
@@ -99,9 +100,35 @@
   color: #6c757d;
 }
 
-/* Make the grid headers a bit darker for contrast */
+/* Make the grid headers a bit darker for contrast and center them */
 .ag-header-cell-label {
   color: rgba(0,0,0,0.7);
+  text-align: center;
+  justify-content: center;
+  display: flex;
+  width: 100%;
+}
+
+.ag-header-cell-text {
+  text-align: center;
+}
+
+.ag-header-cell {
+  text-align: center;
+}
+
+.ag-header-cell .ag-header-cell-label .ag-header-cell-text {
+  text-align: center;
+  width: 100%;
+}
+
+/* Additional header centering for AG Grid */
+.ag-theme-quartz .ag-header-cell-label {
+  justify-content: center !important;
+}
+
+.ag-theme-quartz .ag-header-cell-text {
+  text-align: center !important;
 }
 
 /* Style for editable cells */

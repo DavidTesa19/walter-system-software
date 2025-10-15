@@ -145,9 +145,9 @@ const UsersGrid = () => {
   // Add new user
   const handleAddUser = async () => {
     const newUser = {
-      name: "Uživatel",
-      company: "Společnost",
-      location: "Lokace",
+      name: " NovýUživatel",
+      company: "Nová Společnost",
+      location: "Nová Lokace",
       mobile: "000 000 000"
     };
 
