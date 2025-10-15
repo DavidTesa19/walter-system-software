@@ -1,10 +1,9 @@
-import "ag-grid-community/styles/ag-grid.css";
 import "ag-grid-community/styles/ag-theme-quartz.css";
 import "./UsersGrid.css";
 import { AgGridReact} from "ag-grid-react";
 import { useEffect, useState, useCallback, useRef } from "react";
 import type { UserInterface } from "./user.interface";
-import type { ColDef, GridApi, GridReadyEvent } from "ag-grid-community";
+import type { ColDef } from "ag-grid-community";
 import { ModuleRegistry, AllCommunityModule } from "ag-grid-community";
 
 // Register AG Grid modules
@@ -18,6 +17,30 @@ const UsersGrid = () => {
   const gridRef = useRef<AgGridReact>(null);
   
   const API_BASE = import.meta.env.VITE_API_URL || "http://localhost:3004";
+
+  // Save column state to localStorage
+  const saveColumnState = useCallback(() => {
+    if (gridRef.current?.api) {
+      const columnState = gridRef.current.api.getColumnState();
+      localStorage.setItem('walter-grid-columns', JSON.stringify(columnState));
+    }
+  }, []);
+
+  // Restore column state from localStorage
+  const restoreColumnState = useCallback(() => {
+    const savedState = localStorage.getItem('walter-grid-columns');
+    if (savedState && gridRef.current?.api) {
+      try {
+        const columnState = JSON.parse(savedState);
+        gridRef.current.api.applyColumnState({
+          state: columnState,
+          applyOrder: true
+        });
+      } catch (e) {
+        console.warn('Failed to restore column state:', e);
+      }
+    }
+  }, []);
 
   // Delete button component
   const DeleteButton = (props: any) => {
@@ -46,14 +69,16 @@ const UsersGrid = () => {
         className="delete-btn"
         title="Delete user"
       >
-        🗑️
+        <svg width="12" height="12" viewBox="0 0 12 12" fill="none" xmlns="http://www.w3.org/2000/svg">
+          <path d="M9 3L3 9M3 3L9 9" stroke="white" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
+        </svg>
       </button>
     );
   };
 
   const [colDefs] = useState<ColDef<UserInterface>[]>([
     { 
-      headerName: "Delete", 
+      headerName: "", 
       cellRenderer: DeleteButton,
       width: 80,
       pinned: 'left',
@@ -69,36 +94,28 @@ const UsersGrid = () => {
     },
     { 
       field: "name", 
-      headerName: "Name",
+      headerName: "Jméno",
       filter: true,
       editable: true,
       width: 150
     },
     { 
       field: "company", 
-      headerName: "Company",
+      headerName: "Společnost",
       filter: true,
       editable: true,
       width: 200
     },
     { 
-      field: "country.name", 
-      headerName: "Country",
+      field: "location", 
+      headerName: "Lokace",
       filter: true,
       editable: true,
       width: 130,
-      valueSetter: (params) => {
-        // Handle nested object editing
-        params.data.country = { 
-          ...params.data.country, 
-          name: params.newValue 
-        };
-        return true;
-      }
     },
     { 
       field: "mobile", 
-      headerName: "Mobile",
+      headerName: "Telefon",
       editable: true,
       width: 150
     },
@@ -148,10 +165,10 @@ const UsersGrid = () => {
   // Add new user
   const handleAddUser = async () => {
     const newUser = {
-      name: "New User",
-      company: "New Company",
-      country: { name: "Country", flag: "xx" },
-      mobile: "(000) 000-0000"
+      name: "Uživatel",
+      company: "Společnost",
+      location: "Lokace",
+      mobile: "000 000 000"
     };
 
     try {
@@ -174,17 +191,32 @@ const UsersGrid = () => {
     }
   };
 
+  // Reset column layout
+  const resetColumnLayout = () => {
+    localStorage.removeItem('walter-grid-columns');
+    window.location.reload(); // Simple way to reset to default layout
+  };
+
   return (
     <div className="page-container">
       <div className="header-section">
         <h1 className="page-title">Walter System</h1>
-        <button 
-          onClick={handleAddUser} 
-          className="add-user-btn"
-          disabled={isLoading}
-        >
-          + Add User
-        </button>
+        <div className="button-group">
+          <button 
+            onClick={resetColumnLayout} 
+            className="reset-btn"
+            title="Reset column layout to default"
+          >
+            Reset Layout
+          </button>
+          <button 
+            onClick={handleAddUser} 
+            className="add-user-btn"
+            disabled={isLoading}
+          >
+            + Add User
+          </button>
+        </div>
       </div>
       
       <div className="grid-wrapper ag-theme-quartz" style={{ height: 500, width: "100%" }}>
@@ -193,6 +225,11 @@ const UsersGrid = () => {
           rowData={rowData}
           columnDefs={colDefs}
           onCellValueChanged={onCellValueChanged}
+          onGridReady={restoreColumnState}
+          onColumnResized={saveColumnState}
+          onColumnMoved={saveColumnState}
+          onColumnPinned={saveColumnState}
+          onColumnVisible={saveColumnState}
           defaultColDef={{
             resizable: true,
             sortable: true,

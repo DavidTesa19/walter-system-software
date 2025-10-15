@@ -2,9 +2,6 @@ export interface UserInterface {
   id: number;
   name: string;
   company: string;
-  country: {
-    name: string;
-    flag: string;
-  };
+  location: string;
   mobile: string;
 }
