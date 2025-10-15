@@ -5,21 +5,29 @@ import path from "path";
 
 const app = express();
 const PORT = process.env.PORT ? Number(process.env.PORT) : 3004;
-const DATA_DIR = process.env.DATA_DIR || path.resolve(process.cwd(), "data");
+// For free tier: use /tmp (temporary) or current directory
+const DATA_DIR = process.env.DATA_DIR || "/tmp";
 const DATA_FILE = path.join(DATA_DIR, "db.json");
 // Use the db.json co-located with this server by default
-const SEED_FILE = process.env.SEED_FILE || path.resolve(process.cwd(), "src", "server", "db.json");
+const SEED_FILE = process.env.SEED_FILE || path.resolve(process.cwd(), "db.json");
 
 // Ensure data directory exists
-fs.mkdirSync(DATA_DIR, { recursive: true });
+try {
+  fs.mkdirSync(DATA_DIR, { recursive: true });
+} catch (e) {
+  console.warn("Could not create data directory:", e.message);
+}
 
 // Seed data file on first run if missing
 if (!fs.existsSync(DATA_FILE)) {
   try {
     if (fs.existsSync(SEED_FILE)) {
       fs.copyFileSync(SEED_FILE, DATA_FILE);
+      console.log("Seeded data from:", SEED_FILE);
     } else {
-      fs.writeFileSync(DATA_FILE, JSON.stringify({ users: [] }, null, 2));
+      const defaultData = { users: [] };
+      fs.writeFileSync(DATA_FILE, JSON.stringify(defaultData, null, 2));
+      console.log("Created empty data file");
     }
   } catch (e) {
     console.error("Failed to initialize data file:", e);
