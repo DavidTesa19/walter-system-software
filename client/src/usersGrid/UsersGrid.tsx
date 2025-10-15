@@ -5,6 +5,7 @@ import { useEffect, useState, useCallback, useRef, forwardRef, useImperativeHand
 import type { UserInterface } from "./user.interface";
 import type { ColDef, ICellEditorParams } from "ag-grid-community";
 import { ModuleRegistry, AllCommunityModule } from "ag-grid-community";
+import { fieldOptions } from "./fieldOptions";
 
 // Register AG Grid modules
 ModuleRegistry.registerModules([AllCommunityModule]);
@@ -236,6 +237,280 @@ const DateCellRenderer = (params: any) => {
           strokeLinejoin="round"
         />
       </svg>
+    </div>
+  );
+};
+
+// Status cell renderer component
+const StatusCellRenderer = (params: any) => {
+  const statusOptions = [
+    { value: 'Not Started', label: 'Nezahájeno', color: '#6c757d', bgColor: '#f8f9fa' },
+    { value: 'In Process', label: 'V procesu', color: '#0d6efd', bgColor: '#e7f1ff' },
+    { value: 'Done', label: 'Dokončeno', color: '#198754', bgColor: '#d1eddb' }
+  ];
+
+  const getCurrentStatus = () => {
+    return statusOptions.find(option => option.value === params.value) || statusOptions[0];
+  };
+
+  const handleStatusClick = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    e.preventDefault();
+    
+    // Get the position of the clicked cell
+    const cellRect = (e.target as HTMLElement).closest('.ag-cell')?.getBoundingClientRect();
+    if (!cellRect) return;
+    
+    // Create dropdown container
+    const dropdown = document.createElement('div');
+    dropdown.style.position = 'fixed';
+    dropdown.style.top = `${cellRect.bottom + 2}px`;
+    dropdown.style.left = `${cellRect.left}px`;
+    dropdown.style.width = `${cellRect.width}px`;
+    dropdown.style.zIndex = '10000';
+    dropdown.style.backgroundColor = 'white';
+    dropdown.style.border = '1px solid #ccc';
+    dropdown.style.borderRadius = '4px';
+    dropdown.style.boxShadow = '0 2px 8px rgba(0, 0, 0, 0.15)';
+    dropdown.style.maxHeight = '150px';
+    dropdown.style.overflowY = 'auto';
+    
+    // Create options
+    statusOptions.forEach(option => {
+      const optionDiv = document.createElement('div');
+      optionDiv.style.padding = '8px 12px';
+      optionDiv.style.cursor = 'pointer';
+      optionDiv.style.backgroundColor = option.bgColor;
+      optionDiv.style.color = option.color;
+      optionDiv.style.fontWeight = '500';
+      optionDiv.style.borderBottom = '1px solid #eee';
+      optionDiv.textContent = option.label;
+      
+      // Hover effect
+      optionDiv.addEventListener('mouseenter', () => {
+        optionDiv.style.opacity = '0.8';
+      });
+      
+      optionDiv.addEventListener('mouseleave', () => {
+        optionDiv.style.opacity = '1';
+      });
+      
+      // Click handler
+      optionDiv.addEventListener('click', () => {
+        params.setValue(option.value);
+        cleanup();
+      });
+      
+      dropdown.appendChild(optionDiv);
+    });
+    
+    // Add to DOM
+    document.body.appendChild(dropdown);
+    
+    // Handle clicking outside to close
+    const handleClickOutside = (event: MouseEvent) => {
+      if (!dropdown.contains(event.target as Node)) {
+        cleanup();
+      }
+    };
+    
+    // Handle escape key
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') {
+        cleanup();
+      }
+    };
+    
+    const cleanup = () => {
+      if (document.body.contains(dropdown)) {
+        document.removeEventListener('click', handleClickOutside);
+        document.removeEventListener('keydown', handleKeyDown);
+        document.body.removeChild(dropdown);
+      }
+    };
+    
+    // Add event listeners after a short delay to prevent immediate closure
+    setTimeout(() => {
+      document.addEventListener('click', handleClickOutside);
+      document.addEventListener('keydown', handleKeyDown);
+    }, 100);
+  };
+
+  const currentStatus = getCurrentStatus();
+
+  return (
+    <div
+      onClick={handleStatusClick}
+      style={{
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        width: '100%',
+        height: '100%',
+        cursor: 'pointer',
+        backgroundColor: currentStatus.bgColor,
+        color: currentStatus.color,
+        fontWeight: '500',
+        padding: '4px 8px',
+        borderRadius: '4px',
+        border: '1px solid transparent',
+        transition: 'all 0.2s ease'
+      }}
+      onMouseEnter={(e) => {
+        e.currentTarget.style.opacity = '0.8';
+        e.currentTarget.style.border = '1px solid #ccc';
+      }}
+      onMouseLeave={(e) => {
+        e.currentTarget.style.opacity = '1';
+        e.currentTarget.style.border = '1px solid transparent';
+      }}
+    >
+      {currentStatus.label}
+    </div>
+  );
+};
+
+// Field cell renderer component
+const FieldCellRenderer = (params: any) => {
+  const getCurrentField = () => {
+    return fieldOptions.find(option => option.value === params.value) || 
+           { value: params.value || '', label: params.value || 'Select Field' };
+  };
+
+  const handleFieldClick = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    e.preventDefault();
+    
+    // Get the position of the clicked cell
+    const cellRect = (e.target as HTMLElement).closest('.ag-cell')?.getBoundingClientRect();
+    if (!cellRect) return;
+    
+    // Create dropdown container
+    const dropdown = document.createElement('div');
+    dropdown.style.position = 'fixed';
+    dropdown.style.top = `${cellRect.bottom + 2}px`;
+    dropdown.style.left = `${cellRect.left}px`;
+    dropdown.style.width = `${Math.max(cellRect.width, 200)}px`;
+    dropdown.style.zIndex = '10000';
+    dropdown.style.backgroundColor = 'white';
+    dropdown.style.border = '1px solid #ccc';
+    dropdown.style.borderRadius = '4px';
+    dropdown.style.boxShadow = '0 2px 8px rgba(0, 0, 0, 0.15)';
+    dropdown.style.maxHeight = '300px';
+    dropdown.style.overflowY = 'auto';
+    
+    // Create options with letter headers
+    let currentLetter = '';
+    fieldOptions.forEach(option => {
+      const firstLetter = option.label.charAt(0).toUpperCase();
+      
+      // Add letter header if we're starting a new letter section
+      if (firstLetter !== currentLetter) {
+        currentLetter = firstLetter;
+        
+        const headerDiv = document.createElement('div');
+        headerDiv.style.padding = '8px 12px';
+        headerDiv.style.backgroundColor = '#e9ecef';
+        headerDiv.style.color = '#495057';
+        headerDiv.style.fontWeight = 'bold';
+        headerDiv.style.fontSize = '14px';
+        headerDiv.style.borderBottom = '2px solid #dee2e6';
+        headerDiv.style.position = 'sticky';
+        headerDiv.style.top = '0';
+        headerDiv.style.zIndex = '1';
+        headerDiv.textContent = currentLetter;
+        headerDiv.style.cursor = 'default';
+        
+        dropdown.appendChild(headerDiv);
+      }
+      
+      const optionDiv = document.createElement('div');
+      optionDiv.style.padding = '8px 12px';
+      optionDiv.style.cursor = 'pointer';
+      optionDiv.style.backgroundColor = 'white';
+      optionDiv.style.color = '#333';
+      optionDiv.style.borderBottom = '1px solid #eee';
+      optionDiv.textContent = option.label;
+      
+      // Hover effect
+      optionDiv.addEventListener('mouseenter', () => {
+        optionDiv.style.backgroundColor = '#f8f9fa';
+      });
+      
+      optionDiv.addEventListener('mouseleave', () => {
+        optionDiv.style.backgroundColor = 'white';
+      });
+      
+      // Click handler
+      optionDiv.addEventListener('click', () => {
+        params.setValue(option.value);
+        cleanup();
+      });
+      
+      dropdown.appendChild(optionDiv);
+    });
+    
+    // Add to DOM
+    document.body.appendChild(dropdown);
+    
+    // Handle clicking outside to close
+    const handleClickOutside = (event: MouseEvent) => {
+      if (!dropdown.contains(event.target as Node)) {
+        cleanup();
+      }
+    };
+    
+    // Handle escape key
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') {
+        cleanup();
+      }
+    };
+    
+    const cleanup = () => {
+      if (document.body.contains(dropdown)) {
+        document.removeEventListener('click', handleClickOutside);
+        document.removeEventListener('keydown', handleKeyDown);
+        document.body.removeChild(dropdown);
+      }
+    };
+    
+    // Add event listeners after a short delay to prevent immediate closure
+    setTimeout(() => {
+      document.addEventListener('click', handleClickOutside);
+      document.addEventListener('keydown', handleKeyDown);
+    }, 100);
+  };
+
+  const currentField = getCurrentField();
+
+  return (
+    <div
+      onClick={handleFieldClick}
+      style={{
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        width: '100%',
+        height: '100%',
+        cursor: 'pointer',
+        backgroundColor: 'white',
+        color: '#333',
+        padding: '4px 8px',
+        borderRadius: '4px',
+        border: '1px solid transparent',
+        transition: 'all 0.2s ease'
+      }}
+      onMouseEnter={(e) => {
+        e.currentTarget.style.backgroundColor = '#f8f9fa';
+        e.currentTarget.style.border = '1px solid #ccc';
+      }}
+      onMouseLeave={(e) => {
+        e.currentTarget.style.backgroundColor = 'white';
+        e.currentTarget.style.border = '1px solid transparent';
+      }}
+    >
+      {currentField.label}
     </div>
   );
 };
@@ -506,10 +781,11 @@ const UsersGrid = () => {
     { 
       field: "field", 
       headerName: "Obor",
-      editable: true,
+      editable: false,
       filter: true,
       flex: 1,
-      minWidth: 120
+      minWidth: 120,
+      cellRenderer: FieldCellRenderer
     },
     { 
       field: "info", 
@@ -532,10 +808,11 @@ const UsersGrid = () => {
     { 
       field: "status", 
       headerName: "Stav",
-      editable: true,
+      editable: false,
       filter: true,
       flex: 1,
-      minWidth: 120
+      minWidth: 120,
+      cellRenderer: StatusCellRenderer
     },
   ];
 
@@ -569,10 +846,11 @@ const UsersGrid = () => {
     { 
       field: "field", 
       headerName: "Specializace/Obor",
-      editable: true,
+      editable: false,
       filter: true,
       flex: 2,
-      minWidth: 120
+      minWidth: 120,
+      cellRenderer: FieldCellRenderer
     },
     { 
       field: "location", 
