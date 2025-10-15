@@ -28,5 +28,28 @@
       "location": "Praha",
       "mobile": "(423) 564-7972"
     }
+  ],
+  "employees": [
+    {
+      "id": 1,
+      "name": "John Smith",
+      "company": "Tech Solutions Ltd",
+      "location": "Brno",
+      "mobile": "(420) 123-456"
+    },
+    {
+      "id": 2,
+      "name": "Anna Novakova",
+      "company": "Digital Agency",
+      "location": "Ostrava",
+      "mobile": "(420) 654-321"
+    },
+    {
+      "id": 3,
+      "name": "Pavel Dvorak",
+      "company": "Software House",
+      "location": "Plzen",
+      "mobile": "(420) 789-012"
+    }
   ]
 }

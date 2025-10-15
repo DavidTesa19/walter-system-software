@@ -50,10 +50,11 @@ function readDb() {
     const raw = fs.readFileSync(DATA_FILE, "utf8");
     const obj = JSON.parse(raw || "{}");
     if (!obj.users) obj.users = [];
+    if (!obj.employees) obj.employees = [];
     return obj;
   } catch (e) {
     console.error("Error reading DB:", e);
-    return { users: [] };
+    return { users: [], employees: [] };
   }
 }
 
@@ -115,6 +116,55 @@ app.delete("/users/:id", (req, res) => {
   const before = db.users.length;
   db.users = db.users.filter((u) => u.id !== id);
   if (db.users.length === before) return res.status(404).json({ error: "Not found" });
+  if (!writeDb(db)) return res.status(500).json({ error: "Failed to persist" });
+  res.status(204).end();
+});
+
+// CRUD for employees
+app.get("/employees", (_req, res) => {
+  const db = readDb();
+  res.json(db.employees);
+});
+
+app.post("/employees", (req, res) => {
+  const db = readDb();
+  const employee = req.body || {};
+  // Simple id assignment (max + 1)
+  const maxId = db.employees.reduce((m, e) => (e.id > m ? e.id : m), 0);
+  const nextId = maxId + 1;
+  const newEmployee = { id: nextId, ...employee };
+  db.employees.push(newEmployee);
+  if (!writeDb(db)) return res.status(500).json({ error: "Failed to persist" });
+  res.status(201).json(newEmployee);
+});
+
+app.put("/employees/:id", (req, res) => {
+  const id = Number(req.params.id);
+  const db = readDb();
+  const idx = db.employees.findIndex((e) => e.id === id);
+  if (idx === -1) return res.status(404).json({ error: "Not found" });
+  const updated = { ...req.body, id };
+  db.employees[idx] = updated;
+  if (!writeDb(db)) return res.status(500).json({ error: "Failed to persist" });
+  res.json(updated);
+});
+
+app.patch("/employees/:id", (req, res) => {
+  const id = Number(req.params.id);
+  const db = readDb();
+  const idx = db.employees.findIndex((e) => e.id === id);
+  if (idx === -1) return res.status(404).json({ error: "Not found" });
+  db.employees[idx] = { ...db.employees[idx], ...req.body, id };
+  if (!writeDb(db)) return res.status(500).json({ error: "Failed to persist" });
+  res.json(db.employees[idx]);
+});
+
+app.delete("/employees/:id", (req, res) => {
+  const id = Number(req.params.id);
+  const db = readDb();
+  const before = db.employees.length;
+  db.employees = db.employees.filter((e) => e.id !== id);
+  if (db.employees.length === before) return res.status(404).json({ error: "Not found" });
   if (!writeDb(db)) return res.status(500).json({ error: "Failed to persist" });
   res.status(204).end();
 });

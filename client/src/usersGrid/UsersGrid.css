@@ -12,6 +12,54 @@
   align-items: center;
   text-align: center;
   margin-bottom: 1.25rem;
+  gap: 2rem;
+}
+
+/* Navigation tabs styles */
+.navigation-tabs {
+  display: flex;
+  gap: 0.5rem;
+  background: #f8f9fa;
+  padding: 0.25rem;
+  border-radius: 8px;
+  box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+}
+
+.nav-tab {
+  background: transparent;
+  border: none;
+  padding: 0.75rem 1.5rem;
+  border-radius: 6px;
+  cursor: pointer;
+  font-size: 0.95rem;
+  font-weight: 500;
+  color: #6c757d;
+  transition: all 0.2s;
+  white-space: nowrap;
+}
+
+.nav-tab:hover {
+  background: #e9ecef;
+  color: #495057;
+}
+
+.nav-tab.active {
+  background: #007bff;
+  color: white;
+  box-shadow: 0 2px 4px rgba(0,123,255,0.3);
+}
+
+/* Table section */
+.table-section {
+  margin-bottom: 2rem;
+}
+
+.table-title {
+  font-size: 1.5rem;
+  font-weight: 600;
+  margin-bottom: 1rem;
+  color: #333;
+  text-align: left;
 }
 
 .page-title {
