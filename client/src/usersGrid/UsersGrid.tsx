@@ -1,17 +1,246 @@
 import "ag-grid-community/styles/ag-theme-quartz.css";
 import "./UsersGrid.css";
 import { AgGridReact} from "ag-grid-react";
-import { useEffect, useState, useCallback, useRef } from "react";
+import { useEffect, useState, useCallback, useRef, forwardRef, useImperativeHandle } from "react";
 import type { UserInterface } from "./user.interface";
-import type { ColDef } from "ag-grid-community";
+import type { ColDef, ICellEditorParams } from "ag-grid-community";
 import { ModuleRegistry, AllCommunityModule } from "ag-grid-community";
 
 // Register AG Grid modules
 ModuleRegistry.registerModules([AllCommunityModule]);
 
+// Date picker cell editor component
+const DatePickerEditor = forwardRef((props: ICellEditorParams, ref) => {
+  const [value, setValue] = useState(props.value || '');
+  const inputRef = useRef<HTMLInputElement>(null);
 
+  useImperativeHandle(ref, () => {
+    return {
+      getValue() {
+        return value;
+      },
+      afterGuiAttached() {
+        if (inputRef.current) {
+          inputRef.current.focus();
+          inputRef.current.showPicker?.();
+        }
+      }
+    };
+  });
 
-type TableType = 'partners' | 'clients' | 'tipers';
+  const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    setValue(e.target.value);
+  };
+
+  // Convert existing date string to YYYY-MM-DD format for input
+  const formatDateForInput = (dateStr: string) => {
+    if (!dateStr) return '';
+    
+    // If already in YYYY-MM-DD format, return as is
+    if (/^\d{4}-\d{2}-\d{2}$/.test(dateStr)) {
+      return dateStr;
+    }
+    
+    // Try to parse other formats and convert to YYYY-MM-DD
+    const date = new Date(dateStr);
+    if (!isNaN(date.getTime())) {
+      return date.toISOString().split('T')[0];
+    }
+    
+    return '';
+  };
+
+  // Format the current value for display in the input
+  const inputValue = formatDateForInput(value);
+
+  return (
+    <input
+      ref={inputRef}
+      type="date"
+      value={inputValue}
+      onChange={handleChange}
+      style={{
+        width: '100%',
+        height: '100%',
+        border: 'none',
+        outline: 'none',
+        padding: '4px 8px',
+        fontSize: '14px'
+      }}
+    />
+  );
+});
+
+// Date cell renderer component
+const DateCellRenderer = (params: any) => {
+  const handleIconClick = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    e.preventDefault();
+    
+    // Get the position of the clicked icon
+    const iconRect = (e.target as HTMLElement).closest('svg')?.getBoundingClientRect();
+    if (!iconRect) return;
+    
+    // Create a date input element positioned next to the icon
+    const dateInput = document.createElement('input');
+    dateInput.type = 'date';
+    dateInput.style.position = 'fixed';
+    dateInput.style.top = `${iconRect.bottom + 5}px`;
+    dateInput.style.left = `${iconRect.left - 100}px`; // Offset to center it better
+    dateInput.style.zIndex = '10000';
+    dateInput.style.border = '2px solid #007acc';
+    dateInput.style.borderRadius = '4px';
+    dateInput.style.padding = '8px';
+    dateInput.style.backgroundColor = 'white';
+    dateInput.style.boxShadow = '0 4px 12px rgba(0, 0, 0, 0.15)';
+    dateInput.style.fontSize = '14px';
+    dateInput.style.outline = 'none';
+    
+    // Set current value if exists
+    if (params.value) {
+      const formatDateForInput = (dateStr: string) => {
+        if (!dateStr) return '';
+        if (/^\d{4}-\d{2}-\d{2}$/.test(dateStr)) {
+          return dateStr;
+        }
+        const date = new Date(dateStr);
+        if (!isNaN(date.getTime())) {
+          return date.toISOString().split('T')[0];
+        }
+        return '';
+      };
+      dateInput.value = formatDateForInput(params.value);
+    }
+    
+    // Add to DOM
+    document.body.appendChild(dateInput);
+    
+    // Focus and show picker
+    dateInput.focus();
+    
+    // Use setTimeout to ensure the input is ready
+    setTimeout(() => {
+      if (dateInput.showPicker) {
+        dateInput.showPicker();
+      }
+    }, 10);
+    
+    // Handle date selection
+    const handleChange = () => {
+      if (dateInput.value) {
+        // Update the cell value directly
+        params.setValue(dateInput.value);
+      }
+      cleanup();
+    };
+    
+    // Handle clicking outside to close
+    const handleClickOutside = (event: MouseEvent) => {
+      if (!dateInput.contains(event.target as Node)) {
+        cleanup();
+      }
+    };
+    
+    // Handle escape key
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') {
+        cleanup();
+      }
+    };
+    
+    const cleanup = () => {
+      if (document.body.contains(dateInput)) {
+        dateInput.removeEventListener('change', handleChange);
+        document.removeEventListener('click', handleClickOutside);
+        document.removeEventListener('keydown', handleKeyDown);
+        document.body.removeChild(dateInput);
+      }
+    };
+    
+    dateInput.addEventListener('change', handleChange);
+    
+    // Add event listeners after a short delay to prevent immediate closure
+    setTimeout(() => {
+      document.addEventListener('click', handleClickOutside);
+      document.addEventListener('keydown', handleKeyDown);
+    }, 100);
+  };
+
+  const formatDisplayDate = (dateStr: string) => {
+    if (!dateStr) return '';
+    
+    // If it's in YYYY-MM-DD format, convert to readable format
+    if (/^\d{4}-\d{2}-\d{2}$/.test(dateStr)) {
+      const date = new Date(dateStr + 'T00:00:00');
+      if (!isNaN(date.getTime())) {
+        return date.toLocaleDateString('cs-CZ');
+      }
+    }
+    
+    // Try to parse and format other date formats
+    const date = new Date(dateStr);
+    if (!isNaN(date.getTime())) {
+      return date.toLocaleDateString('cs-CZ');
+    }
+    
+    return dateStr;
+  };
+
+  return (
+    <div
+      style={{
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'space-between',
+        width: '100%',
+        height: '100%',
+        padding: '4px 8px'
+      }}
+    >
+      <span>{formatDisplayDate(params.value)}</span>
+      <svg
+        width="16"
+        height="16"
+        viewBox="0 0 24 24"
+        fill="none"
+        xmlns="http://www.w3.org/2000/svg"
+        style={{ 
+          marginLeft: '4px', 
+          opacity: 0.6, 
+          cursor: 'pointer',
+          padding: '2px',
+          borderRadius: '2px'
+        }}
+        onClick={handleIconClick}
+        onMouseEnter={(e) => {
+          e.currentTarget.style.opacity = '1';
+          e.currentTarget.style.backgroundColor = '#f0f0f0';
+        }}
+        onMouseLeave={(e) => {
+          e.currentTarget.style.opacity = '0.6';
+          e.currentTarget.style.backgroundColor = 'transparent';
+        }}
+      >
+        <path
+          d="M8 2V5M16 2V5M3.5 9.09H20.5M21 8.5V17C21 20 19.5 22 16 22H8C4.5 22 3 20 3 17V8.5C3 5.5 4.5 3.5 8 3.5H16C19.5 3.5 21 5.5 21 8.5Z"
+          stroke="currentColor"
+          strokeWidth="1.5"
+          strokeLinecap="round"
+          strokeLinejoin="round"
+        />
+        <path
+          d="M15.6947 13.7H15.7037M11.9955 13.7H12.0045M8.29431 13.7H8.30329M15.6947 17.3H15.7037M11.9955 17.3H12.0045M8.29431 17.3H8.30329"
+          stroke="currentColor"
+          strokeWidth="2"
+          strokeLinecap="round"
+          strokeLinejoin="round"
+        />
+      </svg>
+    </div>
+  );
+};
+
+type TableType = 'clients' | 'partners' | 'tipers';
 
 const UsersGrid = () => {
   const [activeTable, setActiveTable] = useState<TableType>('clients');
@@ -239,23 +468,15 @@ const UsersGrid = () => {
       headerName: "Jméno",
       filter: true,
       editable: true,
-      flex: 2,
-      minWidth: 120
-    },
-    { 
-      field: "company", 
-      headerName: "Společnost",
-      filter: true,
-      editable: true,
-      flex: 2.5,
-      minWidth: 150
+      flex: 1.25,
+      minWidth: 100
     },
     { 
       field: "location", 
       headerName: "Lokalita",
       filter: true,
       editable: true,
-      flex: 1.5,
+      flex: 1,
       minWidth: 100
     },
     { 
@@ -264,6 +485,40 @@ const UsersGrid = () => {
       editable: true,
       filter: true,
       flex: 1.5,
+      minWidth: 120
+    },
+    { 
+      field: "field", 
+      headerName: "Obor",
+      editable: true,
+      filter: true,
+      flex: 1,
+      minWidth: 120
+    },
+    { 
+      field: "info", 
+      headerName: "Popis/Požadavky",
+      editable: true,
+      filter: true,
+      flex: 2,
+      minWidth: 120
+    },
+    { 
+      field: "date", 
+      headerName: "Datum",
+      editable: true,
+      filter: true,
+      flex: 1.5,
+      minWidth: 120,
+      cellRenderer: DateCellRenderer,
+      cellEditor: DatePickerEditor
+    },
+    { 
+      field: "status", 
+      headerName: "Stav",
+      editable: true,
+      filter: true,
+      flex: 1,
       minWidth: 120
     },
   ];
@@ -296,14 +551,6 @@ const UsersGrid = () => {
       minWidth: 120
     },
     { 
-      field: "company", 
-      headerName: "Společnost",
-      filter: true,
-      editable: true,
-      flex: 2.5,
-      minWidth: 150
-    },
-    { 
       field: "location", 
       headerName: "Lokalita",
       filter: true,
@@ -314,6 +561,14 @@ const UsersGrid = () => {
     { 
       field: "mobile", 
       headerName: "Kontakt",
+      editable: true,
+      filter: true,
+      flex: 1.5,
+      minWidth: 120
+    },
+    { 
+      field: "commission", 
+      headerName: "Odměna",
       editable: true,
       filter: true,
       flex: 1.5,
@@ -461,7 +716,7 @@ const UsersGrid = () => {
   // Add new tiper
   const handleAddTiper = async () => {
     const newTiper = {
-      name: "Nový Tiper",
+      name: "Nový Tipař",
       company: "Nová Společnost",
       location: "Nová Lokalita",
       mobile: "000 000 000"
@@ -508,7 +763,7 @@ const UsersGrid = () => {
             onClick={() => setActiveTable('tipers')}
             className={`nav-tab ${activeTable === 'tipers' ? 'active' : ''}`}
           >
-            💡 Tipeři
+            💡 Tipaři
           </button>
         </div>
         <button 
@@ -523,7 +778,7 @@ const UsersGrid = () => {
           + Přidat {
             activeTable === 'clients' ? 'Klienta' : 
             activeTable === 'partners' ? 'Partnera' : 
-            'Tipera'
+            'Tipaře'
           }
         </button>
       </div>
@@ -573,24 +828,6 @@ const UsersGrid = () => {
           </div>
         )}
         
-        {/* Clients Table */}
-        {activeTable === 'clients' && (
-          <div className="grid-wrapper ag-theme-quartz" style={{ height: 500, width: "100%" }}>
-            <AgGridReact
-              ref={clientsGridRef}
-              rowData={clientsData}
-              columnDefs={clientsColDefs}
-              onCellValueChanged={onClientsCellValueChanged}
-              defaultColDef={{
-                resizable: true,
-                sortable: true,
-              }}
-              suppressRowClickSelection={true}
-              loading={isLoading}
-            />
-          </div>
-        )}
-        
         {/* Tipers Table */}
         {activeTable === 'tipers' && (
           <div className="grid-wrapper ag-theme-quartz" style={{ height: 500, width: "100%" }}>
@@ -613,11 +850,11 @@ const UsersGrid = () => {
       <div className="instructions">
         <p><strong>Instrukce:</strong></p>
         <ul>
-          <li>....</li>
-          <li>....</li>
-          <li>....</li>
-          <li>....</li>
-          <li>....</li>
+          <li>Použijte záložky výše pro přepínání mezi tabulkami Klientů, Partnerů a Tiperů</li>
+          <li>Klikněte na jakoukoliv buňku pro úpravu (kromě ID)</li>
+          <li>Stiskněte Enter nebo klikněte mimo pro uložení změn</li>
+          <li>Klikněte na ikonu koše pro smazání položky</li>
+          <li>Klikněte "Přidat Klienta/Partnera/Tipera" pro vytvoření nového záznamu</li>
         </ul>
       </div>
     </div>

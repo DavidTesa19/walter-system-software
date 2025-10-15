@@ -1,6 +1,6 @@
 /* Styles for UsersGrid page */
 .page-container {
-  padding: 4rem 6rem;
+  padding: 4rem 4rem;
   background: transparent;
   color: #222;
   text-align: center;
@@ -94,10 +94,11 @@
 .grid-wrapper {
   background: #fff;
   border-radius: 8px;
-  padding: 1rem 1rem 2rem 1rem;
+  padding: 1rem 1rem 1rem 1rem;
   box-shadow: 0 6px 18px rgba(14, 30, 37, 0.08);
   margin: 0 auto;
-  max-width: 1200px;
+  width: 100%;
+  box-sizing: border-box;
 }
 
 .delete-btn {
