@@ -1,5 +1,5 @@
 {
-  "users": [
+  "partners": [
     {
       "id": 1,
       "name": "Mark Ross",
@@ -29,7 +29,7 @@
       "mobile": "(423) 564-7972"
     }
   ],
-  "employees": [
+  "clients": [
     {
       "id": 1,
       "name": "John Smith",
@@ -50,6 +50,29 @@
       "company": "Software House",
       "location": "Plzen",
       "mobile": "(420) 789-012"
+    }
+  ],
+  "tipers": [
+    {
+      "id": 1,
+      "name": "Filip Novák",
+      "company": "Tips & Analytics",
+      "location": "Brno",
+      "mobile": "(420) 111-222"
+    },
+    {
+      "id": 2,
+      "name": "Marie Svobodová",
+      "company": "Betting Solutions",
+      "location": "Praha",
+      "mobile": "(420) 333-444"
+    },
+    {
+      "id": 3,
+      "name": "Tomáš Krása",
+      "company": "Pro Tipers",
+      "location": "Ostrava",
+      "mobile": "(420) 555-666"
     }
   ]
 }

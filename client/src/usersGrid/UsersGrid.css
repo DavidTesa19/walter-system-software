@@ -163,20 +163,44 @@
 
 .ag-header-cell {
   text-align: center;
+  background-color: #006aff !important; /* Dark blue-gray background */
+  color: #ffffff !important; /* White text */
+  border-bottom: 2px solid #34495e !important; /* Slightly lighter border */
 }
 
 .ag-header-cell .ag-header-cell-label .ag-header-cell-text {
   text-align: center;
   width: 100%;
+  color: #ffffff !important; /* Ensure text is white */
+  font-weight: 600; /* Make text slightly bolder */
 }
 
 /* Additional header centering for AG Grid */
 .ag-theme-quartz .ag-header-cell-label {
   justify-content: center !important;
+  color: #ffffff !important; /* White text for labels */
 }
 
 .ag-theme-quartz .ag-header-cell-text {
   text-align: center !important;
+  color: #ffffff !important; /* White text for header text */
+}
+
+/* Override AG Grid's default header styles */
+.ag-theme-quartz .ag-header-cell {
+  background-color: #005fbf !important;
+  border-right: 1px solid #34495e !important;
+}
+
+/* Header row background */
+.ag-theme-quartz .ag-header-row {
+  background-color: #2c3e50 !important;
+}
+
+/* Remove default header background */
+.ag-theme-quartz .ag-header {
+  background-color: #2c3e50 !important;
+  border-bottom: 2px solid #34495e !important;
 }
 
 /* Style for editable cells */

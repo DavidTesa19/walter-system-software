@@ -49,12 +49,16 @@ function readDb() {
   try {
     const raw = fs.readFileSync(DATA_FILE, "utf8");
     const obj = JSON.parse(raw || "{}");
+    if (!obj.partners) obj.partners = [];
+    if (!obj.clients) obj.clients = [];
+    if (!obj.tipers) obj.tipers = [];
+    // Keep backwards compatibility
     if (!obj.users) obj.users = [];
     if (!obj.employees) obj.employees = [];
     return obj;
   } catch (e) {
     console.error("Error reading DB:", e);
-    return { users: [], employees: [] };
+    return { partners: [], clients: [], tipers: [], users: [], employees: [] };
   }
 }
 
@@ -120,6 +124,54 @@ app.delete("/users/:id", (req, res) => {
   res.status(204).end();
 });
 
+// CRUD for partners
+app.get("/partners", (_req, res) => {
+  const db = readDb();
+  res.json(db.partners);
+});
+
+app.post("/partners", (req, res) => {
+  const db = readDb();
+  const partner = req.body || {};
+  const maxId = db.partners.reduce((m, p) => (p.id > m ? p.id : m), 0);
+  const nextId = maxId + 1;
+  const newPartner = { id: nextId, ...partner };
+  db.partners.push(newPartner);
+  if (!writeDb(db)) return res.status(500).json({ error: "Failed to persist" });
+  res.status(201).json(newPartner);
+});
+
+app.put("/partners/:id", (req, res) => {
+  const id = Number(req.params.id);
+  const db = readDb();
+  const idx = db.partners.findIndex((p) => p.id === id);
+  if (idx === -1) return res.status(404).json({ error: "Not found" });
+  const updated = { ...req.body, id };
+  db.partners[idx] = updated;
+  if (!writeDb(db)) return res.status(500).json({ error: "Failed to persist" });
+  res.json(updated);
+});
+
+app.patch("/partners/:id", (req, res) => {
+  const id = Number(req.params.id);
+  const db = readDb();
+  const idx = db.partners.findIndex((p) => p.id === id);
+  if (idx === -1) return res.status(404).json({ error: "Not found" });
+  db.partners[idx] = { ...db.partners[idx], ...req.body, id };
+  if (!writeDb(db)) return res.status(500).json({ error: "Failed to persist" });
+  res.json(db.partners[idx]);
+});
+
+app.delete("/partners/:id", (req, res) => {
+  const id = Number(req.params.id);
+  const db = readDb();
+  const before = db.partners.length;
+  db.partners = db.partners.filter((p) => p.id !== id);
+  if (db.partners.length === before) return res.status(404).json({ error: "Not found" });
+  if (!writeDb(db)) return res.status(500).json({ error: "Failed to persist" });
+  res.status(204).end();
+});
+
 // CRUD for employees
 app.get("/employees", (_req, res) => {
   const db = readDb();
@@ -165,6 +217,102 @@ app.delete("/employees/:id", (req, res) => {
   const before = db.employees.length;
   db.employees = db.employees.filter((e) => e.id !== id);
   if (db.employees.length === before) return res.status(404).json({ error: "Not found" });
+  if (!writeDb(db)) return res.status(500).json({ error: "Failed to persist" });
+  res.status(204).end();
+});
+
+// CRUD for clients
+app.get("/clients", (_req, res) => {
+  const db = readDb();
+  res.json(db.clients);
+});
+
+app.post("/clients", (req, res) => {
+  const db = readDb();
+  const client = req.body || {};
+  const maxId = db.clients.reduce((m, c) => (c.id > m ? c.id : m), 0);
+  const nextId = maxId + 1;
+  const newClient = { id: nextId, ...client };
+  db.clients.push(newClient);
+  if (!writeDb(db)) return res.status(500).json({ error: "Failed to persist" });
+  res.status(201).json(newClient);
+});
+
+app.put("/clients/:id", (req, res) => {
+  const id = Number(req.params.id);
+  const db = readDb();
+  const idx = db.clients.findIndex((c) => c.id === id);
+  if (idx === -1) return res.status(404).json({ error: "Not found" });
+  const updated = { ...req.body, id };
+  db.clients[idx] = updated;
+  if (!writeDb(db)) return res.status(500).json({ error: "Failed to persist" });
+  res.json(updated);
+});
+
+app.patch("/clients/:id", (req, res) => {
+  const id = Number(req.params.id);
+  const db = readDb();
+  const idx = db.clients.findIndex((c) => c.id === id);
+  if (idx === -1) return res.status(404).json({ error: "Not found" });
+  db.clients[idx] = { ...db.clients[idx], ...req.body, id };
+  if (!writeDb(db)) return res.status(500).json({ error: "Failed to persist" });
+  res.json(db.clients[idx]);
+});
+
+app.delete("/clients/:id", (req, res) => {
+  const id = Number(req.params.id);
+  const db = readDb();
+  const before = db.clients.length;
+  db.clients = db.clients.filter((c) => c.id !== id);
+  if (db.clients.length === before) return res.status(404).json({ error: "Not found" });
+  if (!writeDb(db)) return res.status(500).json({ error: "Failed to persist" });
+  res.status(204).end();
+});
+
+// CRUD for tipers
+app.get("/tipers", (_req, res) => {
+  const db = readDb();
+  res.json(db.tipers);
+});
+
+app.post("/tipers", (req, res) => {
+  const db = readDb();
+  const tiper = req.body || {};
+  const maxId = db.tipers.reduce((m, t) => (t.id > m ? t.id : m), 0);
+  const nextId = maxId + 1;
+  const newTiper = { id: nextId, ...tiper };
+  db.tipers.push(newTiper);
+  if (!writeDb(db)) return res.status(500).json({ error: "Failed to persist" });
+  res.status(201).json(newTiper);
+});
+
+app.put("/tipers/:id", (req, res) => {
+  const id = Number(req.params.id);
+  const db = readDb();
+  const idx = db.tipers.findIndex((t) => t.id === id);
+  if (idx === -1) return res.status(404).json({ error: "Not found" });
+  const updated = { ...req.body, id };
+  db.tipers[idx] = updated;
+  if (!writeDb(db)) return res.status(500).json({ error: "Failed to persist" });
+  res.json(updated);
+});
+
+app.patch("/tipers/:id", (req, res) => {
+  const id = Number(req.params.id);
+  const db = readDb();
+  const idx = db.tipers.findIndex((t) => t.id === id);
+  if (idx === -1) return res.status(404).json({ error: "Not found" });
+  db.tipers[idx] = { ...db.tipers[idx], ...req.body, id };
+  if (!writeDb(db)) return res.status(500).json({ error: "Failed to persist" });
+  res.json(db.tipers[idx]);
+});
+
+app.delete("/tipers/:id", (req, res) => {
+  const id = Number(req.params.id);
+  const db = readDb();
+  const before = db.tipers.length;
+  db.tipers = db.tipers.filter((t) => t.id !== id);
+  if (db.tipers.length === before) return res.status(404).json({ error: "Not found" });
   if (!writeDb(db)) return res.status(500).json({ error: "Failed to persist" });
   res.status(204).end();
 });
