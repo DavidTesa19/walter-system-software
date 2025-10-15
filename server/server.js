@@ -5,8 +5,8 @@ import path from "path";
 
 const app = express();
 const PORT = process.env.PORT ? Number(process.env.PORT) : 3004;
-// For free tier: use /tmp (temporary) or current directory
-const DATA_DIR = process.env.DATA_DIR || "/tmp";
+// For free tier: use temp directory or current directory
+const DATA_DIR = process.env.DATA_DIR || path.resolve(process.cwd(), "data");
 const DATA_FILE = path.join(DATA_DIR, "db.json");
 // Use the db.json co-located with this server by default
 const SEED_FILE = process.env.SEED_FILE || path.resolve(process.cwd(), "db.json");

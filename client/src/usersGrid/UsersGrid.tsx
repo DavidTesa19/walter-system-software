@@ -18,34 +18,9 @@ const UsersGrid = () => {
   
   const API_BASE = import.meta.env.VITE_API_URL || "http://localhost:3004";
 
-  // Save column state to localStorage
-  const saveColumnState = useCallback(() => {
-    if (gridRef.current?.api) {
-      const columnState = gridRef.current.api.getColumnState();
-      localStorage.setItem('walter-grid-columns', JSON.stringify(columnState));
-    }
-  }, []);
-
-  // Restore column state from localStorage
-  const restoreColumnState = useCallback(() => {
-    const savedState = localStorage.getItem('walter-grid-columns');
-    if (savedState && gridRef.current?.api) {
-      try {
-        const columnState = JSON.parse(savedState);
-        gridRef.current.api.applyColumnState({
-          state: columnState,
-          applyOrder: true
-        });
-      } catch (e) {
-        console.warn('Failed to restore column state:', e);
-      }
-    }
-  }, []);
-
   // Delete button component
   const DeleteButton = (props: any) => {
     const handleDelete = async () => {
-      if (window.confirm('Are you sure you want to delete this user?')) {
         try {
           const response = await fetch(`${API_BASE}/users/${props.data.id}`, {
             method: 'DELETE',
@@ -60,7 +35,6 @@ const UsersGrid = () => {
           console.error('Error deleting user:', error);
           alert('Error deleting user');
         }
-      }
     };
 
     return (
@@ -191,32 +165,17 @@ const UsersGrid = () => {
     }
   };
 
-  // Reset column layout
-  const resetColumnLayout = () => {
-    localStorage.removeItem('walter-grid-columns');
-    window.location.reload(); // Simple way to reset to default layout
-  };
-
   return (
     <div className="page-container">
       <div className="header-section">
         <h1 className="page-title">Walter System</h1>
-        <div className="button-group">
-          <button 
-            onClick={resetColumnLayout} 
-            className="reset-btn"
-            title="Reset column layout to default"
-          >
-            Reset Layout
-          </button>
-          <button 
-            onClick={handleAddUser} 
-            className="add-user-btn"
-            disabled={isLoading}
-          >
-            + Add User
-          </button>
-        </div>
+        <button 
+          onClick={handleAddUser} 
+          className="add-user-btn"
+          disabled={isLoading}
+        >
+          + Add User
+        </button>
       </div>
       
       <div className="grid-wrapper ag-theme-quartz" style={{ height: 500, width: "100%" }}>
@@ -225,11 +184,6 @@ const UsersGrid = () => {
           rowData={rowData}
           columnDefs={colDefs}
           onCellValueChanged={onCellValueChanged}
-          onGridReady={restoreColumnState}
-          onColumnResized={saveColumnState}
-          onColumnMoved={saveColumnState}
-          onColumnPinned={saveColumnState}
-          onColumnVisible={saveColumnState}
           defaultColDef={{
             resizable: true,
             sortable: true,
