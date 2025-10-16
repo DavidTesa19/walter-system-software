@@ -772,6 +772,15 @@ const UsersGrid = () => {
       minWidth: 100
     },
     { 
+      field: "field", 
+      headerName: "Obor/Specializace",
+      editable: false,
+      filter: true,
+      flex: 1,
+      minWidth: 120,
+      cellRenderer: FieldCellRenderer
+    },
+    { 
       field: "location", 
       headerName: "Lokalita",
       filter: true,
@@ -786,15 +795,6 @@ const UsersGrid = () => {
       filter: true,
       flex: 1.5,
       minWidth: 120
-    },
-    { 
-      field: "field", 
-      headerName: "Obor",
-      editable: false,
-      filter: true,
-      flex: 1,
-      minWidth: 120,
-      cellRenderer: FieldCellRenderer
     },
     { 
       field: "info", 
@@ -887,7 +887,7 @@ const UsersGrid = () => {
     },
     { 
       field: "commission", 
-      headerName: "Odměna",
+      headerName: "Odměna/Provize",
       editable: true,
       filter: true,
       flex: 1,
