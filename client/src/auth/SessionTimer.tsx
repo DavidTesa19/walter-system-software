@@ -3,7 +3,9 @@ import { useAuth } from './AuthContext';
 import './SessionTimer.css';
 
 const SessionTimer: React.FC = () => {
-  const { timeLeft, logout } = useAuth();
+  const auth = useAuth();
+  const timeLeft: number = (auth as any).timeLeft ?? 0;
+  const logout = auth.logout;
 
   const formatTime = (seconds: number): string => {
     const minutes = Math.floor(seconds / 60);
