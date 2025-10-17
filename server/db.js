@@ -145,7 +145,8 @@ export const db = {
   async update(table, id, data) {
     if (!USE_POSTGRES) return null;
     
-    const fields = Object.keys(data).filter(k => k !== 'id');
+    // Filter out id and PostgreSQL metadata fields
+    const fields = Object.keys(data).filter(k => k !== 'id' && k !== 'created_at' && k !== 'updated_at');
     const values = fields.map(f => data[f]);
     const setClause = fields.map((f, i) => `${f} = $${i + 1}`).join(', ');
     
