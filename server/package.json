@@ -2,15 +2,17 @@
   "name": "walter-system-server",
   "version": "1.0.0",
   "type": "module",
-  "main": "server.js",
+  "main": "server-postgres.js",
   "scripts": {
-    "start": "node server.js",
+    "start": "node server-postgres.js",
     "dev": "node server.js",
-    "sync": "node sync-from-railway.js"
+    "dev:postgres": "node server-postgres.js",
+    "migrate": "node migrate-to-postgres.js",
+    "sync": "node sync-from-production.js"
   },
   "dependencies": {
-    "express": "^4.19.2",
     "cors": "^2.8.5",
-    "pg": "^8.11.3"
+    "express": "^4.19.2",
+    "pg": "^8.16.3"
   }
 }
