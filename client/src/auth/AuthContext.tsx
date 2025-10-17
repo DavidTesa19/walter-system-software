@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useState, useEffect } from 'react';
+import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
 import type { ReactNode } from 'react';
 
 interface AuthContextType {
@@ -22,25 +22,6 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
   const [isAuthenticated, setIsAuthenticated] = useState<boolean>(false);
   const [sessionTimer, setSessionTimer] = useState<number | null>(null);
 
-  // Check for existing session on mount
-  useEffect(() => {
-    const savedAuth = localStorage.getItem('walterAuth');
-    const savedSessionStart = localStorage.getItem('walterSessionStart');
-    
-    if (savedAuth === 'true' && savedSessionStart) {
-      const sessionStartTime = parseInt(savedSessionStart, 10);
-      const elapsed = Date.now() - sessionStartTime;
-      
-      if (elapsed < SESSION_DURATION) {
-        setIsAuthenticated(true);
-        startSessionTimer(SESSION_DURATION - elapsed);
-      } else {
-        // Session expired
-        logout();
-      }
-    }
-  }, []);
-
   const startSessionTimer = (duration: number = SESSION_DURATION) => {
     if (sessionTimer) {
       clearTimeout(sessionTimer);
@@ -55,11 +36,24 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
 
   const login = (code: string): boolean => {
     if (code === VERIFICATION_CODE) {
+      // Clear any existing timer first
+      if (sessionTimer) {
+        clearTimeout(sessionTimer);
+        setSessionTimer(null);
+      }
+      
+      // Clear any existing session data
+      localStorage.removeItem('walterAuth');
+      localStorage.removeItem('walterSessionStart');
+      
+      // Set new session data
       const now = Date.now();
-      setIsAuthenticated(true);
       localStorage.setItem('walterAuth', 'true');
       localStorage.setItem('walterSessionStart', now.toString());
+      
+      setIsAuthenticated(true);
       startSessionTimer();
+      
       return true;
     }
     return false;
@@ -76,16 +70,18 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
     }
   };
 
-  const resetSessionTimer = () => {
+  const resetSessionTimer = useCallback(() => {
     if (isAuthenticated) {
       const now = Date.now();
       localStorage.setItem('walterSessionStart', now.toString());
       startSessionTimer();
     }
-  };
+  }, [isAuthenticated]);
 
   // Reset timer on user activity
   useEffect(() => {
+    let activityCleanup: (() => void) | null = null;
+
     if (isAuthenticated) {
       const handleActivity = () => {
         resetSessionTimer();
@@ -96,13 +92,19 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
         document.addEventListener(event, handleActivity, true);
       });
 
-      return () => {
+      activityCleanup = () => {
         events.forEach(event => {
           document.removeEventListener(event, handleActivity, true);
         });
       };
     }
-  }, [isAuthenticated]);
+
+    return () => {
+      if (activityCleanup) {
+        activityCleanup();
+      }
+    };
+  }, [isAuthenticated, resetSessionTimer]);
 
   const value: AuthContextType = {
     isAuthenticated,
