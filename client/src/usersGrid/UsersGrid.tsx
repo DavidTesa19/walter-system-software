@@ -605,20 +605,29 @@ const UsersGrid = () => {
   // Clients Delete button component
   const ClientsDeleteButton = (props: any) => {
     const handleDelete = async () => {
-        try {
-          const response = await fetch(`${API_BASE}/clients/${props.data.id}`, {
-            method: 'DELETE',
-          });
-          
-          if (response.ok) {
-            fetchClientsData(); // Refresh the clients grid
-          } else {
-            alert('Failed to delete client');
-          }
-        } catch (error) {
-          console.error('Error deleting client:', error);
-          alert('Error deleting client');
+      const clientId = Number(props.data?.id);
+      if (!clientId || Number.isNaN(clientId)) {
+        console.error('Invalid client id, skipping delete:', props.data?.id);
+        return;
+      }
+
+      try {
+        const response = await fetch(`${API_BASE}/clients/${clientId}`, {
+          method: 'DELETE',
+        });
+
+        if (response.ok) {
+          setClientsData(prev => prev.filter(client => client.id !== clientId));
+          await fetchClientsData(); // Refresh to stay in sync with server
+        } else {
+          const errorText = await response.text();
+          console.error('Failed to delete client:', errorText || response.statusText);
+          alert('Failed to delete client');
         }
+      } catch (error) {
+        console.error('Error deleting client:', error);
+        alert('Error deleting client');
+      }
     };
 
     return (
