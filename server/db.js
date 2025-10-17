@@ -50,7 +50,10 @@ export async function initDatabase() {
         location VARCHAR(255),
         mobile VARCHAR(50),
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        obor VARCHAR(255),
+        datum DATE,
+        status VARCHAR(50)
       )
     `);
 
