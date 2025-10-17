@@ -12,7 +12,7 @@ const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
 // Simple verification code (you can change this)
 const VERIFICATION_CODE = 'Walter2025';
-const SESSION_DURATION = 1 * 60 * 1000; // 10 minutes in milliseconds
+const SESSION_DURATION = 30 * 60 * 1000; // 10 minutes in milliseconds
 
 interface AuthProviderProps {
   children: ReactNode;

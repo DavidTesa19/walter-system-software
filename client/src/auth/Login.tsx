@@ -89,7 +89,7 @@ const Login: React.FC = () => {
         
         <div className="login-footer">
           <p className="security-note">
-            🔒 Secure access • Session expires after 1 minute of inactivity
+            🔒 Secure access • Session expires after 30 minutes of inactivity
           </p>
         </div>
       </div>
