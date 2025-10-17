@@ -3,7 +3,7 @@ import "./UsersGrid.css";
 import { AgGridReact} from "ag-grid-react";
 import { useEffect, useState, useCallback, useRef, forwardRef, useImperativeHandle } from "react";
 import type { UserInterface } from "./user.interface";
-import type { ColDef, ICellEditorParams } from "ag-grid-community";
+import type { ColDef, ICellEditorParams, GridApi } from "ag-grid-community";
 import { ModuleRegistry, AllCommunityModule } from "ag-grid-community";
 import { fieldOptions } from "./fieldOptions";
 
@@ -570,28 +570,111 @@ const UsersGrid = () => {
     }
   }, [API_BASE]);
 
-  // Partners Delete button component
-  const PartnersDeleteButton = (props: any) => {
-    const handleDelete = async () => {
-        try {
-          const response = await fetch(`${API_BASE}/partners/${props.data.id}`, {
-            method: 'DELETE',
-          });
-          
-          if (response.ok) {
-            fetchPartnersData(); // Refresh the partners grid
-          } else {
-            alert('Failed to delete partner');
+  const handleDeletePartner = useCallback(
+    async (partnerId: number, rowData?: UserInterface, gridApi?: GridApi<UserInterface>) => {
+      if (!partnerId || Number.isNaN(partnerId)) {
+        console.error('Invalid partner id, skipping delete:', rowData?.id);
+        return;
+      }
+
+      try {
+        const response = await fetch(`${API_BASE}/partners/${partnerId}`, {
+          method: 'DELETE',
+        });
+
+        if (response.ok) {
+          const apiToUse = gridApi ?? partnersGridRef.current?.api;
+          if (rowData && apiToUse) {
+            apiToUse.applyTransaction({ remove: [rowData] });
           }
-        } catch (error) {
-          console.error('Error deleting partner:', error);
-          alert('Error deleting partner');
+          setPartnersData(prev => prev.filter(partner => Number(partner.id) !== partnerId));
+          await fetchPartnersData();
+        } else {
+          const errorText = await response.text();
+          console.error('Failed to delete partner:', errorText || response.statusText);
+          alert('Failed to delete partner');
         }
+      } catch (error) {
+        console.error('Error deleting partner:', error);
+        alert('Error deleting partner');
+      }
+    },
+    [API_BASE, fetchPartnersData]
+  );
+
+  const handleDeleteClient = useCallback(
+    async (clientId: number, rowData?: UserInterface, gridApi?: GridApi<UserInterface>) => {
+      if (!clientId || Number.isNaN(clientId)) {
+        console.error('Invalid client id, skipping delete:', rowData?.id);
+        return;
+      }
+
+      try {
+        const response = await fetch(`${API_BASE}/clients/${clientId}`, {
+          method: 'DELETE',
+        });
+
+        if (response.ok) {
+          const apiToUse = gridApi ?? clientsGridRef.current?.api;
+          if (rowData && apiToUse) {
+            apiToUse.applyTransaction({ remove: [rowData] });
+          }
+          setClientsData(prev => prev.filter(client => Number(client.id) !== clientId));
+          await fetchClientsData();
+        } else {
+          const errorText = await response.text();
+          console.error('Failed to delete client:', errorText || response.statusText);
+          alert('Failed to delete client');
+        }
+      } catch (error) {
+        console.error('Error deleting client:', error);
+        alert('Error deleting client');
+      }
+    },
+    [API_BASE, fetchClientsData]
+  );
+
+  const handleDeleteTiper = useCallback(
+    async (tiperId: number, rowData?: UserInterface, gridApi?: GridApi<UserInterface>) => {
+      if (!tiperId || Number.isNaN(tiperId)) {
+        console.error('Invalid tiper id, skipping delete:', rowData?.id);
+        return;
+      }
+
+      try {
+        const response = await fetch(`${API_BASE}/tipers/${tiperId}`, {
+          method: 'DELETE',
+        });
+
+        if (response.ok) {
+          const apiToUse = gridApi ?? tipersGridRef.current?.api;
+          if (rowData && apiToUse) {
+            apiToUse.applyTransaction({ remove: [rowData] });
+          }
+          setTipersData(prev => prev.filter(tiper => Number(tiper.id) !== tiperId));
+          await fetchTipersData();
+        } else {
+          const errorText = await response.text();
+          console.error('Failed to delete tiper:', errorText || response.statusText);
+          alert('Failed to delete tiper');
+        }
+      } catch (error) {
+        console.error('Error deleting tiper:', error);
+        alert('Error deleting tiper');
+      }
+    },
+    [API_BASE, fetchTipersData]
+  );
+
+  const PartnersDeleteButton = (props: any) => {
+    const handleClick = () => {
+      const partnerId = Number(props.data?.id);
+      void handleDeletePartner(partnerId, props.data, props.api);
     };
 
     return (
-      <button 
-        onClick={handleDelete}
+      <button
+        onClick={handleClick}
         className="delete-btn"
         title="Delete partner"
       >
@@ -602,40 +685,17 @@ const UsersGrid = () => {
     );
   };
 
-  // Clients Delete button component
   const ClientsDeleteButton = (props: any) => {
-    const handleDelete = async () => {
+    const handleClick = () => {
       const clientId = Number(props.data?.id);
-      if (!clientId || Number.isNaN(clientId)) {
-        console.error('Invalid client id, skipping delete:', props.data?.id);
-        return;
-      }
-
-      try {
-        const response = await fetch(`${API_BASE}/clients/${clientId}`, {
-          method: 'DELETE',
-        });
-
-        if (response.ok) {
-          props.api?.applyTransaction?.({ remove: [props.data] });
-          setClientsData(prev => prev.filter(client => Number(client.id) !== clientId));
-          await fetchClientsData(); // Refresh to stay in sync with server
-        } else {
-          const errorText = await response.text();
-          console.error('Failed to delete client:', errorText || response.statusText);
-          alert('Failed to delete client');
-        }
-      } catch (error) {
-        console.error('Error deleting client:', error);
-        alert('Error deleting client');
-      }
+      void handleDeleteClient(clientId, props.data, props.api);
     };
 
     return (
-      <button 
-        onClick={handleDelete}
+      <button
+        onClick={handleClick}
         className="delete-btn"
-        title="Delete employee"
+        title="Delete client"
       >
         <svg width="12" height="12" viewBox="0 0 12 12" fill="none" xmlns="http://www.w3.org/2000/svg">
           <path d="M9 3L3 9M3 3L9 9" stroke="white" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
@@ -644,30 +704,17 @@ const UsersGrid = () => {
     );
   };
 
-  // Tipers Delete button component
   const TipersDeleteButton = (props: any) => {
-    const handleDelete = async () => {
-        try {
-          const response = await fetch(`${API_BASE}/tipers/${props.data.id}`, {
-            method: 'DELETE',
-          });
-          
-          if (response.ok) {
-            fetchTipersData(); // Refresh the tipers grid
-          } else {
-            alert('Failed to delete tiper');
-          }
-        } catch (error) {
-          console.error('Error deleting tiper:', error);
-          alert('Error deleting tiper');
-        }
+    const handleClick = () => {
+      const tiperId = Number(props.data?.id);
+      void handleDeleteTiper(tiperId, props.data, props.api);
     };
 
     return (
-      <button 
-        onClick={handleDelete}
+      <button
+        onClick={handleClick}
         className="delete-btn"
-        title="Delete employee"
+        title="Delete tiper"
       >
         <svg width="12" height="12" viewBox="0 0 12 12" fill="none" xmlns="http://www.w3.org/2000/svg">
           <path d="M9 3L3 9M3 3L9 9" stroke="white" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
@@ -681,6 +728,9 @@ const UsersGrid = () => {
     { 
       headerName: "", 
       cellRenderer: PartnersDeleteButton,
+      cellRendererParams: {
+        onDelete: handleDeletePartner,
+      },
       width: 80,
       pinned: 'left',
       sortable: false,
@@ -759,6 +809,9 @@ const UsersGrid = () => {
     { 
       headerName: "", 
       cellRenderer: ClientsDeleteButton,
+      cellRendererParams: {
+        onDelete: handleDeleteClient,
+      },
       width: 80,
       pinned: 'left',
       sortable: false,
@@ -840,6 +893,9 @@ const UsersGrid = () => {
     { 
       headerName: "", 
       cellRenderer: TipersDeleteButton,
+      cellRendererParams: {
+        onDelete: handleDeleteTiper,
+      },
       width: 80,
       pinned: 'left',
       sortable: false,
