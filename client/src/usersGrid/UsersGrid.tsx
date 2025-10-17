@@ -617,7 +617,8 @@ const UsersGrid = () => {
         });
 
         if (response.ok) {
-          setClientsData(prev => prev.filter(client => client.id !== clientId));
+          props.api?.applyTransaction?.({ remove: [props.data] });
+          setClientsData(prev => prev.filter(client => Number(client.id) !== clientId));
           await fetchClientsData(); // Refresh to stay in sync with server
         } else {
           const errorText = await response.text();
