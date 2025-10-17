@@ -36,6 +36,9 @@ export async function initDatabase() {
         company VARCHAR(255),
         location VARCHAR(255),
         mobile VARCHAR(50),
+        field VARCHAR(255),
+        info TEXT,
+        commission VARCHAR(255),
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
         updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
       )
@@ -49,11 +52,12 @@ export async function initDatabase() {
         company VARCHAR(255),
         location VARCHAR(255),
         mobile VARCHAR(50),
+        info TEXT,
+        field VARCHAR(255),
+        date DATE,
+        status VARCHAR(50),
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-        obor VARCHAR(255),
-        datum DATE,
-        status VARCHAR(50)
+        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
       )
     `);
 
@@ -65,6 +69,9 @@ export async function initDatabase() {
         company VARCHAR(255),
         location VARCHAR(255),
         mobile VARCHAR(50),
+        field VARCHAR(255),
+        info TEXT,
+        commission VARCHAR(255),
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
         updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
       )
@@ -95,6 +102,24 @@ export async function initDatabase() {
         updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
       )
     `);
+
+    // Keep legacy databases in sync with new columns
+    const columnMigrations = [
+      "ALTER TABLE partners ADD COLUMN IF NOT EXISTS field VARCHAR(255)",
+      "ALTER TABLE partners ADD COLUMN IF NOT EXISTS info TEXT",
+      "ALTER TABLE partners ADD COLUMN IF NOT EXISTS commission VARCHAR(255)",
+      "ALTER TABLE clients ADD COLUMN IF NOT EXISTS info TEXT",
+      "ALTER TABLE clients ADD COLUMN IF NOT EXISTS field VARCHAR(255)",
+      "ALTER TABLE clients ADD COLUMN IF NOT EXISTS date DATE",
+      "ALTER TABLE clients ADD COLUMN IF NOT EXISTS status VARCHAR(50)",
+      "ALTER TABLE tipers ADD COLUMN IF NOT EXISTS field VARCHAR(255)",
+      "ALTER TABLE tipers ADD COLUMN IF NOT EXISTS info TEXT",
+      "ALTER TABLE tipers ADD COLUMN IF NOT EXISTS commission VARCHAR(255)"
+    ];
+
+    for (const sql of columnMigrations) {
+      await client.query(sql);
+    }
 
     console.log('✓ Database tables initialized');
   } catch (error) {
