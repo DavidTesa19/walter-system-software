@@ -528,19 +528,12 @@ const UsersGrid = () => {
   const tipersGridRef = useRef<AgGridReact>(null);
   
   const API_BASE = import.meta.env.VITE_API_URL || "http://localhost:3004";
-  
-  // Debug: Log the API URL being used
-  console.log('API_BASE URL:', API_BASE);
-  console.log('Environment:', import.meta.env.MODE);
-  console.log('All env vars:', import.meta.env);
 
   // Fetch partners data
   const fetchPartnersData = useCallback(async () => {
     setIsLoading(true);
     try {
-      console.log('Fetching from:', `${API_BASE}/partners`);
       const response = await fetch(`${API_BASE}/partners`);
-      console.log('Response status:', response.status);
       const data = await response.json();
       setPartnersData(data);
     } catch (error) {
@@ -912,7 +905,7 @@ const UsersGrid = () => {
   // Handle cell value changes for users
   const onPartnersCellValueChanged = useCallback(async (params: any) => {
     try {
-      const updatedUser = { ...params.data };
+      const { created_at, updated_at, ...updatedUser } = params.data;
       
       const response = await fetch(`${API_BASE}/partners/${updatedUser.id}`, {
         method: 'PUT',
@@ -936,7 +929,7 @@ const UsersGrid = () => {
   // Handle cell value changes for clients
   const onClientsCellValueChanged = useCallback(async (params: any) => {
     try {
-      const updatedClient = { ...params.data };
+      const { created_at, updated_at, ...updatedClient } = params.data;
       
       const response = await fetch(`${API_BASE}/clients/${updatedClient.id}`, {
         method: 'PUT',
@@ -960,7 +953,7 @@ const UsersGrid = () => {
   // Handle cell value changes for tipers
   const onTipersCellValueChanged = useCallback(async (params: any) => {
     try {
-      const updatedTiper = { ...params.data };
+      const { created_at, updated_at, ...updatedTiper } = params.data;
       
       const response = await fetch(`${API_BASE}/tipers/${updatedTiper.id}`, {
         method: 'PUT',
