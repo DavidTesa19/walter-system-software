@@ -8,7 +8,7 @@
     "build": "tsc -b && vite build",
     "lint": "eslint .",
     "preview": "vite preview",
-    "start": "serve -s dist -l 3000"
+    "start": "serve -s dist -l $PORT"
   },
   "dependencies": {
     "ag-grid-community": "^34.2.0",
