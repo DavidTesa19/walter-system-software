@@ -37,11 +37,10 @@ if (!fs.existsSync(DATA_FILE)) {
 // CORS: allow specific origin if provided, otherwise allow all (useful for local dev)
 const ALLOWED_ORIGIN = process.env.ALLOWED_ORIGIN;
 app.use(
-  cors(
-    ALLOWED_ORIGIN
-      ? { origin: ALLOWED_ORIGIN, credentials: false }
-      : { origin: true, credentials: false }
-  )
+  cors({
+    origin: true, // Allow all origins in development
+    credentials: false
+  })
 );
 app.use(express.json());
 

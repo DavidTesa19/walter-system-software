@@ -155,6 +155,39 @@
   pointer-events: none;
 }
 
+/* Public Form Link */
+.public-form-link {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 12px 20px;
+  margin-top: 16px;
+  background: transparent;
+  border: 2px solid #667eea;
+  border-radius: 8px;
+  color: #667eea;
+  text-decoration: none;
+  font-size: 15px;
+  font-weight: 600;
+  transition: all 0.2s ease;
+}
+
+.public-form-link:hover {
+  background: #667eea;
+  color: white;
+  transform: translateY(-1px);
+  box-shadow: 0 4px 12px rgba(102, 126, 234, 0.3);
+}
+
+.public-form-link:active {
+  transform: translateY(0);
+}
+
+.public-form-link svg {
+  flex-shrink: 0;
+}
+
 /* Spinner */
 .spinner {
   width: 16px;

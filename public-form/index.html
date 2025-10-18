@@ -28,6 +28,35 @@
             max-width: 600px;
             width: 100%;
             padding: 40px;
+            position: relative;
+        }
+
+        .admin-link {
+            position: absolute;
+            top: 20px;
+            right: 20px;
+            padding: 8px 16px;
+            background: #667eea;
+            color: white;
+            text-decoration: none;
+            border-radius: 8px;
+            font-size: 14px;
+            font-weight: 500;
+            transition: all 0.3s ease;
+            display: flex;
+            align-items: center;
+            gap: 6px;
+        }
+
+        .admin-link:hover {
+            background: #5568d3;
+            transform: translateY(-2px);
+            box-shadow: 0 4px 12px rgba(102, 126, 234, 0.3);
+        }
+
+        .admin-link svg {
+            width: 16px;
+            height: 16px;
         }
 
         h1 {
@@ -35,6 +64,7 @@
             margin-bottom: 10px;
             font-size: 28px;
             text-align: center;
+            padding-right: 80px;
         }
 
         .subtitle {
@@ -186,11 +216,32 @@
                 padding: 10px 15px;
                 font-size: 14px;
             }
+
+            .admin-link {
+                top: 15px;
+                right: 15px;
+                padding: 6px 12px;
+                font-size: 12px;
+            }
+
+            .admin-link svg {
+                width: 14px;
+                height: 14px;
+            }
         }
     </style>
 </head>
 <body>
     <div class="container">
+        <a href="/" class="admin-link" title="Admin Panel">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <rect x="3" y="3" width="7" height="7"></rect>
+                <rect x="14" y="3" width="7" height="7"></rect>
+                <rect x="14" y="14" width="7" height="7"></rect>
+                <rect x="3" y="14" width="7" height="7"></rect>
+            </svg>
+            <span>Admin</span>
+        </a>
         <h1>Žádost o spolupráci</h1>
         <p class="subtitle">Vyplňte formulář pro vytvoření žádosti o spolupráci s Walter System</p>
 
@@ -229,7 +280,7 @@
 
     <script>
         // Configuration - Railway Production Backend
-        const API_BASE_URL = 'https://walter-system-software-production.up.railway.app';
+        const API_BASE_URL = 'https://api.waltersystem.cz';
 
         let currentType = 'clients';
 

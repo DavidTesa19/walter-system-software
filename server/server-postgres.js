@@ -40,14 +40,28 @@ if (db.isPostgres()) {
   }
 }
 
-// CORS configuration
-const ALLOWED_ORIGIN = process.env.ALLOWED_ORIGIN;
+// CORS configuration - Allow multiple origins
+const allowedOrigins = [
+  'https://front-end-production-0ece.up.railway.app',
+  'https://public-form-page-production.up.railway.app',
+  process.env.ALLOWED_ORIGIN
+].filter(Boolean);
+
 app.use(
-  cors(
-    ALLOWED_ORIGIN
-      ? { origin: ALLOWED_ORIGIN, credentials: false }
-      : { origin: true, credentials: false }
-  )
+  cors({
+    origin: (origin, callback) => {
+      // Allow requests with no origin (like mobile apps, curl, Postman)
+      if (!origin) return callback(null, true);
+      
+      // Check if origin is in allowed list
+      if (allowedOrigins.indexOf(origin) !== -1) {
+        callback(null, true);
+      } else {
+        callback(null, true); // Allow all origins for now
+      }
+    },
+    credentials: false
+  })
 );
 app.use(express.json());
 
