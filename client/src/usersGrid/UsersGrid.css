@@ -358,3 +358,100 @@
 .ag-overlay-loading-wrapper {
   background-color: rgba(255, 255, 255, 0.9);
 }
+
+/* Dark Theme Styles */
+[data-theme='dark'] .page-container {
+  background: #121212;
+  color: #e0e0e0;
+}
+
+[data-theme='dark'] .navigation-tabs {
+  background: #1e1e1e;
+  box-shadow: 0 2px 4px rgba(0,0,0,0.4);
+}
+
+[data-theme='dark'] .nav-tab {
+  color: #b0b0b0;
+}
+
+[data-theme='dark'] .nav-tab:hover {
+  background: #2d2d2d;
+  color: #e0e0e0;
+}
+
+[data-theme='dark'] .nav-tab.active {
+  background: #1e3a5f;
+  color: #64b5f6;
+  box-shadow: 0 2px 4px rgba(100,181,246,0.3);
+}
+
+[data-theme='dark'] .add-user-btn {
+  background: linear-gradient(135deg, #1e3a5f 0%, #2d5a8f 100%);
+  color: #e0e0e0;
+}
+
+[data-theme='dark'] .add-user-btn:hover {
+  background: linear-gradient(135deg, #2d5a8f 0%, #3d6a9f 100%);
+  box-shadow: 0 4px 12px rgba(100,181,246,0.3);
+}
+
+[data-theme='dark'] .page-title {
+  color: #e0e0e0;
+}
+
+[data-theme='dark'] .table-title {
+  color: #b0b0b0;
+}
+
+[data-theme='dark'] .grid-container {
+  background: #1a1a1a;
+}
+
+[data-theme='dark'] .external-approve-btn {
+  background: #1e3a5f;
+  border-color: #2d5a8f;
+}
+
+[data-theme='dark'] .external-approve-btn:hover {
+  background: #2d5a8f;
+  border-color: #64b5f6;
+}
+
+[data-theme='dark'] .external-delete-btn {
+  background: #4a1a1a;
+  border-color: #6a2a2a;
+}
+
+[data-theme='dark'] .external-delete-btn:hover {
+  background: #6a2a2a;
+  border-color: #ef5350;
+}
+
+[data-theme='dark'] .instructions {
+  background: #1e1e1e;
+  border: 1px solid #2d2d2d;
+  color: #b0b0b0;
+}
+
+/* AG Grid Dark Theme */
+[data-theme='dark'] .ag-theme-quartz {
+  --ag-background-color: #1a1a1a;
+  --ag-foreground-color: #e0e0e0;
+  --ag-border-color: #2d2d2d;
+  --ag-header-background-color: #0d0d0d;
+  --ag-header-foreground-color: #b0b0b0;
+  --ag-odd-row-background-color: #1a1a1a;
+  --ag-row-hover-color: #2d2d2d;
+  --ag-selected-row-background-color: #1e3a5f;
+  --ag-range-selection-border-color: #64b5f6;
+  --ag-input-focus-border-color: #64b5f6;
+}
+
+[data-theme='dark'] .ag-cell-inline-editing {
+  background-color: #3a3a1a !important;
+  border: 2px solid #64b5f6 !important;
+}
+
+[data-theme='dark'] .ag-overlay-loading-wrapper {
+  background-color: rgba(26, 26, 26, 0.9);
+}

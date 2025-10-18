@@ -620,6 +620,16 @@ const UsersGrid: React.FC<UsersGridProps> = ({ viewMode }) => {
   }, [API_BASE, fetchTipersData]);
 
   const handleDeleteClient = useCallback(async (id: number) => {
+    const client = clientsData.find(c => c.id === id);
+    const isPending = client?.status === 'pending';
+    const confirmMessage = isPending 
+      ? `Opravdu chcete zamítnout tohoto klienta?\n\nJméno: ${client?.name || 'N/A'}\nSpolečnost: ${client?.company || 'N/A'}`
+      : `Opravdu chcete smazat tohoto klienta?\n\nJméno: ${client?.name || 'N/A'}\nSpolečnost: ${client?.company || 'N/A'}`;
+    
+    if (!confirm(confirmMessage)) {
+      return;
+    }
+    
     try {
       const response = await fetch(`${API_BASE}/clients/${id}`, { method: 'DELETE' });
       if (response.ok) {
@@ -631,9 +641,19 @@ const UsersGrid: React.FC<UsersGridProps> = ({ viewMode }) => {
       console.error('Error deleting client:', error);
       alert('Chyba při mazání klienta');
     }
-  }, [API_BASE, fetchClientsData]);
+  }, [API_BASE, fetchClientsData, clientsData]);
 
   const handleDeletePartner = useCallback(async (id: number) => {
+    const partner = partnersData.find(p => p.id === id);
+    const isPending = partner?.status === 'pending';
+    const confirmMessage = isPending 
+      ? `Opravdu chcete zamítnout tohoto partnera?\n\nJméno: ${partner?.name || 'N/A'}\nSpolečnost: ${partner?.company || 'N/A'}`
+      : `Opravdu chcete smazat tohoto partnera?\n\nJméno: ${partner?.name || 'N/A'}\nSpolečnost: ${partner?.company || 'N/A'}`;
+    
+    if (!confirm(confirmMessage)) {
+      return;
+    }
+    
     try {
       const response = await fetch(`${API_BASE}/partners/${id}`, { method: 'DELETE' });
       if (response.ok) {
@@ -645,9 +665,19 @@ const UsersGrid: React.FC<UsersGridProps> = ({ viewMode }) => {
       console.error('Error deleting partner:', error);
       alert('Chyba při mazání partnera');
     }
-  }, [API_BASE, fetchPartnersData]);
+  }, [API_BASE, fetchPartnersData, partnersData]);
 
   const handleDeleteTiper = useCallback(async (id: number) => {
+    const tiper = tipersData.find(t => t.id === id);
+    const isPending = tiper?.status === 'pending';
+    const confirmMessage = isPending 
+      ? `Opravdu chcete zamítnout tohoto tipaře?\n\nJméno: ${tiper?.name || 'N/A'}\nSpolečnost: ${tiper?.company || 'N/A'}`
+      : `Opravdu chcete smazat tohoto tipaře?\n\nJméno: ${tiper?.name || 'N/A'}\nSpolečnost: ${tiper?.company || 'N/A'}`;
+    
+    if (!confirm(confirmMessage)) {
+      return;
+    }
+    
     try {
       const response = await fetch(`${API_BASE}/tipers/${id}`, { method: 'DELETE' });
       if (response.ok) {
@@ -659,7 +689,7 @@ const UsersGrid: React.FC<UsersGridProps> = ({ viewMode }) => {
       console.error('Error deleting tiper:', error);
       alert('Chyba při mazání tipaře');
     }
-  }, [API_BASE, fetchTipersData]);
+  }, [API_BASE, fetchTipersData, tipersData]);
 
   // Refs to grid wrappers for measuring header/row heights
   const clientsWrapperRef = useRef<HTMLDivElement>(null);

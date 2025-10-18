@@ -111,3 +111,41 @@
     min-width: 70px;
   }
 }
+/* Dark Theme Styles */
+[data-theme='dark'] .session-timer {
+  background: #1a1a1a;
+  border: 1px solid #2d2d2d;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.4);
+}
+
+[data-theme='dark'] .timer-text {
+  color: #b0b0b0;
+}
+
+[data-theme='dark'] .timer-normal {
+  border-color: #10b981;
+}
+
+[data-theme='dark'] .timer-normal .timer-text {
+  color: #10b981;
+}
+
+[data-theme='dark'] .timer-warning {
+  border-color: #f59e0b;
+}
+
+[data-theme='dark'] .timer-warning .timer-text {
+  color: #f59e0b;
+}
+
+[data-theme='dark'] .timer-critical {
+  border-color: #ef4444;
+}
+
+[data-theme='dark'] .timer-critical .timer-text {
+  color: #ef4444;
+}
+
+[data-theme='dark'] .logout-button:hover {
+  background: #2d2d2d;
+}
