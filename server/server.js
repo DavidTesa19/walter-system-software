@@ -2,38 +2,13 @@ import express from "express";
 import cors from "cors";
 import fs from "fs";
 import path from "path";
-import {
-  initializeDatabase,
-  getAllPartners,
-  getPartnerById,
-  createPartner,
-  updatePartner,
-  deletePartner,
-  migrateJsonData
-} from "./database.js";
 
 const app = express();
 const PORT = process.env.PORT ? Number(process.env.PORT) : 3004;
-
-// Initialize database on startup
-initializeDatabase().then(async () => {
-  // Auto-migrate data from JSON file if it exists and database is empty
-  try {
-    const partners = await getAllPartners();
-    if (partners.length === 0 && fs.existsSync(SEED_FILE)) {
-      console.log('Database is empty, migrating from JSON file...');
-      const jsonData = JSON.parse(fs.readFileSync(SEED_FILE, 'utf8'));
-      await migrateJsonData(jsonData);
-      console.log('Migration completed successfully');
-    }
-  } catch (error) {
-    console.log('Migration skipped or failed:', error.message);
-  }
-});
-
-// Legacy file-based system for fallback/migration
+// For free tier: use temp directory or current directory
 const DATA_DIR = process.env.DATA_DIR || path.resolve(process.cwd(), "data");
 const DATA_FILE = path.join(DATA_DIR, "db.json");
+// Use the db.json co-located with this server by default
 const SEED_FILE = process.env.SEED_FILE || path.resolve(process.cwd(), "db.json");
 
 // Ensure data directory exists
@@ -60,12 +35,13 @@ if (!fs.existsSync(DATA_FILE)) {
 }
 
 // CORS: allow specific origin if provided, otherwise allow all (useful for local dev)
-const ALLOWED_ORIGIN = process.env.ALLOWED_ORIGIN || "*";
+const ALLOWED_ORIGIN = process.env.ALLOWED_ORIGIN;
 app.use(
-  cors({
-    origin: ALLOWED_ORIGIN === "*" ? true : ALLOWED_ORIGIN,
-    credentials: false
-  })
+  cors(
+    ALLOWED_ORIGIN
+      ? { origin: ALLOWED_ORIGIN, credentials: false }
+      : { origin: true, credentials: false }
+  )
 );
 app.use(express.json());
 
@@ -98,18 +74,6 @@ function writeDb(db) {
 
 // Routes
 app.get("/health", (_req, res) => res.json({ ok: true }));
-
-// Migration endpoint
-app.post("/migrate", async (req, res) => {
-  try {
-    const jsonData = req.body;
-    await migrateJsonData(jsonData);
-    res.json({ message: "Migration completed successfully" });
-  } catch (error) {
-    console.error("Migration error:", error);
-    res.status(500).json({ error: "Migration failed" });
-  }
-});
 
 // CRUD for users
 app.get("/users", (_req, res) => {
@@ -160,66 +124,52 @@ app.delete("/users/:id", (req, res) => {
   res.status(204).end();
 });
 
-// CRUD for partners (PostgreSQL)
-app.get("/partners", async (_req, res) => {
-  try {
-    const partners = await getAllPartners();
-    res.json(partners);
-  } catch (error) {
-    console.error("Error fetching partners:", error);
-    res.status(500).json({ error: "Failed to fetch partners" });
-  }
+// CRUD for partners
+app.get("/partners", (_req, res) => {
+  const db = readDb();
+  res.json(db.partners);
 });
 
-app.post("/partners", async (req, res) => {
-  try {
-    const partner = await createPartner(req.body);
-    res.status(201).json(partner);
-  } catch (error) {
-    console.error("Error creating partner:", error);
-    res.status(500).json({ error: "Failed to create partner" });
-  }
+app.post("/partners", (req, res) => {
+  const db = readDb();
+  const partner = req.body || {};
+  const maxId = db.partners.reduce((m, p) => (p.id > m ? p.id : m), 0);
+  const nextId = maxId + 1;
+  const newPartner = { id: nextId, ...partner };
+  db.partners.push(newPartner);
+  if (!writeDb(db)) return res.status(500).json({ error: "Failed to persist" });
+  res.status(201).json(newPartner);
 });
 
-app.put("/partners/:id", async (req, res) => {
-  try {
-    const id = parseInt(req.params.id);
-    const partner = await updatePartner(id, req.body);
-    if (!partner) {
-      return res.status(404).json({ error: "Partner not found" });
-    }
-    res.json(partner);
-  } catch (error) {
-    console.error("Error updating partner:", error);
-    res.status(500).json({ error: "Failed to update partner" });
-  }
+app.put("/partners/:id", (req, res) => {
+  const id = Number(req.params.id);
+  const db = readDb();
+  const idx = db.partners.findIndex((p) => p.id === id);
+  if (idx === -1) return res.status(404).json({ error: "Not found" });
+  const updated = { ...req.body, id };
+  db.partners[idx] = updated;
+  if (!writeDb(db)) return res.status(500).json({ error: "Failed to persist" });
+  res.json(updated);
 });
 
-app.patch("/partners/:id", async (req, res) => {
-  try {
-    const id = parseInt(req.params.id);
-    const existingPartner = await getPartnerById(id);
-    if (!existingPartner) {
-      return res.status(404).json({ error: "Partner not found" });
-    }
-    const updatedData = { ...existingPartner, ...req.body };
-    const partner = await updatePartner(id, updatedData);
-    res.json(partner);
-  } catch (error) {
-    console.error("Error updating partner:", error);
-    res.status(500).json({ error: "Failed to update partner" });
-  }
+app.patch("/partners/:id", (req, res) => {
+  const id = Number(req.params.id);
+  const db = readDb();
+  const idx = db.partners.findIndex((p) => p.id === id);
+  if (idx === -1) return res.status(404).json({ error: "Not found" });
+  db.partners[idx] = { ...db.partners[idx], ...req.body, id };
+  if (!writeDb(db)) return res.status(500).json({ error: "Failed to persist" });
+  res.json(db.partners[idx]);
 });
 
-app.delete("/partners/:id", async (req, res) => {
-  try {
-    const id = parseInt(req.params.id);
-    await deletePartner(id);
-    res.status(204).end();
-  } catch (error) {
-    console.error("Error deleting partner:", error);
-    res.status(500).json({ error: "Failed to delete partner" });
-  }
+app.delete("/partners/:id", (req, res) => {
+  const id = Number(req.params.id);
+  const db = readDb();
+  const before = db.partners.length;
+  db.partners = db.partners.filter((p) => p.id !== id);
+  if (db.partners.length === before) return res.status(404).json({ error: "Not found" });
+  if (!writeDb(db)) return res.status(500).json({ error: "Failed to persist" });
+  res.status(204).end();
 });
 
 // CRUD for employees

@@ -572,17 +572,30 @@ const UsersGrid = () => {
 
   const handleDeletePartner = useCallback(
     async (partnerId: number, rowData?: UserInterface, gridApi?: GridApi<UserInterface>) => {
+      console.log('🗑️ DELETE PARTNER CALLED');
+      console.log('  - Partner ID:', partnerId);
+      console.log('  - Row Data:', rowData);
+      console.log('  - API Base:', API_BASE);
+      
       if (!partnerId || Number.isNaN(partnerId)) {
-        console.error('Invalid partner id, skipping delete:', rowData?.id);
+        console.error('❌ Invalid partner id, skipping delete:', rowData?.id);
         return;
       }
 
       try {
+        console.log(`📡 Sending DELETE request to: ${API_BASE}/partners/${partnerId}`);
         const response = await fetch(`${API_BASE}/partners/${partnerId}`, {
           method: 'DELETE',
         });
+        
+        console.log('📥 Response received:', {
+          status: response.status,
+          statusText: response.statusText,
+          ok: response.ok
+        });
 
         if (response.ok) {
+          console.log('✅ Delete successful, updating grid');
           const apiToUse = gridApi ?? partnersGridRef.current?.api;
           if (rowData && apiToUse) {
             apiToUse.applyTransaction({ remove: [rowData] });
@@ -591,11 +604,11 @@ const UsersGrid = () => {
           await fetchPartnersData();
         } else {
           const errorText = await response.text();
-          console.error('Failed to delete partner:', errorText || response.statusText);
+          console.error('❌ Failed to delete partner:', errorText || response.statusText);
           alert('Failed to delete partner');
         }
       } catch (error) {
-        console.error('Error deleting partner:', error);
+        console.error('💥 Error deleting partner:', error);
         alert('Error deleting partner');
       }
     },
@@ -604,17 +617,30 @@ const UsersGrid = () => {
 
   const handleDeleteClient = useCallback(
     async (clientId: number, rowData?: UserInterface, gridApi?: GridApi<UserInterface>) => {
+      console.log('🗑️ DELETE CLIENT CALLED');
+      console.log('  - Client ID:', clientId);
+      console.log('  - Row Data:', rowData);
+      console.log('  - API Base:', API_BASE);
+      
       if (!clientId || Number.isNaN(clientId)) {
-        console.error('Invalid client id, skipping delete:', rowData?.id);
+        console.error('❌ Invalid client id, skipping delete:', rowData?.id);
         return;
       }
 
       try {
+        console.log(`📡 Sending DELETE request to: ${API_BASE}/clients/${clientId}`);
         const response = await fetch(`${API_BASE}/clients/${clientId}`, {
           method: 'DELETE',
         });
+        
+        console.log('📥 Response received:', {
+          status: response.status,
+          statusText: response.statusText,
+          ok: response.ok
+        });
 
         if (response.ok) {
+          console.log('✅ Delete successful, updating grid');
           const apiToUse = gridApi ?? clientsGridRef.current?.api;
           if (rowData && apiToUse) {
             apiToUse.applyTransaction({ remove: [rowData] });
@@ -623,11 +649,11 @@ const UsersGrid = () => {
           await fetchClientsData();
         } else {
           const errorText = await response.text();
-          console.error('Failed to delete client:', errorText || response.statusText);
+          console.error('❌ Failed to delete client:', errorText || response.statusText);
           alert('Failed to delete client');
         }
       } catch (error) {
-        console.error('Error deleting client:', error);
+        console.error('💥 Error deleting client:', error);
         alert('Error deleting client');
       }
     },
@@ -667,16 +693,31 @@ const UsersGrid = () => {
   );
 
   const PartnersDeleteButton = (props: any) => {
-    const handleClick = () => {
+    console.log('🔄 PartnersDeleteButton RENDERED', { id: props.data?.id });
+    
+    const handleClick = (e: React.MouseEvent) => {
+      console.log('🖱️ DELETE BUTTON CLICKED (PARTNER)');
+      console.log('  - Event:', e.type);
+      console.log('  - Props data:', props.data);
+      console.log('  - Props data.id:', props.data?.id);
+      
+      e.stopPropagation();
+      e.preventDefault();
+      
       const partnerId = Number(props.data?.id);
+      console.log('  - Parsed partnerId:', partnerId);
+      console.log('  - Is NaN?:', Number.isNaN(partnerId));
+      
       void handleDeletePartner(partnerId, props.data, props.api);
     };
 
     return (
       <button
         onClick={handleClick}
+        onMouseDown={(e) => console.log('👇 Mouse down on partner delete button', e.button)}
         className="delete-btn"
         title="Delete partner"
+        style={{ cursor: 'pointer', pointerEvents: 'auto', zIndex: 9999 }}
       >
         <svg width="12" height="12" viewBox="0 0 12 12" fill="none" xmlns="http://www.w3.org/2000/svg">
           <path d="M9 3L3 9M3 3L9 9" stroke="white" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
@@ -686,16 +727,31 @@ const UsersGrid = () => {
   };
 
   const ClientsDeleteButton = (props: any) => {
-    const handleClick = () => {
+    console.log('🔄 ClientsDeleteButton RENDERED', { id: props.data?.id });
+    
+    const handleClick = (e: React.MouseEvent) => {
+      console.log('🖱️ DELETE BUTTON CLICKED');
+      console.log('  - Event:', e.type);
+      console.log('  - Props data:', props.data);
+      console.log('  - Props data.id:', props.data?.id);
+      
+      e.stopPropagation();
+      e.preventDefault();
+      
       const clientId = Number(props.data?.id);
+      console.log('  - Parsed clientId:', clientId);
+      console.log('  - Is NaN?:', Number.isNaN(clientId));
+      
       void handleDeleteClient(clientId, props.data, props.api);
     };
 
     return (
       <button
         onClick={handleClick}
+        onMouseDown={(e) => console.log('👇 Mouse down on client delete button', e.button)}
         className="delete-btn"
         title="Delete client"
+        style={{ cursor: 'pointer', pointerEvents: 'auto', zIndex: 9999 }}
       >
         <svg width="12" height="12" viewBox="0 0 12 12" fill="none" xmlns="http://www.w3.org/2000/svg">
           <path d="M9 3L3 9M3 3L9 9" stroke="white" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
@@ -705,7 +761,8 @@ const UsersGrid = () => {
   };
 
   const TipersDeleteButton = (props: any) => {
-    const handleClick = () => {
+    const handleClick = (e: React.MouseEvent) => {
+      e.stopPropagation();
       const tiperId = Number(props.data?.id);
       void handleDeleteTiper(tiperId, props.data, props.api);
     };
@@ -736,7 +793,8 @@ const UsersGrid = () => {
       sortable: false,
       filter: false,
       resizable: false,
-      suppressSizeToFit: true
+      suppressSizeToFit: true,
+      editable: false
     },
     { 
       field: "id", 
@@ -817,7 +875,8 @@ const UsersGrid = () => {
       sortable: false,
       filter: false,
       resizable: false,
-      suppressSizeToFit: true
+      suppressSizeToFit: true,
+      editable: false
     },
     { 
       field: "id", 
@@ -901,7 +960,8 @@ const UsersGrid = () => {
       sortable: false,
       filter: false,
       resizable: false,
-      suppressSizeToFit: true
+      suppressSizeToFit: true,
+      editable: false
     },
     { 
       field: "id", 
