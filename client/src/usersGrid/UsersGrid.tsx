@@ -695,33 +695,24 @@ const UsersGrid = () => {
   const PartnersDeleteButton = (props: any) => {
     console.log('🔄 PartnersDeleteButton RENDERED', { id: props.data?.id });
     
-    const handleClick = (e: React.MouseEvent) => {
-      console.log('🖱️ DELETE BUTTON CLICKED (PARTNER)');
-      console.log('  - Event:', e.type);
-      console.log('  - Props data:', props.data);
-      console.log('  - Props data.id:', props.data?.id);
-      
-      e.stopPropagation();
-      e.preventDefault();
-      
-      const partnerId = Number(props.data?.id);
-      console.log('  - Parsed partnerId:', partnerId);
-      console.log('  - Is NaN?:', Number.isNaN(partnerId));
-      
-      void handleDeletePartner(partnerId, props.data, props.api);
-    };
-
-    const handleMouseDown = (e: React.MouseEvent) => {
-      console.log('👇 Mouse down on partner delete button', e.button);
-      // Handle delete on mouse down to bypass AG Grid's click capture
-      e.stopPropagation();
-      e.preventDefault();
-      handleClick(e);
-    };
-
     return (
       <button
-        onMouseDown={handleMouseDown}
+        onMouseDown={(e: React.MouseEvent) => {
+          console.log('👇 Mouse down on partner delete button', e.button);
+          e.stopPropagation();
+          e.preventDefault();
+          
+          const partnerId = Number(props.data?.id);
+          console.log('🖱️ DELETE BUTTON TRIGGERED (PARTNER)');
+          console.log('  - Partner ID:', partnerId);
+          console.log('  - Is NaN?:', Number.isNaN(partnerId));
+          
+          if (partnerId && !Number.isNaN(partnerId)) {
+            void handleDeletePartner(partnerId, props.data, props.api);
+          } else {
+            console.error('❌ Invalid partner ID:', props.data?.id);
+          }
+        }}
         className="delete-btn"
         title="Delete partner"
         style={{ cursor: 'pointer', pointerEvents: 'auto', zIndex: 9999 }}
@@ -736,33 +727,24 @@ const UsersGrid = () => {
   const ClientsDeleteButton = (props: any) => {
     console.log('🔄 ClientsDeleteButton RENDERED', { id: props.data?.id });
     
-    const handleClick = (e: React.MouseEvent) => {
-      console.log('🖱️ DELETE BUTTON CLICKED');
-      console.log('  - Event:', e.type);
-      console.log('  - Props data:', props.data);
-      console.log('  - Props data.id:', props.data?.id);
-      
-      e.stopPropagation();
-      e.preventDefault();
-      
-      const clientId = Number(props.data?.id);
-      console.log('  - Parsed clientId:', clientId);
-      console.log('  - Is NaN?:', Number.isNaN(clientId));
-      
-      void handleDeleteClient(clientId, props.data, props.api);
-    };
-
-    const handleMouseDown = (e: React.MouseEvent) => {
-      console.log('👇 Mouse down on client delete button', e.button);
-      // Handle delete on mouse down to bypass AG Grid's click capture
-      e.stopPropagation();
-      e.preventDefault();
-      handleClick(e);
-    };
-
     return (
       <button
-        onMouseDown={handleMouseDown}
+        onMouseDown={(e: React.MouseEvent) => {
+          console.log('� Mouse down on client delete button', e.button);
+          e.stopPropagation();
+          e.preventDefault();
+          
+          const clientId = Number(props.data?.id);
+          console.log('🖱️ DELETE BUTTON TRIGGERED');
+          console.log('  - Client ID:', clientId);
+          console.log('  - Is NaN?:', Number.isNaN(clientId));
+          
+          if (clientId && !Number.isNaN(clientId)) {
+            void handleDeleteClient(clientId, props.data, props.api);
+          } else {
+            console.error('❌ Invalid client ID:', props.data?.id);
+          }
+        }}
         className="delete-btn"
         title="Delete client"
         style={{ cursor: 'pointer', pointerEvents: 'auto', zIndex: 9999 }}

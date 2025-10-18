@@ -105,20 +105,28 @@
   background: #dc3545;
   color: white;
   border: none;
-  padding: 0.25rem 0.5rem;
+  padding: 0.5rem;
   border-radius: 4px;
-  cursor: pointer;
+  cursor: pointer !important;
   font-size: 0.875rem;
   transition: background-color 0.2s;
   width: 100%;
   height: 100%;
+  min-height: 32px;
   display: flex;
   align-items: center;
   justify-content: center;
+  pointer-events: all !important;
+  position: relative;
+  z-index: 1000;
 }
 
 .delete-btn:hover {
   background: #c82333;
+}
+
+.delete-btn svg {
+  pointer-events: none;
 }
 
 .instructions {
