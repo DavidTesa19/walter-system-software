@@ -1239,7 +1239,7 @@ const UsersGrid = () => {
       }
     } catch (error) {
       console.error('🧪 Error:', error);
-      alert(`❌ Network error: ${error.message}`);
+      alert(`❌ Network error: ${error instanceof Error ? error.message : String(error)}`);
     }
   };
 
