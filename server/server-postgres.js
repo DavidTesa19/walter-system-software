@@ -80,15 +80,22 @@ function writeDb(dbData) {
 
 // Generic CRUD route handler factory
 function createCrudRoutes(tableName) {
-  // GET all
-  app.get(`/${tableName}`, async (_req, res) => {
+  // GET all (with optional status filter)
+  app.get(`/${tableName}`, async (req, res) => {
     try {
+      const status = req.query.status;
+      
       if (db.isPostgres()) {
-        const records = await db.getAll(tableName);
+        const filters = status ? { status } : {};
+        const records = await db.getAll(tableName, filters);
         res.json(records);
       } else {
         const dbData = readDb();
-        res.json(dbData[tableName] || []);
+        let records = dbData[tableName] || [];
+        if (status) {
+          records = records.filter(r => r.status === status);
+        }
+        res.json(records);
       }
     } catch (error) {
       console.error(`Error fetching ${tableName}:`, error);
@@ -117,10 +124,14 @@ function createCrudRoutes(tableName) {
     }
   });
 
-  // POST (create)
+  // POST (create) - defaults to pending status
   app.post(`/${tableName}`, async (req, res) => {
     try {
       const data = req.body || {};
+      // Default status is 'pending' if not specified
+      if (!data.status) {
+        data.status = 'pending';
+      }
       
       if (db.isPostgres()) {
         const newRecord = await db.create(tableName, data);
@@ -183,6 +194,29 @@ function createCrudRoutes(tableName) {
     } catch (error) {
       console.error(`Error deleting ${tableName}:`, error);
       res.status(500).json({ error: "Failed to delete record" });
+    }
+  });
+
+  // APPROVE - Change status from pending to accepted
+  app.post(`/${tableName}/:id/approve`, async (req, res) => {
+    try {
+      const id = Number(req.params.id);
+      
+      if (db.isPostgres()) {
+        const approved = await db.approve(tableName, id);
+        if (!approved) return res.status(404).json({ error: "Not found" });
+        res.json(approved);
+      } else {
+        const dbData = readDb();
+        const idx = dbData[tableName].findIndex(r => r.id === id);
+        if (idx === -1) return res.status(404).json({ error: "Not found" });
+        dbData[tableName][idx] = { ...dbData[tableName][idx], status: 'accepted' };
+        if (!writeDb(dbData)) return res.status(500).json({ error: "Failed to persist" });
+        res.json(dbData[tableName][idx]);
+      }
+    } catch (error) {
+      console.error(`Error approving ${tableName}:`, error);
+      res.status(500).json({ error: "Failed to approve record" });
     }
   });
 }

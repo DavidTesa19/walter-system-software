@@ -1,0 +1,298 @@
+<!DOCTYPE html>
+<html lang="cs">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Walter System - Žádost o spolupráci</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 20px;
+        }
+
+        .container {
+            background: white;
+            border-radius: 16px;
+            box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+            max-width: 600px;
+            width: 100%;
+            padding: 40px;
+        }
+
+        h1 {
+            color: #333;
+            margin-bottom: 10px;
+            font-size: 28px;
+            text-align: center;
+        }
+
+        .subtitle {
+            color: #666;
+            text-align: center;
+            margin-bottom: 30px;
+            font-size: 14px;
+        }
+
+        .type-selector {
+            display: flex;
+            gap: 10px;
+            margin-bottom: 30px;
+            background: #f5f5f5;
+            padding: 5px;
+            border-radius: 10px;
+        }
+
+        .type-btn {
+            flex: 1;
+            padding: 12px 20px;
+            border: none;
+            background: transparent;
+            border-radius: 8px;
+            cursor: pointer;
+            font-size: 15px;
+            font-weight: 500;
+            color: #666;
+            transition: all 0.3s ease;
+        }
+
+        .type-btn:hover {
+            background: #e0e0e0;
+        }
+
+        .type-btn.active {
+            background: #667eea;
+            color: white;
+            box-shadow: 0 2px 8px rgba(102, 126, 234, 0.3);
+        }
+
+        .form-group {
+            margin-bottom: 20px;
+        }
+
+        label {
+            display: block;
+            margin-bottom: 8px;
+            color: #333;
+            font-weight: 500;
+            font-size: 14px;
+        }
+
+        input {
+            width: 100%;
+            padding: 12px 16px;
+            border: 2px solid #e0e0e0;
+            border-radius: 8px;
+            font-size: 15px;
+            transition: border-color 0.3s ease;
+        }
+
+        input:focus {
+            outline: none;
+            border-color: #667eea;
+        }
+
+        .submit-btn {
+            width: 100%;
+            padding: 14px;
+            background: #667eea;
+            color: white;
+            border: none;
+            border-radius: 8px;
+            font-size: 16px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            margin-top: 10px;
+        }
+
+        .submit-btn:hover {
+            background: #5568d3;
+            transform: translateY(-2px);
+            box-shadow: 0 4px 12px rgba(102, 126, 234, 0.4);
+        }
+
+        .submit-btn:active {
+            transform: translateY(0);
+        }
+
+        .submit-btn:disabled {
+            background: #ccc;
+            cursor: not-allowed;
+            transform: none;
+        }
+
+        .message {
+            padding: 12px;
+            border-radius: 8px;
+            margin-bottom: 20px;
+            display: none;
+            text-align: center;
+            font-weight: 500;
+        }
+
+        .message.success {
+            background: #d4edda;
+            color: #155724;
+            border: 1px solid #c3e6cb;
+        }
+
+        .message.error {
+            background: #f8d7da;
+            color: #721c24;
+            border: 1px solid #f5c6cb;
+        }
+
+        .message.show {
+            display: block;
+            animation: slideIn 0.3s ease;
+        }
+
+        @keyframes slideIn {
+            from {
+                opacity: 0;
+                transform: translateY(-10px);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+
+        .required {
+            color: #dc3545;
+        }
+
+        @media (max-width: 640px) {
+            .container {
+                padding: 30px 20px;
+            }
+
+            h1 {
+                font-size: 24px;
+            }
+
+            .type-btn {
+                padding: 10px 15px;
+                font-size: 14px;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>Žádost o spolupráci</h1>
+        <p class="subtitle">Vyplňte formulář pro vytvoření žádosti o spolupráci s Walter System</p>
+
+        <div id="message" class="message"></div>
+
+        <div class="type-selector">
+            <button type="button" class="type-btn active" data-type="clients">Klient</button>
+            <button type="button" class="type-btn" data-type="partners">Partner</button>
+            <button type="button" class="type-btn" data-type="tipers">Tiper</button>
+        </div>
+
+        <form id="submissionForm">
+            <div class="form-group">
+                <label for="name">Jméno <span class="required">*</span></label>
+                <input type="text" id="name" name="name" required placeholder="Zadejte své jméno">
+            </div>
+
+            <div class="form-group">
+                <label for="company">Společnost <span class="required">*</span></label>
+                <input type="text" id="company" name="company" required placeholder="Název společnosti">
+            </div>
+
+            <div class="form-group">
+                <label for="location">Lokalita <span class="required">*</span></label>
+                <input type="text" id="location" name="location" required placeholder="Město">
+            </div>
+
+            <div class="form-group">
+                <label for="mobile">Telefon <span class="required">*</span></label>
+                <input type="tel" id="mobile" name="mobile" required placeholder="+420 XXX XXX XXX">
+            </div>
+
+            <button type="submit" class="submit-btn">Odeslat žádost</button>
+        </form>
+    </div>
+
+    <script>
+        // Configuration - UPDATE THIS with your server URL
+        const API_BASE_URL = 'http://localhost:3004';
+        // For production, use: const API_BASE_URL = 'https://your-railway-app.railway.app';
+
+        let currentType = 'clients';
+
+        // Type selector buttons
+        const typeBtns = document.querySelectorAll('.type-btn');
+        typeBtns.forEach(btn => {
+            btn.addEventListener('click', () => {
+                typeBtns.forEach(b => b.classList.remove('active'));
+                btn.classList.add('active');
+                currentType = btn.dataset.type;
+            });
+        });
+
+        // Form submission
+        const form = document.getElementById('submissionForm');
+        const messageEl = document.getElementById('message');
+
+        function showMessage(text, type) {
+            messageEl.textContent = text;
+            messageEl.className = `message ${type} show`;
+            setTimeout(() => {
+                messageEl.classList.remove('show');
+            }, 5000);
+        }
+
+        form.addEventListener('submit', async (e) => {
+            e.preventDefault();
+
+            const submitBtn = form.querySelector('.submit-btn');
+            submitBtn.disabled = true;
+            submitBtn.textContent = 'Odesílání...';
+
+            const formData = {
+                name: document.getElementById('name').value.trim(),
+                company: document.getElementById('company').value.trim(),
+                location: document.getElementById('location').value.trim(),
+                mobile: document.getElementById('mobile').value.trim(),
+            };
+
+            try {
+                const response = await fetch(`${API_BASE_URL}/${currentType}`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify(formData),
+                });
+
+                if (response.ok) {
+                    showMessage('Žádost byla úspěšně odeslána! Brzy vás budeme kontaktovat.', 'success');
+                    form.reset();
+                } else {
+                    throw new Error('Server error');
+                }
+            } catch (error) {
+                console.error('Error:', error);
+                showMessage('Chyba při odesílání žádosti. Zkuste to prosím znovu.', 'error');
+            } finally {
+                submitBtn.disabled = false;
+                submitBtn.textContent = 'Odeslat žádost';
+            }
+        });
+    </script>
+</body>
+</html>

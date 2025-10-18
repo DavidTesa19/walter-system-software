@@ -181,6 +181,49 @@
   pointer-events: none;
 }
 
+/* Approve buttons column (for pending view) */
+.approve-buttons-column {
+  display: grid;
+  grid-auto-rows: var(--row-height, 42px);
+  align-content: start;
+  position: relative;
+  width: 40px;
+  flex-shrink: 0;
+  padding-top: var(--header-offset, 80px);
+}
+
+.external-approve-btn {
+  background: transparent;
+  color: #999;
+  border: none;
+  padding: 0;
+  border-radius: 4px;
+  cursor: pointer;
+  transition: all 0.15s ease;
+  width: 24px;
+  height: 24px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  align-self: center;
+}
+
+.external-approve-btn:hover {
+  background: rgba(40, 167, 69, 0.1);
+  color: #28a745;
+  transform: scale(1.05);
+}
+
+.external-approve-btn:active {
+  background: rgba(40, 167, 69, 0.2);
+  color: #218838;
+  transform: scale(1.02);
+}
+
+.external-approve-btn svg {
+  pointer-events: none;
+}
+
 .delete-btn {
   background: #dc3545;
   color: white;

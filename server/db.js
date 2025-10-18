@@ -39,6 +39,7 @@ export async function initDatabase() {
         field VARCHAR(255),
         info TEXT,
         commission VARCHAR(255),
+        status VARCHAR(50) DEFAULT 'pending',
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
         updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
       )
@@ -55,7 +56,7 @@ export async function initDatabase() {
         info TEXT,
         field VARCHAR(255),
         date DATE,
-        status VARCHAR(50),
+        status VARCHAR(50) DEFAULT 'pending',
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
         updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
       )
@@ -72,6 +73,7 @@ export async function initDatabase() {
         field VARCHAR(255),
         info TEXT,
         commission VARCHAR(255),
+        status VARCHAR(50) DEFAULT 'pending',
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
         updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
       )
@@ -108,18 +110,25 @@ export async function initDatabase() {
       "ALTER TABLE partners ADD COLUMN IF NOT EXISTS field VARCHAR(255)",
       "ALTER TABLE partners ADD COLUMN IF NOT EXISTS info TEXT",
       "ALTER TABLE partners ADD COLUMN IF NOT EXISTS commission VARCHAR(255)",
+      "ALTER TABLE partners ADD COLUMN IF NOT EXISTS status VARCHAR(50) DEFAULT 'pending'",
       "ALTER TABLE clients ADD COLUMN IF NOT EXISTS info TEXT",
       "ALTER TABLE clients ADD COLUMN IF NOT EXISTS field VARCHAR(255)",
       "ALTER TABLE clients ADD COLUMN IF NOT EXISTS date DATE",
-      "ALTER TABLE clients ADD COLUMN IF NOT EXISTS status VARCHAR(50)",
+      "ALTER TABLE clients ADD COLUMN IF NOT EXISTS status VARCHAR(50) DEFAULT 'pending'",
       "ALTER TABLE tipers ADD COLUMN IF NOT EXISTS field VARCHAR(255)",
       "ALTER TABLE tipers ADD COLUMN IF NOT EXISTS info TEXT",
-      "ALTER TABLE tipers ADD COLUMN IF NOT EXISTS commission VARCHAR(255)"
+      "ALTER TABLE tipers ADD COLUMN IF NOT EXISTS commission VARCHAR(255)",
+      "ALTER TABLE tipers ADD COLUMN IF NOT EXISTS status VARCHAR(50) DEFAULT 'pending'"
     ];
 
     for (const sql of columnMigrations) {
       await client.query(sql);
     }
+
+    // Set existing records without status to 'accepted' (legacy data)
+    await client.query("UPDATE partners SET status = 'accepted' WHERE status IS NULL");
+    await client.query("UPDATE clients SET status = 'accepted' WHERE status IS NULL");
+    await client.query("UPDATE tipers SET status = 'accepted' WHERE status IS NULL");
 
     console.log('✓ Database tables initialized');
   } catch (error) {
@@ -133,10 +142,21 @@ export async function initDatabase() {
 // Generic database operations
 export const db = {
   // Get all records from a table
-  async getAll(table) {
+  async getAll(table, filters = {}) {
     if (!USE_POSTGRES) return null; // Handled by JSON file logic
     
-    const result = await pool.query(`SELECT * FROM ${table} ORDER BY id`);
+    let query = `SELECT * FROM ${table}`;
+    const values = [];
+    
+    // Add WHERE clause for filters
+    if (filters.status) {
+      query += ` WHERE status = $1`;
+      values.push(filters.status);
+    }
+    
+    query += ` ORDER BY id`;
+    
+    const result = await pool.query(query, values);
     return result.rows;
   },
 
@@ -208,6 +228,17 @@ export const db = {
   // Check if using PostgreSQL
   isPostgres() {
     return USE_POSTGRES;
+  },
+
+  // Approve a pending record (change status to accepted)
+  async approve(table, id) {
+    if (!USE_POSTGRES) return null;
+    
+    const result = await pool.query(
+      `UPDATE ${table} SET status = 'accepted', updated_at = CURRENT_TIMESTAMP WHERE id = $1 RETURNING *`,
+      [id]
+    );
+    return result.rows[0] || null;
   }
 };
 

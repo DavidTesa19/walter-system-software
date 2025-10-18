@@ -5,28 +5,32 @@
       "name": "Mark Ross",
       "company": "Genco Pura Olive Oil Company",
       "location": "Praha",
-      "mobile": "(231) 638-1199"
+      "mobile": "(231) 638-1199",
+      "status": "accepted"
     },
     {
       "id": 2,
       "name": "Concepcion King",
       "company": "Globex Corporation",
       "location": "Praha",
-      "mobile": "(490) 696-8066"
+      "mobile": "(490) 696-8066",
+      "status": "accepted"
     },
     {
       "id": 3,
       "name": "Vanecia Green",
       "company": "Soylent Corp",
       "location": "Praha",
-      "mobile": "(607) 248-2032"
+      "mobile": "(607) 248-2032",
+      "status": "accepted"
     },
     {
       "id": 4,
       "name": "Samara Anderson",
       "company": "Initech",
       "location": "Praha",
-      "mobile": "(423) 564-7972"
+      "mobile": "(423) 564-7972",
+      "status": "accepted"
     }
   ],
   "clients": [
@@ -35,21 +39,24 @@
       "name": "John Smith",
       "company": "Tech Solutions Ltd",
       "location": "Brno",
-      "mobile": "(420) 123-456"
+      "mobile": "(420) 123-456",
+      "status": "accepted"
     },
     {
       "id": 2,
       "name": "Anna Novakova",
       "company": "Digital Agency",
       "location": "Ostrava",
-      "mobile": "(420) 654-321"
+      "mobile": "(420) 654-321",
+      "status": "accepted"
     },
     {
       "id": 3,
       "name": "Pavel Dvorak",
       "company": "Software House",
       "location": "Plzen",
-      "mobile": "(420) 789-012"
+      "mobile": "(420) 789-012",
+      "status": "accepted"
     }
   ],
   "tipers": [
@@ -58,21 +65,24 @@
       "name": "Filip Novák",
       "company": "Tips & Analytics",
       "location": "Brno",
-      "mobile": "(420) 111-222"
+      "mobile": "(420) 111-222",
+      "status": "accepted"
     },
     {
       "id": 2,
       "name": "Marie Svobodová",
       "company": "Betting Solutions",
       "location": "Praha",
-      "mobile": "(420) 333-444"
+      "mobile": "(420) 333-444",
+      "status": "accepted"
     },
     {
       "id": 3,
       "name": "Tomáš Krása",
       "company": "Pro Tipers",
       "location": "Ostrava",
-      "mobile": "(420) 555-666"
+      "mobile": "(420) 555-666",
+      "status": "accepted"
     }
   ]
 }

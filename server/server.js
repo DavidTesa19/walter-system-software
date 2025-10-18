@@ -125,9 +125,14 @@ app.delete("/users/:id", (req, res) => {
 });
 
 // CRUD for partners
-app.get("/partners", (_req, res) => {
+app.get("/partners", (req, res) => {
   const db = readDb();
-  res.json(db.partners);
+  const status = req.query.status;
+  if (status) {
+    res.json(db.partners.filter(p => p.status === status));
+  } else {
+    res.json(db.partners);
+  }
 });
 
 app.post("/partners", (req, res) => {
@@ -135,7 +140,8 @@ app.post("/partners", (req, res) => {
   const partner = req.body || {};
   const maxId = db.partners.reduce((m, p) => (p.id > m ? p.id : m), 0);
   const nextId = maxId + 1;
-  const newPartner = { id: nextId, ...partner };
+  // Default status is 'pending' if not specified, or use the provided status
+  const newPartner = { id: nextId, status: 'pending', ...partner };
   db.partners.push(newPartner);
   if (!writeDb(db)) return res.status(500).json({ error: "Failed to persist" });
   res.status(201).json(newPartner);
@@ -170,6 +176,17 @@ app.delete("/partners/:id", (req, res) => {
   if (db.partners.length === before) return res.status(404).json({ error: "Not found" });
   if (!writeDb(db)) return res.status(500).json({ error: "Failed to persist" });
   res.status(204).end();
+});
+
+// Approve partner (change status from pending to accepted)
+app.post("/partners/:id/approve", (req, res) => {
+  const id = Number(req.params.id);
+  const db = readDb();
+  const idx = db.partners.findIndex((p) => p.id === id);
+  if (idx === -1) return res.status(404).json({ error: "Not found" });
+  db.partners[idx] = { ...db.partners[idx], status: "accepted" };
+  if (!writeDb(db)) return res.status(500).json({ error: "Failed to persist" });
+  res.json(db.partners[idx]);
 });
 
 // CRUD for employees
@@ -222,9 +239,14 @@ app.delete("/employees/:id", (req, res) => {
 });
 
 // CRUD for clients
-app.get("/clients", (_req, res) => {
+app.get("/clients", (req, res) => {
   const db = readDb();
-  res.json(db.clients);
+  const status = req.query.status;
+  if (status) {
+    res.json(db.clients.filter(c => c.status === status));
+  } else {
+    res.json(db.clients);
+  }
 });
 
 app.post("/clients", (req, res) => {
@@ -232,7 +254,8 @@ app.post("/clients", (req, res) => {
   const client = req.body || {};
   const maxId = db.clients.reduce((m, c) => (c.id > m ? c.id : m), 0);
   const nextId = maxId + 1;
-  const newClient = { id: nextId, ...client };
+  // Default status is 'pending' if not specified, or use the provided status
+  const newClient = { id: nextId, status: 'pending', ...client };
   db.clients.push(newClient);
   if (!writeDb(db)) return res.status(500).json({ error: "Failed to persist" });
   res.status(201).json(newClient);
@@ -269,10 +292,26 @@ app.delete("/clients/:id", (req, res) => {
   res.status(204).end();
 });
 
-// CRUD for tipers
-app.get("/tipers", (_req, res) => {
+// Approve client (change status from pending to accepted)
+app.post("/clients/:id/approve", (req, res) => {
+  const id = Number(req.params.id);
   const db = readDb();
-  res.json(db.tipers);
+  const idx = db.clients.findIndex((c) => c.id === id);
+  if (idx === -1) return res.status(404).json({ error: "Not found" });
+  db.clients[idx] = { ...db.clients[idx], status: "accepted" };
+  if (!writeDb(db)) return res.status(500).json({ error: "Failed to persist" });
+  res.json(db.clients[idx]);
+});
+
+// CRUD for tipers
+app.get("/tipers", (req, res) => {
+  const db = readDb();
+  const status = req.query.status;
+  if (status) {
+    res.json(db.tipers.filter(t => t.status === status));
+  } else {
+    res.json(db.tipers);
+  }
 });
 
 app.post("/tipers", (req, res) => {
@@ -280,7 +319,8 @@ app.post("/tipers", (req, res) => {
   const tiper = req.body || {};
   const maxId = db.tipers.reduce((m, t) => (t.id > m ? t.id : m), 0);
   const nextId = maxId + 1;
-  const newTiper = { id: nextId, ...tiper };
+  // Default status is 'pending' if not specified, or use the provided status
+  const newTiper = { id: nextId, status: 'pending', ...tiper };
   db.tipers.push(newTiper);
   if (!writeDb(db)) return res.status(500).json({ error: "Failed to persist" });
   res.status(201).json(newTiper);
@@ -315,6 +355,17 @@ app.delete("/tipers/:id", (req, res) => {
   if (db.tipers.length === before) return res.status(404).json({ error: "Not found" });
   if (!writeDb(db)) return res.status(500).json({ error: "Failed to persist" });
   res.status(204).end();
+});
+
+// Approve tiper (change status from pending to accepted)
+app.post("/tipers/:id/approve", (req, res) => {
+  const id = Number(req.params.id);
+  const db = readDb();
+  const idx = db.tipers.findIndex((t) => t.id === id);
+  if (idx === -1) return res.status(404).json({ error: "Not found" });
+  db.tipers[idx] = { ...db.tipers[idx], status: "accepted" };
+  if (!writeDb(db)) return res.status(500).json({ error: "Failed to persist" });
+  res.json(db.tipers[idx]);
 });
 
 app.listen(PORT, "0.0.0.0", () => {

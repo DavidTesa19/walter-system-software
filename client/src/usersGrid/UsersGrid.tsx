@@ -517,7 +517,11 @@ const FieldCellRenderer = (params: any) => {
 
 type TableType = 'clients' | 'partners' | 'tipers';
 
-const UsersGrid = () => {
+interface UsersGridProps {
+  viewMode: 'active' | 'pending';
+}
+
+const UsersGrid: React.FC<UsersGridProps> = ({ viewMode }) => {
   const [activeTable, setActiveTable] = useState<TableType>('clients');
   const [partnersData, setPartnersData] = useState<UserInterface[]>([]);
   const [clientsData, setClientsData] = useState<UserInterface[]>([]);
@@ -528,12 +532,13 @@ const UsersGrid = () => {
   const tipersGridRef = useRef<AgGridReact>(null);
   
   const API_BASE = import.meta.env.VITE_API_URL || "http://localhost:3004";
+  const status = viewMode === 'active' ? 'accepted' : 'pending';
 
   // Fetch partners data
   const fetchPartnersData = useCallback(async () => {
     setIsLoading(true);
     try {
-      const response = await fetch(`${API_BASE}/partners`);
+      const response = await fetch(`${API_BASE}/partners?status=${status}`);
       const data = await response.json();
       setPartnersData(data);
     } catch (error) {
@@ -541,13 +546,13 @@ const UsersGrid = () => {
     } finally {
       setIsLoading(false);
     }
-  }, [API_BASE]);
+  }, [API_BASE, status]);
 
   // Fetch clients data
   const fetchClientsData = useCallback(async () => {
     setIsLoading(true);
     try {
-      const response = await fetch(`${API_BASE}/clients`);
+      const response = await fetch(`${API_BASE}/clients?status=${status}`);
       const data = await response.json();
       setClientsData(data);
     } catch (error) {
@@ -555,12 +560,12 @@ const UsersGrid = () => {
     } finally {
       setIsLoading(false);
     }
-  }, [API_BASE]);
+  }, [API_BASE, status]);
 
   const fetchTipersData = useCallback(async () => {
     setIsLoading(true);
     try {
-      const response = await fetch(`${API_BASE}/tipers`);
+      const response = await fetch(`${API_BASE}/tipers?status=${status}`);
       const data = await response.json();
       setTipersData(data);
     } catch (error) {
@@ -568,9 +573,52 @@ const UsersGrid = () => {
     } finally {
       setIsLoading(false);
     }
-  }, [API_BASE]);
+  }, [API_BASE, status]);
 
   // Delete handlers for each table (used by external buttons)
+  // Approve handlers
+  const handleApproveClient = useCallback(async (id: number) => {
+    try {
+      const response = await fetch(`${API_BASE}/clients/${id}/approve`, { method: 'POST' });
+      if (response.ok) {
+        fetchClientsData();
+      } else {
+        alert('Failed to approve client');
+      }
+    } catch (error) {
+      console.error('Error approving client:', error);
+      alert('Error approving client');
+    }
+  }, [API_BASE, fetchClientsData]);
+
+  const handleApprovePartner = useCallback(async (id: number) => {
+    try {
+      const response = await fetch(`${API_BASE}/partners/${id}/approve`, { method: 'POST' });
+      if (response.ok) {
+        fetchPartnersData();
+      } else {
+        alert('Failed to approve partner');
+      }
+    } catch (error) {
+      console.error('Error approving partner:', error);
+      alert('Error approving partner');
+    }
+  }, [API_BASE, fetchPartnersData]);
+
+  const handleApproveTiper = useCallback(async (id: number) => {
+    try {
+      const response = await fetch(`${API_BASE}/tipers/${id}/approve`, { method: 'POST' });
+      if (response.ok) {
+        fetchTipersData();
+      } else {
+        alert('Failed to approve tiper');
+      }
+    } catch (error) {
+      console.error('Error approving tiper:', error);
+      alert('Error approving tiper');
+    }
+  }, [API_BASE, fetchTipersData]);
+
   const handleDeleteClient = useCallback(async (id: number) => {
     try {
       const response = await fetch(`${API_BASE}/clients/${id}`, { method: 'DELETE' });
@@ -642,16 +690,39 @@ const UsersGrid = () => {
 
   // Re-measure when data changes or window resizes
   useEffect(() => {
-    setClientsSizes(measureGrid(clientsWrapperRef.current));
+    const timer = setTimeout(() => {
+      setClientsSizes(measureGrid(clientsWrapperRef.current));
+    }, 50);
+    return () => clearTimeout(timer);
   }, [clientsData, measureGrid]);
 
   useEffect(() => {
-    setPartnersSizes(measureGrid(partnersWrapperRef.current));
+    const timer = setTimeout(() => {
+      setPartnersSizes(measureGrid(partnersWrapperRef.current));
+    }, 50);
+    return () => clearTimeout(timer);
   }, [partnersData, measureGrid]);
 
   useEffect(() => {
-    setTipersSizes(measureGrid(tipersWrapperRef.current));
+    const timer = setTimeout(() => {
+      setTipersSizes(measureGrid(tipersWrapperRef.current));
+    }, 50);
+    return () => clearTimeout(timer);
   }, [tipersData, measureGrid]);
+
+  // Re-measure when switching tabs
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      if (activeTable === 'clients') {
+        setClientsSizes(measureGrid(clientsWrapperRef.current));
+      } else if (activeTable === 'partners') {
+        setPartnersSizes(measureGrid(partnersWrapperRef.current));
+      } else if (activeTable === 'tipers') {
+        setTipersSizes(measureGrid(tipersWrapperRef.current));
+      }
+    }, 100);
+    return () => clearTimeout(timer);
+  }, [activeTable, measureGrid]);
 
   useEffect(() => {
     const onResize = () => {
@@ -663,73 +734,7 @@ const UsersGrid = () => {
     return () => window.removeEventListener('resize', onResize);
   }, [measureGrid]);
 
-  // Partners column definitions
-  const partnersColDefs: ColDef<UserInterface>[] = [
-    { 
-      field: "id", 
-      headerName: "ID",
-      flex: 0.5,
-      minWidth: 70,
-      editable: false 
-    },
-    { 
-      field: "field", 
-      headerName: "Specializace/Obor",
-      editable: false,
-      filter: true,
-      flex: 2,
-      minWidth: 120,
-      cellRenderer: FieldCellRenderer
-    },
-    { 
-      field: "location", 
-      headerName: "Lokalita",
-      filter: true,
-      editable: true,
-      flex: 1,
-      minWidth: 100
-    },
-    { 
-      field: "name", 
-      headerName: "Jméno",
-      filter: true,
-      editable: true,
-      flex: 1.5,
-      minWidth: 120
-    },
-    { 
-      field: "company", 
-      headerName: "Společnost",
-      filter: true,
-      editable: true,
-      flex: 1.5,
-      minWidth: 150
-    },
-    {
-      field: "info", 
-      headerName: "Info o společnosti",
-      editable: true,
-      filter: true,
-      flex: 2.5,
-      minWidth: 120
-    },
-    { 
-      field: "mobile", 
-      headerName: "Kontakt",
-      editable: true,
-      filter: true,
-      flex: 1,
-      minWidth: 120
-    }, 
-    {
-      field: "commission", 
-      headerName: "Odměna/Provize",
-      editable: true,
-      filter: true,
-      flex: 1.2,
-      minWidth: 120
-    },
-  ];
+  
 
   // Clients column definitions
   const clientsColDefs: ColDef<UserInterface>[] = [
@@ -802,22 +807,14 @@ const UsersGrid = () => {
     },
   ];
 
-  // Tipers column definitions
-  const tipersColDefs: ColDef<UserInterface>[] = [
+  // Partners column definitions
+  const partnersColDefs: ColDef<UserInterface>[] = [
     { 
       field: "id", 
       headerName: "ID",
       flex: 0.5,
       minWidth: 70,
       editable: false 
-    },
-    { 
-      field: "name", 
-      headerName: "Jméno",
-      filter: true,
-      editable: true,
-      flex: 1.5,
-      minWidth: 120
     },
     { 
       field: "field", 
@@ -829,12 +826,72 @@ const UsersGrid = () => {
       cellRenderer: FieldCellRenderer
     },
     { 
+      field: "location", 
+      headerName: "Lokalita",
+      filter: true,
+      editable: true,
+      flex: 1,
+      minWidth: 100
+    },
+    { 
+      field: "company", 
+      headerName: "Společnost",
+      filter: true,
+      editable: true,
+      flex: 1.5,
+      minWidth: 150
+    },
+    {
       field: "info", 
-      headerName: "Informace",
+      headerName: "Info o společnosti",
       editable: true,
       filter: true,
-      flex: 2,
+      flex: 2.5,
       minWidth: 120
+    },
+    { 
+      field: "name", 
+      headerName: "Jméno",
+      filter: true,
+      editable: true,
+      flex: 1.5,
+      minWidth: 120
+    },
+    { 
+      field: "mobile", 
+      headerName: "Kontakt",
+      editable: true,
+      filter: true,
+      flex: 1,
+      minWidth: 120
+    }, 
+    {
+      field: "commission", 
+      headerName: "Odměna/Provize",
+      editable: true,
+      filter: true,
+      flex: 1.2,
+      minWidth: 120
+    },
+  ];
+
+  // Tipers column definitions
+  const tipersColDefs: ColDef<UserInterface>[] = [
+    { 
+      field: "id", 
+      headerName: "ID",
+      flex: 0.5,
+      minWidth: 70,
+      editable: false 
+    },
+    { 
+      field: "field", 
+      headerName: "Specializace/Obor",
+      editable: false,
+      filter: true,
+      flex: 2,
+      minWidth: 120,
+      cellRenderer: FieldCellRenderer
     },
     { 
       field: "location", 
@@ -843,6 +900,22 @@ const UsersGrid = () => {
       editable: true,
       flex: 1,
       minWidth: 100
+    },
+    { 
+      field: "name", 
+      headerName: "Jméno",
+      filter: true,
+      editable: true,
+      flex: 1.5,
+      minWidth: 120
+    },
+    { 
+      field: "info", 
+      headerName: "Informace",
+      editable: true,
+      filter: true,
+      flex: 2,
+      minWidth: 120
     },
     { 
       field: "mobile", 
@@ -1081,6 +1154,28 @@ const UsersGrid = () => {
         {/* Clients Table */}
         {activeTable === 'clients' && (
           <div className="grid-container">
+            {viewMode === 'pending' && (
+              <div
+                className="approve-buttons-column"
+                style={{
+                  ['--row-height' as any]: `${clientsSizes.row}px`,
+                  ['--header-offset' as any]: `${clientsSizes.headerOffset}px`,
+                }}
+              >
+                {clientsData.map((client) => (
+                  <button
+                    key={client.id}
+                    onClick={() => handleApproveClient(client.id as number)}
+                    className="external-approve-btn"
+                    title="Approve client"
+                  >
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                      <path d="M20 6L9 17L4 12" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+                    </svg>
+                  </button>
+                ))}
+              </div>
+            )}
             <div
               className="delete-buttons-column"
               style={{
@@ -1093,7 +1188,7 @@ const UsersGrid = () => {
                   key={client.id}
                   onClick={() => handleDeleteClient(client.id as number)}
                   className="external-delete-btn"
-                  title="Delete client"
+                  title={viewMode === 'pending' ? 'Reject client' : 'Delete client'}
                 >
                   <svg width="14" height="14" viewBox="0 0 12 12" fill="none" xmlns="http://www.w3.org/2000/svg">
                     <path d="M9 3L3 9M3 3L9 9" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
@@ -1121,6 +1216,28 @@ const UsersGrid = () => {
         {/* Partners Table */}
         {activeTable === 'partners' && (
           <div className="grid-container">
+            {viewMode === 'pending' && (
+              <div
+                className="approve-buttons-column"
+                style={{
+                  ['--row-height' as any]: `${partnersSizes.row}px`,
+                  ['--header-offset' as any]: `${partnersSizes.headerOffset}px`,
+                }}
+              >
+                {partnersData.map((partner) => (
+                  <button
+                    key={partner.id}
+                    onClick={() => handleApprovePartner(partner.id as number)}
+                    className="external-approve-btn"
+                    title="Approve partner"
+                  >
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                      <path d="M20 6L9 17L4 12" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+                    </svg>
+                  </button>
+                ))}
+              </div>
+            )}
             <div
               className="delete-buttons-column"
               style={{
@@ -1133,7 +1250,7 @@ const UsersGrid = () => {
                   key={partner.id}
                   onClick={() => handleDeletePartner(partner.id as number)}
                   className="external-delete-btn"
-                  title="Delete partner"
+                  title={viewMode === 'pending' ? 'Reject partner' : 'Delete partner'}
                 >
                   <svg width="14" height="14" viewBox="0 0 12 12" fill="none" xmlns="http://www.w3.org/2000/svg">
                     <path d="M9 3L3 9M3 3L9 9" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
@@ -1161,6 +1278,28 @@ const UsersGrid = () => {
         {/* Tipers Table */}
         {activeTable === 'tipers' && (
           <div className="grid-container">
+            {viewMode === 'pending' && (
+              <div
+                className="approve-buttons-column"
+                style={{
+                  ['--row-height' as any]: `${tipersSizes.row}px`,
+                  ['--header-offset' as any]: `${tipersSizes.headerOffset}px`,
+                }}
+              >
+                {tipersData.map((tiper) => (
+                  <button
+                    key={tiper.id}
+                    onClick={() => handleApproveTiper(tiper.id as number)}
+                    className="external-approve-btn"
+                    title="Approve tiper"
+                  >
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                      <path d="M20 6L9 17L4 12" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+                    </svg>
+                  </button>
+                ))}
+              </div>
+            )}
             <div
               className="delete-buttons-column"
               style={{
@@ -1173,7 +1312,7 @@ const UsersGrid = () => {
                   key={tiper.id}
                   onClick={() => handleDeleteTiper(tiper.id as number)}
                   className="external-delete-btn"
-                  title="Delete tiper"
+                  title={viewMode === 'pending' ? 'Reject tiper' : 'Delete tiper'}
                 >
                   <svg width="14" height="14" viewBox="0 0 12 12" fill="none" xmlns="http://www.w3.org/2000/svg">
                     <path d="M9 3L3 9M3 3L9 9" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
