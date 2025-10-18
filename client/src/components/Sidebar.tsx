@@ -30,7 +30,7 @@ const Sidebar: React.FC<SidebarProps> = ({ activeView, onViewChange }) => {
             <polyline points="9 11 12 14 22 4"></polyline>
             <path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"></path>
           </svg>
-          <span>Active Collaborations</span>
+          <span>Aktivní spolupráce</span>
         </button>
         <button
           className={`sidebar-button ${activeView === 'pending' ? 'active' : ''}`}
@@ -49,7 +49,7 @@ const Sidebar: React.FC<SidebarProps> = ({ activeView, onViewChange }) => {
             <circle cx="12" cy="12" r="10"></circle>
             <polyline points="12 6 12 12 16 14"></polyline>
           </svg>
-          <span>Pending Approval</span>
+          <span>Čekající na schválení</span>
         </button>
         <a
           href="/public-form"
@@ -70,7 +70,7 @@ const Sidebar: React.FC<SidebarProps> = ({ activeView, onViewChange }) => {
             <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path>
             <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path>
           </svg>
-          <span>Public Form</span>
+          <span>Veřejný formulář</span>
           <svg
             width="14"
             height="14"

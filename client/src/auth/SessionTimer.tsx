@@ -23,11 +23,11 @@ const SessionTimer: React.FC = () => {
     <div className={`session-timer ${getTimerClass()}`}>
       <div className="timer-content">
         <span className="timer-icon">⏱️</span>
-        <span className="timer-text">Session: {formatTime(timeLeft)}</span>
+        <span className="timer-text">Relace: {formatTime(timeLeft)}</span>
         <button 
           onClick={logout} 
           className="logout-button"
-          title="Logout"
+          title="Odhlásit se"
         >
           🚪
         </button>

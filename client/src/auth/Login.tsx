@@ -19,7 +19,7 @@ const Login: React.FC = () => {
     const success = login(code);
     
     if (!success) {
-      setError('Invalid verification code. Please try again.');
+      setError('Neplatný ověřovací kód. Zkuste to prosím znovu.');
       setCode('');
     }
     
@@ -44,20 +44,20 @@ const Login: React.FC = () => {
       <div className="login-card">
         <div className="login-header">
           <h1 className="login-title">Walter System</h1>
-          <p className="login-subtitle">Access Verification Required</p>
+          <p className="login-subtitle">Vyžadováno ověření přístupu</p>
         </div>
         
         <form onSubmit={handleSubmit} className="login-form">
           <div className="input-group">
             <label htmlFor="verification-code" className="input-label">
-              Verification Code
+              Ověřovací kód
             </label>
             <input
               id="verification-code"
               type="password"
               value={code}
               onChange={handleCodeChange}
-              placeholder="Enter verification code"
+              placeholder="Zadejte ověřovací kód"
               className={`input-field ${error ? 'input-error' : ''}`}
               disabled={isLoading}
               autoComplete="current-password"
@@ -79,10 +79,10 @@ const Login: React.FC = () => {
             {isLoading ? (
               <>
                 <span className="spinner"></span>
-                Verifying...
+                Ověřuji...
               </>
             ) : (
-              'Access System'
+              'Přístup do systému'
             )}
           </button>
         </form>
@@ -106,7 +106,7 @@ const Login: React.FC = () => {
             <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path>
             <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path>
           </svg>
-          <span>Submit Public Form</span>
+          <span>Odeslat veřejný formulář</span>
           <svg
             width="14"
             height="14"
@@ -125,7 +125,7 @@ const Login: React.FC = () => {
         
         <div className="login-footer">
           <p className="security-note">
-            🔒 Secure access • Session expires after 30 minutes of inactivity
+            🔒 Zabezpečený přístup • Relace vyprší po 30 minutách nečinnosti
           </p>
         </div>
       </div>

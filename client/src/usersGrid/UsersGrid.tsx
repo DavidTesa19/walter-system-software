@@ -374,7 +374,7 @@ const StatusCellRenderer = (params: any) => {
 const FieldCellRenderer = (params: any) => {
   const getCurrentField = () => {
     return fieldOptions.find(option => option.value === params.value) || 
-           { value: params.value || '', label: params.value || 'Select Field' };
+           { value: params.value || '', label: params.value || 'Vyberte obor' };
   };
 
   const handleFieldClick = (e: React.MouseEvent) => {
@@ -496,7 +496,7 @@ const FieldCellRenderer = (params: any) => {
         cursor: 'pointer',
         backgroundColor: 'white',
         color: '#333',
-        padding: '4px 8px',
+        padding: '0 8px',
         borderRadius: '4px',
         border: '1px solid transparent',
         transition: 'all 0.2s ease'
@@ -583,11 +583,11 @@ const UsersGrid: React.FC<UsersGridProps> = ({ viewMode }) => {
       if (response.ok) {
         fetchClientsData();
       } else {
-        alert('Failed to approve client');
+        alert('Nepodařilo se schválit klienta');
       }
     } catch (error) {
       console.error('Error approving client:', error);
-      alert('Error approving client');
+      alert('Chyba při schvalování klienta');
     }
   }, [API_BASE, fetchClientsData]);
 
@@ -597,11 +597,11 @@ const UsersGrid: React.FC<UsersGridProps> = ({ viewMode }) => {
       if (response.ok) {
         fetchPartnersData();
       } else {
-        alert('Failed to approve partner');
+        alert('Nepodařilo se schválit partnera');
       }
     } catch (error) {
       console.error('Error approving partner:', error);
-      alert('Error approving partner');
+      alert('Chyba při schvalování partnera');
     }
   }, [API_BASE, fetchPartnersData]);
 
@@ -611,11 +611,11 @@ const UsersGrid: React.FC<UsersGridProps> = ({ viewMode }) => {
       if (response.ok) {
         fetchTipersData();
       } else {
-        alert('Failed to approve tiper');
+        alert('Nepodařilo se schválit tipaře');
       }
     } catch (error) {
       console.error('Error approving tiper:', error);
-      alert('Error approving tiper');
+      alert('Chyba při schvalování tipaře');
     }
   }, [API_BASE, fetchTipersData]);
 
@@ -625,11 +625,11 @@ const UsersGrid: React.FC<UsersGridProps> = ({ viewMode }) => {
       if (response.ok) {
         fetchClientsData();
       } else {
-        alert('Failed to delete client');
+        alert('Nepodařilo se smazat klienta');
       }
     } catch (error) {
       console.error('Error deleting client:', error);
-      alert('Error deleting client');
+      alert('Chyba při mazání klienta');
     }
   }, [API_BASE, fetchClientsData]);
 
@@ -639,11 +639,11 @@ const UsersGrid: React.FC<UsersGridProps> = ({ viewMode }) => {
       if (response.ok) {
         fetchPartnersData();
       } else {
-        alert('Failed to delete partner');
+        alert('Nepodařilo se smazat partnera');
       }
     } catch (error) {
       console.error('Error deleting partner:', error);
-      alert('Error deleting partner');
+      alert('Chyba při mazání partnera');
     }
   }, [API_BASE, fetchPartnersData]);
 
@@ -653,11 +653,11 @@ const UsersGrid: React.FC<UsersGridProps> = ({ viewMode }) => {
       if (response.ok) {
         fetchTipersData();
       } else {
-        alert('Failed to delete tiper');
+        alert('Nepodařilo se smazat tipaře');
       }
     } catch (error) {
       console.error('Error deleting tiper:', error);
-      alert('Error deleting tiper');
+      alert('Chyba při mazání tipaře');
     }
   }, [API_BASE, fetchTipersData]);
 
@@ -1004,12 +1004,12 @@ const UsersGrid: React.FC<UsersGridProps> = ({ viewMode }) => {
       });
 
       if (!response.ok) {
-        alert('Failed to update tiper');
+        alert('Nepodařilo se aktualizovat tipaře');
         fetchTipersData(); // Revert changes by refreshing
       }
     } catch (error) {
       console.error('Error updating tiper:', error);
-      alert('Error updating tiper');
+      alert('Chyba při aktualizaci tipaře');
       fetchTipersData(); // Revert changes by refreshing
     }
   }, [API_BASE, fetchTipersData]);
@@ -1035,11 +1035,11 @@ const UsersGrid: React.FC<UsersGridProps> = ({ viewMode }) => {
       if (response.ok) {
         fetchPartnersData(); // Refresh the grid
       } else {
-        alert('Failed to add partner');
+        alert('Nepodařilo se přidat partnera');
       }
     } catch (error) {
       console.error('Error adding partner:', error);
-      alert('Error adding partner');
+      alert('Chyba při přidávání partnera');
     }
   };
 
@@ -1064,11 +1064,11 @@ const UsersGrid: React.FC<UsersGridProps> = ({ viewMode }) => {
       if (response.ok) {
         fetchClientsData(); // Refresh the grid
       } else {
-        alert('Failed to add client');
+        alert('Nepodařilo se přidat klienta');
       }
     } catch (error) {
       console.error('Error adding client:', error);
-      alert('Error adding client');
+      alert('Chyba při přidávání klienta');
     }
   };
 
@@ -1093,11 +1093,11 @@ const UsersGrid: React.FC<UsersGridProps> = ({ viewMode }) => {
       if (response.ok) {
         fetchTipersData(); // Refresh the grid
       } else {
-        alert('Failed to add tiper');
+        alert('Nepodařilo se přidat tipaře');
       }
     } catch (error) {
       console.error('Error adding tiper:', error);
-      alert('Error adding tiper');
+      alert('Chyba při přidávání tipaře');
     }
   };
 
@@ -1167,7 +1167,7 @@ const UsersGrid: React.FC<UsersGridProps> = ({ viewMode }) => {
                     key={client.id}
                     onClick={() => handleApproveClient(client.id as number)}
                     className="external-approve-btn"
-                    title="Approve client"
+                    title="Schválit klienta"
                   >
                     <svg width="16" height="16" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
                       <path d="M20 6L9 17L4 12" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
@@ -1188,7 +1188,7 @@ const UsersGrid: React.FC<UsersGridProps> = ({ viewMode }) => {
                   key={client.id}
                   onClick={() => handleDeleteClient(client.id as number)}
                   className="external-delete-btn"
-                  title={viewMode === 'pending' ? 'Reject client' : 'Delete client'}
+                  title={viewMode === 'pending' ? 'Zamítnout klienta' : 'Smazat klienta'}
                 >
                   <svg width="14" height="14" viewBox="0 0 12 12" fill="none" xmlns="http://www.w3.org/2000/svg">
                     <path d="M9 3L3 9M3 3L9 9" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
@@ -1229,7 +1229,7 @@ const UsersGrid: React.FC<UsersGridProps> = ({ viewMode }) => {
                     key={partner.id}
                     onClick={() => handleApprovePartner(partner.id as number)}
                     className="external-approve-btn"
-                    title="Approve partner"
+                    title="Schválit partnera"
                   >
                     <svg width="16" height="16" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
                       <path d="M20 6L9 17L4 12" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
@@ -1250,7 +1250,7 @@ const UsersGrid: React.FC<UsersGridProps> = ({ viewMode }) => {
                   key={partner.id}
                   onClick={() => handleDeletePartner(partner.id as number)}
                   className="external-delete-btn"
-                  title={viewMode === 'pending' ? 'Reject partner' : 'Delete partner'}
+                  title={viewMode === 'pending' ? 'Zamítnout partnera' : 'Smazat partnera'}
                 >
                   <svg width="14" height="14" viewBox="0 0 12 12" fill="none" xmlns="http://www.w3.org/2000/svg">
                     <path d="M9 3L3 9M3 3L9 9" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
@@ -1291,7 +1291,7 @@ const UsersGrid: React.FC<UsersGridProps> = ({ viewMode }) => {
                     key={tiper.id}
                     onClick={() => handleApproveTiper(tiper.id as number)}
                     className="external-approve-btn"
-                    title="Approve tiper"
+                    title="Schválit tipaře"
                   >
                     <svg width="16" height="16" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
                       <path d="M20 6L9 17L4 12" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
@@ -1312,7 +1312,7 @@ const UsersGrid: React.FC<UsersGridProps> = ({ viewMode }) => {
                   key={tiper.id}
                   onClick={() => handleDeleteTiper(tiper.id as number)}
                   className="external-delete-btn"
-                  title={viewMode === 'pending' ? 'Reject tiper' : 'Delete tiper'}
+                  title={viewMode === 'pending' ? 'Zamítnout tipaře' : 'Smazat tipaře'}
                 >
                   <svg width="14" height="14" viewBox="0 0 12 12" fill="none" xmlns="http://www.w3.org/2000/svg">
                     <path d="M9 3L3 9M3 3L9 9" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
@@ -1341,11 +1341,11 @@ const UsersGrid: React.FC<UsersGridProps> = ({ viewMode }) => {
       <div className="instructions">
         <p><strong>Instrukce:</strong></p>
         <ul>
-          <li>Použijte záložky výše pro přepínání mezi tabulkami Klientů, Partnerů a Tiperů</li>
+          <li>Použijte záložky výše pro přepínání mezi tabulkami Klientů, Partnerů a Tipařů</li>
           <li>Klikněte na jakoukoliv buňku pro úpravu (kromě ID)</li>
           <li>Stiskněte Enter nebo klikněte mimo pro uložení změn</li>
           <li>Klikněte na ikonu koše pro smazání položky</li>
-          <li>Klikněte "Přidat Klienta/Partnera/Tipera" pro vytvoření nového záznamu</li>
+          <li>Klikněte "Přidat Klienta/Partnera/Tipaře" pro vytvoření nového záznamu</li>
         </ul>
       </div>
     </div>
