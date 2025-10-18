@@ -711,10 +711,17 @@ const UsersGrid = () => {
       void handleDeletePartner(partnerId, props.data, props.api);
     };
 
+    const handleMouseDown = (e: React.MouseEvent) => {
+      console.log('👇 Mouse down on partner delete button', e.button);
+      // Handle delete on mouse down to bypass AG Grid's click capture
+      e.stopPropagation();
+      e.preventDefault();
+      handleClick(e);
+    };
+
     return (
       <button
-        onClick={handleClick}
-        onMouseDown={(e) => console.log('👇 Mouse down on partner delete button', e.button)}
+        onMouseDown={handleMouseDown}
         className="delete-btn"
         title="Delete partner"
         style={{ cursor: 'pointer', pointerEvents: 'auto', zIndex: 9999 }}
@@ -745,10 +752,17 @@ const UsersGrid = () => {
       void handleDeleteClient(clientId, props.data, props.api);
     };
 
+    const handleMouseDown = (e: React.MouseEvent) => {
+      console.log('👇 Mouse down on client delete button', e.button);
+      // Handle delete on mouse down to bypass AG Grid's click capture
+      e.stopPropagation();
+      e.preventDefault();
+      handleClick(e);
+    };
+
     return (
       <button
-        onClick={handleClick}
-        onMouseDown={(e) => console.log('👇 Mouse down on client delete button', e.button)}
+        onMouseDown={handleMouseDown}
         className="delete-btn"
         title="Delete client"
         style={{ cursor: 'pointer', pointerEvents: 'auto', zIndex: 9999 }}
@@ -762,16 +776,27 @@ const UsersGrid = () => {
 
   const TipersDeleteButton = (props: any) => {
     const handleClick = (e: React.MouseEvent) => {
+      console.log('🖱️ DELETE BUTTON CLICKED (TIPER)');
       e.stopPropagation();
+      e.preventDefault();
       const tiperId = Number(props.data?.id);
+      console.log('  - Parsed tiperId:', tiperId);
       void handleDeleteTiper(tiperId, props.data, props.api);
+    };
+
+    const handleMouseDown = (e: React.MouseEvent) => {
+      console.log('👇 Mouse down on tiper delete button', e.button);
+      e.stopPropagation();
+      e.preventDefault();
+      handleClick(e);
     };
 
     return (
       <button
-        onClick={handleClick}
+        onMouseDown={handleMouseDown}
         className="delete-btn"
         title="Delete tiper"
+        style={{ cursor: 'pointer', pointerEvents: 'auto', zIndex: 9999 }}
       >
         <svg width="12" height="12" viewBox="0 0 12 12" fill="none" xmlns="http://www.w3.org/2000/svg">
           <path d="M9 3L3 9M3 3L9 9" stroke="white" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
@@ -794,7 +819,8 @@ const UsersGrid = () => {
       filter: false,
       resizable: false,
       suppressSizeToFit: true,
-      editable: false
+      editable: false,
+      suppressNavigable: true
     },
     { 
       field: "id", 
@@ -876,7 +902,8 @@ const UsersGrid = () => {
       filter: false,
       resizable: false,
       suppressSizeToFit: true,
-      editable: false
+      editable: false,
+      suppressNavigable: true
     },
     { 
       field: "id", 
