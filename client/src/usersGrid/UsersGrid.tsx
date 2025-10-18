@@ -697,8 +697,8 @@ const UsersGrid = () => {
     
     return (
       <button
-        onMouseDown={(e: React.MouseEvent) => {
-          console.log('👇 Mouse down on partner delete button', e.button);
+        onClick={(e: React.MouseEvent) => {
+          console.log('�️ Click on partner delete button');
           e.stopPropagation();
           e.preventDefault();
           
@@ -715,6 +715,8 @@ const UsersGrid = () => {
         }}
         className="delete-btn"
         title="Delete partner"
+        type="button"
+        aria-label="Delete partner"
         style={{ cursor: 'pointer', pointerEvents: 'auto', zIndex: 9999 }}
       >
         <svg width="12" height="12" viewBox="0 0 12 12" fill="none" xmlns="http://www.w3.org/2000/svg">
@@ -729,8 +731,8 @@ const UsersGrid = () => {
     
     return (
       <button
-        onMouseDown={(e: React.MouseEvent) => {
-          console.log('� Mouse down on client delete button', e.button);
+        onClick={(e: React.MouseEvent) => {
+          console.log('🖱️ Click on client delete button');
           e.stopPropagation();
           e.preventDefault();
           
@@ -747,6 +749,8 @@ const UsersGrid = () => {
         }}
         className="delete-btn"
         title="Delete client"
+        type="button"
+        aria-label="Delete client"
         style={{ cursor: 'pointer', pointerEvents: 'auto', zIndex: 9999 }}
       >
         <svg width="12" height="12" viewBox="0 0 12 12" fill="none" xmlns="http://www.w3.org/2000/svg">
@@ -766,18 +770,13 @@ const UsersGrid = () => {
       void handleDeleteTiper(tiperId, props.data, props.api);
     };
 
-    const handleMouseDown = (e: React.MouseEvent) => {
-      console.log('👇 Mouse down on tiper delete button', e.button);
-      e.stopPropagation();
-      e.preventDefault();
-      handleClick(e);
-    };
-
     return (
       <button
-        onMouseDown={handleMouseDown}
+        onClick={handleClick}
         className="delete-btn"
         title="Delete tiper"
+        type="button"
+        aria-label="Delete tiper"
         style={{ cursor: 'pointer', pointerEvents: 'auto', zIndex: 9999 }}
       >
         <svg width="12" height="12" viewBox="0 0 12 12" fill="none" xmlns="http://www.w3.org/2000/svg">
