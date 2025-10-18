@@ -1195,6 +1195,54 @@ const UsersGrid = () => {
     }
   };
 
+  // TEST DELETE BUTTON - Outside grid to isolate issue
+  const handleTestDelete = async () => {
+    console.log('🧪 TEST DELETE BUTTON CLICKED');
+    
+    const currentData = activeTable === 'clients' ? clientsData : 
+                       activeTable === 'partners' ? partnersData : 
+                       tipersData;
+    
+    if (currentData.length === 0) {
+      alert('No records to delete. Add a record first.');
+      return;
+    }
+    
+    const firstRecord = currentData[0];
+    const endpoint = activeTable === 'clients' ? 'clients' : 
+                    activeTable === 'partners' ? 'partners' : 
+                    'tipers';
+    
+    console.log(`🧪 Attempting to delete first ${endpoint} record:`, firstRecord);
+    console.log(`🧪 URL: ${API_BASE}/${endpoint}/${firstRecord.id}`);
+    
+    try {
+      const response = await fetch(`${API_BASE}/${endpoint}/${firstRecord.id}`, {
+        method: 'DELETE',
+      });
+      
+      console.log('🧪 Response:', {
+        status: response.status,
+        statusText: response.statusText,
+        ok: response.ok
+      });
+      
+      if (response.ok) {
+        alert(`✅ Successfully deleted ${endpoint} ID ${firstRecord.id}`);
+        // Refresh data
+        if (activeTable === 'clients') await fetchClientsData();
+        else if (activeTable === 'partners') await fetchPartnersData();
+        else await fetchTipersData();
+      } else {
+        const errorText = await response.text();
+        alert(`❌ Delete failed: ${response.status} ${errorText}`);
+      }
+    } catch (error) {
+      console.error('🧪 Error:', error);
+      alert(`❌ Network error: ${error.message}`);
+    }
+  };
+
   return (
     <div className="page-container">
       <div className="header-section">
@@ -1219,6 +1267,22 @@ const UsersGrid = () => {
             💡 Tipaři
           </button>
         </div>
+        <button 
+          onClick={handleTestDelete}
+          style={{
+            background: '#ff6b6b',
+            color: 'white',
+            border: 'none',
+            padding: '0.75rem 1.5rem',
+            borderRadius: '6px',
+            cursor: 'pointer',
+            fontSize: '0.95rem',
+            fontWeight: '500',
+            marginRight: '1rem'
+          }}
+        >
+          🧪 TEST: Delete First Row
+        </button>
         <button 
           onClick={
             activeTable === 'clients' ? handleAddClient : 
