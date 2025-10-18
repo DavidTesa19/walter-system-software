@@ -3,7 +3,7 @@ import "./UsersGrid.css";
 import { AgGridReact} from "ag-grid-react";
 import { useEffect, useState, useCallback, useRef, forwardRef, useImperativeHandle } from "react";
 import type { UserInterface } from "./user.interface";
-import type { ColDef, ICellEditorParams, GridApi } from "ag-grid-community";
+import type { ColDef, ICellEditorParams } from "ag-grid-community";
 import { ModuleRegistry, AllCommunityModule } from "ag-grid-community";
 import { fieldOptions } from "./fieldOptions";
 
@@ -570,239 +570,101 @@ const UsersGrid = () => {
     }
   }, [API_BASE]);
 
-  const handleDeletePartner = useCallback(
-    async (partnerId: number, rowData?: UserInterface, gridApi?: GridApi<UserInterface>) => {
-      console.log('🗑️ DELETE PARTNER CALLED');
-      console.log('  - Partner ID:', partnerId);
-      console.log('  - Row Data:', rowData);
-      console.log('  - API Base:', API_BASE);
-      
-      if (!partnerId || Number.isNaN(partnerId)) {
-        console.error('❌ Invalid partner id, skipping delete:', rowData?.id);
-        return;
+  // Delete handlers for each table (used by external buttons)
+  const handleDeleteClient = useCallback(async (id: number) => {
+    try {
+      const response = await fetch(`${API_BASE}/clients/${id}`, { method: 'DELETE' });
+      if (response.ok) {
+        fetchClientsData();
+      } else {
+        alert('Failed to delete client');
       }
+    } catch (error) {
+      console.error('Error deleting client:', error);
+      alert('Error deleting client');
+    }
+  }, [API_BASE, fetchClientsData]);
 
-      try {
-        console.log(`📡 Sending DELETE request to: ${API_BASE}/partners/${partnerId}`);
-        const response = await fetch(`${API_BASE}/partners/${partnerId}`, {
-          method: 'DELETE',
-        });
-        
-        console.log('📥 Response received:', {
-          status: response.status,
-          statusText: response.statusText,
-          ok: response.ok
-        });
-
-        if (response.ok) {
-          console.log('✅ Delete successful, updating grid');
-          const apiToUse = gridApi ?? partnersGridRef.current?.api;
-          if (rowData && apiToUse) {
-            apiToUse.applyTransaction({ remove: [rowData] });
-          }
-          setPartnersData(prev => prev.filter(partner => Number(partner.id) !== partnerId));
-          await fetchPartnersData();
-        } else {
-          const errorText = await response.text();
-          console.error('❌ Failed to delete partner:', errorText || response.statusText);
-          alert('Failed to delete partner');
-        }
-      } catch (error) {
-        console.error('💥 Error deleting partner:', error);
-        alert('Error deleting partner');
+  const handleDeletePartner = useCallback(async (id: number) => {
+    try {
+      const response = await fetch(`${API_BASE}/partners/${id}`, { method: 'DELETE' });
+      if (response.ok) {
+        fetchPartnersData();
+      } else {
+        alert('Failed to delete partner');
       }
-    },
-    [API_BASE, fetchPartnersData]
-  );
+    } catch (error) {
+      console.error('Error deleting partner:', error);
+      alert('Error deleting partner');
+    }
+  }, [API_BASE, fetchPartnersData]);
 
-  const handleDeleteClient = useCallback(
-    async (clientId: number, rowData?: UserInterface, gridApi?: GridApi<UserInterface>) => {
-      console.log('🗑️ DELETE CLIENT CALLED');
-      console.log('  - Client ID:', clientId);
-      console.log('  - Row Data:', rowData);
-      console.log('  - API Base:', API_BASE);
-      
-      if (!clientId || Number.isNaN(clientId)) {
-        console.error('❌ Invalid client id, skipping delete:', rowData?.id);
-        return;
+  const handleDeleteTiper = useCallback(async (id: number) => {
+    try {
+      const response = await fetch(`${API_BASE}/tipers/${id}`, { method: 'DELETE' });
+      if (response.ok) {
+        fetchTipersData();
+      } else {
+        alert('Failed to delete tiper');
       }
+    } catch (error) {
+      console.error('Error deleting tiper:', error);
+      alert('Error deleting tiper');
+    }
+  }, [API_BASE, fetchTipersData]);
 
-      try {
-        console.log(`📡 Sending DELETE request to: ${API_BASE}/clients/${clientId}`);
-        const response = await fetch(`${API_BASE}/clients/${clientId}`, {
-          method: 'DELETE',
-        });
-        
-        console.log('📥 Response received:', {
-          status: response.status,
-          statusText: response.statusText,
-          ok: response.ok
-        });
+  // Refs to grid wrappers for measuring header/row heights
+  const clientsWrapperRef = useRef<HTMLDivElement>(null);
+  const partnersWrapperRef = useRef<HTMLDivElement>(null);
+  const tipersWrapperRef = useRef<HTMLDivElement>(null);
 
-        if (response.ok) {
-          console.log('✅ Delete successful, updating grid');
-          const apiToUse = gridApi ?? clientsGridRef.current?.api;
-          if (rowData && apiToUse) {
-            apiToUse.applyTransaction({ remove: [rowData] });
-          }
-          setClientsData(prev => prev.filter(client => Number(client.id) !== clientId));
-          await fetchClientsData();
-        } else {
-          const errorText = await response.text();
-          console.error('❌ Failed to delete client:', errorText || response.statusText);
-          alert('Failed to delete client');
-        }
-      } catch (error) {
-        console.error('💥 Error deleting client:', error);
-        alert('Error deleting client');
-      }
-    },
-    [API_BASE, fetchClientsData]
-  );
+  // Measured sizes per table
+  const [clientsSizes, setClientsSizes] = useState({ row: 42, headerOffset: 80 });
+  const [partnersSizes, setPartnersSizes] = useState({ row: 42, headerOffset: 80 });
+  const [tipersSizes, setTipersSizes] = useState({ row: 42, headerOffset: 80 });
 
-  const handleDeleteTiper = useCallback(
-    async (tiperId: number, rowData?: UserInterface, gridApi?: GridApi<UserInterface>) => {
-      if (!tiperId || Number.isNaN(tiperId)) {
-        console.error('Invalid tiper id, skipping delete:', rowData?.id);
-        return;
-      }
+  const measureGrid = useCallback((wrapper: HTMLDivElement | null) => {
+    try {
+      if (!wrapper) return { row: 42, headerOffset: 80 };
+      const headerEl = wrapper.querySelector('.ag-header') as HTMLElement | null;
+      const firstRow = wrapper.querySelector('.ag-center-cols-container .ag-row') as HTMLElement | null;
+      const headerRect = headerEl?.getBoundingClientRect();
+      const rowRect = firstRow?.getBoundingClientRect();
+      const cs = window.getComputedStyle(wrapper);
+      const paddingTop = parseFloat(cs.paddingTop || '0');
+      const headerHeight = (headerRect?.height ?? 64);
+      const rowHeight = (rowRect?.height ?? 42);
+      return { row: Math.round(rowHeight), headerOffset: Math.round(headerHeight + paddingTop) };
+    } catch {
+      return { row: 42, headerOffset: 80 };
+    }
+  }, []);
 
-      try {
-        const response = await fetch(`${API_BASE}/tipers/${tiperId}`, {
-          method: 'DELETE',
-        });
+  // Re-measure when data changes or window resizes
+  useEffect(() => {
+    setClientsSizes(measureGrid(clientsWrapperRef.current));
+  }, [clientsData, measureGrid]);
 
-        if (response.ok) {
-          const apiToUse = gridApi ?? tipersGridRef.current?.api;
-          if (rowData && apiToUse) {
-            apiToUse.applyTransaction({ remove: [rowData] });
-          }
-          setTipersData(prev => prev.filter(tiper => Number(tiper.id) !== tiperId));
-          await fetchTipersData();
-        } else {
-          const errorText = await response.text();
-          console.error('Failed to delete tiper:', errorText || response.statusText);
-          alert('Failed to delete tiper');
-        }
-      } catch (error) {
-        console.error('Error deleting tiper:', error);
-        alert('Error deleting tiper');
-      }
-    },
-    [API_BASE, fetchTipersData]
-  );
+  useEffect(() => {
+    setPartnersSizes(measureGrid(partnersWrapperRef.current));
+  }, [partnersData, measureGrid]);
 
-  const PartnersDeleteButton = (props: any) => {
-    console.log('🔄 PartnersDeleteButton RENDERED', { id: props.data?.id });
-    
-    return (
-      <button
-        onClick={(e: React.MouseEvent) => {
-          console.log('�️ Click on partner delete button');
-          e.stopPropagation();
-          e.preventDefault();
-          
-          const partnerId = Number(props.data?.id);
-          console.log('🖱️ DELETE BUTTON TRIGGERED (PARTNER)');
-          console.log('  - Partner ID:', partnerId);
-          console.log('  - Is NaN?:', Number.isNaN(partnerId));
-          
-          if (partnerId && !Number.isNaN(partnerId)) {
-            void handleDeletePartner(partnerId, props.data, props.api);
-          } else {
-            console.error('❌ Invalid partner ID:', props.data?.id);
-          }
-        }}
-        className="delete-btn"
-        title="Delete partner"
-        type="button"
-        aria-label="Delete partner"
-        style={{ cursor: 'pointer', pointerEvents: 'auto', zIndex: 9999 }}
-      >
-        <svg width="12" height="12" viewBox="0 0 12 12" fill="none" xmlns="http://www.w3.org/2000/svg">
-          <path d="M9 3L3 9M3 3L9 9" stroke="white" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
-        </svg>
-      </button>
-    );
-  };
+  useEffect(() => {
+    setTipersSizes(measureGrid(tipersWrapperRef.current));
+  }, [tipersData, measureGrid]);
 
-  const ClientsDeleteButton = (props: any) => {
-    console.log('🔄 ClientsDeleteButton RENDERED', { id: props.data?.id });
-    
-    return (
-      <button
-        onClick={(e: React.MouseEvent) => {
-          console.log('🖱️ Click on client delete button');
-          e.stopPropagation();
-          e.preventDefault();
-          
-          const clientId = Number(props.data?.id);
-          console.log('🖱️ DELETE BUTTON TRIGGERED');
-          console.log('  - Client ID:', clientId);
-          console.log('  - Is NaN?:', Number.isNaN(clientId));
-          
-          if (clientId && !Number.isNaN(clientId)) {
-            void handleDeleteClient(clientId, props.data, props.api);
-          } else {
-            console.error('❌ Invalid client ID:', props.data?.id);
-          }
-        }}
-        className="delete-btn"
-        title="Delete client"
-        type="button"
-        aria-label="Delete client"
-        style={{ cursor: 'pointer', pointerEvents: 'auto', zIndex: 9999 }}
-      >
-        <svg width="12" height="12" viewBox="0 0 12 12" fill="none" xmlns="http://www.w3.org/2000/svg">
-          <path d="M9 3L3 9M3 3L9 9" stroke="white" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
-        </svg>
-      </button>
-    );
-  };
-
-  const TipersDeleteButton = (props: any) => {
-    const handleClick = (e: React.MouseEvent) => {
-      console.log('🖱️ DELETE BUTTON CLICKED (TIPER)');
-      e.stopPropagation();
-      e.preventDefault();
-      const tiperId = Number(props.data?.id);
-      console.log('  - Parsed tiperId:', tiperId);
-      void handleDeleteTiper(tiperId, props.data, props.api);
+  useEffect(() => {
+    const onResize = () => {
+      setClientsSizes(measureGrid(clientsWrapperRef.current));
+      setPartnersSizes(measureGrid(partnersWrapperRef.current));
+      setTipersSizes(measureGrid(tipersWrapperRef.current));
     };
-
-    return (
-      <button
-        onClick={handleClick}
-        className="delete-btn"
-        title="Delete tiper"
-        type="button"
-        aria-label="Delete tiper"
-        style={{ cursor: 'pointer', pointerEvents: 'auto', zIndex: 9999 }}
-      >
-        <svg width="12" height="12" viewBox="0 0 12 12" fill="none" xmlns="http://www.w3.org/2000/svg">
-          <path d="M9 3L3 9M3 3L9 9" stroke="white" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
-        </svg>
-      </button>
-    );
-  };
+    window.addEventListener('resize', onResize);
+    return () => window.removeEventListener('resize', onResize);
+  }, [measureGrid]);
 
   // Partners column definitions
   const partnersColDefs: ColDef<UserInterface>[] = [
-    { 
-      headerName: "", 
-      cellRenderer: PartnersDeleteButton,
-      cellRendererParams: {
-        onDelete: handleDeletePartner,
-      },
-      width: 80,
-      pinned: 'left',
-      sortable: false,
-      filter: false,
-      resizable: false,
-      suppressSizeToFit: true,
-      editable: false,
-      suppressNavigable: true
-    },
     { 
       field: "id", 
       headerName: "ID",
@@ -871,21 +733,6 @@ const UsersGrid = () => {
 
   // Clients column definitions
   const clientsColDefs: ColDef<UserInterface>[] = [
-    { 
-      headerName: "", 
-      cellRenderer: ClientsDeleteButton,
-      cellRendererParams: {
-        onDelete: handleDeleteClient,
-      },
-      width: 80,
-      pinned: 'left',
-      sortable: false,
-      filter: false,
-      resizable: false,
-      suppressSizeToFit: true,
-      editable: false,
-      suppressNavigable: true
-    },
     { 
       field: "id", 
       headerName: "ID",
@@ -957,20 +804,6 @@ const UsersGrid = () => {
 
   // Tipers column definitions
   const tipersColDefs: ColDef<UserInterface>[] = [
-    { 
-      headerName: "", 
-      cellRenderer: TipersDeleteButton,
-      cellRendererParams: {
-        onDelete: handleDeleteTiper,
-      },
-      width: 80,
-      pinned: 'left',
-      sortable: false,
-      filter: false,
-      resizable: false,
-      suppressSizeToFit: true,
-      editable: false
-    },
     { 
       field: "id", 
       headerName: "ID",
@@ -1195,54 +1028,6 @@ const UsersGrid = () => {
     }
   };
 
-  // TEST DELETE BUTTON - Outside grid to isolate issue
-  const handleTestDelete = async () => {
-    console.log('🧪 TEST DELETE BUTTON CLICKED');
-    
-    const currentData = activeTable === 'clients' ? clientsData : 
-                       activeTable === 'partners' ? partnersData : 
-                       tipersData;
-    
-    if (currentData.length === 0) {
-      alert('No records to delete. Add a record first.');
-      return;
-    }
-    
-    const firstRecord = currentData[0];
-    const endpoint = activeTable === 'clients' ? 'clients' : 
-                    activeTable === 'partners' ? 'partners' : 
-                    'tipers';
-    
-    console.log(`🧪 Attempting to delete first ${endpoint} record:`, firstRecord);
-    console.log(`🧪 URL: ${API_BASE}/${endpoint}/${firstRecord.id}`);
-    
-    try {
-      const response = await fetch(`${API_BASE}/${endpoint}/${firstRecord.id}`, {
-        method: 'DELETE',
-      });
-      
-      console.log('🧪 Response:', {
-        status: response.status,
-        statusText: response.statusText,
-        ok: response.ok
-      });
-      
-      if (response.ok) {
-        alert(`✅ Successfully deleted ${endpoint} ID ${firstRecord.id}`);
-        // Refresh data
-        if (activeTable === 'clients') await fetchClientsData();
-        else if (activeTable === 'partners') await fetchPartnersData();
-        else await fetchTipersData();
-      } else {
-        const errorText = await response.text();
-        alert(`❌ Delete failed: ${response.status} ${errorText}`);
-      }
-    } catch (error) {
-      console.error('🧪 Error:', error);
-      alert(`❌ Network error: ${error instanceof Error ? error.message : String(error)}`);
-    }
-  };
-
   return (
     <div className="page-container">
       <div className="header-section">
@@ -1267,22 +1052,6 @@ const UsersGrid = () => {
             💡 Tipaři
           </button>
         </div>
-        <button 
-          onClick={handleTestDelete}
-          style={{
-            background: '#ff6b6b',
-            color: 'white',
-            border: 'none',
-            padding: '0.75rem 1.5rem',
-            borderRadius: '6px',
-            cursor: 'pointer',
-            fontSize: '0.95rem',
-            fontWeight: '500',
-            marginRight: '1rem'
-          }}
-        >
-          🧪 TEST: Delete First Row
-        </button>
         <button 
           onClick={
             activeTable === 'clients' ? handleAddClient : 
@@ -1311,55 +1080,121 @@ const UsersGrid = () => {
         
         {/* Clients Table */}
         {activeTable === 'clients' && (
-          <div className="grid-wrapper ag-theme-quartz" style={{ height: 500, width: "100%" }}>
-            <AgGridReact
-              ref={clientsGridRef}
-              rowData={clientsData}
-              columnDefs={clientsColDefs}
-              onCellValueChanged={onClientsCellValueChanged}
-              defaultColDef={{
-                resizable: true,
-                sortable: true,
+          <div className="grid-container">
+            <div
+              className="delete-buttons-column"
+              style={{
+                ['--row-height' as any]: `${clientsSizes.row}px`,
+                ['--header-offset' as any]: `${clientsSizes.headerOffset}px`,
               }}
-              suppressRowClickSelection={true}
-              loading={isLoading}
-            />
+            >
+              {clientsData.map((client) => (
+                <button
+                  key={client.id}
+                  onClick={() => handleDeleteClient(client.id as number)}
+                  className="external-delete-btn"
+                  title="Delete client"
+                >
+                  <svg width="14" height="14" viewBox="0 0 12 12" fill="none" xmlns="http://www.w3.org/2000/svg">
+                    <path d="M9 3L3 9M3 3L9 9" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+                  </svg>
+                </button>
+              ))}
+            </div>
+            <div ref={clientsWrapperRef} className="grid-wrapper ag-theme-quartz" style={{ height: 500, width: "100%" }}>
+              <AgGridReact
+                ref={clientsGridRef}
+                rowData={clientsData}
+                columnDefs={clientsColDefs}
+                onCellValueChanged={onClientsCellValueChanged}
+                defaultColDef={{
+                  resizable: true,
+                  sortable: true,
+                }}
+                suppressRowClickSelection={true}
+                loading={isLoading}
+              />
+            </div>
           </div>
         )}
         
         {/* Partners Table */}
         {activeTable === 'partners' && (
-          <div className="grid-wrapper ag-theme-quartz" style={{ height: 500, width: "100%" }}>
-            <AgGridReact
-              ref={partnersGridRef}
-              rowData={partnersData}
-              columnDefs={partnersColDefs}
-              onCellValueChanged={onPartnersCellValueChanged}
-              defaultColDef={{
-                resizable: true,
-                sortable: true,
+          <div className="grid-container">
+            <div
+              className="delete-buttons-column"
+              style={{
+                ['--row-height' as any]: `${partnersSizes.row}px`,
+                ['--header-offset' as any]: `${partnersSizes.headerOffset}px`,
               }}
-              suppressRowClickSelection={true}
-              loading={isLoading}
-            />
+            >
+              {partnersData.map((partner) => (
+                <button
+                  key={partner.id}
+                  onClick={() => handleDeletePartner(partner.id as number)}
+                  className="external-delete-btn"
+                  title="Delete partner"
+                >
+                  <svg width="14" height="14" viewBox="0 0 12 12" fill="none" xmlns="http://www.w3.org/2000/svg">
+                    <path d="M9 3L3 9M3 3L9 9" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+                  </svg>
+                </button>
+              ))}
+            </div>
+            <div ref={partnersWrapperRef} className="grid-wrapper ag-theme-quartz" style={{ height: 500, width: "100%" }}>
+              <AgGridReact
+                ref={partnersGridRef}
+                rowData={partnersData}
+                columnDefs={partnersColDefs}
+                onCellValueChanged={onPartnersCellValueChanged}
+                defaultColDef={{
+                  resizable: true,
+                  sortable: true,
+                }}
+                suppressRowClickSelection={true}
+                loading={isLoading}
+              />
+            </div>
           </div>
         )}
         
         {/* Tipers Table */}
         {activeTable === 'tipers' && (
-          <div className="grid-wrapper ag-theme-quartz" style={{ height: 500, width: "100%" }}>
-            <AgGridReact
-              ref={tipersGridRef}
-              rowData={tipersData}
-              columnDefs={tipersColDefs}
-              onCellValueChanged={onTipersCellValueChanged}
-              defaultColDef={{
-                resizable: true,
-                sortable: true,
+          <div className="grid-container">
+            <div
+              className="delete-buttons-column"
+              style={{
+                ['--row-height' as any]: `${tipersSizes.row}px`,
+                ['--header-offset' as any]: `${tipersSizes.headerOffset}px`,
               }}
-              suppressRowClickSelection={true}
-              loading={isLoading}
-            />
+            >
+              {tipersData.map((tiper) => (
+                <button
+                  key={tiper.id}
+                  onClick={() => handleDeleteTiper(tiper.id as number)}
+                  className="external-delete-btn"
+                  title="Delete tiper"
+                >
+                  <svg width="14" height="14" viewBox="0 0 12 12" fill="none" xmlns="http://www.w3.org/2000/svg">
+                    <path d="M9 3L3 9M3 3L9 9" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+                  </svg>
+                </button>
+              ))}
+            </div>
+            <div ref={tipersWrapperRef} className="grid-wrapper ag-theme-quartz" style={{ height: 500, width: "100%" }}>
+              <AgGridReact
+                ref={tipersGridRef}
+                rowData={tipersData}
+                columnDefs={tipersColDefs}
+                onCellValueChanged={onTipersCellValueChanged}
+                defaultColDef={{
+                  resizable: true,
+                  sortable: true,
+                }}
+                suppressRowClickSelection={true}
+                loading={isLoading}
+              />
+            </div>
           </div>
         )}
       </div>
