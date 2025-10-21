@@ -42,6 +42,7 @@
   color: var(--color-text-muted);
   transition: all 0.2s;
   white-space: nowrap;
+  font-family: var(--font-subheading);
 }
 
 .nav-tab:hover {
@@ -66,10 +67,11 @@
   margin-bottom: 1rem;
   color: var(--color-text);
   text-align: left;
+  font-family: var(--font-subheading);
 }
 
 .page-title {
-  font-family: 'Georgia', 'Times New Roman', serif;
+  font-family: var(--font-heading);
   font-weight: 700;
   font-size: 2.25rem;
   margin: 0;
@@ -77,8 +79,8 @@
 }
 
 .add-user-btn {
-  background: var(--color-primary);
-  color: var(--color-primary-contrast);
+  background: var(--color-accent);
+  color: var(--color-accent-contrast);
   border: none;
   padding: 0.75rem 1.5rem;
   border-radius: 0.75rem;
@@ -86,10 +88,11 @@
   font-size: 0.95rem;
   font-weight: 600;
   transition: background-color 0.2s ease;
+  font-family: var(--font-subheading);
 }
 
 .add-user-btn:hover:not(:disabled) {
-  background: var(--color-primary-hover);
+  background: var(--color-accent-hover);
 }
 
 .add-user-btn:disabled {
@@ -324,17 +327,20 @@
 .ag-theme-quartz .ag-header-cell-label {
   justify-content: center !important;
   color: var(--color-primary-contrast) !important;
+  font-family: var(--font-subheading);
 }
 
 .ag-theme-quartz .ag-header-cell-text {
   text-align: center !important;
   color: var(--color-primary-contrast) !important;
+  font-family: var(--font-subheading);
 }
 
 /* Override AG Grid's default header styles */
 .ag-theme-quartz .ag-header-cell {
   background: var(--color-primary) !important;
   border-right: 1px solid var(--color-border-strong) !important;
+  font-family: var(--font-subheading);
 }
 
 /* Header row background */
@@ -359,6 +365,14 @@
   --ag-selected-row-background-color: color-mix(in srgb, var(--color-primary) 20%, var(--color-surface));
   --ag-range-selection-border-color: var(--color-primary);
   --ag-input-focus-border-color: var(--color-primary);
+}
+
+.ag-theme-quartz .ag-cell,
+.ag-theme-quartz .ag-group-value,
+.ag-theme-quartz .ag-cell-value,
+.ag-theme-quartz .ag-full-width-row .ag-cell {
+  font-family: var(--font-body);
+  color: var(--color-text);
 }
 
 /* Style for editable cells */

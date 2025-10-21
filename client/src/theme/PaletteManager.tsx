@@ -1,9 +1,10 @@
-import React, { useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { colord } from 'colord';
 import { HslStringColorPicker } from 'react-colorful';
 import {
   useTheme,
   type PaletteColors,
+  type PaletteTypography,
   type ColorPalette,
   type PaletteInput,
   type Theme
@@ -14,6 +15,7 @@ type PaletteDraft = {
   name: string;
   mode: Theme;
   colors: PaletteColors;
+  typography: PaletteTypography;
   is_active: boolean;
 };
 
@@ -48,17 +50,52 @@ const TEMPLATE_COLORS: Record<Theme, PaletteColors> = {
   }
 };
 
+const TEMPLATE_TYPOGRAPHY: Record<Theme, PaletteTypography> = {
+  light: {
+    heading: "'Playfair Display', 'Times New Roman', serif",
+    subheading: "'Poppins', 'Segoe UI', sans-serif",
+    body: "'Inter', system-ui, sans-serif"
+  },
+  dark: {
+    heading: "'Playfair Display', 'Times New Roman', serif",
+    subheading: "'Poppins', 'Segoe UI', sans-serif",
+    body: "'Inter', system-ui, sans-serif"
+  }
+};
+
+const FONT_FIELDS: Array<{ key: keyof PaletteTypography; label: string; sample: string }> = [
+  { key: 'heading', label: 'Nadpisy', sample: 'Walter System – Nadpis' },
+  { key: 'subheading', label: 'Podnadpisy', sample: 'Příprava na schválení' },
+  { key: 'body', label: 'Tělo textu', sample: 'Tabulky, popisky a drobný text.' }
+];
+
+const FONT_SUGGESTIONS: string[] = [
+  "'Inter', system-ui, sans-serif",
+  "'Poppins', 'Segoe UI', sans-serif",
+  "'Playfair Display', 'Times New Roman', serif",
+  "'Roboto Slab', 'Times New Roman', serif",
+  "'Merriweather', 'Georgia', serif",
+  "'Source Sans Pro', 'Segoe UI', sans-serif",
+  "'Montserrat', 'Segoe UI', sans-serif",
+  "'Raleway', 'Segoe UI', sans-serif"
+];
+
 const createDraftFromPalette = (palette: ColorPalette): PaletteDraft => ({
   name: palette.name,
   mode: palette.mode,
   colors: { ...palette.colors },
+  typography: { ...(palette.typography ?? TEMPLATE_TYPOGRAPHY[palette.mode]) },
   is_active: palette.is_active
 });
 
-const createTemplateDraft = (mode: Theme, base?: PaletteColors): PaletteDraft => ({
+const createTemplateDraft = (
+  mode: Theme,
+  base?: { colors: PaletteColors; typography: PaletteTypography }
+): PaletteDraft => ({
   name: mode === 'light' ? 'Nová světlá paleta' : 'Nová tmavá paleta',
   mode,
-  colors: { ...(base ?? TEMPLATE_COLORS[mode]) },
+  colors: { ...(base?.colors ?? TEMPLATE_COLORS[mode]) },
+  typography: { ...(base?.typography ?? TEMPLATE_TYPOGRAPHY[mode]) },
   is_active: false
 });
 
@@ -83,9 +120,14 @@ const PaletteManager: React.FC = () => {
     dark: palettes.filter(palette => palette.mode === 'dark')
   }), [palettes]);
 
-  const getBaseColors = (mode: Theme) => {
+  const getBaseValues = (mode: Theme) => {
     const active = palettes.find(palette => palette.mode === mode && palette.is_active);
-    return active?.colors ?? TEMPLATE_COLORS[mode];
+    return {
+      colors: active ? { ...active.colors } : TEMPLATE_COLORS[mode],
+      typography: active?.typography
+        ? { ...active.typography }
+        : TEMPLATE_TYPOGRAPHY[mode]
+    };
   };
 
   const handleStartCreate = (mode: Theme) => {
@@ -93,7 +135,7 @@ const PaletteManager: React.FC = () => {
     setEditingDraft(null);
     setDrafts(prev => ({
       ...prev,
-      [mode]: createTemplateDraft(mode, getBaseColors(mode))
+  [mode]: createTemplateDraft(mode, getBaseValues(mode))
     }));
   };
 
@@ -136,6 +178,7 @@ const PaletteManager: React.FC = () => {
         name: draft.name.trim(),
         mode,
         colors: draft.colors,
+        typography: draft.typography,
         is_active: draft.is_active
       };
       const created = await createPalette(payload);
@@ -167,6 +210,7 @@ const PaletteManager: React.FC = () => {
       const payload: Partial<Omit<PaletteInput, 'mode'>> = {
         name: editingDraft.value.name.trim(),
         colors: editingDraft.value.colors,
+        typography: editingDraft.value.typography,
         is_active: editingDraft.value.is_active
       };
       await updatePalette(editingDraft.id, payload);
@@ -341,6 +385,24 @@ const PaletteCard: React.FC<PaletteCardProps> = ({
         </div>
       ))}
     </div>
+    {palette.typography ? (
+      <div className="palette-card__typography">
+        {FONT_FIELDS.map(field => (
+          <div key={field.key} className="palette-card__font">
+            <div className="palette-card__font-meta">
+              <span className="palette-card__font-label">{field.label}</span>
+              <code className="palette-card__font-value">{palette.typography?.[field.key]}</code>
+            </div>
+            <div
+              className="palette-card__font-preview"
+              style={{ fontFamily: palette.typography?.[field.key] }}
+            >
+              {field.sample}
+            </div>
+          </div>
+        ))}
+      </div>
+    ) : null}
     <div className="palette-card__actions">
       <button
         type="button"
@@ -369,6 +431,150 @@ interface PaletteFormProps {
   disabled?: boolean;
 }
 
+interface FontSelectProps {
+  id: string;
+  value: string;
+  onChange: (value: string) => void;
+  suggestions: string[];
+  disabled?: boolean;
+  placeholder?: string;
+}
+
+const FontSelect: React.FC<FontSelectProps> = ({
+  id,
+  value,
+  onChange,
+  suggestions,
+  disabled,
+  placeholder
+}) => {
+  const [isOpen, setIsOpen] = useState(false);
+  const [query, setQuery] = useState('');
+  const containerRef = useRef<HTMLDivElement | null>(null);
+  const searchInputRef = useRef<HTMLInputElement | null>(null);
+
+  const normalizedSuggestions = useMemo(() => {
+    const base = Array.from(new Set([
+      ...suggestions,
+      value
+    ].filter(Boolean)));
+    if (!query.trim()) {
+      return base;
+    }
+    const lowerQuery = query.toLowerCase();
+    return base.filter(option => option.toLowerCase().includes(lowerQuery));
+  }, [suggestions, value, query]);
+
+  useEffect(() => {
+    if (!isOpen) {
+      setQuery('');
+      return;
+    }
+    const handleClickOutside = (event: MouseEvent) => {
+      if (containerRef.current && !containerRef.current.contains(event.target as Node)) {
+        setIsOpen(false);
+      }
+    };
+    const handleEscape = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') {
+        setIsOpen(false);
+      }
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+    document.addEventListener('keydown', handleEscape);
+    requestAnimationFrame(() => {
+      searchInputRef.current?.focus();
+    });
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside);
+      document.removeEventListener('keydown', handleEscape);
+    };
+  }, [isOpen]);
+
+  const handleToggle = () => {
+    if (disabled) return;
+    setIsOpen(prev => !prev);
+  };
+
+  const handleSelect = (option: string) => {
+    onChange(option);
+    setIsOpen(false);
+  };
+
+  const handleInputChange = (event: React.ChangeEvent<HTMLInputElement>) => {
+    const next = event.target.value;
+    onChange(next);
+    if (!isOpen) {
+      setQuery(next);
+    }
+  };
+
+  const handleSearchChange = (event: React.ChangeEvent<HTMLInputElement>) => {
+    setQuery(event.target.value);
+  };
+
+  return (
+    <div className="font-select" ref={containerRef}>
+      <div className="font-select__field">
+        <input
+          id={id}
+          type="text"
+          value={value}
+          onChange={handleInputChange}
+          placeholder={placeholder}
+          className="palette-form__input font-select__input"
+          spellCheck={false}
+          disabled={disabled}
+          aria-haspopup="listbox"
+          aria-expanded={isOpen}
+        />
+        <button
+          type="button"
+          className="font-select__trigger"
+          onClick={handleToggle}
+          disabled={disabled}
+          aria-label="Vybrat font"
+          aria-controls={`${id}-options`}
+          aria-expanded={isOpen}
+        >
+          ▾
+        </button>
+      </div>
+      {isOpen ? (
+        <div className="font-select__panel" role="listbox" id={`${id}-options`}>
+          <input
+            ref={searchInputRef}
+            type="text"
+            value={query}
+            onChange={handleSearchChange}
+            className="font-select__search"
+            placeholder="Hledat font"
+            spellCheck={false}
+            aria-label="Hledat font"
+          />
+          <div className="font-select__options">
+            {normalizedSuggestions.length > 0 ? (
+              normalizedSuggestions.map(option => (
+                <button
+                  type="button"
+                  key={option}
+                  onClick={() => handleSelect(option)}
+                  className={`font-select__option${option === value ? ' is-active' : ''}`}
+                  style={{ fontFamily: option }}
+                >
+                  {option}
+                </button>
+              ))
+            ) : (
+              <div className="font-select__empty">Žádné fonty neodpovídají hledání.</div>
+            )}
+          </div>
+        </div>
+      ) : null}
+    </div>
+  );
+};
+
 const PaletteForm: React.FC<PaletteFormProps> = ({
   heading,
   draft,
@@ -390,6 +596,16 @@ const PaletteForm: React.FC<PaletteFormProps> = ({
     });
   };
 
+  const handleTypographyChange = (key: keyof PaletteTypography, value: string) => {
+    onChange({
+      ...draft,
+      typography: {
+        ...draft.typography,
+        [key]: value
+      }
+    });
+  };
+
   return (
     <div className="palette-form">
       <div className="palette-form__header">
@@ -398,11 +614,11 @@ const PaletteForm: React.FC<PaletteFormProps> = ({
           Zavřít
         </button>
       </div>
-      <label className="palette-form__label" htmlFor={`palette-name-${heading}`}>
+      <label className="palette-form__label" htmlFor={`palette-name-${draft.mode}`}>
         Název palety
       </label>
       <input
-        id={`palette-name-${heading}`}
+        id={`palette-name-${draft.mode}`}
         type="text"
         className="palette-form__input"
         value={draft.name}
@@ -443,6 +659,41 @@ const PaletteForm: React.FC<PaletteFormProps> = ({
           <div className="palette-form__picker-value">
             <code>{draft.colors[activeKey]}</code>
           </div>
+        </div>
+      </div>
+
+      <div className="palette-form__typography">
+        <div className="palette-form__typography-header">
+          <span className="palette-form__label">Typografie</span>
+          <p>
+            Zvolte fonty pro nadpisy, podnadpisy a tělo textu. Hodnota musí být platný CSS řetězec
+            <code>font-family</code>.
+          </p>
+        </div>
+        <div className="palette-form__typography-grid">
+          {FONT_FIELDS.map(field => {
+            const controlId = `font-suggestions-${field.key}-${draft.mode}`;
+            return (
+              <label key={field.key} className="palette-form__font-field">
+                <span className="palette-form__font-label">{field.label}</span>
+                <FontSelect
+                  id={controlId}
+                  value={draft.typography[field.key] ?? ''}
+                  onChange={value => handleTypographyChange(field.key, value)}
+                  suggestions={FONT_SUGGESTIONS}
+                  disabled={disabled}
+                  placeholder="např. 'Inter', system-ui, sans-serif"
+                />
+                <span
+                  className="palette-form__font-preview"
+                  style={{ fontFamily: draft.typography[field.key] }}
+                >
+                  {field.sample}
+                </span>
+                <code className="palette-form__font-value">{draft.typography[field.key]}</code>
+              </label>
+            );
+          })}
         </div>
       </div>
 

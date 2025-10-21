@@ -23,11 +23,18 @@ export interface PaletteColors {
   border: string;
 }
 
+export interface PaletteTypography {
+  heading: string;
+  subheading: string;
+  body: string;
+}
+
 export interface ColorPalette {
   id: number;
   name: string;
   mode: Theme;
   colors: PaletteColors;
+  typography?: PaletteTypography;
   is_active: boolean;
   created_at?: string;
   updated_at?: string;
@@ -37,6 +44,7 @@ export type PaletteInput = {
   name: string;
   mode: Theme;
   colors: PaletteColors;
+  typography: PaletteTypography;
   is_active?: boolean;
 };
 
@@ -81,6 +89,19 @@ const FALLBACK_COLORS: Record<Theme, PaletteColors> = {
   }
 };
 
+const FALLBACK_TYPOGRAPHY: Record<Theme, PaletteTypography> = {
+  light: {
+    heading: "'Playfair Display', 'Times New Roman', serif",
+    subheading: "'Poppins', 'Segoe UI', sans-serif",
+    body: "'Inter', system-ui, sans-serif"
+  },
+  dark: {
+    heading: "'Playfair Display', 'Times New Roman', serif",
+    subheading: "'Poppins', 'Segoe UI', sans-serif",
+    body: "'Inter', system-ui, sans-serif"
+  }
+};
+
 const SUCCESS_BASE = '#10b981';
 const WARNING_BASE = '#f59e0b';
 const DANGER_BASE = '#ef4444';
@@ -95,6 +116,17 @@ const ensureColord = (value: string, fallback: string): Colord => {
   const fallbackParsed = colord(fallback);
   return fallbackParsed.isValid() ? fallbackParsed : colord('#000000');
 };
+
+const cloneTypography = (typography: PaletteTypography): PaletteTypography => ({
+  heading: typography.heading,
+  subheading: typography.subheading,
+  body: typography.body
+});
+
+const ensurePaletteTypography = (palette: ColorPalette): ColorPalette => ({
+  ...palette,
+  typography: cloneTypography(palette.typography ?? FALLBACK_TYPOGRAPHY[palette.mode])
+});
 
 const toHslString = (instance: Colord) => instance.toHslString();
 const toRgbString = (instance: Colord) => instance.toRgbString();
@@ -111,8 +143,14 @@ const mixColors = (color: string, target: string, ratio: number, fallback: strin
 const alpha = (color: string, value: number, fallback: string) =>
   toRgbString(ensureColord(color, fallback).alpha(clamp(value)));
 
-const computeCssVariables = (colors: PaletteColors, mode: Theme): Record<string, string> => {
+const computeCssVariables = (
+  colors: PaletteColors,
+  mode: Theme,
+  typography?: PaletteTypography
+): Record<string, string> => {
   const fallback = FALLBACK_COLORS[mode];
+  const fonts = typography ?? FALLBACK_TYPOGRAPHY[mode];
+
   const primary = ensureColord(colors.primary, fallback.primary);
   const accent = ensureColord(colors.accent, fallback.accent);
   const background = ensureColord(colors.background, fallback.background);
@@ -251,13 +289,17 @@ const computeCssVariables = (colors: PaletteColors, mode: Theme): Record<string,
     )} 0%, ${surface.toHslString()} 100%)`,
     '--focus-ring': focusRing,
     '--scrollbar-thumb': alpha(border.toHslString(), mode === 'dark' ? 0.6 : 0.9, fallback.border),
-    '--scrollbar-track': alpha(background.toHslString(), mode === 'dark' ? 0.35 : 0.7, fallback.background)
+    '--scrollbar-track': alpha(background.toHslString(), mode === 'dark' ? 0.35 : 0.7, fallback.background),
+    '--font-heading': fonts.heading,
+    '--font-subheading': fonts.subheading,
+    '--font-body': fonts.body
   };
 };
 
 const applyPaletteToDocument = (mode: Theme, palette?: ColorPalette | null) => {
-  const resolved = palette?.colors ?? FALLBACK_COLORS[mode];
-  const variables = computeCssVariables(resolved, mode);
+  const resolvedColors = palette?.colors ?? FALLBACK_COLORS[mode];
+  const resolvedTypography = palette?.typography ?? FALLBACK_TYPOGRAPHY[mode];
+  const variables = computeCssVariables(resolvedColors, mode, resolvedTypography);
   const root = document.documentElement;
 
   root.setAttribute('data-theme', mode);
@@ -286,7 +328,7 @@ export const ThemeProvider: React.FC<{ children: React.ReactNode }> = ({ childre
         throw new Error(`Failed to load palettes: ${response.status}`);
       }
       const data: ColorPalette[] = await response.json();
-      setPalettes(data);
+      setPalettes(data.map(ensurePaletteTypography));
     } catch (err) {
       const message = err instanceof Error ? err.message : 'Unknown error';
       setError(message);
@@ -300,7 +342,7 @@ export const ThemeProvider: React.FC<{ children: React.ReactNode }> = ({ childre
   }, [fetchPalettes]);
 
   useEffect(() => {
-    applyPaletteToDocument(theme, null);
+    applyPaletteToDocument(theme);
   }, []);
 
   const getActivePalette = useCallback(
@@ -349,7 +391,7 @@ export const ThemeProvider: React.FC<{ children: React.ReactNode }> = ({ childre
         throw new Error('Failed to create palette');
       }
 
-      const created: ColorPalette = await response.json();
+      const created = ensurePaletteTypography(await response.json());
       await fetchPalettes();
 
       if (created.mode === theme && created.is_active) {
@@ -373,7 +415,7 @@ export const ThemeProvider: React.FC<{ children: React.ReactNode }> = ({ childre
         throw new Error('Failed to update palette');
       }
 
-      const updated: ColorPalette = await response.json();
+      const updated = ensurePaletteTypography(await response.json());
       await fetchPalettes();
 
       if (updated.mode === theme && updated.is_active) {
@@ -412,7 +454,7 @@ export const ThemeProvider: React.FC<{ children: React.ReactNode }> = ({ childre
         throw new Error('Failed to activate palette');
       }
 
-      const activated: ColorPalette = await response.json();
+      const activated = ensurePaletteTypography(await response.json());
       await fetchPalettes();
 
       if (activated.mode === theme) {

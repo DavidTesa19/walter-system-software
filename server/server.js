@@ -3,6 +3,28 @@ import cors from "cors";
 import fs from "fs";
 import path from "path";
 
+const PALETTE_COLOR_KEYS = [
+  "primary",
+  "accent",
+  "background",
+  "surface",
+  "text",
+  "muted",
+  "border"
+];
+
+const PALETTE_TYPOGRAPHY_KEYS = [
+  "heading",
+  "subheading",
+  "body"
+];
+
+const DEFAULT_TYPOGRAPHY = {
+  heading: "'Playfair Display', 'Times New Roman', serif",
+  subheading: "'Poppins', 'Segoe UI', sans-serif",
+  body: "'Inter', system-ui, sans-serif"
+};
+
 const DEFAULT_COLOR_PALETTES = [
   {
     id: 1,
@@ -17,6 +39,7 @@ const DEFAULT_COLOR_PALETTES = [
       muted: "hsl(220, 12%, 46%)",
       border: "hsl(214, 32%, 89%)"
     },
+    typography: { ...DEFAULT_TYPOGRAPHY },
     is_active: true
   },
   {
@@ -32,23 +55,15 @@ const DEFAULT_COLOR_PALETTES = [
       muted: "hsl(215, 20%, 65%)",
       border: "hsl(220, 23%, 28%)"
     },
+    typography: { ...DEFAULT_TYPOGRAPHY },
     is_active: true
   }
 ];
 
-const PALETTE_COLOR_KEYS = [
-  "primary",
-  "accent",
-  "background",
-  "surface",
-  "text",
-  "muted",
-  "border"
-];
-
 const cloneDefaultPalettes = () => DEFAULT_COLOR_PALETTES.map(palette => ({
   ...palette,
-  colors: { ...palette.colors }
+  colors: { ...palette.colors },
+  typography: { ...palette.typography }
 }));
 
 const ensurePalettes = db => {
@@ -84,6 +99,38 @@ const ensurePalettes = db => {
       });
       mutated = true;
     }
+
+    modePalettes.forEach(palette => {
+      if (!palette.colors || typeof palette.colors !== "object") {
+        palette.colors = {};
+      }
+
+      const fallback = DEFAULT_COLOR_PALETTES.find(item => item.mode === palette.mode) ?? DEFAULT_COLOR_PALETTES[0];
+      for (const key of PALETTE_COLOR_KEYS) {
+        const value = palette.colors[key];
+        if (typeof value !== "string" || !value.trim()) {
+          palette.colors[key] = fallback.colors[key];
+          mutated = true;
+        } else {
+          palette.colors[key] = value.trim();
+        }
+      }
+
+      if (!palette.typography || typeof palette.typography !== "object") {
+        palette.typography = {};
+      }
+
+      for (const key of PALETTE_TYPOGRAPHY_KEYS) {
+        const value = palette.typography[key];
+        if (typeof value !== "string" || !value.trim()) {
+          const fallbackFont = fallback.typography?.[key] ?? DEFAULT_TYPOGRAPHY[key];
+          palette.typography[key] = fallbackFont;
+          mutated = true;
+        } else {
+          palette.typography[key] = value.trim();
+        }
+      }
+    });
   }
 
   return mutated;
@@ -124,6 +171,25 @@ const sanitizePalettePayload = (body, { partial = false, allowMode = true } = {}
       }
       if (Object.keys(colors).length === PALETTE_COLOR_KEYS.length) {
         payload.colors = colors;
+      }
+    }
+  }
+
+  if (!partial || body.typography !== undefined) {
+    if (typeof body.typography !== "object" || body.typography === null) {
+      errors.push("typography");
+    } else {
+      const typography = {};
+      for (const key of PALETTE_TYPOGRAPHY_KEYS) {
+        const value = body.typography[key];
+        if (typeof value !== "string" || !value.trim()) {
+          errors.push(`typography.${key}`);
+        } else {
+          typography[key] = value.trim();
+        }
+      }
+      if (Object.keys(typography).length === PALETTE_TYPOGRAPHY_KEYS.length) {
+        payload.typography = typography;
       }
     }
   }
@@ -179,7 +245,14 @@ if (!fs.existsSync(DATA_FILE)) {
       fs.copyFileSync(SEED_FILE, DATA_FILE);
       console.log("Seeded data from:", SEED_FILE);
     } else {
-      const defaultData = { users: [] };
+      const defaultData = {
+        users: [],
+        partners: [],
+        clients: [],
+        tipers: [],
+        employees: [],
+        color_palettes: cloneDefaultPalettes()
+      };
       fs.writeFileSync(DATA_FILE, JSON.stringify(defaultData, null, 2));
       console.log("Created empty data file");
     }
@@ -462,6 +535,10 @@ app.put("/color-palettes/:id", (req, res) => {
   };
 
   db.color_palettes[idx] = updated;
+
+  if (payload.typography) {
+    db.color_palettes[idx].typography = payload.typography;
+  }
 
   if (payload.is_active) {
     setActivePalette(db.color_palettes, id);

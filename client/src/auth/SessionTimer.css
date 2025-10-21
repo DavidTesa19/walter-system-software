@@ -18,6 +18,7 @@
   padding: 8px 12px;
   font-size: 14px;
   font-weight: 500;
+  font-family: var(--font-body);
 }
 
 .timer-icon {
@@ -26,7 +27,7 @@
 
 .timer-text {
   color: #374151;
-  font-family: 'Courier New', monospace;
+  font-family: var(--font-subheading);
   min-width: 80px;
 }
 
@@ -41,6 +42,7 @@
   display: flex;
   align-items: center;
   justify-content: center;
+  font-family: var(--font-subheading);
 }
 
 .logout-button:hover {

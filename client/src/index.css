@@ -1,5 +1,11 @@
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;600&family=Playfair+Display:wght@600;700&family=Poppins:wght@500;600&display=swap');
+
 :root {
-  font-family: 'Inter', system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  --font-heading: 'Playfair Display', 'Times New Roman', serif;
+  --font-subheading: 'Poppins', 'Segoe UI', sans-serif;
+  --font-body: 'Inter', system-ui, sans-serif;
+
+  font-family: var(--font-body);
   line-height: 1.5;
   font-weight: 400;
   font-synthesis: none;
@@ -68,12 +74,32 @@ body {
   color: var(--color-text);
   display: flex;
   flex-direction: column;
+  font-family: var(--font-body);
 }
 
 #root {
   flex: 1;
   display: flex;
   flex-direction: column;
+}
+
+h1,
+h2 {
+  font-family: var(--font-heading);
+  line-height: 1.2;
+}
+
+h3,
+h4,
+h5,
+h6,
+.section-heading {
+  font-family: var(--font-subheading);
+  line-height: 1.3;
+}
+
+p {
+  color: inherit;
 }
 
 a {
@@ -87,7 +113,7 @@ a:hover {
 }
 
 button {
-  font-family: inherit;
+  font-family: var(--font-subheading);
   font-size: 0.95rem;
   border-radius: 0.75rem;
   border: none;
@@ -97,6 +123,37 @@ button {
   cursor: pointer;
   font-weight: 600;
   transition: background-color 0.2s ease, transform 0.15s ease;
+}
+
+label,
+.badge,
+.nav-tab,
+.sidebar-button,
+.palette-form__label,
+.palette-card__swatch-label,
+.palette-card__actions button,
+.palette-card__badge {
+  font-family: var(--font-subheading);
+}
+
+p,
+li,
+td,
+th,
+.palette-card__swatch-value,
+.palette-form__color-tab small,
+.palette-form__font-value,
+.palette-form__font-preview,
+.palette-card__font-value,
+.palette-card__font-preview,
+.font-select__option,
+.font-select__empty {
+  font-family: var(--font-body);
+}
+
+.ag-theme-quartz {
+  --ag-font-family: var(--font-body);
+  font-family: var(--font-body);
 }
 
 button:hover:not(:disabled) {

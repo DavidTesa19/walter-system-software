@@ -22,6 +22,18 @@ const PALETTE_COLOR_KEYS = [
   "border"
 ];
 
+const PALETTE_TYPOGRAPHY_KEYS = [
+  "heading",
+  "subheading",
+  "body"
+];
+
+const DEFAULT_TYPOGRAPHY = {
+  heading: "'Playfair Display', 'Times New Roman', serif",
+  subheading: "'Poppins', 'Segoe UI', sans-serif",
+  body: "'Inter', system-ui, sans-serif"
+};
+
 const DEFAULT_PALETTES = [
   {
     id: 1,
@@ -36,6 +48,7 @@ const DEFAULT_PALETTES = [
       muted: "hsl(220, 12%, 46%)",
       border: "hsl(214, 32%, 89%)"
     },
+    typography: { ...DEFAULT_TYPOGRAPHY },
     is_active: true
   },
   {
@@ -51,6 +64,7 @@ const DEFAULT_PALETTES = [
       muted: "hsl(215, 20%, 65%)",
       border: "hsl(220, 23%, 28%)"
     },
+    typography: { ...DEFAULT_TYPOGRAPHY },
     is_active: true
   }
 ];
@@ -154,7 +168,8 @@ function writeDb(dbData) {
 function cloneDefaultPalettes() {
   return DEFAULT_PALETTES.map(palette => ({
     ...palette,
-    colors: { ...palette.colors }
+    colors: { ...palette.colors },
+    typography: { ...palette.typography }
   }));
 }
 
@@ -192,6 +207,19 @@ function ensureFilePalettes(store) {
         palette.colors[key] = fallback.colors[key];
       } else {
         palette.colors[key] = value.trim();
+      }
+    }
+
+    if (!palette.typography || typeof palette.typography !== 'object') {
+      palette.typography = {};
+    }
+
+    for (const key of PALETTE_TYPOGRAPHY_KEYS) {
+      const value = palette.typography[key];
+      if (typeof value !== 'string' || !value.trim()) {
+        palette.typography[key] = fallback.typography?.[key] ?? DEFAULT_TYPOGRAPHY[key];
+      } else {
+        palette.typography[key] = value.trim();
       }
     }
   });
@@ -268,6 +296,25 @@ function sanitizePalettePayload(body, { partial = false, allowMode = true } = {}
       }
       if (Object.keys(colors).length === PALETTE_COLOR_KEYS.length) {
         payload.colors = colors;
+      }
+    }
+  }
+
+  if (!partial || body.typography !== undefined) {
+    if (typeof body.typography !== 'object' || body.typography === null) {
+      errors.push('typography');
+    } else {
+      const typography = {};
+      for (const key of PALETTE_TYPOGRAPHY_KEYS) {
+        const value = body.typography[key];
+        if (typeof value !== 'string' || !value.trim()) {
+          errors.push(`typography.${key}`);
+        } else {
+          typography[key] = value.trim();
+        }
+      }
+      if (Object.keys(typography).length === PALETTE_TYPOGRAPHY_KEYS.length) {
+        payload.typography = typography;
       }
     }
   }
@@ -434,6 +481,7 @@ app.put("/color-palettes/:id", async (req, res) => {
 
     if (payload.name) palette.name = payload.name;
     if (payload.colors) palette.colors = payload.colors;
+    if (payload.typography) palette.typography = payload.typography;
     if (payload.is_active !== undefined) {
       palette.is_active = payload.is_active;
       if (payload.is_active) {

@@ -112,6 +112,7 @@ export async function initDatabase() {
         name VARCHAR(120) NOT NULL,
         mode VARCHAR(12) NOT NULL CHECK (mode IN ('light', 'dark')),
         colors JSONB NOT NULL,
+        typography JSONB NOT NULL DEFAULT '{}'::jsonb,
         is_active BOOLEAN DEFAULT FALSE,
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
         updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
@@ -131,7 +132,8 @@ export async function initDatabase() {
       "ALTER TABLE tipers ADD COLUMN IF NOT EXISTS field VARCHAR(255)",
       "ALTER TABLE tipers ADD COLUMN IF NOT EXISTS info TEXT",
       "ALTER TABLE tipers ADD COLUMN IF NOT EXISTS commission VARCHAR(255)",
-      "ALTER TABLE tipers ADD COLUMN IF NOT EXISTS status VARCHAR(50) DEFAULT 'pending'"
+      "ALTER TABLE tipers ADD COLUMN IF NOT EXISTS status VARCHAR(50) DEFAULT 'pending'",
+      "ALTER TABLE color_palettes ADD COLUMN IF NOT EXISTS typography JSONB NOT NULL DEFAULT '{}'::jsonb"
     ];
 
     for (const sql of columnMigrations) {
@@ -171,6 +173,11 @@ async function ensureDefaultPalettes(client) {
         muted: 'hsl(220, 12%, 46%)',
         border: 'hsl(214, 32%, 89%)'
       },
+      typography: {
+        heading: "'Playfair Display', 'Times New Roman', serif",
+        subheading: "'Poppins', 'Segoe UI', sans-serif",
+        body: "'Inter', system-ui, sans-serif"
+      },
       is_active: true
     },
     {
@@ -185,6 +192,11 @@ async function ensureDefaultPalettes(client) {
         muted: 'hsl(215, 20%, 65%)',
         border: 'hsl(220, 23%, 28%)'
       },
+      typography: {
+        heading: "'Playfair Display', 'Times New Roman', serif",
+        subheading: "'Poppins', 'Segoe UI', sans-serif",
+        body: "'Inter', system-ui, sans-serif"
+      },
       is_active: true
     }
   ];
@@ -192,10 +204,16 @@ async function ensureDefaultPalettes(client) {
   if (!hasPalettes) {
     for (const palette of defaultPalettes) {
       await client.query(
-        `INSERT INTO color_palettes (name, mode, colors, is_active)
-         VALUES ($1, $2, $3::jsonb, $4)
+        `INSERT INTO color_palettes (name, mode, colors, typography, is_active)
+         VALUES ($1, $2, $3::jsonb, $4::jsonb, $5)
          ON CONFLICT DO NOTHING`,
-        [palette.name, palette.mode, JSON.stringify(palette.colors), palette.is_active]
+        [
+          palette.name,
+          palette.mode,
+          JSON.stringify(palette.colors),
+          JSON.stringify(palette.typography ?? {}),
+          palette.is_active
+        ]
       );
     }
     return;
@@ -333,7 +351,7 @@ export const db = {
     return result.rows;
   },
 
-  async createColorPalette({ name, mode, colors, is_active }) {
+  async createColorPalette({ name, mode, colors, typography, is_active }) {
     if (!USE_POSTGRES) return null;
 
     const client = await pool.connect();
@@ -344,10 +362,10 @@ export const db = {
       }
 
       const result = await client.query(
-        `INSERT INTO color_palettes (name, mode, colors, is_active)
-         VALUES ($1, $2, $3::jsonb, $4)
+        `INSERT INTO color_palettes (name, mode, colors, typography, is_active)
+         VALUES ($1, $2, $3::jsonb, $4::jsonb, $5)
          RETURNING *`,
-        [name, mode, JSON.stringify(colors), Boolean(is_active)]
+        [name, mode, JSON.stringify(colors), JSON.stringify(typography ?? {}), Boolean(is_active)]
       );
 
       if (!is_active) {
@@ -372,7 +390,7 @@ export const db = {
     }
   },
 
-  async updateColorPalette(id, { name, colors, is_active }) {
+  async updateColorPalette(id, { name, colors, typography, is_active }) {
     if (!USE_POSTGRES) return null;
 
     const client = await pool.connect();
@@ -399,11 +417,18 @@ export const db = {
         `UPDATE color_palettes
            SET name = COALESCE($2, name),
                colors = COALESCE($3::jsonb, colors),
-               is_active = COALESCE($4, is_active),
+               typography = COALESCE($4::jsonb, typography),
+               is_active = COALESCE($5, is_active),
                updated_at = CURRENT_TIMESTAMP
          WHERE id = $1
          RETURNING *`,
-        [id, name ?? null, colors ? JSON.stringify(colors) : null, typeof is_active === 'boolean' ? is_active : null]
+        [
+          id,
+          name ?? null,
+          colors ? JSON.stringify(colors) : null,
+          typography ? JSON.stringify(typography) : null,
+          typeof is_active === 'boolean' ? is_active : null
+        ]
       );
 
       if (result.rows.length === 0) {
