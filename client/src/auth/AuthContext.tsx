@@ -34,6 +34,33 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
     setSessionTimer(timer);
   };
 
+  // Check for existing session on mount
+  useEffect(() => {
+    const checkExistingSession = () => {
+      const authValue = localStorage.getItem('walterAuth');
+      const sessionStart = localStorage.getItem('walterSessionStart');
+      
+      if (authValue === 'true' && sessionStart) {
+        const startTime = parseInt(sessionStart, 10);
+        const now = Date.now();
+        const elapsed = now - startTime;
+        const remaining = SESSION_DURATION - elapsed;
+        
+        // If session is still valid
+        if (remaining > 0) {
+          setIsAuthenticated(true);
+          startSessionTimer(remaining);
+        } else {
+          // Session expired, clean up
+          localStorage.removeItem('walterAuth');
+          localStorage.removeItem('walterSessionStart');
+        }
+      }
+    };
+    
+    checkExistingSession();
+  }, []); // Empty dependency array - only run on mount
+
   const login = (code: string): boolean => {
     if (code === VERIFICATION_CODE) {
       // Clear any existing timer first
