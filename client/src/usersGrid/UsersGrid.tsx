@@ -529,7 +529,7 @@ const FieldCellRenderer = (params: any) => {
 type TableType = 'clients' | 'partners' | 'tipers';
 
 interface UsersGridProps {
-  viewMode: 'active' | 'pending';
+  viewMode: 'active' | 'pending' | 'archived';
 }
 
 const UsersGrid: React.FC<UsersGridProps> = ({ viewMode }) => {
@@ -543,7 +543,7 @@ const UsersGrid: React.FC<UsersGridProps> = ({ viewMode }) => {
   const tipersGridRef = useRef<AgGridReact>(null);
   
   const API_BASE = import.meta.env.VITE_API_URL || "http://localhost:3004";
-  const status = viewMode === 'active' ? 'accepted' : 'pending';
+  const status = viewMode === 'active' ? 'accepted' : viewMode === 'pending' ? 'pending' : 'archived';
 
   // Fetch partners data
   const fetchPartnersData = useCallback(async () => {
@@ -630,74 +630,159 @@ const UsersGrid: React.FC<UsersGridProps> = ({ viewMode }) => {
     }
   }, [API_BASE, fetchTipersData]);
 
+  // Restore handlers for archived items
+  const handleRestoreClient = useCallback(async (id: number) => {
+    try {
+      const response = await fetch(`${API_BASE}/clients/${id}/restore`, { method: 'POST' });
+      if (response.ok) {
+        fetchClientsData();
+      } else {
+        alert('Nepodařilo se obnovit klienta');
+      }
+    } catch (error) {
+      console.error('Error restoring client:', error);
+      alert('Chyba při obnovování klienta');
+    }
+  }, [API_BASE, fetchClientsData]);
+
+  const handleRestorePartner = useCallback(async (id: number) => {
+    try {
+      const response = await fetch(`${API_BASE}/partners/${id}/restore`, { method: 'POST' });
+      if (response.ok) {
+        fetchPartnersData();
+      } else {
+        alert('Nepodařilo se obnovit partnera');
+      }
+    } catch (error) {
+      console.error('Error restoring partner:', error);
+      alert('Chyba při obnovování partnera');
+    }
+  }, [API_BASE, fetchPartnersData]);
+
+  const handleRestoreTiper = useCallback(async (id: number) => {
+    try {
+      const response = await fetch(`${API_BASE}/tipers/${id}/restore`, { method: 'POST' });
+      if (response.ok) {
+        fetchTipersData();
+      } else {
+        alert('Nepodařilo se obnovit tipaře');
+      }
+    } catch (error) {
+      console.error('Error restoring tiper:', error);
+      alert('Chyba při obnovování tipaře');
+    }
+  }, [API_BASE, fetchTipersData]);
+
   const handleDeleteClient = useCallback(async (id: number) => {
     const client = clientsData.find(c => c.id === id);
+    const isArchived = client?.status === 'archived';
     const isPending = client?.status === 'pending';
-    const confirmMessage = isPending 
-      ? `Opravdu chcete zamítnout tohoto klienta?\n\nJméno: ${client?.name || 'N/A'}\nSpolečnost: ${client?.company || 'N/A'}`
-      : `Opravdu chcete smazat tohoto klienta?\n\nJméno: ${client?.name || 'N/A'}\nSpolečnost: ${client?.company || 'N/A'}`;
+    
+    let confirmMessage = '';
+    let endpoint = '';
+    let method = 'DELETE';
+    
+    if (isArchived) {
+      confirmMessage = `Opravdu chcete TRVALE SMAZAT tohoto klienta z databáze?\n\nJméno: ${client?.name || 'N/A'}\nSpolečnost: ${client?.company || 'N/A'}\n\nTato akce je NEzvratná!`;
+      endpoint = `${API_BASE}/clients/${id}`;
+    } else if (isPending) {
+      confirmMessage = `Opravdu chcete zamítnout tohoto klienta?\n\nJméno: ${client?.name || 'N/A'}\nSpolečnost: ${client?.company || 'N/A'}`;
+      endpoint = `${API_BASE}/clients/${id}`;
+    } else {
+      confirmMessage = `Opravdu chcete přesunout tohoto klienta do archivu k odstraňení?\n\nJméno: ${client?.name || 'N/A'}\nSpolečnost: ${client?.company || 'N/A'}`;
+      endpoint = `${API_BASE}/clients/${id}/archive`;
+      method = 'POST';
+    }
     
     if (!confirm(confirmMessage)) {
       return;
     }
     
     try {
-      const response = await fetch(`${API_BASE}/clients/${id}`, { method: 'DELETE' });
+      const response = await fetch(endpoint, { method });
       if (response.ok) {
         fetchClientsData();
       } else {
-        alert('Nepodařilo se smazat klienta');
+        alert('Nepodařilo se provést akci');
       }
     } catch (error) {
-      console.error('Error deleting client:', error);
-      alert('Chyba při mazání klienta');
+      console.error('Error performing action on client:', error);
+      alert('Chyba při provádění akce');
     }
   }, [API_BASE, fetchClientsData, clientsData]);
 
   const handleDeletePartner = useCallback(async (id: number) => {
     const partner = partnersData.find(p => p.id === id);
+    const isArchived = partner?.status === 'archived';
     const isPending = partner?.status === 'pending';
-    const confirmMessage = isPending 
-      ? `Opravdu chcete zamítnout tohoto partnera?\n\nJméno: ${partner?.name || 'N/A'}\nSpolečnost: ${partner?.company || 'N/A'}`
-      : `Opravdu chcete smazat tohoto partnera?\n\nJméno: ${partner?.name || 'N/A'}\nSpolečnost: ${partner?.company || 'N/A'}`;
+    
+    let confirmMessage = '';
+    let endpoint = '';
+    let method = 'DELETE';
+    
+    if (isArchived) {
+      confirmMessage = `Opravdu chcete TRVALE SMAZAT tohoto partnera z databáze?\n\nJméno: ${partner?.name || 'N/A'}\nSpolečnost: ${partner?.company || 'N/A'}\n\nTato akce je NEzvratná!`;
+      endpoint = `${API_BASE}/partners/${id}`;
+    } else if (isPending) {
+      confirmMessage = `Opravdu chcete zamítnout tohoto partnera?\n\nJméno: ${partner?.name || 'N/A'}\nSpolečnost: ${partner?.company || 'N/A'}`;
+      endpoint = `${API_BASE}/partners/${id}`;
+    } else {
+      confirmMessage = `Opravdu chcete přesunout tohoto partnera do archivu k odstraňení?\n\nJméno: ${partner?.name || 'N/A'}\nSpolečnost: ${partner?.company || 'N/A'}`;
+      endpoint = `${API_BASE}/partners/${id}/archive`;
+      method = 'POST';
+    }
     
     if (!confirm(confirmMessage)) {
       return;
     }
     
     try {
-      const response = await fetch(`${API_BASE}/partners/${id}`, { method: 'DELETE' });
+      const response = await fetch(endpoint, { method });
       if (response.ok) {
         fetchPartnersData();
       } else {
-        alert('Nepodařilo se smazat partnera');
+        alert('Nepodařilo se provést akci');
       }
     } catch (error) {
-      console.error('Error deleting partner:', error);
-      alert('Chyba při mazání partnera');
+      console.error('Error performing action on partner:', error);
+      alert('Chyba při provádění akce');
     }
   }, [API_BASE, fetchPartnersData, partnersData]);
 
   const handleDeleteTiper = useCallback(async (id: number) => {
     const tiper = tipersData.find(t => t.id === id);
+    const isArchived = tiper?.status === 'archived';
     const isPending = tiper?.status === 'pending';
-    const confirmMessage = isPending 
-      ? `Opravdu chcete zamítnout tohoto tipaře?\n\nJméno: ${tiper?.name || 'N/A'}\nSpolečnost: ${tiper?.company || 'N/A'}`
-      : `Opravdu chcete smazat tohoto tipaře?\n\nJméno: ${tiper?.name || 'N/A'}\nSpolečnost: ${tiper?.company || 'N/A'}`;
+    
+    let confirmMessage = '';
+    let endpoint = '';
+    let method = 'DELETE';
+    
+    if (isArchived) {
+      confirmMessage = `Opravdu chcete TRVALE SMAZAT tohoto tipaře z databáze?\n\nJméno: ${tiper?.name || 'N/A'}\nSpolečnost: ${tiper?.company || 'N/A'}\n\nTato akce je NEzvratná!`;
+      endpoint = `${API_BASE}/tipers/${id}`;
+    } else if (isPending) {
+      confirmMessage = `Opravdu chcete zamítnout tohoto tipaře?\n\nJméno: ${tiper?.name || 'N/A'}\nSpolečnost: ${tiper?.company || 'N/A'}`;
+      endpoint = `${API_BASE}/tipers/${id}`;
+    } else {
+      confirmMessage = `Opravdu chcete přesunout tohoto tipaře do archivu k odstraňení?\n\nJméno: ${tiper?.name || 'N/A'}\nSpolečnost: ${tiper?.company || 'N/A'}`;
+      endpoint = `${API_BASE}/tipers/${id}/archive`;
+      method = 'POST';
+    }
     
     if (!confirm(confirmMessage)) {
       return;
     }
     
     try {
-      const response = await fetch(`${API_BASE}/tipers/${id}`, { method: 'DELETE' });
+      const response = await fetch(endpoint, { method });
       if (response.ok) {
         fetchTipersData();
       } else {
-        alert('Nepodařilo se smazat tipaře');
+        alert('Nepodařilo se provést akci');
       }
     } catch (error) {
-      console.error('Error deleting tiper:', error);
+      console.error('Error performing action on tiper:', error);
       alert('Chyba při mazání tipaře');
     }
   }, [API_BASE, fetchTipersData, tipersData]);
@@ -1227,6 +1312,31 @@ const UsersGrid: React.FC<UsersGridProps> = ({ viewMode }) => {
                 ))}
               </div>
             )}
+            {viewMode === 'archived' && (
+              <div
+                className="approve-buttons-column"
+                style={{
+                  ['--row-height' as any]: `${clientsSizes.row}px`,
+                  ['--header-offset' as any]: `${clientsSizes.headerOffset}px`,
+                }}
+              >
+                {clientsData.map((client) => (
+                  <button
+                    key={client.id}
+                    onClick={() => handleRestoreClient(client.id as number)}
+                    className="external-approve-btn"
+                    title="Obnovit klienta"
+                  >
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                      <path d="M3 12a9 9 0 0 1 9-9 9.75 9.75 0 0 1 6.74 2.74L21 8" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+                      <path d="M21 3v5h-5" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+                      <path d="M21 12a9 9 0 0 1-9 9 9.75 9.75 0 0 1-6.74-2.74L3 16" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+                      <path d="M3 21v-5h5" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+                    </svg>
+                  </button>
+                ))}
+              </div>
+            )}
             <div
               className="delete-buttons-column"
               style={{
@@ -1239,7 +1349,7 @@ const UsersGrid: React.FC<UsersGridProps> = ({ viewMode }) => {
                   key={client.id}
                   onClick={() => handleDeleteClient(client.id as number)}
                   className="external-delete-btn"
-                  title={viewMode === 'pending' ? 'Zamítnout klienta' : 'Smazat klienta'}
+                  title={viewMode === 'pending' ? 'Zamítnout klienta' : viewMode === 'archived' ? 'Trvale smazat klienta' : 'Archivovat klienta'}
                 >
                   <svg width="14" height="14" viewBox="0 0 12 12" fill="none" xmlns="http://www.w3.org/2000/svg">
                     <path d="M9 3L3 9M3 3L9 9" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
@@ -1289,6 +1399,31 @@ const UsersGrid: React.FC<UsersGridProps> = ({ viewMode }) => {
                 ))}
               </div>
             )}
+            {viewMode === 'archived' && (
+              <div
+                className="approve-buttons-column"
+                style={{
+                  ['--row-height' as any]: `${partnersSizes.row}px`,
+                  ['--header-offset' as any]: `${partnersSizes.headerOffset}px`,
+                }}
+              >
+                {partnersData.map((partner) => (
+                  <button
+                    key={partner.id}
+                    onClick={() => handleRestorePartner(partner.id as number)}
+                    className="external-approve-btn"
+                    title="Obnovit partnera"
+                  >
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                      <path d="M3 12a9 9 0 0 1 9-9 9.75 9.75 0 0 1 6.74 2.74L21 8" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+                      <path d="M21 3v5h-5" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+                      <path d="M21 12a9 9 0 0 1-9 9 9.75 9.75 0 0 1-6.74-2.74L3 16" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+                      <path d="M3 21v-5h5" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+                    </svg>
+                  </button>
+                ))}
+              </div>
+            )}
             <div
               className="delete-buttons-column"
               style={{
@@ -1301,7 +1436,7 @@ const UsersGrid: React.FC<UsersGridProps> = ({ viewMode }) => {
                   key={partner.id}
                   onClick={() => handleDeletePartner(partner.id as number)}
                   className="external-delete-btn"
-                  title={viewMode === 'pending' ? 'Zamítnout partnera' : 'Smazat partnera'}
+                  title={viewMode === 'pending' ? 'Zamítnout partnera' : viewMode === 'archived' ? 'Trvale smazat partnera' : 'Archivovat partnera'}
                 >
                   <svg width="14" height="14" viewBox="0 0 12 12" fill="none" xmlns="http://www.w3.org/2000/svg">
                     <path d="M9 3L3 9M3 3L9 9" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
@@ -1351,6 +1486,31 @@ const UsersGrid: React.FC<UsersGridProps> = ({ viewMode }) => {
                 ))}
               </div>
             )}
+            {viewMode === 'archived' && (
+              <div
+                className="approve-buttons-column"
+                style={{
+                  ['--row-height' as any]: `${tipersSizes.row}px`,
+                  ['--header-offset' as any]: `${tipersSizes.headerOffset}px`,
+                }}
+              >
+                {tipersData.map((tiper) => (
+                  <button
+                    key={tiper.id}
+                    onClick={() => handleRestoreTiper(tiper.id as number)}
+                    className="external-approve-btn"
+                    title="Obnovit tipaře"
+                  >
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                      <path d="M3 12a9 9 0 0 1 9-9 9.75 9.75 0 0 1 6.74 2.74L21 8" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+                      <path d="M21 3v5h-5" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+                      <path d="M21 12a9 9 0 0 1-9 9 9.75 9.75 0 0 1-6.74-2.74L3 16" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+                      <path d="M3 21v-5h5" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+                    </svg>
+                  </button>
+                ))}
+              </div>
+            )}
             <div
               className="delete-buttons-column"
               style={{
@@ -1363,7 +1523,7 @@ const UsersGrid: React.FC<UsersGridProps> = ({ viewMode }) => {
                   key={tiper.id}
                   onClick={() => handleDeleteTiper(tiper.id as number)}
                   className="external-delete-btn"
-                  title={viewMode === 'pending' ? 'Zamítnout tipaře' : 'Smazat tipaře'}
+                  title={viewMode === 'pending' ? 'Zamítnout tipaře' : viewMode === 'archived' ? 'Trvale smazat tipaře' : 'Archivovat tipaře'}
                 >
                   <svg width="14" height="14" viewBox="0 0 12 12" fill="none" xmlns="http://www.w3.org/2000/svg">
                     <path d="M9 3L3 9M3 3L9 9" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>

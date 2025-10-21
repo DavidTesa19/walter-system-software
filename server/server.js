@@ -188,6 +188,28 @@ app.post("/partners/:id/approve", (req, res) => {
   res.json(db.partners[idx]);
 });
 
+// Archive partner (change status to archived for removal approval)
+app.post("/partners/:id/archive", (req, res) => {
+  const id = Number(req.params.id);
+  const db = readDb();
+  const idx = db.partners.findIndex((p) => p.id === id);
+  if (idx === -1) return res.status(404).json({ error: "Not found" });
+  db.partners[idx] = { ...db.partners[idx], status: "archived" };
+  if (!writeDb(db)) return res.status(500).json({ error: "Failed to persist" });
+  res.json(db.partners[idx]);
+});
+
+// Restore partner from archive (change status back to accepted)
+app.post("/partners/:id/restore", (req, res) => {
+  const id = Number(req.params.id);
+  const db = readDb();
+  const idx = db.partners.findIndex((p) => p.id === id);
+  if (idx === -1) return res.status(404).json({ error: "Not found" });
+  db.partners[idx] = { ...db.partners[idx], status: "accepted" };
+  if (!writeDb(db)) return res.status(500).json({ error: "Failed to persist" });
+  res.json(db.partners[idx]);
+});
+
 // CRUD for employees
 app.get("/employees", (_req, res) => {
   const db = readDb();
@@ -302,6 +324,28 @@ app.post("/clients/:id/approve", (req, res) => {
   res.json(db.clients[idx]);
 });
 
+// Archive client (change status to archived for removal approval)
+app.post("/clients/:id/archive", (req, res) => {
+  const id = Number(req.params.id);
+  const db = readDb();
+  const idx = db.clients.findIndex((c) => c.id === id);
+  if (idx === -1) return res.status(404).json({ error: "Not found" });
+  db.clients[idx] = { ...db.clients[idx], status: "archived" };
+  if (!writeDb(db)) return res.status(500).json({ error: "Failed to persist" });
+  res.json(db.clients[idx]);
+});
+
+// Restore client from archive (change status back to accepted)
+app.post("/clients/:id/restore", (req, res) => {
+  const id = Number(req.params.id);
+  const db = readDb();
+  const idx = db.clients.findIndex((c) => c.id === id);
+  if (idx === -1) return res.status(404).json({ error: "Not found" });
+  db.clients[idx] = { ...db.clients[idx], status: "accepted" };
+  if (!writeDb(db)) return res.status(500).json({ error: "Failed to persist" });
+  res.json(db.clients[idx]);
+});
+
 // CRUD for tipers
 app.get("/tipers", (req, res) => {
   const db = readDb();
@@ -358,6 +402,28 @@ app.delete("/tipers/:id", (req, res) => {
 
 // Approve tiper (change status from pending to accepted)
 app.post("/tipers/:id/approve", (req, res) => {
+  const id = Number(req.params.id);
+  const db = readDb();
+  const idx = db.tipers.findIndex((t) => t.id === id);
+  if (idx === -1) return res.status(404).json({ error: "Not found" });
+  db.tipers[idx] = { ...db.tipers[idx], status: "accepted" };
+  if (!writeDb(db)) return res.status(500).json({ error: "Failed to persist" });
+  res.json(db.tipers[idx]);
+});
+
+// Archive tiper (change status to archived for removal approval)
+app.post("/tipers/:id/archive", (req, res) => {
+  const id = Number(req.params.id);
+  const db = readDb();
+  const idx = db.tipers.findIndex((t) => t.id === id);
+  if (idx === -1) return res.status(404).json({ error: "Not found" });
+  db.tipers[idx] = { ...db.tipers[idx], status: "archived" };
+  if (!writeDb(db)) return res.status(500).json({ error: "Failed to persist" });
+  res.json(db.tipers[idx]);
+});
+
+// Restore tiper from archive (change status back to accepted)
+app.post("/tipers/:id/restore", (req, res) => {
   const id = Number(req.params.id);
   const db = readDb();
   const idx = db.tipers.findIndex((t) => t.id === id);

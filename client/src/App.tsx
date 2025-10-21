@@ -8,14 +8,14 @@ import './components/Sidebar.css';
 
 const AppContent: React.FC = () => {
   const { isAuthenticated } = useAuth();
-  const [viewMode, setViewMode] = useState<'active' | 'pending'>('active');
+  const [viewMode, setViewMode] = useState<'active' | 'pending' | 'archived'>('active');
 
   if (!isAuthenticated) {
     return <Login />;
   }
 
   return (
-    <div className="app-layout">
+    <div style={{ display: 'flex' }}>
       <Sidebar activeView={viewMode} onViewChange={setViewMode} />
       <div className="main-content">
         <UsersGrid viewMode={viewMode} />

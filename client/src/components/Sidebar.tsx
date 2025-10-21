@@ -3,8 +3,8 @@ import { useTheme } from '../theme/ThemeContext';
 import './Sidebar.css';
 
 interface SidebarProps {
-  activeView: 'active' | 'pending';
-  onViewChange: (view: 'active' | 'pending') => void;
+  activeView: 'active' | 'pending' | 'archived';
+  onViewChange: (view: 'active' | 'pending' | 'archived') => void;
 }
 
 const Sidebar: React.FC<SidebarProps> = ({ activeView, onViewChange }) => {
@@ -53,6 +53,26 @@ const Sidebar: React.FC<SidebarProps> = ({ activeView, onViewChange }) => {
             <polyline points="12 6 12 12 16 14"></polyline>
           </svg>
           <span>Čekající na schválení</span>
+        </button>
+        <button
+          className={`sidebar-button ${activeView === 'archived' ? 'active' : ''}`}
+          onClick={() => onViewChange('archived')}
+        >
+          <svg
+            width="20"
+            height="20"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="2"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+          >
+            <polyline points="21 8 21 21 3 21 3 8"></polyline>
+            <rect x="1" y="3" width="22" height="5"></rect>
+            <line x1="10" y1="12" x2="14" y2="12"></line>
+          </svg>
+          <span>Archiv k odstranění</span>
         </button>
         <button
           className="sidebar-button theme-toggle"
