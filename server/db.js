@@ -105,6 +105,19 @@ export async function initDatabase() {
       )
     `);
 
+    // Create color palettes table
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS color_palettes (
+        id SERIAL PRIMARY KEY,
+        name VARCHAR(120) NOT NULL,
+        mode VARCHAR(12) NOT NULL CHECK (mode IN ('light', 'dark')),
+        colors JSONB NOT NULL,
+        is_active BOOLEAN DEFAULT FALSE,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+      )
+    `);
+
     // Keep legacy databases in sync with new columns
     const columnMigrations = [
       "ALTER TABLE partners ADD COLUMN IF NOT EXISTS field VARCHAR(255)",
@@ -130,12 +143,93 @@ export async function initDatabase() {
     await client.query("UPDATE clients SET status = 'accepted' WHERE status IS NULL");
     await client.query("UPDATE tipers SET status = 'accepted' WHERE status IS NULL");
 
+    await ensureDefaultPalettes(client);
+
     console.log('✓ Database tables initialized');
   } catch (error) {
     console.error('Error initializing database:', error);
     throw error;
   } finally {
     client.release();
+  }
+}
+
+async function ensureDefaultPalettes(client) {
+  const { rows } = await client.query('SELECT COUNT(*)::INT AS count FROM color_palettes');
+  const hasPalettes = rows[0]?.count > 0;
+
+  const defaultPalettes = [
+    {
+      name: 'Walter Light',
+      mode: 'light',
+      colors: {
+        primary: 'hsl(221, 83%, 55%)',
+        accent: 'hsl(172, 66%, 45%)',
+        background: 'hsl(210, 33%, 98%)',
+        surface: 'hsl(0, 0%, 100%)',
+        text: 'hsl(224, 33%, 16%)',
+        muted: 'hsl(220, 12%, 46%)',
+        border: 'hsl(214, 32%, 89%)'
+      },
+      is_active: true
+    },
+    {
+      name: 'Walter Dark',
+      mode: 'dark',
+      colors: {
+        primary: 'hsl(217, 86%, 65%)',
+        accent: 'hsl(162, 87%, 60%)',
+        background: 'hsl(222, 47%, 11%)',
+        surface: 'hsl(218, 39%, 14%)',
+        text: 'hsl(210, 40%, 96%)',
+        muted: 'hsl(215, 20%, 65%)',
+        border: 'hsl(220, 23%, 28%)'
+      },
+      is_active: true
+    }
+  ];
+
+  if (!hasPalettes) {
+    for (const palette of defaultPalettes) {
+      await client.query(
+        `INSERT INTO color_palettes (name, mode, colors, is_active)
+         VALUES ($1, $2, $3::jsonb, $4)
+         ON CONFLICT DO NOTHING`,
+        [palette.name, palette.mode, JSON.stringify(palette.colors), palette.is_active]
+      );
+    }
+    return;
+  }
+
+  const modes = ['light', 'dark'];
+  for (const mode of modes) {
+    const { rows: activeRows } = await client.query(
+      'SELECT id FROM color_palettes WHERE mode = $1 AND is_active = true LIMIT 1',
+      [mode]
+    );
+
+    if (activeRows.length === 0) {
+      const { rows: firstRows } = await client.query(
+        'SELECT id FROM color_palettes WHERE mode = $1 ORDER BY id LIMIT 1',
+        [mode]
+      );
+
+      if (firstRows.length > 0) {
+        await client.query(
+          'UPDATE color_palettes SET is_active = (id = $1) WHERE mode = $2',
+          [firstRows[0].id, mode]
+        );
+      } else {
+        const fallback = defaultPalettes.find(p => p.mode === mode);
+        if (fallback) {
+          await client.query(
+            `INSERT INTO color_palettes (name, mode, colors, is_active)
+             VALUES ($1, $2, $3::jsonb, true)` ,
+            [fallback.name, fallback.mode, JSON.stringify(fallback.colors)]
+          );
+        }
+      }
+    }
   }
 }
 
@@ -228,6 +322,221 @@ export const db = {
   // Check if using PostgreSQL
   isPostgres() {
     return USE_POSTGRES;
+  },
+
+  async getColorPalettes() {
+    if (!USE_POSTGRES) return null;
+
+    const result = await pool.query(
+      'SELECT * FROM color_palettes ORDER BY mode, id'
+    );
+    return result.rows;
+  },
+
+  async createColorPalette({ name, mode, colors, is_active }) {
+    if (!USE_POSTGRES) return null;
+
+    const client = await pool.connect();
+    try {
+      await client.query('BEGIN');
+      if (is_active) {
+        await client.query('UPDATE color_palettes SET is_active = false WHERE mode = $1', [mode]);
+      }
+
+      const result = await client.query(
+        `INSERT INTO color_palettes (name, mode, colors, is_active)
+         VALUES ($1, $2, $3::jsonb, $4)
+         RETURNING *`,
+        [name, mode, JSON.stringify(colors), Boolean(is_active)]
+      );
+
+      if (!is_active) {
+        await client.query(
+          `UPDATE color_palettes
+             SET is_active = true
+           WHERE id = $1
+             AND NOT EXISTS (
+               SELECT 1 FROM color_palettes WHERE mode = $2 AND is_active = true
+             )`,
+          [result.rows[0].id, mode]
+        );
+      }
+
+      await client.query('COMMIT');
+      return result.rows[0];
+    } catch (error) {
+      await client.query('ROLLBACK');
+      throw error;
+    } finally {
+      client.release();
+    }
+  },
+
+  async updateColorPalette(id, { name, colors, is_active }) {
+    if (!USE_POSTGRES) return null;
+
+    const client = await pool.connect();
+    try {
+      await client.query('BEGIN');
+
+      const current = await client.query(
+        'SELECT mode FROM color_palettes WHERE id = $1',
+        [id]
+      );
+
+      if (current.rows.length === 0) {
+        await client.query('ROLLBACK');
+        return null;
+      }
+
+      const mode = current.rows[0].mode;
+
+      if (is_active) {
+        await client.query('UPDATE color_palettes SET is_active = false WHERE mode = $1', [mode]);
+      }
+
+      const result = await client.query(
+        `UPDATE color_palettes
+           SET name = COALESCE($2, name),
+               colors = COALESCE($3::jsonb, colors),
+               is_active = COALESCE($4, is_active),
+               updated_at = CURRENT_TIMESTAMP
+         WHERE id = $1
+         RETURNING *`,
+        [id, name ?? null, colors ? JSON.stringify(colors) : null, typeof is_active === 'boolean' ? is_active : null]
+      );
+
+      if (result.rows.length === 0) {
+        await client.query('ROLLBACK');
+        return null;
+      }
+
+      if (!is_active) {
+        const { rows } = await client.query(
+          'SELECT COUNT(*)::INT AS count FROM color_palettes WHERE mode = $1 AND is_active = true',
+          [mode]
+        );
+        if (rows[0].count === 0) {
+          await client.query(
+            'UPDATE color_palettes SET is_active = true WHERE id = $1',
+            [id]
+          );
+          result.rows[0].is_active = true;
+        }
+      }
+
+      await client.query('COMMIT');
+      return result.rows[0];
+    } catch (error) {
+      await client.query('ROLLBACK');
+      throw error;
+    } finally {
+      client.release();
+    }
+  },
+
+  async deleteColorPalette(id) {
+    if (!USE_POSTGRES) return null;
+
+    const client = await pool.connect();
+    try {
+      await client.query('BEGIN');
+
+      const { rows: toDelete } = await client.query(
+        'SELECT id, mode, is_active FROM color_palettes WHERE id = $1',
+        [id]
+      );
+
+      if (toDelete.length === 0) {
+        await client.query('ROLLBACK');
+        return null;
+      }
+
+      const palette = toDelete[0];
+
+      await client.query('DELETE FROM color_palettes WHERE id = $1', [id]);
+
+      if (palette.is_active) {
+        const { rows } = await client.query(
+          'SELECT id FROM color_palettes WHERE mode = $1 ORDER BY id LIMIT 1',
+          [palette.mode]
+        );
+        if (rows.length > 0) {
+          await client.query(
+            'UPDATE color_palettes SET is_active = true WHERE id = $1',
+            [rows[0].id]
+          );
+        }
+      }
+
+      await client.query('COMMIT');
+      return palette;
+    } catch (error) {
+      await client.query('ROLLBACK');
+      throw error;
+    } finally {
+      client.release();
+    }
+  },
+
+  async activateColorPalette(id) {
+    if (!USE_POSTGRES) return null;
+
+    const client = await pool.connect();
+    try {
+      await client.query('BEGIN');
+
+      const { rows } = await client.query(
+        'SELECT mode FROM color_palettes WHERE id = $1',
+        [id]
+      );
+
+      if (rows.length === 0) {
+        await client.query('ROLLBACK');
+        return null;
+      }
+
+      const mode = rows[0].mode;
+
+      await client.query(
+        'UPDATE color_palettes SET is_active = false WHERE mode = $1',
+        [mode]
+      );
+
+      const result = await client.query(
+        'UPDATE color_palettes SET is_active = true, updated_at = CURRENT_TIMESTAMP WHERE id = $1 RETURNING *',
+        [id]
+      );
+
+      await client.query('COMMIT');
+      return result.rows[0] ?? null;
+    } catch (error) {
+      await client.query('ROLLBACK');
+      throw error;
+    } finally {
+      client.release();
+    }
+  },
+
+  async getActivePalettes() {
+    if (!USE_POSTGRES) return null;
+
+    const result = await pool.query(
+      `SELECT * FROM color_palettes
+        WHERE is_active = true
+        ORDER BY mode`
+    );
+    return result.rows;
+  },
+
+  async getActivePaletteByMode(mode) {
+    if (!USE_POSTGRES) return null;
+
+    const result = await pool.query(
+      'SELECT * FROM color_palettes WHERE mode = $1 AND is_active = true LIMIT 1',
+      [mode]
+    );
+    return result.rows[0] ?? null;
   },
 
   // Approve a pending record (change status to accepted)

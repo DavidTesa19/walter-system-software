@@ -2,9 +2,11 @@ import React from 'react';
 import { useTheme } from '../theme/ThemeContext';
 import './Sidebar.css';
 
+type SidebarView = 'active' | 'pending' | 'archived' | 'palettes';
+
 interface SidebarProps {
-  activeView: 'active' | 'pending' | 'archived';
-  onViewChange: (view: 'active' | 'pending' | 'archived') => void;
+  activeView: SidebarView;
+  onViewChange: (view: SidebarView) => void;
 }
 
 const Sidebar: React.FC<SidebarProps> = ({ activeView, onViewChange }) => {
@@ -73,6 +75,27 @@ const Sidebar: React.FC<SidebarProps> = ({ activeView, onViewChange }) => {
             <line x1="10" y1="12" x2="14" y2="12"></line>
           </svg>
           <span>Archiv k odstranění</span>
+        </button>
+        <button
+          className={`sidebar-button ${activeView === 'palettes' ? 'active' : ''}`}
+          onClick={() => onViewChange('palettes')}
+        >
+          <svg
+            width="20"
+            height="20"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="2"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+          >
+            <path d="M12 21c4.97 0 9-3.04 9-7 0-4-4.5-7-9-7S3 10 3 14c0 1.38.56 2.63 1.5 3.68.43.48.51 1.18.19 1.74l-.75 1.32a1 1 0 0 0 1.4 1.4l1.32-.75c.56-.32 1.26-.24 1.74.19A8.93 8.93 0 0 0 12 21Z" />
+            <circle cx="8.5" cy="11.5" r="1.5" />
+            <circle cx="12" cy="7" r="1.5" />
+            <circle cx="15.5" cy="11.5" r="1.5" />
+          </svg>
+          <span>Barevné palety</span>
         </button>
         <button
           className="sidebar-button theme-toggle"

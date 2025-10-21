@@ -1,13 +1,14 @@
 /* Styles for UsersGrid page */
 .page-container {
-  padding: 4rem 4rem;
-  background: transparent;
-  color: #222;
+  padding: 4rem;
+  background: var(--color-background);
+  color: var(--color-text);
   text-align: center;
   min-height: 100vh;
   overflow: hidden;
   box-sizing: border-box;
   max-width: 100%;
+  width: 100%;
 }
 
 .header-section {
@@ -23,10 +24,11 @@
 .navigation-tabs {
   display: flex;
   gap: 0.5rem;
-  background: #f8f9fa;
+  background: var(--color-surface-alt);
   padding: 0.25rem;
-  border-radius: 8px;
-  box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+  border-radius: 0.75rem;
+  box-shadow: var(--color-shadow-sm);
+  border: 1px solid var(--color-border);
 }
 
 .nav-tab {
@@ -37,20 +39,20 @@
   cursor: pointer;
   font-size: 0.95rem;
   font-weight: 500;
-  color: #6c757d;
+  color: var(--color-text-muted);
   transition: all 0.2s;
   white-space: nowrap;
 }
 
 .nav-tab:hover {
-  background: #e9ecef;
-  color: #495057;
+  background: var(--color-surface-hover);
+  color: var(--color-text);
 }
 
 .nav-tab.active {
-  background: #007bff;
-  color: white;
-  box-shadow: 0 2px 4px rgba(0,123,255,0.3);
+  background: var(--color-primary);
+  color: var(--color-primary-contrast);
+  box-shadow: 0 2px 6px color-mix(in srgb, var(--color-primary) 25%, transparent);
 }
 
 /* Table section */
@@ -62,7 +64,7 @@
   font-size: 1.5rem;
   font-weight: 600;
   margin-bottom: 1rem;
-  color: #333;
+  color: var(--color-text);
   text-align: left;
 }
 
@@ -71,27 +73,27 @@
   font-weight: 700;
   font-size: 2.25rem;
   margin: 0;
-  color: #111;
+  color: var(--color-text);
 }
 
 .add-user-btn {
-  background: #007bff;
-  color: white;
+  background: var(--color-primary);
+  color: var(--color-primary-contrast);
   border: none;
   padding: 0.75rem 1.5rem;
-  border-radius: 6px;
+  border-radius: 0.75rem;
   cursor: pointer;
   font-size: 0.95rem;
-  font-weight: 500;
-  transition: background-color 0.2s;
+  font-weight: 600;
+  transition: background-color 0.2s ease;
 }
 
 .add-user-btn:hover:not(:disabled) {
-  background: #0056b3;
+  background: var(--color-primary-hover);
 }
 
 .add-user-btn:disabled {
-  background: #6c757d;
+  background: var(--color-text-muted);
   cursor: not-allowed;
 }
 
@@ -99,7 +101,8 @@
   display: flex;
   position: relative;
   max-width: 100%;
-  overflow: visible;
+  width: 100%;
+  overflow: hidden;
 }
 
 .delete-buttons-column {
@@ -113,10 +116,11 @@
 }
 
 .grid-wrapper {
-  background: #fff;
-  border-radius: 8px;
-  padding: 1rem 1rem 1rem 1rem;
-  box-shadow: 0 6px 18px rgba(14, 30, 37, 0.08);
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: 1rem;
+  padding: 1rem;
+  box-shadow: var(--color-shadow-md);
   margin: 0 auto;
   flex: 1;
   box-sizing: border-box;
@@ -128,7 +132,7 @@
 /* In-row delete button styles (pinned column) */
 .inrow-delete-btn {
   background: transparent;
-  color: #999;
+  color: var(--color-text-muted);
   border: none;
   padding: 0;
   border-radius: 4px;
@@ -142,14 +146,14 @@
 }
 
 .inrow-delete-btn:hover {
-  background: rgba(220, 53, 69, 0.1);
-  color: #dc3545;
+  background: color-mix(in srgb, var(--color-danger) 18%, transparent);
+  color: var(--color-danger);
   transform: scale(1.05);
 }
 
 .inrow-delete-btn:active {
-  background: rgba(220, 53, 69, 0.2);
-  color: #b02a37;
+  background: color-mix(in srgb, var(--color-danger) 28%, transparent);
+  color: var(--color-danger-hover);
   transform: scale(1.02);
 }
 
@@ -160,7 +164,7 @@
 /* External delete buttons (outside grid) */
 .external-delete-btn {
   background: transparent;
-  color: #999;
+  color: var(--color-text-muted);
   border: none;
   padding: 0;
   border-radius: 4px;
@@ -176,13 +180,13 @@
 
 .external-delete-btn:hover {
   background: transparent;
-  color: #dc3545;
+  color: var(--color-danger);
   transform: scale(1.05);
 }
 
 .external-delete-btn:active {
   background: transparent;
-  color: #b02a37;
+  color: var(--color-danger-hover);
   transform: scale(1.02);
 }
 
@@ -203,7 +207,7 @@
 
 .external-approve-btn {
   background: transparent;
-  color: #28a745;
+  color: var(--color-success);
   border: none;
   padding: 0;
   border-radius: 4px;
@@ -219,13 +223,13 @@
 
 .external-approve-btn:hover {
   background: transparent;
-  color: #218838;
+  color: var(--color-success-hover);
   transform: scale(1.1);
 }
 
 .external-approve-btn:active {
   background: transparent;
-  color: #1e7e34;
+  color: color-mix(in srgb, var(--color-success) 75%, black);
   transform: scale(1.05);
 }
 
@@ -234,8 +238,8 @@
 }
 
 .delete-btn {
-  background: #dc3545;
-  color: white;
+  background: var(--color-danger);
+  color: var(--color-danger-contrast);
   border: none;
   padding: 0.5rem;
   border-radius: 4px;
@@ -254,7 +258,7 @@
 }
 
 .delete-btn:hover {
-  background: #c82333;
+  background: var(--color-danger-hover);
 }
 
 .delete-btn svg {
@@ -264,9 +268,9 @@
 .instructions {
   margin-top: 2rem;
   padding: 1.5rem;
-  background: #f8f9fa;
+  background: var(--color-surface-alt);
   border-radius: 8px;
-  border-left: 4px solid #007bff;
+  border-left: 4px solid var(--color-primary);
   text-align: left;
   max-width: 1200px;
   margin-left: auto;
@@ -276,7 +280,7 @@
 .instructions p {
   margin: 0 0 0.5rem 0;
   font-weight: 600;
-  color: #495057;
+  color: var(--color-text);
 }
 
 .instructions ul {
@@ -286,12 +290,12 @@
 
 .instructions li {
   margin-bottom: 0.25rem;
-  color: #6c757d;
+  color: var(--color-text-muted);
 }
 
 /* Make the grid headers a bit darker for contrast and center them */
 .ag-header-cell-label {
-  color: rgba(0,0,0,0.7);
+  color: var(--color-primary-contrast);
   text-align: center;
   justify-content: center;
   display: flex;
@@ -304,173 +308,66 @@
 
 .ag-header-cell {
   text-align: center;
-  background-color: #006aff !important; /* Dark blue-gray background */
-  color: #ffffff !important; /* White text */
-  border-bottom: 2px solid #34495e !important; /* Slightly lighter border */
+  background: var(--color-primary) !important;
+  color: var(--color-primary-contrast) !important;
+  border-bottom: 2px solid var(--color-border-strong) !important;
 }
 
 .ag-header-cell .ag-header-cell-label .ag-header-cell-text {
   text-align: center;
   width: 100%;
-  color: #ffffff !important; /* Ensure text is white */
+  color: var(--color-primary-contrast) !important;
   font-weight: 600; /* Make text slightly bolder */
 }
 
 /* Additional header centering for AG Grid */
 .ag-theme-quartz .ag-header-cell-label {
   justify-content: center !important;
-  color: #ffffff !important; /* White text for labels */
+  color: var(--color-primary-contrast) !important;
 }
 
 .ag-theme-quartz .ag-header-cell-text {
   text-align: center !important;
-  color: #ffffff !important; /* White text for header text */
-}
-
-/* Hue rotation animation for header */
-@keyframes hueRotate {
-  0% {
-    filter: hue-rotate(0deg);
-  }
-  100% {
-    filter: hue-rotate(360deg);
-  }
+  color: var(--color-primary-contrast) !important;
 }
 
 /* Override AG Grid's default header styles */
 .ag-theme-quartz .ag-header-cell {
-  background-color: #005fbf !important;
-  border-right: 1px solid #34495e !important;
-  animation: hueRotate 30s linear infinite;
+  background: var(--color-primary) !important;
+  border-right: 1px solid var(--color-border-strong) !important;
 }
 
 /* Header row background */
 .ag-theme-quartz .ag-header-row {
-  background-color: #2c3e50 !important;
-  animation: hueRotate 30s linear infinite;
+  background: var(--color-primary-hover) !important;
 }
 
 /* Remove default header background */
 .ag-theme-quartz .ag-header {
-  background-color: #2c3e50 !important;
-  border-bottom: 2px solid #34495e !important;
-  animation: hueRotate 30s linear infinite;
+  background: var(--color-primary) !important;
+  border-bottom: 2px solid var(--color-border-strong) !important;
+}
+
+.ag-theme-quartz {
+  --ag-background-color: var(--color-surface);
+  --ag-foreground-color: var(--color-text);
+  --ag-border-color: var(--color-border);
+  --ag-header-background-color: var(--color-primary);
+  --ag-header-foreground-color: var(--color-primary-contrast);
+  --ag-odd-row-background-color: color-mix(in srgb, var(--color-surface-alt) 70%, var(--color-surface));
+  --ag-row-hover-color: color-mix(in srgb, var(--color-primary) 12%, var(--color-surface));
+  --ag-selected-row-background-color: color-mix(in srgb, var(--color-primary) 20%, var(--color-surface));
+  --ag-range-selection-border-color: var(--color-primary);
+  --ag-input-focus-border-color: var(--color-primary);
 }
 
 /* Style for editable cells */
 .ag-cell-inline-editing {
-  background-color: #fff3cd !important;
-  border: 2px solid #ffc107 !important;
+  background: color-mix(in srgb, var(--color-warning) 18%, var(--color-surface)) !important;
+  border: 2px solid var(--color-warning) !important;
 }
 
 /* Loading overlay styling */
 .ag-overlay-loading-wrapper {
-  background-color: rgba(255, 255, 255, 0.9);
-}
-
-/* Dark Theme Styles */
-[data-theme='dark'] .page-container {
-  background: #121212;
-  color: #e0e0e0;
-}
-
-[data-theme='dark'] .navigation-tabs {
-  background: #1e1e1e;
-  box-shadow: 0 2px 4px rgba(0,0,0,0.4);
-}
-
-[data-theme='dark'] .nav-tab {
-  color: #b0b0b0;
-}
-
-[data-theme='dark'] .nav-tab:hover {
-  background: #2d2d2d;
-  color: #e0e0e0;
-}
-
-[data-theme='dark'] .nav-tab.active {
-  background: #1e3a5f;
-  color: #64b5f6;
-  box-shadow: 0 2px 4px rgba(100,181,246,0.3);
-}
-
-[data-theme='dark'] .add-user-btn {
-  background: linear-gradient(135deg, #1e3a5f 0%, #2d5a8f 100%);
-  color: #e0e0e0;
-}
-
-[data-theme='dark'] .add-user-btn:hover {
-  background: linear-gradient(135deg, #2d5a8f 0%, #3d6a9f 100%);
-  box-shadow: 0 4px 12px rgba(100,181,246,0.3);
-}
-
-[data-theme='dark'] .page-title {
-  color: #e0e0e0;
-}
-
-[data-theme='dark'] .table-title {
-  color: #b0b0b0;
-}
-
-[data-theme='dark'] .grid-container {
-  background: #1a1a1a;
-}
-
-[data-theme='dark'] .grid-wrapper {
-  background: #0d0d0d;
-  box-shadow: 0 6px 18px rgba(0, 0, 0, 0.4);
-}
-
-[data-theme='dark'] .external-approve-btn {
-  color: #10b981;
-}
-
-[data-theme='dark'] .external-approve-btn:hover {
-  color: #34d399;
-}
-
-[data-theme='dark'] .external-delete-btn {
-  color: #ef5350;
-}
-
-[data-theme='dark'] .external-delete-btn:hover {
-  color: #f87171;
-}
-
-[data-theme='dark'] .instructions {
-  background: #1e1e1e;
-  border: 1px solid #2d2d2d;
-  color: #b0b0b0;
-}
-
-/* AG Grid Dark Theme */
-[data-theme='dark'] .ag-theme-quartz {
-  --ag-background-color: #1a1a1a;
-  --ag-foreground-color: #e0e0e0;
-  --ag-border-color: #2d2d2d;
-  --ag-header-background-color: #0d0d0d;
-  --ag-header-foreground-color: #b0b0b0;
-  --ag-odd-row-background-color: #1a1a1a;
-  --ag-row-hover-color: #2d2d2d;
-  --ag-selected-row-background-color: #1e3a5f;
-  --ag-range-selection-border-color: #64b5f6;
-  --ag-input-focus-border-color: #64b5f6;
-}
-
-[data-theme='dark'] .ag-cell-inline-editing {
-  background-color: #3a3a1a !important;
-  border: 2px solid #64b5f6 !important;
-}
-
-[data-theme='dark'] .ag-overlay-loading-wrapper {
-  background-color: rgba(26, 26, 26, 0.9);
-}
-
-/* Dark theme for custom cell renderers */
-[data-theme='dark'] .ag-cell {
-  border-color: #2d2d2d !important;
-}
-
-[data-theme='dark'] .ag-row {
-  border-color: #2d2d2d !important;
+  background: color-mix(in srgb, var(--color-surface) 92%, transparent);
 }

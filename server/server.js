@@ -3,6 +3,160 @@ import cors from "cors";
 import fs from "fs";
 import path from "path";
 
+const DEFAULT_COLOR_PALETTES = [
+  {
+    id: 1,
+    name: "Walter Light",
+    mode: "light",
+    colors: {
+      primary: "hsl(221, 83%, 55%)",
+      accent: "hsl(172, 66%, 45%)",
+      background: "hsl(210, 33%, 98%)",
+      surface: "hsl(0, 0%, 100%)",
+      text: "hsl(224, 33%, 16%)",
+      muted: "hsl(220, 12%, 46%)",
+      border: "hsl(214, 32%, 89%)"
+    },
+    is_active: true
+  },
+  {
+    id: 2,
+    name: "Walter Dark",
+    mode: "dark",
+    colors: {
+      primary: "hsl(217, 86%, 65%)",
+      accent: "hsl(162, 87%, 60%)",
+      background: "hsl(222, 47%, 11%)",
+      surface: "hsl(218, 39%, 14%)",
+      text: "hsl(210, 40%, 96%)",
+      muted: "hsl(215, 20%, 65%)",
+      border: "hsl(220, 23%, 28%)"
+    },
+    is_active: true
+  }
+];
+
+const PALETTE_COLOR_KEYS = [
+  "primary",
+  "accent",
+  "background",
+  "surface",
+  "text",
+  "muted",
+  "border"
+];
+
+const cloneDefaultPalettes = () => DEFAULT_COLOR_PALETTES.map(palette => ({
+  ...palette,
+  colors: { ...palette.colors }
+}));
+
+const ensurePalettes = db => {
+  let mutated = false;
+  if (!Array.isArray(db.color_palettes)) {
+    db.color_palettes = cloneDefaultPalettes();
+    mutated = true;
+  }
+
+  const modes = ["light", "dark"];
+  let nextId = db.color_palettes.reduce((max, palette) => (palette.id > max ? palette.id : max), 0);
+
+  for (const mode of modes) {
+    const modePalettes = db.color_palettes.filter(palette => palette.mode === mode);
+    if (modePalettes.length === 0) {
+      const fallback = cloneDefaultPalettes().find(palette => palette.mode === mode);
+      if (fallback) {
+        nextId += 1;
+        fallback.id = nextId;
+        db.color_palettes.push(fallback);
+        mutated = true;
+      }
+      continue;
+    }
+
+    const activePalettes = modePalettes.filter(palette => palette.is_active);
+    if (activePalettes.length === 0) {
+      modePalettes[0].is_active = true;
+      mutated = true;
+    } else if (activePalettes.length > 1) {
+      activePalettes.forEach((palette, index) => {
+        palette.is_active = index === 0;
+      });
+      mutated = true;
+    }
+  }
+
+  return mutated;
+};
+
+const sanitizePalettePayload = (body, { partial = false, allowMode = true } = {}) => {
+  const errors = [];
+  const payload = {};
+
+  if (!partial || body.name !== undefined) {
+    if (typeof body.name !== "string" || !body.name.trim()) {
+      errors.push("name");
+    } else {
+      payload.name = body.name.trim();
+    }
+  }
+
+  if (allowMode && (!partial || body.mode !== undefined)) {
+    if (body.mode !== "light" && body.mode !== "dark") {
+      errors.push("mode");
+    } else {
+      payload.mode = body.mode;
+    }
+  }
+
+  if (!partial || body.colors !== undefined) {
+    if (typeof body.colors !== "object" || body.colors === null) {
+      errors.push("colors");
+    } else {
+      const colors = {};
+      for (const key of PALETTE_COLOR_KEYS) {
+        const value = body.colors[key];
+        if (typeof value !== "string" || !value.trim()) {
+          errors.push(`colors.${key}`);
+        } else {
+          colors[key] = value.trim();
+        }
+      }
+      if (Object.keys(colors).length === PALETTE_COLOR_KEYS.length) {
+        payload.colors = colors;
+      }
+    }
+  }
+
+  if (body.is_active !== undefined) {
+    payload.is_active = Boolean(body.is_active);
+  }
+
+  return { payload, errors };
+};
+
+const getNextPaletteId = palettes => palettes.reduce((max, palette) => (
+  typeof palette.id === "number" && palette.id > max ? palette.id : max
+), 0) + 1;
+
+const setActivePalette = (palettes, id) => {
+  const palette = palettes.find(item => item.id === id);
+  if (!palette) return null;
+  palettes.forEach(item => {
+    if (item.mode === palette.mode) {
+      item.is_active = item.id === palette.id;
+    }
+  });
+  return palette;
+};
+
+const removePalette = (palettes, id) => {
+  const index = palettes.findIndex(item => item.id === id);
+  if (index === -1) return null;
+  const [removed] = palettes.splice(index, 1);
+  return removed;
+};
+
 const app = express();
 const PORT = process.env.PORT ? Number(process.env.PORT) : 3004;
 // For free tier: use temp directory or current directory
@@ -54,10 +208,21 @@ function readDb() {
     // Keep backwards compatibility
     if (!obj.users) obj.users = [];
     if (!obj.employees) obj.employees = [];
+    const mutated = ensurePalettes(obj);
+    if (mutated) {
+      writeDb(obj);
+    }
     return obj;
   } catch (e) {
     console.error("Error reading DB:", e);
-    return { partners: [], clients: [], tipers: [], users: [], employees: [] };
+    return {
+      partners: [],
+      clients: [],
+      tipers: [],
+      users: [],
+      employees: [],
+      color_palettes: cloneDefaultPalettes()
+    };
   }
 }
 
@@ -197,6 +362,160 @@ app.post("/partners/:id/archive", (req, res) => {
   db.partners[idx] = { ...db.partners[idx], status: "archived" };
   if (!writeDb(db)) return res.status(500).json({ error: "Failed to persist" });
   res.json(db.partners[idx]);
+});
+
+// Color palette routes for local JSON storage
+app.get("/color-palettes", (req, res) => {
+  const mode = req.query.mode;
+  if (mode && mode !== "light" && mode !== "dark") {
+    return res.status(400).json({ error: "Invalid mode" });
+  }
+
+  const db = readDb();
+  const palettes = mode
+    ? db.color_palettes.filter(palette => palette.mode === mode)
+    : db.color_palettes;
+  res.json(palettes);
+});
+
+app.get("/color-palettes/active", (req, res) => {
+  const mode = req.query.mode;
+  if (mode && mode !== "light" && mode !== "dark") {
+    return res.status(400).json({ error: "Invalid mode" });
+  }
+
+  const db = readDb();
+
+  if (mode) {
+    const palette = db.color_palettes.find(item => item.mode === mode && item.is_active);
+    if (!palette) {
+      return res.status(404).json({ error: "Active palette not found" });
+    }
+    return res.json(palette);
+  }
+
+  const response = {
+    light: db.color_palettes.find(item => item.mode === "light" && item.is_active) || null,
+    dark: db.color_palettes.find(item => item.mode === "dark" && item.is_active) || null
+  };
+
+  res.json(response);
+});
+
+app.post("/color-palettes", (req, res) => {
+  const { payload, errors } = sanitizePalettePayload(req.body, { partial: false, allowMode: true });
+  if (errors.length) {
+    return res.status(400).json({ error: "Invalid payload", details: errors });
+  }
+
+  const db = readDb();
+  const id = getNextPaletteId(db.color_palettes);
+  const newPalette = {
+    id,
+    ...payload,
+    is_active: Boolean(payload.is_active)
+  };
+
+  if (newPalette.is_active) {
+    db.color_palettes.forEach(item => {
+      if (item.mode === newPalette.mode) {
+        item.is_active = false;
+      }
+    });
+  }
+
+  db.color_palettes.push(newPalette);
+
+  if (newPalette.is_active) {
+    setActivePalette(db.color_palettes, newPalette.id);
+  }
+
+  ensurePalettes(db);
+
+  if (!writeDb(db)) {
+    return res.status(500).json({ error: "Failed to persist palette" });
+  }
+
+  res.status(201).json(newPalette);
+});
+
+app.put("/color-palettes/:id", (req, res) => {
+  const id = Number(req.params.id);
+  if (Number.isNaN(id)) {
+    return res.status(400).json({ error: "Invalid palette id" });
+  }
+
+  const { payload, errors } = sanitizePalettePayload(req.body, { partial: true, allowMode: false });
+  if (errors.length) {
+    return res.status(400).json({ error: "Invalid payload", details: errors });
+  }
+
+  const db = readDb();
+  const idx = db.color_palettes.findIndex(palette => palette.id === id);
+  if (idx === -1) {
+    return res.status(404).json({ error: "Palette not found" });
+  }
+
+  const updated = {
+    ...db.color_palettes[idx],
+    ...payload
+  };
+
+  db.color_palettes[idx] = updated;
+
+  if (payload.is_active) {
+    setActivePalette(db.color_palettes, id);
+  }
+
+  ensurePalettes(db);
+
+  if (!writeDb(db)) {
+    return res.status(500).json({ error: "Failed to persist palette" });
+  }
+
+  res.json(updated);
+});
+
+app.delete("/color-palettes/:id", (req, res) => {
+  const id = Number(req.params.id);
+  if (Number.isNaN(id)) {
+    return res.status(400).json({ error: "Invalid palette id" });
+  }
+
+  const db = readDb();
+  const removed = removePalette(db.color_palettes, id);
+  if (!removed) {
+    return res.status(404).json({ error: "Palette not found" });
+  }
+
+  ensurePalettes(db);
+
+  if (!writeDb(db)) {
+    return res.status(500).json({ error: "Failed to persist palette" });
+  }
+
+  res.status(204).end();
+});
+
+app.post("/color-palettes/:id/activate", (req, res) => {
+  const id = Number(req.params.id);
+  if (Number.isNaN(id)) {
+    return res.status(400).json({ error: "Invalid palette id" });
+  }
+
+  const db = readDb();
+  const activated = setActivePalette(db.color_palettes, id);
+  if (!activated) {
+    return res.status(404).json({ error: "Palette not found" });
+  }
+
+  ensurePalettes(db);
+
+  if (!writeDb(db)) {
+    return res.status(500).json({ error: "Failed to persist palette activation" });
+  }
+
+  res.json(activated);
 });
 
 // Restore partner from archive (change status back to accepted)
