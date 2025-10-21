@@ -239,6 +239,28 @@ export const db = {
       [id]
     );
     return result.rows[0] || null;
+  },
+
+  // Archive a record (mark for removal)
+  async archive(table, id) {
+    if (!USE_POSTGRES) return null;
+
+    const result = await pool.query(
+      `UPDATE ${table} SET status = 'archived', updated_at = CURRENT_TIMESTAMP WHERE id = $1 RETURNING *`,
+      [id]
+    );
+    return result.rows[0] || null;
+  },
+
+  // Restore a record from archive (back to accepted)
+  async restore(table, id) {
+    if (!USE_POSTGRES) return null;
+
+    const result = await pool.query(
+      `UPDATE ${table} SET status = 'accepted', updated_at = CURRENT_TIMESTAMP WHERE id = $1 RETURNING *`,
+      [id]
+    );
+    return result.rows[0] || null;
   }
 };
 

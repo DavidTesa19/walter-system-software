@@ -233,6 +233,52 @@ function createCrudRoutes(tableName) {
       res.status(500).json({ error: "Failed to approve record" });
     }
   });
+
+  // ARCHIVE - Change status to archived (mark for removal)
+  app.post(`/${tableName}/:id/archive`, async (req, res) => {
+    try {
+      const id = Number(req.params.id);
+
+      if (db.isPostgres()) {
+        const archived = await db.archive(tableName, id);
+        if (!archived) return res.status(404).json({ error: "Not found" });
+        res.json(archived);
+      } else {
+        const dbData = readDb();
+        const idx = dbData[tableName].findIndex(r => r.id === id);
+        if (idx === -1) return res.status(404).json({ error: "Not found" });
+        dbData[tableName][idx] = { ...dbData[tableName][idx], status: 'archived' };
+        if (!writeDb(dbData)) return res.status(500).json({ error: "Failed to persist" });
+        res.json(dbData[tableName][idx]);
+      }
+    } catch (error) {
+      console.error(`Error archiving ${tableName}:`, error);
+      res.status(500).json({ error: "Failed to archive record" });
+    }
+  });
+
+  // RESTORE - Change status from archived back to accepted
+  app.post(`/${tableName}/:id/restore`, async (req, res) => {
+    try {
+      const id = Number(req.params.id);
+
+      if (db.isPostgres()) {
+        const restored = await db.restore(tableName, id);
+        if (!restored) return res.status(404).json({ error: "Not found" });
+        res.json(restored);
+      } else {
+        const dbData = readDb();
+        const idx = dbData[tableName].findIndex(r => r.id === id);
+        if (idx === -1) return res.status(404).json({ error: "Not found" });
+        dbData[tableName][idx] = { ...dbData[tableName][idx], status: 'accepted' };
+        if (!writeDb(dbData)) return res.status(500).json({ error: "Failed to persist" });
+        res.json(dbData[tableName][idx]);
+      }
+    } catch (error) {
+      console.error(`Error restoring ${tableName}:`, error);
+      res.status(500).json({ error: "Failed to restore record" });
+    }
+  });
 }
 
 // Health check
