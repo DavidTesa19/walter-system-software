@@ -6,6 +6,9 @@
       "company": "Genco Pura Olive Oil Company",
       "location": "Praha",
       "mobile": "(231) 638-1199",
+      "field": null,
+      "info": null,
+      "commission": null,
       "status": "accepted"
     },
     {
@@ -14,6 +17,9 @@
       "company": "Globex Corporation",
       "location": "Praha",
       "mobile": "(490) 696-8066",
+      "field": null,
+      "info": null,
+      "commission": null,
       "status": "accepted"
     },
     {
@@ -22,6 +28,9 @@
       "company": "Soylent Corp",
       "location": "Praha",
       "mobile": "(607) 248-2032",
+      "field": null,
+      "info": null,
+      "commission": null,
       "status": "accepted"
     },
     {
@@ -30,24 +39,66 @@
       "company": "Initech",
       "location": "Praha",
       "mobile": "(423) 564-7972",
+      "field": null,
+      "info": null,
+      "commission": null,
+      "status": "pending"
+    },
+    {
+      "id": 5,
+      "name": "Nový Partner",
+      "company": "Nová Společnost",
+      "location": "Nová Lokalita",
+      "mobile": "000 000 000",
+      "field": null,
+      "info": null,
+      "commission": null,
       "status": "accepted"
+    },
+    {
+      "id": 7,
+      "name": "Nový Partner",
+      "company": "Nová Společnost",
+      "location": "Nová Lokalita",
+      "mobile": "000 000 000",
+      "field": null,
+      "info": null,
+      "commission": null,
+      "status": "pending"
+    },
+    {
+      "id": 8,
+      "name": "Nový Partner",
+      "company": "Nová Společnost",
+      "location": "Nová Lokalita",
+      "mobile": "000 000 000",
+      "field": null,
+      "info": null,
+      "commission": null,
+      "status": "pending"
+    },
+    {
+      "id": 9,
+      "name": "Petr svoboda",
+      "company": "caravan",
+      "location": "Brasilia",
+      "mobile": "+39 988 879",
+      "field": null,
+      "info": null,
+      "commission": null,
+      "status": "pending"
     }
   ],
   "clients": [
-    {
-      "id": 1,
-      "name": "John Smith",
-      "company": "Tech Solutions Ltd",
-      "location": "Brno",
-      "mobile": "(420) 123-456",
-      "status": "accepted"
-    },
     {
       "id": 2,
       "name": "Anna Novakova",
       "company": "Digital Agency",
       "location": "Ostrava",
       "mobile": "(420) 654-321",
+      "info": null,
+      "field": null,
+      "date": null,
       "status": "accepted"
     },
     {
@@ -56,6 +107,75 @@
       "company": "Software House",
       "location": "Plzen",
       "mobile": "(420) 789-012",
+      "info": null,
+      "field": null,
+      "date": null,
+      "status": "accepted"
+    },
+    {
+      "id": 4,
+      "name": "Martin Walter Zabiják",
+      "company": "Nová Společnost",
+      "location": "Nová Lokalita",
+      "mobile": "000 000 000",
+      "info": null,
+      "field": null,
+      "date": null,
+      "status": "accepted"
+    },
+    {
+      "id": 5,
+      "name": "fsfds",
+      "company": "Test Company",
+      "location": "Test Locatiofsdfsdn",
+      "mobile": "fsdfdsf",
+      "info": null,
+      "field": "Aeronautika a letectví",
+      "date": "2025-10-29T23:00:00.000Z",
+      "status": "Done"
+    },
+    {
+      "id": 6,
+      "name": "dfhdfgf",
+      "company": "Nová Společnost",
+      "location": "Nová Lokalita",
+      "mobile": "000 000 000",
+      "info": null,
+      "field": null,
+      "date": null,
+      "status": "accepted"
+    },
+    {
+      "id": 7,
+      "name": "Nový Klient",
+      "company": "Nová Společnost",
+      "location": "Nová Lokalita",
+      "mobile": "000 000 000",
+      "info": null,
+      "field": null,
+      "date": null,
+      "status": "accepted"
+    },
+    {
+      "id": 8,
+      "name": "Nový Klient",
+      "company": "Nová Společnost",
+      "location": "Nová Lokalita",
+      "mobile": "000 000 000",
+      "info": null,
+      "field": null,
+      "date": null,
+      "status": "accepted"
+    },
+    {
+      "id": 11,
+      "name": "afds",
+      "company": "adfas",
+      "location": "afdsf",
+      "mobile": "+420 000 888 555",
+      "info": null,
+      "field": null,
+      "date": null,
       "status": "accepted"
     }
   ],
@@ -66,14 +186,9 @@
       "company": "Tips & Analytics",
       "location": "Brno",
       "mobile": "(420) 111-222",
-      "status": "accepted"
-    },
-    {
-      "id": 2,
-      "name": "Marie Svobodová",
-      "company": "Betting Solutions",
-      "location": "Praha",
-      "mobile": "(420) 333-444",
+      "field": null,
+      "info": null,
+      "commission": null,
       "status": "accepted"
     },
     {
@@ -82,7 +197,56 @@
       "company": "Pro Tipers",
       "location": "Ostrava",
       "mobile": "(420) 555-666",
-      "status": "accepted"
+      "field": null,
+      "info": null,
+      "commission": null,
+      "status": "pending"
+    },
+    {
+      "id": 4,
+      "name": "Nový Tipař",
+      "company": "Nová Společnost",
+      "location": "Nová Lokalita",
+      "mobile": "000 000 000",
+      "field": null,
+      "info": null,
+      "commission": null,
+      "status": "pending"
+    },
+    {
+      "id": 5,
+      "name": "Nový Tipař",
+      "company": "Nová Společnost",
+      "location": "Nová Lokalita",
+      "mobile": "000 000 000",
+      "field": null,
+      "info": null,
+      "commission": null,
+      "status": "pending"
+    },
+    {
+      "id": 6,
+      "name": "Nový Tipař",
+      "company": "Nová Společnost",
+      "location": "Nová Lokalita",
+      "mobile": "000 000 000",
+      "field": null,
+      "info": null,
+      "commission": null,
+      "status": "pending"
+    },
+    {
+      "id": 7,
+      "name": "Nový Tipař",
+      "company": "Nová Společnost",
+      "location": "Nová Lokalita",
+      "mobile": "000 000 000",
+      "field": null,
+      "info": null,
+      "commission": null,
+      "status": "pending"
     }
-  ]
+  ],
+  "users": [],
+  "employees": []
 }

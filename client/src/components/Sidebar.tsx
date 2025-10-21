@@ -102,7 +102,7 @@ const Sidebar: React.FC<SidebarProps> = ({ activeView, onViewChange }) => {
           )}
         </button>
         <a
-          href="/public-form"
+          href="https://form.waltersystem.cz"
           target="_blank"
           rel="noopener noreferrer"
           className="sidebar-button sidebar-link"

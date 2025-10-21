@@ -15,7 +15,7 @@ const AppContent: React.FC = () => {
   }
 
   return (
-    <div style={{ display: 'flex' }}>
+    <div className="app-layout">
       <Sidebar activeView={viewMode} onViewChange={setViewMode} />
       <div className="main-content">
         <UsersGrid viewMode={viewMode} />

@@ -4,6 +4,10 @@
   background: transparent;
   color: #222;
   text-align: center;
+  min-height: 100vh;
+  overflow: hidden;
+  box-sizing: border-box;
+  max-width: 100%;
 }
 
 .header-section {
@@ -94,6 +98,8 @@
 .grid-container {
   display: flex;
   position: relative;
+  max-width: 100%;
+  overflow: visible;
 }
 
 .delete-buttons-column {
@@ -114,6 +120,9 @@
   margin: 0 auto;
   flex: 1;
   box-sizing: border-box;
+  max-width: 100%;
+  overflow: auto;
+  min-width: 0; /* allows flex child to shrink and prevents overflow */
 }
 
 /* In-row delete button styles (pinned column) */
@@ -166,13 +175,13 @@
 }
 
 .external-delete-btn:hover {
-  background: rgba(220, 53, 69, 0.1);
+  background: transparent;
   color: #dc3545;
   transform: scale(1.05);
 }
 
 .external-delete-btn:active {
-  background: rgba(220, 53, 69, 0.2);
+  background: transparent;
   color: #b02a37;
   transform: scale(1.02);
 }
@@ -194,7 +203,7 @@
 
 .external-approve-btn {
   background: transparent;
-  color: #999;
+  color: #28a745;
   border: none;
   padding: 0;
   border-radius: 4px;
@@ -209,15 +218,15 @@
 }
 
 .external-approve-btn:hover {
-  background: rgba(40, 167, 69, 0.1);
-  color: #28a745;
-  transform: scale(1.05);
+  background: transparent;
+  color: #218838;
+  transform: scale(1.1);
 }
 
 .external-approve-btn:active {
-  background: rgba(40, 167, 69, 0.2);
-  color: #218838;
-  transform: scale(1.02);
+  background: transparent;
+  color: #1e7e34;
+  transform: scale(1.05);
 }
 
 .external-approve-btn svg {
@@ -407,24 +416,25 @@
   background: #1a1a1a;
 }
 
+[data-theme='dark'] .grid-wrapper {
+  background: #0d0d0d;
+  box-shadow: 0 6px 18px rgba(0, 0, 0, 0.4);
+}
+
 [data-theme='dark'] .external-approve-btn {
-  background: #1e3a5f;
-  border-color: #2d5a8f;
+  color: #10b981;
 }
 
 [data-theme='dark'] .external-approve-btn:hover {
-  background: #2d5a8f;
-  border-color: #64b5f6;
+  color: #34d399;
 }
 
 [data-theme='dark'] .external-delete-btn {
-  background: #4a1a1a;
-  border-color: #6a2a2a;
+  color: #ef5350;
 }
 
 [data-theme='dark'] .external-delete-btn:hover {
-  background: #6a2a2a;
-  border-color: #ef5350;
+  color: #f87171;
 }
 
 [data-theme='dark'] .instructions {
@@ -454,4 +464,13 @@
 
 [data-theme='dark'] .ag-overlay-loading-wrapper {
   background-color: rgba(26, 26, 26, 0.9);
+}
+
+/* Dark theme for custom cell renderers */
+[data-theme='dark'] .ag-cell {
+  border-color: #2d2d2d !important;
+}
+
+[data-theme='dark'] .ag-row {
+  border-color: #2d2d2d !important;
 }

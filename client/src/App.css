@@ -1,0 +1,16 @@
+/* Main app layout */
+#root {
+  min-height: 100vh;
+}
+
+.app-layout {
+  display: flex;
+  min-height: 100vh;
+}
+
+.main-content {
+  margin-left: 250px;
+  flex: 1;
+  min-width: 0;
+  overflow-x: auto;
+}
