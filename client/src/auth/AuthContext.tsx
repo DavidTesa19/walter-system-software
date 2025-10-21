@@ -22,7 +22,18 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
   const [isAuthenticated, setIsAuthenticated] = useState<boolean>(false);
   const [sessionTimer, setSessionTimer] = useState<number | null>(null);
 
-  const startSessionTimer = (duration: number = SESSION_DURATION) => {
+  const logout = useCallback(() => {
+    setIsAuthenticated(false);
+    localStorage.removeItem('walterAuth');
+    localStorage.removeItem('walterSessionStart');
+    
+    if (sessionTimer) {
+      clearTimeout(sessionTimer);
+      setSessionTimer(null);
+    }
+  }, [sessionTimer]);
+
+  const startSessionTimer = useCallback((duration: number = SESSION_DURATION) => {
     if (sessionTimer) {
       clearTimeout(sessionTimer);
     }
@@ -32,6 +43,31 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
     }, duration);
 
     setSessionTimer(timer);
+  }, [sessionTimer, logout]);
+
+  const login = (code: string): boolean => {
+    if (code === VERIFICATION_CODE) {
+      // Clear any existing timer first
+      if (sessionTimer) {
+        clearTimeout(sessionTimer);
+        setSessionTimer(null);
+      }
+      
+      // Clear any existing session data
+      localStorage.removeItem('walterAuth');
+      localStorage.removeItem('walterSessionStart');
+      
+      // Set new session data
+      const now = Date.now();
+      localStorage.setItem('walterAuth', 'true');
+      localStorage.setItem('walterSessionStart', now.toString());
+      
+      setIsAuthenticated(true);
+      startSessionTimer();
+      
+      return true;
+    }
+    return false;
   };
 
   // Check for existing session on mount
@@ -59,43 +95,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
     };
     
     checkExistingSession();
-  }, []); // Empty dependency array - only run on mount
-
-  const login = (code: string): boolean => {
-    if (code === VERIFICATION_CODE) {
-      // Clear any existing timer first
-      if (sessionTimer) {
-        clearTimeout(sessionTimer);
-        setSessionTimer(null);
-      }
-      
-      // Clear any existing session data
-      localStorage.removeItem('walterAuth');
-      localStorage.removeItem('walterSessionStart');
-      
-      // Set new session data
-      const now = Date.now();
-      localStorage.setItem('walterAuth', 'true');
-      localStorage.setItem('walterSessionStart', now.toString());
-      
-      setIsAuthenticated(true);
-      startSessionTimer();
-      
-      return true;
-    }
-    return false;
-  };
-
-  const logout = () => {
-    setIsAuthenticated(false);
-    localStorage.removeItem('walterAuth');
-    localStorage.removeItem('walterSessionStart');
-    
-    if (sessionTimer) {
-      clearTimeout(sessionTimer);
-      setSessionTimer(null);
-    }
-  };
+  }, [startSessionTimer]); // Run when startSessionTimer is available
 
   const resetSessionTimer = useCallback(() => {
     if (isAuthenticated) {
