@@ -1,12 +1,11 @@
 import React from 'react';
 import { useTheme } from '../theme/ThemeContext';
+import type { AppView } from '../types/appView';
 import './Sidebar.css';
 
-type SidebarView = 'active' | 'pending' | 'archived' | 'palettes';
-
 interface SidebarProps {
-  activeView: SidebarView;
-  onViewChange: (view: SidebarView) => void;
+  activeView: AppView;
+  onViewChange: (view: AppView) => void;
 }
 
 const Sidebar: React.FC<SidebarProps> = ({ activeView, onViewChange }) => {
@@ -75,6 +74,28 @@ const Sidebar: React.FC<SidebarProps> = ({ activeView, onViewChange }) => {
             <line x1="10" y1="12" x2="14" y2="12"></line>
           </svg>
           <span>Archiv k odstranění</span>
+        </button>
+        <button
+          className={`sidebar-button ${activeView === 'future' ? 'active' : ''}`}
+          onClick={() => onViewChange('future')}
+        >
+          <svg
+            width="20"
+            height="20"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="2"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+          >
+            <rect x="4" y="4" width="10" height="4" rx="1"></rect>
+            <rect x="4" y="10" width="12" height="4" rx="1"></rect>
+            <rect x="4" y="16" width="16" height="4" rx="1"></rect>
+            <circle cx="18" cy="6" r="1"></circle>
+            <circle cx="20" cy="18" r="1"></circle>
+          </svg>
+          <span>Budoucí funkce</span>
         </button>
         <button
           className={`sidebar-button ${activeView === 'palettes' ? 'active' : ''}`}

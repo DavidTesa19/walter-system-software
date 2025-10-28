@@ -105,6 +105,20 @@ export async function initDatabase() {
       )
     `);
 
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS future_functions (
+        id SERIAL PRIMARY KEY,
+        name VARCHAR(255) NOT NULL,
+        priority VARCHAR(50),
+        complexity VARCHAR(50),
+        phase VARCHAR(120),
+        info TEXT,
+        status VARCHAR(50) DEFAULT 'Planned',
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+      )
+    `);
+
     // Create color palettes table
     await client.query(`
       CREATE TABLE IF NOT EXISTS color_palettes (
@@ -133,7 +147,12 @@ export async function initDatabase() {
       "ALTER TABLE tipers ADD COLUMN IF NOT EXISTS info TEXT",
       "ALTER TABLE tipers ADD COLUMN IF NOT EXISTS commission VARCHAR(255)",
       "ALTER TABLE tipers ADD COLUMN IF NOT EXISTS status VARCHAR(50) DEFAULT 'pending'",
-      "ALTER TABLE color_palettes ADD COLUMN IF NOT EXISTS typography JSONB NOT NULL DEFAULT '{}'::jsonb"
+      "ALTER TABLE color_palettes ADD COLUMN IF NOT EXISTS typography JSONB NOT NULL DEFAULT '{}'::jsonb",
+      "ALTER TABLE future_functions ADD COLUMN IF NOT EXISTS priority VARCHAR(50)",
+      "ALTER TABLE future_functions ADD COLUMN IF NOT EXISTS complexity VARCHAR(50)",
+      "ALTER TABLE future_functions ADD COLUMN IF NOT EXISTS phase VARCHAR(120)",
+      "ALTER TABLE future_functions ADD COLUMN IF NOT EXISTS info TEXT",
+      "ALTER TABLE future_functions ADD COLUMN IF NOT EXISTS status VARCHAR(50) DEFAULT 'Planned'"
     ];
 
     for (const sql of columnMigrations) {
@@ -144,6 +163,7 @@ export async function initDatabase() {
     await client.query("UPDATE partners SET status = 'accepted' WHERE status IS NULL");
     await client.query("UPDATE clients SET status = 'accepted' WHERE status IS NULL");
     await client.query("UPDATE tipers SET status = 'accepted' WHERE status IS NULL");
+  await client.query("UPDATE future_functions SET status = 'Planned' WHERE status IS NULL");
 
     await ensureDefaultPalettes(client);
 

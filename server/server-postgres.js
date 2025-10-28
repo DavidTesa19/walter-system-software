@@ -12,6 +12,15 @@ const DATA_DIR = process.env.DATA_DIR || path.resolve(process.cwd(), "data");
 const DATA_FILE = path.join(DATA_DIR, "db.json");
 const SEED_FILE = process.env.SEED_FILE || path.resolve(process.cwd(), "db.json");
 
+const FUTURE_FUNCTION_DEFAULTS = {
+  name: "Nová funkce",
+  priority: "Medium",
+  complexity: "Moderate",
+  phase: "Medium Term",
+  info: "",
+  status: "Planned"
+};
+
 const PALETTE_COLOR_KEYS = [
   "primary",
   "accent",
@@ -93,6 +102,7 @@ if (db.isPostgres()) {
           tipers: [], 
           users: [], 
           employees: [], 
+          futureFunctions: [],
           color_palettes: cloneDefaultPalettes()
         };
         fs.writeFileSync(DATA_FILE, JSON.stringify(defaultData, null, 2));
@@ -136,9 +146,10 @@ function readDb() {
     const obj = JSON.parse(raw || "{}");
     if (!obj.partners) obj.partners = [];
     if (!obj.clients) obj.clients = [];
-    if (!obj.tipers) obj.tipers = [];
-    if (!obj.users) obj.users = [];
-    if (!obj.employees) obj.employees = [];
+  if (!obj.tipers) obj.tipers = [];
+  if (!obj.users) obj.users = [];
+  if (!obj.employees) obj.employees = [];
+  if (!obj.futureFunctions) obj.futureFunctions = [];
     if (!Array.isArray(obj.color_palettes)) obj.color_palettes = cloneDefaultPalettes();
     ensureFilePalettes(obj);
     return obj;
@@ -150,6 +161,7 @@ function readDb() {
       tipers: [], 
       users: [], 
       employees: [], 
+      futureFunctions: [],
       color_palettes: cloneDefaultPalettes()
     };
   }
@@ -755,6 +767,141 @@ function createCrudRoutes(tableName) {
   });
 }
 
+function createFutureFunctionsRoutes() {
+  const tableName = 'future_functions';
+
+  app.get('/future-functions', async (req, res) => {
+    try {
+      const status = typeof req.query.status === 'string' ? req.query.status : undefined;
+
+      if (db.isPostgres()) {
+        const filters = status ? { status } : {};
+        const records = await db.getAll(tableName, filters);
+        return res.json(records);
+      }
+
+      const store = readDb();
+      let records = store.futureFunctions ?? [];
+      if (status) {
+        records = records.filter((record) => record.status === status);
+      }
+      res.json(records);
+    } catch (error) {
+      console.error('Error fetching future functions:', error);
+      res.status(500).json({ error: 'Failed to fetch future functions' });
+    }
+  });
+
+  app.post('/future-functions', async (req, res) => {
+    try {
+      const payload = { ...FUTURE_FUNCTION_DEFAULTS, ...(req.body ?? {}) };
+
+      if (db.isPostgres()) {
+        const created = await db.create(tableName, payload);
+        return res.status(201).json(created);
+      }
+
+      const store = readDb();
+      const maxId = store.futureFunctions.reduce((max, item) => (item.id > max ? item.id : max), 0);
+      const entry = { id: maxId + 1, ...payload };
+      store.futureFunctions.push(entry);
+      if (!writeDb(store)) {
+        return res.status(500).json({ error: 'Failed to persist' });
+      }
+      res.status(201).json(entry);
+    } catch (error) {
+      console.error('Error creating future function:', error);
+      res.status(500).json({ error: 'Failed to create future function' });
+    }
+  });
+
+  app.put('/future-functions/:id', async (req, res) => {
+    try {
+      const id = Number(req.params.id);
+      const payload = { ...FUTURE_FUNCTION_DEFAULTS, ...(req.body ?? {}) };
+
+      if (db.isPostgres()) {
+        const updated = await db.update(tableName, id, payload);
+        if (!updated) {
+          return res.status(404).json({ error: 'Not found' });
+        }
+        return res.json(updated);
+      }
+
+      const store = readDb();
+      const idx = store.futureFunctions.findIndex((record) => record.id === id);
+      if (idx === -1) {
+        return res.status(404).json({ error: 'Not found' });
+      }
+      store.futureFunctions[idx] = { ...store.futureFunctions[idx], ...payload, id };
+      if (!writeDb(store)) {
+        return res.status(500).json({ error: 'Failed to persist' });
+      }
+      res.json(store.futureFunctions[idx]);
+    } catch (error) {
+      console.error('Error updating future function:', error);
+      res.status(500).json({ error: 'Failed to update future function' });
+    }
+  });
+
+  app.patch('/future-functions/:id', async (req, res) => {
+    try {
+      const id = Number(req.params.id);
+      const patch = req.body ?? {};
+
+      if (db.isPostgres()) {
+        const updated = await db.update(tableName, id, patch);
+        if (!updated) {
+          return res.status(404).json({ error: 'Not found' });
+        }
+        return res.json(updated);
+      }
+
+      const store = readDb();
+      const idx = store.futureFunctions.findIndex((record) => record.id === id);
+      if (idx === -1) {
+        return res.status(404).json({ error: 'Not found' });
+      }
+      store.futureFunctions[idx] = { ...store.futureFunctions[idx], ...patch, id };
+      if (!writeDb(store)) {
+        return res.status(500).json({ error: 'Failed to persist' });
+      }
+      res.json(store.futureFunctions[idx]);
+    } catch (error) {
+      console.error('Error patching future function:', error);
+      res.status(500).json({ error: 'Failed to patch future function' });
+    }
+  });
+
+  app.delete('/future-functions/:id', async (req, res) => {
+    try {
+      const id = Number(req.params.id);
+
+      if (db.isPostgres()) {
+        const deleted = await db.delete(tableName, id);
+        if (!deleted) {
+          return res.status(404).json({ error: 'Not found' });
+        }
+        return res.status(204).end();
+      }
+
+      const store = readDb();
+      const before = store.futureFunctions.length;
+      store.futureFunctions = store.futureFunctions.filter((record) => record.id !== id);
+      if (before === store.futureFunctions.length) {
+        return res.status(404).json({ error: 'Not found' });
+      }
+      if (!writeDb(store)) {
+        return res.status(500).json({ error: 'Failed to persist' });
+      }
+      res.status(204).end();
+    } catch (error) {
+      console.error('Error deleting future function:', error);
+      res.status(500).json({ error: 'Failed to delete future function' });
+    }
+  });
+}
+
 // Health check
 app.get("/health", (_req, res) => {
   res.json({ 
@@ -770,6 +917,7 @@ createCrudRoutes('clients');
 createCrudRoutes('tipers');
 createCrudRoutes('users');
 createCrudRoutes('employees');
+createFutureFunctionsRoutes();
 
 // Start server
 app.listen(PORT, () => {

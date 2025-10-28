@@ -47,18 +47,25 @@ async function migrate() {
   }
 
   // Migrate each table
-  const tables = ['partners', 'clients', 'tipers', 'users', 'employees'];
+  const tableMappings = [
+    { table: 'partners', jsonKey: 'partners' },
+    { table: 'clients', jsonKey: 'clients' },
+    { table: 'tipers', jsonKey: 'tipers' },
+    { table: 'users', jsonKey: 'users' },
+    { table: 'employees', jsonKey: 'employees' },
+    { table: 'future_functions', jsonKey: 'futureFunctions' }
+  ];
   let totalRecords = 0;
 
-  for (const table of tables) {
-    const records = jsonData[table] || [];
+  for (const { table, jsonKey } of tableMappings) {
+    const records = jsonData[jsonKey] || [];
     
     if (records.length === 0) {
       console.log(`⊘ ${table}: No records to migrate`);
       continue;
     }
 
-    console.log(`📦 Migrating ${table}...`);
+  console.log(`📦 Migrating ${table}...`);
     let successCount = 0;
     let errorCount = 0;
 

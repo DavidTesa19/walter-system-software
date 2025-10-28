@@ -248,5 +248,25 @@
     }
   ],
   "users": [],
-  "employees": []
+  "employees": [],
+  "futureFunctions": [
+    {
+      "id": 1,
+      "name": "Klientská segmentace",
+      "priority": "High",
+      "complexity": "Complex",
+      "phase": "Before Launch",
+      "info": "Automatická segmentace klientů pro personalizovanou komunikaci.",
+      "status": "Planned"
+    },
+    {
+      "id": 2,
+      "name": "Integrace CRM",
+      "priority": "Medium",
+      "complexity": "Moderate",
+      "phase": "Urgent",
+      "info": "Propojení s externím CRM systémem pro synchronizaci dat.",
+      "status": "In Progress"
+    }
+  ]
 }

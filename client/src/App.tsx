@@ -2,12 +2,14 @@ import React, { useState } from 'react';
 import { AuthProvider, useAuth } from './auth/AuthContext';
 import { ThemeProvider } from './theme/ThemeContext';
 import Login from './auth/Login';
-import UsersGrid from './usersGrid/UsersGrid';
 import Sidebar from './components/Sidebar';
 import PaletteManager from './theme/PaletteManager';
+import ActiveCommissionsView from './views/ActiveCommissionsView';
+import PendingApprovalsView from './views/PendingApprovalsView';
+import ArchivedCommissionsView from './views/ArchivedCommissionsView';
+import FutureFunctionsView from './views/FutureFunctionsView';
+import type { AppView } from './types/appView';
 import './components/Sidebar.css';
-
-type AppView = 'active' | 'pending' | 'archived' | 'palettes';
 
 const AppContent: React.FC = () => {
   const { isAuthenticated } = useAuth();
@@ -24,9 +26,13 @@ const AppContent: React.FC = () => {
         {(() => {
           switch (viewMode) {
             case 'active':
+              return <ActiveCommissionsView />;
             case 'pending':
+              return <PendingApprovalsView />;
             case 'archived':
-              return <UsersGrid viewMode={viewMode} />;
+              return <ArchivedCommissionsView />;
+            case 'future':
+              return <FutureFunctionsView />;
             case 'palettes':
               return <PaletteManager />;
             default:

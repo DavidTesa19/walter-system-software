@@ -231,6 +231,15 @@ const DATA_FILE = path.join(DATA_DIR, "db.json");
 // Use the db.json co-located with this server by default
 const SEED_FILE = process.env.SEED_FILE || path.resolve(process.cwd(), "db.json");
 
+const FUTURE_FUNCTION_DEFAULTS = {
+  name: "Nová funkce",
+  priority: "Medium",
+  complexity: "Moderate",
+  phase: "Medium Term",
+  info: "",
+  status: "Planned"
+};
+
 // Ensure data directory exists
 try {
   fs.mkdirSync(DATA_DIR, { recursive: true });
@@ -251,6 +260,7 @@ if (!fs.existsSync(DATA_FILE)) {
         clients: [],
         tipers: [],
         employees: [],
+        futureFunctions: [],
         color_palettes: cloneDefaultPalettes()
       };
       fs.writeFileSync(DATA_FILE, JSON.stringify(defaultData, null, 2));
@@ -275,9 +285,10 @@ function readDb() {
   try {
     const raw = fs.readFileSync(DATA_FILE, "utf8");
     const obj = JSON.parse(raw || "{}");
-    if (!obj.partners) obj.partners = [];
-    if (!obj.clients) obj.clients = [];
-    if (!obj.tipers) obj.tipers = [];
+  if (!obj.partners) obj.partners = [];
+  if (!obj.clients) obj.clients = [];
+  if (!obj.tipers) obj.tipers = [];
+  if (!obj.futureFunctions) obj.futureFunctions = [];
     // Keep backwards compatibility
     if (!obj.users) obj.users = [];
     if (!obj.employees) obj.employees = [];
@@ -294,6 +305,7 @@ function readDb() {
       tipers: [],
       users: [],
       employees: [],
+      futureFunctions: [],
       color_palettes: cloneDefaultPalettes()
     };
   }
@@ -535,10 +547,6 @@ app.put("/color-palettes/:id", (req, res) => {
   };
 
   db.color_palettes[idx] = updated;
-
-  if (payload.typography) {
-    db.color_palettes[idx].typography = payload.typography;
-  }
 
   if (payload.is_active) {
     setActivePalette(db.color_palettes, id);
@@ -827,6 +835,60 @@ app.post("/tipers/:id/restore", (req, res) => {
   db.tipers[idx] = { ...db.tipers[idx], status: "accepted" };
   if (!writeDb(db)) return res.status(500).json({ error: "Failed to persist" });
   res.json(db.tipers[idx]);
+});
+
+// CRUD for future functions roadmap
+app.get("/future-functions", (req, res) => {
+  const db = readDb();
+  const status = typeof req.query.status === "string" ? req.query.status : undefined;
+  let records = db.futureFunctions ?? [];
+
+  if (status) {
+    records = records.filter((record) => record.status === status);
+  }
+
+  res.json(records);
+});
+
+app.post("/future-functions", (req, res) => {
+  const db = readDb();
+  const payload = { ...FUTURE_FUNCTION_DEFAULTS, ...(req.body ?? {}) };
+  const maxId = db.futureFunctions.reduce((max, item) => (item.id > max ? item.id : max), 0);
+  const entry = { id: maxId + 1, ...payload };
+  db.futureFunctions.push(entry);
+  if (!writeDb(db)) return res.status(500).json({ error: "Failed to persist" });
+  res.status(201).json(entry);
+});
+
+app.put("/future-functions/:id", (req, res) => {
+  const id = Number(req.params.id);
+  const db = readDb();
+  const idx = db.futureFunctions.findIndex((record) => record.id === id);
+  if (idx === -1) return res.status(404).json({ error: "Not found" });
+  const updated = { ...FUTURE_FUNCTION_DEFAULTS, ...db.futureFunctions[idx], ...(req.body ?? {}), id };
+  db.futureFunctions[idx] = updated;
+  if (!writeDb(db)) return res.status(500).json({ error: "Failed to persist" });
+  res.json(updated);
+});
+
+app.patch("/future-functions/:id", (req, res) => {
+  const id = Number(req.params.id);
+  const db = readDb();
+  const idx = db.futureFunctions.findIndex((record) => record.id === id);
+  if (idx === -1) return res.status(404).json({ error: "Not found" });
+  db.futureFunctions[idx] = { ...db.futureFunctions[idx], ...(req.body ?? {}), id };
+  if (!writeDb(db)) return res.status(500).json({ error: "Failed to persist" });
+  res.json(db.futureFunctions[idx]);
+});
+
+app.delete("/future-functions/:id", (req, res) => {
+  const id = Number(req.params.id);
+  const db = readDb();
+  const before = db.futureFunctions.length;
+  db.futureFunctions = db.futureFunctions.filter((record) => record.id !== id);
+  if (db.futureFunctions.length === before) return res.status(404).json({ error: "Not found" });
+  if (!writeDb(db)) return res.status(500).json({ error: "Failed to persist" });
+  res.status(204).end();
 });
 
 app.listen(PORT, "0.0.0.0", () => {

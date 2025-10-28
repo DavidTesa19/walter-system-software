@@ -9,5 +9,9 @@
     "server:start": "cd server && npm start",
     "install:all": "npm install && cd client && npm install && cd ../server && npm install",
     "dev": "echo Use 'npm run client:dev' and 'npm run server:dev' in separate terminals"
+  },
+  "dependencies": {
+    "@tailwindcss/vite": "^4.1.16",
+    "tailwindcss": "^4.1.16"
   }
 }
