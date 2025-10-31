@@ -5,7 +5,8 @@ import { AgGridReact } from "ag-grid-react";
 import { AllCommunityModule, ModuleRegistry, type CellValueChangedEvent, type ColDef } from "ag-grid-community";
 import { API_BASE } from "../usersGrid/constants";
 import { measureGrid, type GridSizes } from "../usersGrid/utils/gridSizing";
-import InfoCellRenderer from "./cells/InfoCellRenderer";
+import InfoPopupEditor from "./cells/InfoPopupEditor";
+import OptionSelectEditor from "./cells/OptionSelectEditor";
 
 export interface FutureFunction {
   id: number;
@@ -57,9 +58,9 @@ const FutureFunctionsGrid: React.FC = () => {
   const handleAddFunction = useCallback(async () => {
     const newFunction = {
       name: "Nová funkce",
-    priority: PRIORITY_OPTIONS[1],
-    complexity: COMPLEXITY_OPTIONS[1],
-    phase: PHASE_OPTIONS[1],
+      priority: PRIORITY_OPTIONS[1],
+      complexity: COMPLEXITY_OPTIONS[1],
+      phase: PHASE_OPTIONS[1],
       info: "",
       status: STATUS_OPTIONS[0]
     } satisfies Omit<FutureFunction, "id">;
@@ -167,9 +168,27 @@ const FutureFunctionsGrid: React.FC = () => {
         filter: true,
         flex: 1,
         minWidth: 140,
-        cellEditor: "agSelectCellEditor",
+  cellEditor: OptionSelectEditor,
+        cellEditorPopup: true,
         cellEditorParams: {
           values: [...PRIORITY_OPTIONS]
+        },
+        onCellClicked: (params) => {
+          const rowIndex = params.node?.rowIndex;
+          const colId = params.column?.getId();
+
+          if (rowIndex == null || colId == null) {
+            return;
+          }
+
+          const isAlreadyEditing = params.api.getEditingCells().some((cell) => {
+            const cellColId = cell.column?.getId();
+            return cell.rowIndex === rowIndex && cellColId === colId;
+          });
+
+          if (!isAlreadyEditing) {
+            params.api.startEditingCell({ rowIndex, colKey: colId });
+          }
         }
       },
       {
@@ -178,9 +197,27 @@ const FutureFunctionsGrid: React.FC = () => {
         filter: true,
         flex: 1,
         minWidth: 150,
-        cellEditor: "agSelectCellEditor",
+  cellEditor: OptionSelectEditor,
+        cellEditorPopup: true,
         cellEditorParams: {
           values: [...COMPLEXITY_OPTIONS]
+        },
+        onCellClicked: (params) => {
+          const rowIndex = params.node?.rowIndex;
+          const colId = params.column?.getId();
+
+          if (rowIndex == null || colId == null) {
+            return;
+          }
+
+          const isAlreadyEditing = params.api.getEditingCells().some((cell) => {
+            const cellColId = cell.column?.getId();
+            return cell.rowIndex === rowIndex && cellColId === colId;
+          });
+
+          if (!isAlreadyEditing) {
+            params.api.startEditingCell({ rowIndex, colKey: colId });
+          }
         }
       },
       {
@@ -189,9 +226,27 @@ const FutureFunctionsGrid: React.FC = () => {
         filter: true,
         flex: 1,
         minWidth: 150,
-        cellEditor: "agSelectCellEditor",
+  cellEditor: OptionSelectEditor,
+        cellEditorPopup: true,
         cellEditorParams: {
           values: [...PHASE_OPTIONS]
+        },
+        onCellClicked: (params) => {
+          const rowIndex = params.node?.rowIndex;
+          const colId = params.column?.getId();
+
+          if (rowIndex == null || colId == null) {
+            return;
+          }
+
+          const isAlreadyEditing = params.api.getEditingCells().some((cell) => {
+            const cellColId = cell.column?.getId();
+            return cell.rowIndex === rowIndex && cellColId === colId;
+          });
+
+          if (!isAlreadyEditing) {
+            params.api.startEditingCell({ rowIndex, colKey: colId });
+          }
         }
       },
       {
@@ -201,13 +256,30 @@ const FutureFunctionsGrid: React.FC = () => {
         flex: 2,
         minWidth: 220,
         tooltipField: "info",
-        cellRenderer: InfoCellRenderer,
-        cellEditor: "agLargeTextCellEditor",
+        cellClass: "info-cell-truncate",
+        cellEditor: InfoPopupEditor,
         cellEditorPopup: true,
         cellEditorParams: {
           maxLength: 1000,
           rows: 8,
           cols: 60
+        },
+        onCellClicked: (params) => {
+          const rowIndex = params.node?.rowIndex;
+          const colId = params.column?.getId();
+
+          if (rowIndex == null || colId == null) {
+            return;
+          }
+
+          const isAlreadyEditing = params.api.getEditingCells().some((cell) => {
+            const cellColId = cell.column?.getId();
+            return cell.rowIndex === rowIndex && cellColId === colId;
+          });
+
+          if (!isAlreadyEditing) {
+            params.api.startEditingCell({ rowIndex, colKey: colId });
+          }
         }
       },
       {
@@ -216,9 +288,27 @@ const FutureFunctionsGrid: React.FC = () => {
         filter: true,
         flex: 1,
         minWidth: 150,
-        cellEditor: "agSelectCellEditor",
+  cellEditor: OptionSelectEditor,
+        cellEditorPopup: true,
         cellEditorParams: {
           values: [...STATUS_OPTIONS]
+        },
+        onCellClicked: (params) => {
+          const rowIndex = params.node?.rowIndex;
+          const colId = params.column?.getId();
+
+          if (rowIndex == null || colId == null) {
+            return;
+          }
+
+          const isAlreadyEditing = params.api.getEditingCells().some((cell) => {
+            const cellColId = cell.column?.getId();
+            return cell.rowIndex === rowIndex && cellColId === colId;
+          });
+
+          if (!isAlreadyEditing) {
+            params.api.startEditingCell({ rowIndex, colKey: colId });
+          }
         }
       },
       // actions are handled by the external delete column on the left
@@ -298,7 +388,7 @@ const FutureFunctionsGrid: React.FC = () => {
         <ul>
           <li>Použijte tlačítko „Přidat funkci" pro založení nového záznamu</li>
           <li>Kliknutím na buňku lze upravit hodnotu, rozbalovací pole nabízí připravené možnosti</li>
-          <li>Sloupec "Info" lze kliknutím otevřít v detailu bez změny výšky řádku</li>
+          <li>Sloupec "Info" otevře po kliknutí editor s tlačítky pro potvrzení (✓) a zrušení (×) změn</li>
           <li>Tlačítko s křížkem vlevo odstraní danou položku z plánu</li>
         </ul>
       </div>
