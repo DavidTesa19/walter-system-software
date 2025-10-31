@@ -80,6 +80,14 @@ const FONT_SUGGESTIONS: string[] = [
   "'Raleway', 'Segoe UI', sans-serif"
 ];
 
+const COLOR_HISTORY_STORAGE_KEY = 'palette-manager-color-history';
+const COLOR_HISTORY_LIMIT = 20;
+
+const normalizeColorValue = (value: string) => {
+  const normalized = colord(value);
+  return normalized.isValid() ? normalized.toHslString() : value;
+};
+
 const createDraftFromPalette = (palette: ColorPalette): PaletteDraft => ({
   name: palette.name,
   mode: palette.mode,
@@ -114,11 +122,62 @@ const PaletteManager: React.FC = () => {
   const [editingDraft, setEditingDraft] = useState<{ id: number; value: PaletteDraft } | null>(null);
   const [isSaving, setIsSaving] = useState(false);
   const [formError, setFormError] = useState<string | null>(null);
+  const [colorHistory, setColorHistory] = useState<string[]>([]);
+  const hasLoadedHistoryRef = useRef(false);
+
+  useEffect(() => {
+    if (typeof window === 'undefined') {
+      return;
+    }
+    try {
+      const stored = window.localStorage.getItem(COLOR_HISTORY_STORAGE_KEY);
+      if (!stored) {
+        return;
+      }
+      const parsed: unknown = JSON.parse(stored);
+      if (Array.isArray(parsed)) {
+        const sanitized = parsed.filter((item): item is string => typeof item === 'string');
+        if (sanitized.length > 0) {
+          const normalized = sanitized.map(normalizeColorValue);
+          const deduplicated = normalized.filter((color, index) => normalized.indexOf(color) === index);
+          setColorHistory(deduplicated.slice(0, COLOR_HISTORY_LIMIT));
+        }
+      }
+    } catch (err) {
+      // Ignore storage parsing issues to avoid blocking the editor.
+    } finally {
+      hasLoadedHistoryRef.current = true;
+    }
+  }, []);
+
+  useEffect(() => {
+    if (!hasLoadedHistoryRef.current || typeof window === 'undefined') {
+      return;
+    }
+    try {
+      window.localStorage.setItem(COLOR_HISTORY_STORAGE_KEY, JSON.stringify(colorHistory));
+    } catch (err) {
+      // Silent failure keeps the UI responsive even when storage is unavailable.
+    }
+  }, [colorHistory]);
 
   const palettesByMode = useMemo(() => ({
     light: palettes.filter(palette => palette.mode === 'light'),
     dark: palettes.filter(palette => palette.mode === 'dark')
   }), [palettes]);
+
+  const handleSaveColorToHistory = (color: string) => {
+    const normalized = normalizeColorValue(color);
+    setColorHistory(prev => {
+      const deduplicated = prev.filter(existing => existing !== normalized);
+      const next = [normalized, ...deduplicated];
+      return next.slice(0, COLOR_HISTORY_LIMIT);
+    });
+  };
+
+  const handleRemoveColorFromHistory = (color: string) => {
+    setColorHistory(prev => prev.filter(existing => existing !== color));
+  };
 
   const getBaseValues = (mode: Theme) => {
     const active = palettes.find(palette => palette.mode === mode && palette.is_active);
@@ -304,6 +363,9 @@ const PaletteManager: React.FC = () => {
                   onCancel={() => handleCancelCreate(mode)}
                   onChange={updated => handleDraftChange(mode, () => updated)}
                   onSubmit={() => submitCreate(mode)}
+                  colorHistory={colorHistory}
+                  onAddHistory={handleSaveColorToHistory}
+                  onRemoveHistory={handleRemoveColorFromHistory}
                 />
               ) : null}
 
@@ -331,6 +393,9 @@ const PaletteManager: React.FC = () => {
                           onCancel={() => setEditingDraft(null)}
                           onChange={updated => handleEditingChange(() => updated)}
                           onSubmit={submitEdit}
+                          colorHistory={colorHistory}
+                          onAddHistory={handleSaveColorToHistory}
+                          onRemoveHistory={handleRemoveColorFromHistory}
                         />
                       ) : null}
                     </PaletteCard>
@@ -429,6 +494,9 @@ interface PaletteFormProps {
   onCancel: () => void;
   onSubmit: () => void;
   disabled?: boolean;
+  colorHistory: string[];
+  onAddHistory: (color: string) => void;
+  onRemoveHistory: (color: string) => void;
 }
 
 interface FontSelectProps {
@@ -581,7 +649,10 @@ const PaletteForm: React.FC<PaletteFormProps> = ({
   onChange,
   onCancel,
   onSubmit,
-  disabled
+  disabled,
+  colorHistory,
+  onAddHistory,
+  onRemoveHistory
 }) => {
   const [activeKey, setActiveKey] = useState<keyof PaletteColors>('primary');
 
@@ -604,6 +675,25 @@ const PaletteForm: React.FC<PaletteFormProps> = ({
         [key]: value
       }
     });
+  };
+
+  const activeColor = draft.colors[activeKey];
+  const normalizedActiveColor = normalizeColorValue(activeColor);
+  const isColorSaved = colorHistory.includes(normalizedActiveColor);
+
+  const handleHistorySave = () => {
+    if (disabled) return;
+    onAddHistory(normalizedActiveColor);
+  };
+
+  const handleHistorySelect = (color: string) => {
+    if (disabled) return;
+    handleColorChange(color);
+  };
+
+  const handleHistoryRemove = (color: string) => {
+    if (disabled) return;
+    onRemoveHistory(color);
   };
 
   return (
@@ -651,11 +741,54 @@ const PaletteForm: React.FC<PaletteFormProps> = ({
           })}
         </div>
         <div className="palette-form__picker" role="tabpanel">
-          <HslStringColorPicker
-            color={draft.colors[activeKey]}
-            onChange={handleColorChange}
-            className="palette-form__picker-widget"
-          />
+          <div className="palette-form__picker-content">
+            <HslStringColorPicker
+              color={draft.colors[activeKey]}
+              onChange={handleColorChange}
+              className="palette-form__picker-widget"
+            />
+            <div className="palette-form__history">
+              <div className="palette-form__history-header">
+                <span>Uložené barvy</span>
+                <button
+                  type="button"
+                  className="palette-form__history-add"
+                  onClick={handleHistorySave}
+                  disabled={disabled || isColorSaved}
+                >
+                  {isColorSaved ? 'Uloženo' : 'Uložit barvu'}
+                </button>
+              </div>
+              {colorHistory.length > 0 ? (
+                <div className="palette-form__history-grid">
+                  {colorHistory.map(color => (
+                    <div key={color} className="palette-form__history-item">
+                      <button
+                        type="button"
+                        className={`palette-form__history-button${color === normalizedActiveColor ? ' is-active' : ''}`}
+                        style={{ background: color }}
+                        onClick={() => handleHistorySelect(color)}
+                        disabled={disabled}
+                        title={color}
+                        aria-label={`Použít barvu ${color}`}
+                      />
+                      <button
+                        type="button"
+                        className="palette-form__history-remove"
+                        onClick={() => handleHistoryRemove(color)}
+                        disabled={disabled}
+                        aria-label={`Odebrat barvu ${color}`}
+                      >
+                        ×
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <div className="palette-form__history-empty">Zatím žádné uložené barvy.</div>
+              )}
+            </div>
+          </div>
           <div className="palette-form__picker-value">
             <code>{draft.colors[activeKey]}</code>
           </div>
