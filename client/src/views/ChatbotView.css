@@ -64,6 +64,37 @@
   box-shadow: 0 0 0 3px color-mix(in srgb, var(--color-primary) 10%, transparent);
 }
 
+.web-search-toggle {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.5rem 1rem;
+  border: 1px solid var(--color-border);
+  border-radius: 6px;
+  background-color: var(--color-background);
+  color: var(--color-text);
+  font-size: 0.875rem;
+  font-family: var(--font-body);
+  cursor: pointer;
+  transition: all 0.2s ease;
+  user-select: none;
+}
+
+.web-search-toggle:hover {
+  border-color: var(--color-primary);
+  background-color: var(--color-surface);
+}
+
+.web-search-toggle input[type="checkbox"] {
+  cursor: pointer;
+  width: 16px;
+  height: 16px;
+}
+
+.web-search-toggle input[type="checkbox"]:checked {
+  accent-color: var(--color-primary);
+}
+
 .clear-button {
   display: flex;
   align-items: center;

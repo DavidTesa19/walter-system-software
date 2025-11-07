@@ -42,6 +42,7 @@ const ChatbotView: React.FC = () => {
   const [responseStyle, setResponseStyle] = useState<'concise' | 'detailed'>('concise');
   const [copiedMessageId, setCopiedMessageId] = useState<string | null>(null);
   const [useStreaming] = useState(true);
+  const [useWebSearch, setUseWebSearch] = useState(true); // Default to enabled
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
   const suggestedPrompts = [
@@ -202,6 +203,7 @@ const ChatbotView: React.FC = () => {
           ],
           model: selectedModel,
           responseStyle: responseStyle,
+          useWebSearch: useWebSearch,
         }),
       });
 
@@ -325,6 +327,7 @@ const ChatbotView: React.FC = () => {
           ],
           model: selectedModel,
           responseStyle: responseStyle,
+          useWebSearch: useWebSearch,
         }),
       });
 
@@ -434,6 +437,7 @@ const ChatbotView: React.FC = () => {
           }]),
           model: selectedModel,
           responseStyle: responseStyle,
+          useWebSearch: useWebSearch,
         }),
       });
 
@@ -540,6 +544,14 @@ const ChatbotView: React.FC = () => {
             <option value="concise">📝 Stručné</option>
             <option value="detailed">📚 Podrobné</option>
           </select>
+          <label className="web-search-toggle" title="Povolit vyhledávání na webu">
+            <input
+              type="checkbox"
+              checked={useWebSearch}
+              onChange={(e) => setUseWebSearch(e.target.checked)}
+            />
+            <span>🌐 Web Search</span>
+          </label>
           {messages.length > 0 && (
             <button className="clear-button" onClick={handleClearChat}>
               <svg

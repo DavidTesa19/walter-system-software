@@ -4,6 +4,8 @@ import fs from "fs";
 import path from "path";
 import OpenAI from "openai";
 import dotenv from "dotenv";
+import axios from "axios";
+import * as cheerio from "cheerio";
 
 // Load environment variables
 dotenv.config();
@@ -240,6 +242,131 @@ const SEED_FILE = process.env.SEED_FILE || path.resolve(process.cwd(), "db.json"
 const openai = new OpenAI({
   apiKey: process.env.OPENAI_API_KEY,
 });
+
+// Fetch and extract webpage content
+async function fetchWebpageContent(url, maxLength = 3000) {
+  try {
+    const response = await axios.get(url, {
+      timeout: 5000,
+      headers: {
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36'
+      }
+    });
+
+    const $ = cheerio.load(response.data);
+    
+    // Remove script, style, and other non-content elements
+    $('script, style, nav, footer, header, iframe, noscript').remove();
+    
+    // Extract text from main content areas
+    let content = '';
+    const selectors = ['article', 'main', '.content', '#content', '.post-content', '.entry-content', 'body'];
+    
+    for (const selector of selectors) {
+      const element = $(selector);
+      if (element.length > 0) {
+        content = element.text();
+        break;
+      }
+    }
+    
+    // Fallback to body if no content found
+    if (!content) {
+      content = $('body').text();
+    }
+    
+    // Clean up whitespace
+    content = content
+      .replace(/\s+/g, ' ')
+      .replace(/\n+/g, '\n')
+      .trim();
+    
+    // Truncate if too long
+    if (content.length > maxLength) {
+      content = content.substring(0, maxLength) + '...';
+    }
+    
+    return content;
+  } catch (error) {
+    console.error(`Failed to fetch ${url}:`, error.message);
+    return null;
+  }
+}
+
+// Web Search Function using Brave Search API
+async function searchWeb(query, maxResults = 3, fetchContent = true) {
+  const braveApiKey = process.env.BRAVE_SEARCH_API_KEY;
+  
+  if (!braveApiKey || braveApiKey === 'your_brave_search_api_key_here') {
+    throw new Error('Brave Search API key not configured. Get one at https://brave.com/search/api/');
+  }
+
+  try {
+    const response = await axios.get('https://api.search.brave.com/res/v1/web/search', {
+      params: {
+        q: query,
+        count: maxResults,
+      },
+      headers: {
+        'Accept': 'application/json',
+        'Accept-Encoding': 'gzip',
+        'X-Subscription-Token': braveApiKey,
+      },
+    });
+
+    const results = response.data.web?.results || [];
+    
+    // Fetch actual webpage content for better results
+    const enrichedResults = [];
+    for (const result of results) {
+      const enrichedResult = {
+        title: result.title,
+        url: result.url,
+        description: result.description,
+        snippet: result.extra_snippets?.join(' ') || result.description,
+      };
+      
+      if (fetchContent) {
+        console.log(`Fetching content from: ${result.url}`);
+        const content = await fetchWebpageContent(result.url);
+        if (content) {
+          enrichedResult.content = content;
+        }
+      }
+      
+      enrichedResults.push(enrichedResult);
+    }
+    
+    return enrichedResults;
+  } catch (error) {
+    console.error('Brave Search error:', error.response?.data || error.message);
+    throw new Error(`Web search failed: ${error.message}`);
+  }
+}
+
+// Define the web search tool for OpenAI function calling
+const webSearchTool = {
+  type: "function",
+  function: {
+    name: "web_search",
+    description: "Search the web and fetch actual webpage content for CURRENT, UP-TO-DATE information. This tool fetches full webpage content. YOU MUST USE THIS for: current sports statistics/scores, weather forecasts, today's news, recent events, current season data, or ANY time-sensitive information. Your training data is outdated - always search for current information!",
+    parameters: {
+      type: "object",
+      properties: {
+        query: {
+          type: "string",
+          description: "The search query to find information on the web",
+        },
+        max_results: {
+          type: "number",
+          description: "Maximum number of search results to return (default: 5)",
+          default: 5,
+        },
+      },
+      required: ["query"],
+    },
+  },
+};
 
 const FUTURE_FUNCTION_DEFAULTS = {
   name: "Nová funkce",
@@ -909,7 +1036,7 @@ app.post("/api/chat", async (req, res) => {
   console.log("/api/chat hit at", new Date().toISOString());
   console.log("API key set:", !!process.env.OPENAI_API_KEY);
   try {
-    const { messages, model = "gpt-4o-mini", responseStyle = "concise" } = req.body ?? {};
+    const { messages, model = "gpt-4o-mini", responseStyle = "concise", useWebSearch = false } = req.body ?? {};
 
     if (!messages || !Array.isArray(messages)) {
       return res.status(400).json({ error: "Messages array is required" });
@@ -927,11 +1054,22 @@ app.post("/api/chat", async (req, res) => {
       styleInstruction = "Provide detailed, comprehensive answers. Explain concepts thoroughly with examples when relevant.";
     }
 
+    // Get current date for context
+    const currentDate = new Date().toLocaleDateString('en-US', { 
+      weekday: 'long', 
+      year: 'numeric', 
+      month: 'long', 
+      day: 'numeric' 
+    });
+
     const systemMessage = {
       role: "system",
       content:
-        `You are the Walter System in-app assistant. You are accessed via the OpenAI API using the model name: ${model}. ` +
+        `You are the Walter System in-app assistant. Today's date is ${currentDate}. You are accessed via the OpenAI API using the model name: ${model}. ` +
         `If a user asks what model you are, state the exact model string "${model}". Avoid speculating about other products (like ChatGPT web). ` +
+        (useWebSearch 
+          ? "You have access to web search that fetches FULL webpage content. ALWAYS use web search for: current events, recent sports stats, weather, news, today's information, dates, or anything time-sensitive. Don't rely on your training data for current information - search the web! " 
+          : "") +
         styleInstruction,
     };
 
@@ -1046,6 +1184,12 @@ app.post("/api/chat", async (req, res) => {
         messages: messagesWithSystem,
       };
 
+      // Add web search tool if enabled
+      if (useWebSearch) {
+        apiParams.tools = [webSearchTool];
+        apiParams.tool_choice = "auto"; // Let the model decide when to use the tool
+      }
+
       // O1, O3, and GPT-5 (non-Pro) series have restricted parameters
       const isRestrictedModel = model.startsWith('o1') || 
                                model.startsWith('o3') || 
@@ -1054,16 +1198,83 @@ app.post("/api/chat", async (req, res) => {
       if (isRestrictedModel) {
         // Reasoning models: no temperature, use max_completion_tokens
         apiParams.max_completion_tokens = 4000;  // Increased from 1000
+        // Reasoning models don't support function calling yet
+        delete apiParams.tools;
+        delete apiParams.tool_choice;
       } else {
         // Standard models: support temperature and max_tokens
         apiParams.temperature = 0.7;
         apiParams.max_tokens = 2000;  // Increased from 1000
       }
 
-      console.log("Calling OpenAI with params:", { model, messageCount: messagesWithSystem.length, ...apiParams });
+      console.log("Calling OpenAI with params:", { model, messageCount: messagesWithSystem.length, useWebSearch, ...apiParams });
+      
+      // First API call
       completion = await openai.chat.completions.create(apiParams);
       console.log("OpenAI response - finish_reason:", completion.choices[0].finish_reason);
-      responseMessage = completion.choices[0].message.content;
+      
+      let assistantMessage = completion.choices[0].message;
+      responseMessage = assistantMessage.content;
+
+      // Handle function calling
+      if (assistantMessage.tool_calls && assistantMessage.tool_calls.length > 0) {
+        console.log("Function call detected:", assistantMessage.tool_calls);
+        
+        // Add assistant message with tool calls to conversation
+        messagesWithSystem.push(assistantMessage);
+        
+        // Execute each tool call
+        for (const toolCall of assistantMessage.tool_calls) {
+          if (toolCall.function.name === 'web_search') {
+            try {
+              const args = JSON.parse(toolCall.function.arguments);
+              console.log("Executing web search:", args.query);
+              
+              const searchResults = await searchWeb(args.query, args.max_results || 3);
+              
+              // Format search results for the AI with actual webpage content
+              const resultsText = searchResults.map((r, i) => {
+                let resultText = `${i + 1}. ${r.title}\n   URL: ${r.url}\n   Description: ${r.description}`;
+                if (r.content) {
+                  resultText += `\n   Content: ${r.content}`;
+                }
+                return resultText;
+              }).join('\n\n');
+              
+              // Add function response to conversation
+              messagesWithSystem.push({
+                role: "tool",
+                tool_call_id: toolCall.id,
+                content: `Search results for "${args.query}":\n\n${resultsText}`,
+              });
+            } catch (error) {
+              console.error("Web search error:", error);
+              messagesWithSystem.push({
+                role: "tool",
+                tool_call_id: toolCall.id,
+                content: `Error performing web search: ${error.message}`,
+              });
+            }
+          }
+        }
+        
+        // Make second API call with function results
+        const followUpParams = {
+          model,
+          messages: messagesWithSystem,
+        };
+        
+        if (!isRestrictedModel) {
+          followUpParams.temperature = 0.7;
+          followUpParams.max_tokens = 2000;
+        } else {
+          followUpParams.max_completion_tokens = 4000;
+        }
+        
+        console.log("Making follow-up call with function results");
+        completion = await openai.chat.completions.create(followUpParams);
+        responseMessage = completion.choices[0].message.content;
+      }
     }
 
     // Final validation - ensure we have actual content
@@ -1112,7 +1323,7 @@ app.post("/api/chat/stream", async (req, res) => {
   res.setHeader('Connection', 'keep-alive');
   
   try {
-    const { messages, model = "gpt-4o-mini", responseStyle = "concise" } = req.body ?? {};
+    const { messages, model = "gpt-4o-mini", responseStyle = "concise", useWebSearch = false } = req.body ?? {};
 
     if (!messages || !Array.isArray(messages)) {
       res.write(`data: ${JSON.stringify({ error: "Messages array is required" })}\n\n`);
@@ -1134,11 +1345,22 @@ app.post("/api/chat/stream", async (req, res) => {
       styleInstruction = "Provide detailed, comprehensive answers. Explain concepts thoroughly with examples when relevant.";
     }
 
+    // Get current date for context
+    const currentDate = new Date().toLocaleDateString('en-US', { 
+      weekday: 'long', 
+      year: 'numeric', 
+      month: 'long', 
+      day: 'numeric' 
+    });
+
     const systemMessage = {
       role: "system",
       content:
-        `You are the Walter System in-app assistant. You are accessed via the OpenAI API using the model name: ${model}. ` +
+        `You are the Walter System in-app assistant. Today's date is ${currentDate}. You are accessed via the OpenAI API using the model name: ${model}. ` +
         `If a user asks what model you are, state the exact model string "${model}". Avoid speculating about other products (like ChatGPT web). ` +
+        (useWebSearch 
+          ? "You have access to web search that fetches FULL webpage content. ALWAYS use web search for: current events, recent sports stats, weather, news, today's information, dates, or anything time-sensitive. Don't rely on your training data for current information - search the web! " 
+          : "") +
         styleInstruction,
     };
 
@@ -1153,47 +1375,176 @@ app.post("/api/chat/stream", async (req, res) => {
       stream: true, // Enable streaming
     };
 
+    // Add web search tool if enabled
+    if (useWebSearch) {
+      apiParams.tools = [webSearchTool];
+      apiParams.tool_choice = "auto";
+    }
+
     const isRestrictedModel = model.startsWith('o1') || 
                              model.startsWith('o3') || 
                              model.toLowerCase().includes('gpt-5');
     
     if (isRestrictedModel) {
       apiParams.max_completion_tokens = 4000;
+      // Reasoning models don't support function calling yet
+      delete apiParams.tools;
+      delete apiParams.tool_choice;
     } else {
       apiParams.temperature = 0.7;
       apiParams.max_tokens = 2000;
     }
 
-    console.log("Starting stream with model:", model);
+    console.log("Starting stream with model:", model, "useWebSearch:", useWebSearch);
     const stream = await openai.chat.completions.create(apiParams);
 
     let fullContent = '';
     let totalTokens = { prompt: 0, completion: 0, total: 0 };
+    let toolCalls = [];
+    let currentToolCall = null;
 
     for await (const chunk of stream) {
-      const content = chunk.choices[0]?.delta?.content || '';
+      const delta = chunk.choices[0]?.delta;
+      
+      // Handle text content
+      const content = delta?.content || '';
       if (content) {
         fullContent += content;
-        // Send chunk to client
         res.write(`data: ${JSON.stringify({ type: 'content', content })}\n\n`);
+      }
+
+      // Handle tool calls (function calling)
+      if (delta?.tool_calls) {
+        for (const toolCallDelta of delta.tool_calls) {
+          if (toolCallDelta.index !== undefined) {
+            if (!toolCalls[toolCallDelta.index]) {
+              toolCalls[toolCallDelta.index] = {
+                id: toolCallDelta.id || '',
+                type: 'function',
+                function: {
+                  name: toolCallDelta.function?.name || '',
+                  arguments: toolCallDelta.function?.arguments || ''
+                }
+              };
+            } else {
+              // Append to existing tool call
+              if (toolCallDelta.function?.arguments) {
+                toolCalls[toolCallDelta.index].function.arguments += toolCallDelta.function.arguments;
+              }
+            }
+          }
+        }
       }
 
       // Check for completion
       if (chunk.choices[0]?.finish_reason) {
-        // Send final metadata
-        if (chunk.usage) {
-          totalTokens = {
-            prompt: chunk.usage.prompt_tokens || 0,
-            completion: chunk.usage.completion_tokens || 0,
-            total: chunk.usage.total_tokens || 0,
+        const finishReason = chunk.choices[0].finish_reason;
+        
+        // Handle function calling
+        if (finishReason === 'tool_calls' && toolCalls.length > 0) {
+          console.log("Function call detected in stream:", toolCalls);
+          
+          // Notify client that we're executing a function
+          res.write(`data: ${JSON.stringify({ type: 'function_call', message: 'Searching the web...' })}\n\n`);
+          
+          // Add assistant message with tool calls
+          messagesWithSystem.push({
+            role: 'assistant',
+            content: null,
+            tool_calls: toolCalls
+          });
+          
+          // Execute tool calls
+          for (const toolCall of toolCalls) {
+            if (toolCall.function.name === 'web_search') {
+              try {
+                const args = JSON.parse(toolCall.function.arguments);
+                console.log("Executing web search:", args.query);
+                
+                const searchResults = await searchWeb(args.query, args.max_results || 3);
+                
+                const resultsText = searchResults.map((r, i) => {
+                  let resultText = `${i + 1}. ${r.title}\n   URL: ${r.url}\n   Description: ${r.description}`;
+                  if (r.content) {
+                    resultText += `\n   Content: ${r.content}`;
+                  }
+                  return resultText;
+                }).join('\n\n');
+                
+                messagesWithSystem.push({
+                  role: "tool",
+                  tool_call_id: toolCall.id,
+                  content: `Search results for "${args.query}":\n\n${resultsText}`,
+                });
+              } catch (error) {
+                console.error("Web search error:", error);
+                messagesWithSystem.push({
+                  role: "tool",
+                  tool_call_id: toolCall.id,
+                  content: `Error performing web search: ${error.message}`,
+                });
+              }
+            }
+          }
+          
+          // Make follow-up streaming request with function results
+          const followUpParams = {
+            model,
+            messages: messagesWithSystem,
+            stream: true,
           };
+          
+          if (!isRestrictedModel) {
+            followUpParams.temperature = 0.7;
+            followUpParams.max_tokens = 2000;
+          } else {
+            followUpParams.max_completion_tokens = 4000;
+          }
+          
+          console.log("Making follow-up stream with function results");
+          const followUpStream = await openai.chat.completions.create(followUpParams);
+          
+          fullContent = ''; // Reset for follow-up response
+          
+          for await (const followUpChunk of followUpStream) {
+            const followUpContent = followUpChunk.choices[0]?.delta?.content || '';
+            if (followUpContent) {
+              fullContent += followUpContent;
+              res.write(`data: ${JSON.stringify({ type: 'content', content: followUpContent })}\n\n`);
+            }
+            
+            if (followUpChunk.choices[0]?.finish_reason) {
+              if (followUpChunk.usage) {
+                totalTokens = {
+                  prompt: followUpChunk.usage.prompt_tokens || 0,
+                  completion: followUpChunk.usage.completion_tokens || 0,
+                  total: followUpChunk.usage.total_tokens || 0,
+                };
+              }
+              res.write(`data: ${JSON.stringify({ 
+                type: 'done', 
+                model, 
+                usage: totalTokens,
+                finish_reason: followUpChunk.choices[0].finish_reason 
+              })}\n\n`);
+            }
+          }
+        } else {
+          // Normal completion without function calls
+          if (chunk.usage) {
+            totalTokens = {
+              prompt: chunk.usage.prompt_tokens || 0,
+              completion: chunk.usage.completion_tokens || 0,
+              total: chunk.usage.total_tokens || 0,
+            };
+          }
+          res.write(`data: ${JSON.stringify({ 
+            type: 'done', 
+            model, 
+            usage: totalTokens,
+            finish_reason: finishReason 
+          })}\n\n`);
         }
-        res.write(`data: ${JSON.stringify({ 
-          type: 'done', 
-          model, 
-          usage: totalTokens,
-          finish_reason: chunk.choices[0].finish_reason 
-        })}\n\n`);
       }
     }
 
