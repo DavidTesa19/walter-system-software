@@ -2,6 +2,11 @@ import express from "express";
 import cors from "cors";
 import fs from "fs";
 import path from "path";
+import OpenAI from "openai";
+import dotenv from "dotenv";
+
+// Load environment variables
+dotenv.config();
 
 const PALETTE_COLOR_KEYS = [
   "primary",
@@ -230,6 +235,11 @@ const DATA_DIR = process.env.DATA_DIR || path.resolve(process.cwd(), "data");
 const DATA_FILE = path.join(DATA_DIR, "db.json");
 // Use the db.json co-located with this server by default
 const SEED_FILE = process.env.SEED_FILE || path.resolve(process.cwd(), "db.json");
+
+// Initialize OpenAI
+const openai = new OpenAI({
+  apiKey: process.env.OPENAI_API_KEY,
+});
 
 const FUTURE_FUNCTION_DEFAULTS = {
   name: "Nová funkce",
@@ -888,6 +898,386 @@ app.delete("/future-functions/:id", (req, res) => {
   db.futureFunctions = db.futureFunctions.filter((record) => record.id !== id);
   if (db.futureFunctions.length === before) return res.status(404).json({ error: "Not found" });
   if (!writeDb(db)) return res.status(500).json({ error: "Failed to persist" });
+  res.status(204).end();
+});
+
+// ============================================
+// AI CHATBOT ENDPOINT
+// ============================================
+
+app.post("/api/chat", async (req, res) => {
+  console.log("/api/chat hit at", new Date().toISOString());
+  console.log("API key set:", !!process.env.OPENAI_API_KEY);
+  try {
+    const { messages, model = "gpt-4o-mini", responseStyle = "concise" } = req.body ?? {};
+
+    if (!messages || !Array.isArray(messages)) {
+      return res.status(400).json({ error: "Messages array is required" });
+    }
+
+    if (!process.env.OPENAI_API_KEY) {
+      return res.status(500).json({ error: "OpenAI API key not configured" });
+    }
+
+    // Build system instruction based on response style
+    let styleInstruction = "";
+    if (responseStyle === "concise") {
+      styleInstruction = "Keep answers concise and helpful. Be brief but accurate.";
+    } else {
+      styleInstruction = "Provide detailed, comprehensive answers. Explain concepts thoroughly with examples when relevant.";
+    }
+
+    const systemMessage = {
+      role: "system",
+      content:
+        `You are the Walter System in-app assistant. You are accessed via the OpenAI API using the model name: ${model}. ` +
+        `If a user asks what model you are, state the exact model string "${model}". Avoid speculating about other products (like ChatGPT web). ` +
+        styleInstruction,
+    };
+
+    const messagesWithSystem = Array.isArray(messages)
+      ? [systemMessage, ...messages]
+      : [systemMessage];
+
+    // GPT-5 Pro and some reasoning models require the /v1/responses endpoint
+    const requiresResponsesAPI = model.toLowerCase().includes('gpt-5-pro') || 
+                                  model.toLowerCase().includes('gpt-6-pro');
+    
+    let completion;
+    let responseMessage;
+
+    if (requiresResponsesAPI) {
+      // Use direct fetch for /v1/responses endpoint (not yet in SDK)
+      // Responses API uses 'input' instead of 'messages'
+      const response = await fetch('https://api.openai.com/v1/responses', {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${process.env.OPENAI_API_KEY}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          model: model,
+          input: messagesWithSystem,  // 'input' instead of 'messages' for Responses API
+          // Responses API doesn't support temperature or token limits in the same way
+        }),
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({}));
+        throw new Error(errorData?.error?.message || `Responses API error: ${response.status}`);
+      }
+
+      const data = await response.json();
+      console.log("Responses API raw data:", JSON.stringify(data, null, 2));
+      
+      // Responses API structure - try multiple extraction paths
+      responseMessage = null;
+      
+      // Path 1: Direct response field
+      if (data.response && typeof data.response === 'string') {
+        responseMessage = data.response;
+      }
+      
+      // Path 2: data field with text
+      if (!responseMessage && data.data?.text) {
+        responseMessage = data.data.text;
+      }
+      
+      // Path 3: output array with message items
+      if (!responseMessage && Array.isArray(data.output)) {
+        for (const item of data.output) {
+          // Look for message type with content
+          if (item.type === 'message') {
+            if (Array.isArray(item.content)) {
+              const textParts = item.content
+                .filter(c => c?.type === 'text' && c?.text)
+                .map(c => c.text)
+                .join('');
+              if (textParts) {
+                responseMessage = textParts;
+                break;
+              }
+            } else if (typeof item.content === 'string') {
+              responseMessage = item.content;
+              break;
+            }
+          }
+          // Look for direct text field
+          if (!responseMessage && item.text) {
+            responseMessage = item.text;
+            break;
+          }
+        }
+      }
+      
+      // Path 4: Standard choices format
+      if (!responseMessage && data.choices?.[0]?.message?.content) {
+        responseMessage = data.choices[0].message.content;
+      }
+      
+      // Path 5: response_format might indicate content location
+      if (!responseMessage && data.content) {
+        responseMessage = data.content;
+      }
+      
+      // Last resort - if still no content, log and return error message
+      if (!responseMessage) {
+        console.error("Could not extract response from Responses API. Full data structure keys:", Object.keys(data));
+        responseMessage = `[Debug] Unable to parse response. Received: ${JSON.stringify(data).substring(0, 200)}...`;
+      }
+      
+      // Ensure it's a string
+      if (typeof responseMessage !== 'string') {
+        console.warn("Non-string response, stringifying:", responseMessage);
+        responseMessage = JSON.stringify(responseMessage);
+      }
+      
+      console.log("Extracted response message:", responseMessage);
+      
+      // Mock completion object for consistent response format
+      completion = {
+        choices: [{ message: { content: responseMessage } }],
+        usage: data.usage || { prompt_tokens: 0, completion_tokens: 0, total_tokens: 0 }
+      };
+    } else {
+      // Standard chat completions API for GPT-4, GPT-5 (non-Pro), O1, etc.
+      const apiParams = {
+        model,
+        messages: messagesWithSystem,
+      };
+
+      // O1, O3, and GPT-5 (non-Pro) series have restricted parameters
+      const isRestrictedModel = model.startsWith('o1') || 
+                               model.startsWith('o3') || 
+                               model.toLowerCase().includes('gpt-5');
+      
+      if (isRestrictedModel) {
+        // Reasoning models: no temperature, use max_completion_tokens
+        apiParams.max_completion_tokens = 4000;  // Increased from 1000
+      } else {
+        // Standard models: support temperature and max_tokens
+        apiParams.temperature = 0.7;
+        apiParams.max_tokens = 2000;  // Increased from 1000
+      }
+
+      console.log("Calling OpenAI with params:", { model, messageCount: messagesWithSystem.length, ...apiParams });
+      completion = await openai.chat.completions.create(apiParams);
+      console.log("OpenAI response - finish_reason:", completion.choices[0].finish_reason);
+      responseMessage = completion.choices[0].message.content;
+    }
+
+    // Final validation - ensure we have actual content
+    if (!responseMessage || responseMessage.trim().length === 0) {
+      console.error("Empty response received from API. Model:", model, "Completion:", completion);
+      responseMessage = "I apologize, but I received an empty response. Please try again or rephrase your question.";
+    }
+
+    console.log("Final response message length:", responseMessage.length, "chars");
+
+    res.json({
+      message: responseMessage,
+      model: model,
+      usage: completion.usage,
+    });
+
+  } catch (error) {
+    // Normalize OpenAI error shapes
+    const status = error.status || error.code || 500;
+    const errPayload = {
+      error: "Failed to get AI response",
+      message: error.message,
+      type: error?.error?.type || error?.name,
+      code: error?.error?.code || undefined,
+      details:
+        error?.error?.message ||
+        error?.response?.data?.error?.message ||
+        error?.response?.data ||
+        undefined,
+    };
+    console.error("OpenAI API Error:", JSON.stringify(errPayload, null, 2));
+    res.status(Number.isInteger(status) ? status : 500).json(errPayload);
+  }
+});
+
+// ============================================
+// AI CHATBOT STREAMING ENDPOINT
+// ============================================
+
+app.post("/api/chat/stream", async (req, res) => {
+  console.log("/api/chat/stream hit at", new Date().toISOString());
+  
+  // Set headers for SSE
+  res.setHeader('Content-Type', 'text/event-stream');
+  res.setHeader('Cache-Control', 'no-cache');
+  res.setHeader('Connection', 'keep-alive');
+  
+  try {
+    const { messages, model = "gpt-4o-mini", responseStyle = "concise" } = req.body ?? {};
+
+    if (!messages || !Array.isArray(messages)) {
+      res.write(`data: ${JSON.stringify({ error: "Messages array is required" })}\n\n`);
+      res.end();
+      return;
+    }
+
+    if (!process.env.OPENAI_API_KEY) {
+      res.write(`data: ${JSON.stringify({ error: "OpenAI API key not configured" })}\n\n`);
+      res.end();
+      return;
+    }
+
+    // Build system instruction
+    let styleInstruction = "";
+    if (responseStyle === "concise") {
+      styleInstruction = "Keep answers concise and helpful. Be brief but accurate.";
+    } else {
+      styleInstruction = "Provide detailed, comprehensive answers. Explain concepts thoroughly with examples when relevant.";
+    }
+
+    const systemMessage = {
+      role: "system",
+      content:
+        `You are the Walter System in-app assistant. You are accessed via the OpenAI API using the model name: ${model}. ` +
+        `If a user asks what model you are, state the exact model string "${model}". Avoid speculating about other products (like ChatGPT web). ` +
+        styleInstruction,
+    };
+
+    const messagesWithSystem = Array.isArray(messages)
+      ? [systemMessage, ...messages]
+      : [systemMessage];
+
+    // API parameters
+    const apiParams = {
+      model,
+      messages: messagesWithSystem,
+      stream: true, // Enable streaming
+    };
+
+    const isRestrictedModel = model.startsWith('o1') || 
+                             model.startsWith('o3') || 
+                             model.toLowerCase().includes('gpt-5');
+    
+    if (isRestrictedModel) {
+      apiParams.max_completion_tokens = 4000;
+    } else {
+      apiParams.temperature = 0.7;
+      apiParams.max_tokens = 2000;
+    }
+
+    console.log("Starting stream with model:", model);
+    const stream = await openai.chat.completions.create(apiParams);
+
+    let fullContent = '';
+    let totalTokens = { prompt: 0, completion: 0, total: 0 };
+
+    for await (const chunk of stream) {
+      const content = chunk.choices[0]?.delta?.content || '';
+      if (content) {
+        fullContent += content;
+        // Send chunk to client
+        res.write(`data: ${JSON.stringify({ type: 'content', content })}\n\n`);
+      }
+
+      // Check for completion
+      if (chunk.choices[0]?.finish_reason) {
+        // Send final metadata
+        if (chunk.usage) {
+          totalTokens = {
+            prompt: chunk.usage.prompt_tokens || 0,
+            completion: chunk.usage.completion_tokens || 0,
+            total: chunk.usage.total_tokens || 0,
+          };
+        }
+        res.write(`data: ${JSON.stringify({ 
+          type: 'done', 
+          model, 
+          usage: totalTokens,
+          finish_reason: chunk.choices[0].finish_reason 
+        })}\n\n`);
+      }
+    }
+
+    res.end();
+
+  } catch (error) {
+    console.error("Streaming error:", error);
+    res.write(`data: ${JSON.stringify({ 
+      type: 'error',
+      error: error.message || 'Streaming failed'
+    })}\n\n`);
+    res.end();
+  }
+});
+
+// ============================================
+// CONVERSATION MANAGEMENT ENDPOINTS
+// ============================================
+
+// Get all conversations
+app.get("/api/conversations", (req, res) => {
+  const db = readDb();
+  const conversations = db.conversations || [];
+  res.json(conversations);
+});
+
+// Get single conversation
+app.get("/api/conversations/:id", (req, res) => {
+  const db = readDb();
+  const conversation = db.conversations?.find(c => c.id === req.params.id);
+  if (!conversation) {
+    return res.status(404).json({ error: "Conversation not found" });
+  }
+  res.json(conversation);
+});
+
+// Create new conversation
+app.post("/api/conversations", (req, res) => {
+  const db = readDb();
+  if (!db.conversations) db.conversations = [];
+  
+  const conversation = {
+    id: `conv_${Date.now()}`,
+    title: req.body.title || "New Conversation",
+    messages: req.body.messages || [],
+    createdAt: new Date().toISOString(),
+    updatedAt: new Date().toISOString(),
+  };
+  
+  db.conversations.push(conversation);
+  if (!writeDb(db)) return res.status(500).json({ error: "Failed to save" });
+  res.json(conversation);
+});
+
+// Update conversation
+app.put("/api/conversations/:id", (req, res) => {
+  const db = readDb();
+  const index = db.conversations?.findIndex(c => c.id === req.params.id);
+  
+  if (index === -1 || index === undefined) {
+    return res.status(404).json({ error: "Conversation not found" });
+  }
+  
+  db.conversations[index] = {
+    ...db.conversations[index],
+    ...req.body,
+    updatedAt: new Date().toISOString(),
+  };
+  
+  if (!writeDb(db)) return res.status(500).json({ error: "Failed to save" });
+  res.json(db.conversations[index]);
+});
+
+// Delete conversation
+app.delete("/api/conversations/:id", (req, res) => {
+  const db = readDb();
+  const index = db.conversations?.findIndex(c => c.id === req.params.id);
+  
+  if (index === -1 || index === undefined) {
+    return res.status(404).json({ error: "Conversation not found" });
+  }
+  
+  db.conversations.splice(index, 1);
+  if (!writeDb(db)) return res.status(500).json({ error: "Failed to delete" });
   res.status(204).end();
 });
 

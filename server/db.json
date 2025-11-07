@@ -6,7 +6,7 @@
       "company": "Genco Pura Olive Oil Company",
       "location": "Praha",
       "mobile": "(231) 638-1199",
-      "field": null,
+      "field": "Aeronautika a letectví",
       "info": null,
       "commission": null,
       "status": "accepted"
@@ -56,17 +56,6 @@
       "status": "accepted"
     },
     {
-      "id": 7,
-      "name": "Nový Partner",
-      "company": "Nová Společnost",
-      "location": "Nová Lokalita",
-      "mobile": "000 000 000",
-      "field": null,
-      "info": null,
-      "commission": null,
-      "status": "pending"
-    },
-    {
       "id": 8,
       "name": "Nový Partner",
       "company": "Nová Společnost",
@@ -75,7 +64,7 @@
       "field": null,
       "info": null,
       "commission": null,
-      "status": "pending"
+      "status": "accepted"
     },
     {
       "id": 9,
@@ -97,7 +86,7 @@
       "location": "Ostrava",
       "mobile": "(420) 654-321",
       "info": null,
-      "field": null,
+      "field": "Administrativa",
       "date": null,
       "status": "accepted"
     },
@@ -165,7 +154,7 @@
       "info": null,
       "field": null,
       "date": null,
-      "status": "accepted"
+      "status": "archived"
     },
     {
       "id": 11,
@@ -177,6 +166,94 @@
       "field": null,
       "date": null,
       "status": "accepted"
+    },
+    {
+      "id": 12,
+      "name": "Nový Klient",
+      "company": "Nová Společnost",
+      "location": "Nová Lokalita",
+      "mobile": "000 000 000",
+      "info": null,
+      "field": null,
+      "date": null,
+      "status": "In Process"
+    },
+    {
+      "id": 13,
+      "name": "Nový Klient",
+      "company": "Nová Společnost",
+      "location": "Nová Lokalita",
+      "mobile": "000 000 000",
+      "info": null,
+      "field": null,
+      "date": null,
+      "status": "Done"
+    },
+    {
+      "id": 14,
+      "name": "Nový Klient",
+      "company": "Nová Společnost",
+      "location": "Nová Lokalita",
+      "mobile": "000 000 000",
+      "info": null,
+      "field": null,
+      "date": null,
+      "status": "Not Started"
+    },
+    {
+      "id": 15,
+      "name": "Nový Klient",
+      "company": "Nová Společnost",
+      "location": "Nová Lokalita",
+      "mobile": "000 000 000",
+      "info": null,
+      "field": null,
+      "date": null,
+      "status": "pending"
+    },
+    {
+      "id": 16,
+      "name": "Nový Klient",
+      "company": "Nová Společnost",
+      "location": "Nová Lokalita",
+      "mobile": "000 000 000",
+      "info": null,
+      "field": null,
+      "date": null,
+      "status": "Done"
+    },
+    {
+      "id": 17,
+      "name": "Nový Klient",
+      "company": "Nová Společnost",
+      "location": "Nová Lokalita",
+      "mobile": "000 000 000",
+      "info": null,
+      "field": "Aeronautika a letectví",
+      "date": null,
+      "status": "Not Started"
+    },
+    {
+      "id": 18,
+      "name": "Martin Walter",
+      "company": "XXX",
+      "location": "Praha",
+      "mobile": "111 222 333",
+      "info": null,
+      "field": null,
+      "date": null,
+      "status": "accepted"
+    },
+    {
+      "id": 19,
+      "name": "Martin Walter",
+      "company": "AAA",
+      "location": "Praha",
+      "mobile": "111 111 111",
+      "info": null,
+      "field": null,
+      "date": null,
+      "status": "pending"
     }
   ],
   "tipers": [
@@ -248,25 +325,5 @@
     }
   ],
   "users": [],
-  "employees": [],
-  "futureFunctions": [
-    {
-      "id": 1,
-      "name": "Klientská segmentace",
-      "priority": "High",
-      "complexity": "Complex",
-      "phase": "Before Launch",
-      "info": "Automatická segmentace klientů pro personalizovanou komunikaci.",
-      "status": "Planned"
-    },
-    {
-      "id": 2,
-      "name": "Integrace CRM",
-      "priority": "Medium",
-      "complexity": "Moderate",
-      "phase": "Urgent",
-      "info": "Propojení s externím CRM systémem pro synchronizaci dat.",
-      "status": "In Progress"
-    }
-  ]
+  "employees": []
 }

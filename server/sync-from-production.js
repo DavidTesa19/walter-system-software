@@ -16,6 +16,10 @@ import fs from 'fs';
 import path from 'path';
 import pkg from 'pg';
 const { Pool } = pkg;
+import dotenv from 'dotenv';
+
+// Load environment variables
+dotenv.config();
 
 const OUTPUT_FILE = path.resolve(process.cwd(), 'db.json');
 
