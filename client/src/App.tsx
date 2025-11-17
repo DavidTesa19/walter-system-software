@@ -7,13 +7,10 @@ import PaletteManager from './theme/PaletteManager';
 import ActiveCommissionsView from './views/ActiveCommissionsView';
 import PendingApprovalsView from './views/PendingApprovalsView';
 import ArchivedCommissionsView from './views/ArchivedCommissionsView';
+import FutureFunctionsView from './views/FutureFunctionsView';
 import ChatbotView from './views/ChatbotView';
 import type { AppView } from './types/appView';
 import './components/Sidebar.css';
-
-const FutureFunctionsView: React.FC = () => {
-  return <div>Future functions coming soon.</div>;
-};
 
 const AppContent: React.FC = () => {
   const { isAuthenticated } = useAuth();

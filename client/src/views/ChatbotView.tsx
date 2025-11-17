@@ -2,6 +2,8 @@ import React, { useState, useRef, useEffect } from 'react';
 import './ChatbotView.css';
 import MarkdownMessage from '../components/MarkdownMessage';
 
+type AIProvider = 'openai' | 'claude';
+
 interface Message {
   id: string;
   role: 'user' | 'assistant';
@@ -24,11 +26,43 @@ interface Conversation {
   updatedAt: string;
 }
 
-type AIModel = 
+type OpenAIModel = 
   | 'gpt-5-2025-08-07'
   | 'gpt-5-mini-2025-08-07'
   | 'gpt-4o-mini' 
   | 'gpt-4o';
+
+type ClaudeModel = 'claude-sonnet-4-5';
+
+type AIModel = OpenAIModel | ClaudeModel;
+
+const DEFAULT_OPENAI_MODEL: OpenAIModel = 'gpt-4o-mini';
+const DEFAULT_CLAUDE_MODEL: ClaudeModel = 'claude-sonnet-4-5';
+
+const OPENAI_MODELS: OpenAIModel[] = [
+  'gpt-5-2025-08-07',
+  'gpt-5-mini-2025-08-07',
+  'gpt-4o',
+  'gpt-4o-mini',
+];
+
+const CLAUDE_MODELS: { id: ClaudeModel; label: string }[] = [
+  {
+    id: 'claude-sonnet-4-5',
+    label: 'Claude 4.5 Sonnet (Výkonný)',
+  },
+];
+
+// Model-specific max token limits (as per API documentation)
+const MODEL_MAX_TOKENS: Record<string, number> = {
+  'claude-sonnet-4-5': 64000,
+  'claude-3-5-sonnet-20241022': 8192,
+  'claude-3-haiku-20240307': 4096,
+  'gpt-5-2025-08-07': 16384,
+  'gpt-5-mini-2025-08-07': 16384,
+  'gpt-4o': 16384,
+  'gpt-4o-mini': 16384,
+};
 
 const ChatbotView: React.FC = () => {
   const [messages, setMessages] = useState<Message[]>([]);
@@ -37,12 +71,14 @@ const ChatbotView: React.FC = () => {
   const [showConversations, setShowConversations] = useState(false);
   const [inputValue, setInputValue] = useState('');
   const [isLoading, setIsLoading] = useState(false);
-  const [selectedModel, setSelectedModel] = useState<AIModel>('gpt-4o-mini');
+  const [selectedProvider, setSelectedProvider] = useState<AIProvider>('openai');
+  const [selectedModel, setSelectedModel] = useState<AIModel>(DEFAULT_OPENAI_MODEL);
   const [activeServerModel, setActiveServerModel] = useState<string | null>(null);
   const [responseStyle, setResponseStyle] = useState<'concise' | 'detailed'>('concise');
   const [copiedMessageId, setCopiedMessageId] = useState<string | null>(null);
   const [useStreaming] = useState(true);
   const [useWebSearch, setUseWebSearch] = useState(true); // Default to enabled
+  const [maxTokens, setMaxTokens] = useState<number>(8000);
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
   const suggestedPrompts = [
@@ -51,6 +87,19 @@ const ChatbotView: React.FC = () => {
     "What are the best practices for React development?",
     "Help me debug this error message",
   ];
+
+  // Get max tokens limit for current model
+  const getCurrentModelMaxTokens = (): number => {
+    return MODEL_MAX_TOKENS[selectedModel] || 8000;
+  };
+
+  // Update maxTokens when model changes to ensure it doesn't exceed limit
+  useEffect(() => {
+    const modelMax = getCurrentModelMaxTokens();
+    if (maxTokens > modelMax) {
+      setMaxTokens(modelMax);
+    }
+  }, [selectedModel]);
 
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
@@ -201,9 +250,11 @@ const ChatbotView: React.FC = () => {
               content: userMessage.content,
             },
           ],
+          provider: selectedProvider,
           model: selectedModel,
           responseStyle: responseStyle,
           useWebSearch: useWebSearch,
+          maxTokens: maxTokens,
         }),
       });
 
@@ -289,7 +340,7 @@ const ChatbotView: React.FC = () => {
   };
 
   const handleSendMessage = async () => {
-    if (useStreaming) {
+    if (useStreaming && selectedProvider === 'openai') {
       return handleSendMessageStreaming();
     }
 
@@ -325,9 +376,11 @@ const ChatbotView: React.FC = () => {
               content: userMessage.content,
             },
           ],
+          provider: selectedProvider,
           model: selectedModel,
           responseStyle: responseStyle,
           useWebSearch: useWebSearch,
+          maxTokens: maxTokens,
         }),
       });
 
@@ -438,11 +491,12 @@ const ChatbotView: React.FC = () => {
           model: selectedModel,
           responseStyle: responseStyle,
           useWebSearch: useWebSearch,
+          maxTokens: maxTokens,
         }),
       });
 
       if (!response.ok) {
-        throw new Error('Failed to regenerate response');
+        throw new Error(`Server error: ${response.status}`);
       }
 
       const data = await response.json();
@@ -527,13 +581,44 @@ const ChatbotView: React.FC = () => {
         <div className="chatbot-header-right">
           <select
             className="model-selector"
+            value={selectedProvider}
+            onChange={(e) => {
+              const provider = e.target.value as AIProvider;
+              setSelectedProvider(provider);
+              if (provider === 'openai') {
+                setSelectedModel(DEFAULT_OPENAI_MODEL);
+              } else {
+                setSelectedModel(DEFAULT_CLAUDE_MODEL);
+              }
+            }}
+            title="Poskytovatel AI"
+          >
+            <option value="openai">OpenAI</option>
+            <option value="claude">Claude</option>
+          </select>
+          <select
+            className="model-selector"
             value={selectedModel}
             onChange={(e) => setSelectedModel(e.target.value as AIModel)}
+            title="Model"
           >
-            <option value="gpt-5-2025-08-07">GPT-5 (Nejlepší)</option>
-            <option value="gpt-5-mini-2025-08-07">GPT-5 Mini (Rychlý)</option>
-            <option value="gpt-4o">GPT-4o (Výkonný)</option>
-            <option value="gpt-4o-mini">GPT-4o Mini (Ekonomický)</option>
+            {selectedProvider === 'openai' && (
+              <>
+                <option value="gpt-5-2025-08-07">GPT-5 (Nejlepší)</option>
+                <option value="gpt-5-mini-2025-08-07">GPT-5 Mini (Rychlý)</option>
+                <option value="gpt-4o">GPT-4o (Výkonný)</option>
+                <option value="gpt-4o-mini">GPT-4o Mini (Ekonomický)</option>
+              </>
+            )}
+            {selectedProvider === 'claude' && (
+              <>
+                {CLAUDE_MODELS.map((model) => (
+                  <option key={model.id} value={model.id}>
+                    {model.label}
+                  </option>
+                ))}
+              </>
+            )}
           </select>
           <select
             className="model-selector"
@@ -552,6 +637,25 @@ const ChatbotView: React.FC = () => {
             />
             <span>🌐 Web Search</span>
           </label>
+          <div className="token-limit-control" title="Maximální počet tokenů v odpovědi">
+            <label htmlFor="max-tokens-slider">
+              📏 Max Tokens: <strong>{maxTokens.toLocaleString()}</strong>
+            </label>
+            <input
+              id="max-tokens-slider"
+              type="range"
+              min="1000"
+              max={getCurrentModelMaxTokens()}
+              step="500"
+              value={maxTokens}
+              onChange={(e) => setMaxTokens(Number(e.target.value))}
+              className="token-slider"
+            />
+            <div className="token-limits">
+              <span>1k</span>
+              <span>{(getCurrentModelMaxTokens() / 1000).toFixed(0)}k</span>
+            </div>
+          </div>
           {messages.length > 0 && (
             <button className="clear-button" onClick={handleClearChat}>
               <svg

@@ -3,9 +3,156 @@ import { AgGridReact } from "ag-grid-react";
 import type { ColDef } from "ag-grid-community";
 import type { UserInterface } from "../user.interface";
 import FieldCellRenderer from "../cells/FieldCellRenderer";
+import ProfileCellRenderer from "../cells/ProfileCellRenderer";
+import ProfilePanel from "../components/ProfilePanel";
 import { measureGrid, type GridSizes } from "../utils/gridSizing";
 import { API_BASE, mapViewToStatus } from "../constants";
+import { formatProfileDate, normalizeText, toStatusBadge } from "../utils/profileUtils";
+import type { ProfileSection } from "../types/profile";
 import type { SectionProps } from "./SectionTypes";
+
+const buildTiperSections = (tiper: UserInterface | null): ProfileSection[] => {
+  if (!tiper) {
+    return [];
+  }
+
+  const sections: ProfileSection[] = [];
+
+  // Identifikace a stav
+  const idFields = [] as any[];
+  if (tiper.id !== undefined && tiper.id !== null) {
+    idFields.push({ label: "ID", value: String(tiper.id) });
+  }
+  const status = normalizeText(tiper.status);
+  if (status) {
+    idFields.push({ label: "Stav", value: status });
+  }
+  const name = normalizeText(tiper.name);
+  if (name) {
+    idFields.push({ label: "Jméno", value: name });
+  }
+  if (idFields.length > 0) {
+    sections.push({ title: "Identifikace", fields: idFields });
+  }
+
+  const profileFields = [];
+  const specialization = normalizeText(tiper.field);
+  if (specialization) {
+    profileFields.push({ label: "Specializace", value: specialization });
+  }
+  const location = normalizeText(tiper.location);
+  if (location) {
+    profileFields.push({ label: "Lokalita", value: location });
+  }
+  const company = normalizeText(tiper.company);
+  if (company) {
+    profileFields.push({ label: "Společnost", value: company });
+  }
+  const address = normalizeText(tiper.address);
+  if (address) {
+    profileFields.push({ label: "Adresa", value: address });
+  }
+
+  if (profileFields.length > 0) {
+    sections.push({ title: "Profil tipaře", fields: profileFields });
+  }
+
+  const contactFields = [];
+  const contact = normalizeText(tiper.mobile);
+  if (contact) {
+    contactFields.push({ label: "Kontakt", value: contact });
+  }
+  const email = normalizeText(tiper.email);
+  if (email) {
+    contactFields.push({ label: "E-mail", value: email });
+  }
+  const website = normalizeText(tiper.website);
+  if (website) {
+    contactFields.push({ label: "Web", value: website });
+  }
+
+  if (contactFields.length > 0) {
+    sections.push({ title: "Kontakt", fields: contactFields });
+  }
+
+  const cooperationFields = [];
+  const commission = normalizeText(tiper.commission);
+  if (commission) {
+    cooperationFields.push({ label: "Odměna / Provize", value: commission });
+  }
+
+  const date = formatProfileDate(tiper.date);
+  if (date) {
+    cooperationFields.push({ label: "Datum poslední aktualizace", value: date });
+  }
+
+  const lastContact = formatProfileDate(tiper.last_contact);
+  if (lastContact) {
+    cooperationFields.push({ label: "Poslední kontakt", value: lastContact });
+  }
+
+  const assignedTo = normalizeText(tiper.assigned_to);
+  if (assignedTo) {
+    cooperationFields.push({ label: "Odpovědná osoba", value: assignedTo });
+  }
+
+  const nextStep = normalizeText(tiper.next_step);
+  if (nextStep) {
+    cooperationFields.push({ label: "Další krok", value: nextStep, isMultiline: true });
+  }
+
+  const priority = normalizeText(tiper.priority);
+  if (priority) {
+    cooperationFields.push({ label: "Priorita", value: priority });
+  }
+
+  if (status) {
+    cooperationFields.push({ label: "Stav", value: status });
+  }
+
+  if (Array.isArray(tiper.tags) && tiper.tags.length > 0) {
+    cooperationFields.push({ label: "Štítky", value: tiper.tags.join(", ") });
+  }
+
+  cooperationFields.push({
+    label: "Info o tipaři",
+    value: normalizeText(tiper.info) ?? "—",
+    always: true,
+    isMultiline: true
+  });
+
+  const notes = normalizeText(tiper.notes);
+  if (notes) {
+    cooperationFields.push({ label: "Poznámky", value: notes, isMultiline: true });
+  }
+
+  if (cooperationFields.length > 0) {
+    sections.push({ title: "Spolupráce", fields: cooperationFields });
+  }
+
+  return sections;
+};
+
+const buildTiperMeta = (tiper: UserInterface | null): Array<{ label: string; value: string }> | undefined => {
+  if (!tiper || tiper.id === undefined || tiper.id === null) {
+    return undefined;
+  }
+
+  const meta: Array<{ label: string; value: string }> = [{ label: "ID", value: String(tiper.id) }];
+  const status = normalizeText(tiper.status);
+  if (status) {
+    meta.push({ label: "Status", value: status });
+  }
+  const priority = normalizeText(tiper.priority);
+  if (priority) {
+    meta.push({ label: "Priorita", value: priority });
+  }
+  const assignedTo = normalizeText(tiper.assigned_to);
+  if (assignedTo) {
+    meta.push({ label: "Odpovědná osoba", value: assignedTo });
+  }
+  return meta;
+};
 
 const TipersSection: React.FC<SectionProps> = ({
   viewMode,
@@ -18,6 +165,7 @@ const TipersSection: React.FC<SectionProps> = ({
   const gridRef = useRef<AgGridReact<UserInterface>>(null);
   const wrapperRef = useRef<HTMLDivElement>(null);
   const [sizes, setSizes] = useState<GridSizes>({ row: 42, headerOffset: 80 });
+  const [selectedId, setSelectedId] = useState<number | null>(null);
 
   const status = useMemo(() => mapViewToStatus(viewMode), [viewMode]);
 
@@ -33,6 +181,42 @@ const TipersSection: React.FC<SectionProps> = ({
       setIsLoading(false);
     }
   }, [status]);
+
+  const selectedTiper = useMemo(() => {
+    if (selectedId === null) {
+      return null;
+    }
+    return tipersData.find((tiper) => tiper.id === selectedId) ?? null;
+  }, [selectedId, tipersData]);
+
+  const openProfile = useCallback((tiper: UserInterface) => {
+    if (tiper?.id === undefined || tiper.id === null) {
+      return;
+    }
+    setSelectedId(tiper.id);
+  }, []);
+
+  const closeProfile = useCallback(() => {
+    setSelectedId(null);
+  }, []);
+
+  useEffect(() => {
+    if (selectedId === null) {
+      return;
+    }
+    const exists = tipersData.some((tiper) => tiper.id === selectedId);
+    if (!exists) {
+      setSelectedId(null);
+    }
+  }, [selectedId, tipersData]);
+
+  const gridContext = useMemo(() => ({ openProfile }), [openProfile]);
+
+  const profileSections = useMemo(() => buildTiperSections(selectedTiper), [selectedTiper]);
+  const profileBadge = useMemo(() => toStatusBadge(selectedTiper?.status), [selectedTiper]);
+  const profileMeta = useMemo(() => buildTiperMeta(selectedTiper), [selectedTiper]);
+  const profileTitle = normalizeText(selectedTiper?.name) ?? "Profil tipaře";
+  const profileSubtitle = normalizeText(selectedTiper?.company) ?? null;
 
   const handleApproveTiper = useCallback(
     async (id: number) => {
@@ -198,6 +382,24 @@ const TipersSection: React.FC<SectionProps> = ({
   const tipersColDefs = useMemo<ColDef<UserInterface>[]>(
     () => [
       {
+        headerName: "",
+        colId: "profile",
+        pinned: "left",
+        width: 60,
+        minWidth: 60,
+        maxWidth: 68,
+        suppressMovable: true,
+        lockPosition: true,
+        sortable: false,
+        filter: false,
+        resizable: false,
+        cellClass: "profile-cell",
+        headerClass: "profile-cell",
+        cellRenderer: ProfileCellRenderer,
+        editable: false,
+        menuTabs: []
+      },
+      {
         field: "id",
         headerName: "ID",
         flex: 0.5,
@@ -258,95 +460,109 @@ const TipersSection: React.FC<SectionProps> = ({
   );
 
   return (
-    <div className="grid-container">
-      {viewMode === "pending" && (
-        <div
-          className="approve-buttons-column"
-          style={{
-            ["--row-height" as any]: `${sizes.row}px`,
-            ["--header-offset" as any]: `${sizes.headerOffset}px`
-          }}
-        >
-          {tipersData.map((tiper) => (
-            <button
-              key={tiper.id}
-              onClick={() => handleApproveTiper(tiper.id as number)}
-              className="external-approve-btn"
-              title="Schválit tipaře"
-            >
-              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-                <path d="M20 6L9 17L4 12" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
-              </svg>
-            </button>
-          ))}
-        </div>
-      )}
-      {viewMode === "archived" && (
-        <div
-          className="approve-buttons-column"
-          style={{
-            ["--row-height" as any]: `${sizes.row}px`,
-            ["--header-offset" as any]: `${sizes.headerOffset}px`
-          }}
-        >
-          {tipersData.map((tiper) => (
-            <button
-              key={tiper.id}
-              onClick={() => handleRestoreTiper(tiper.id as number)}
-              className="external-approve-btn"
-              title="Obnovit tipaře"
-            >
-              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-                <path d="M3 12a9 9 0 0 1 9-9 9.75 9.75 0 0 1 6.74 2.74L21 8" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
-                <path d="M21 3v5h-5" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
-                <path d="M21 12a9 9 0 0 1-9 9 9.75 9.75 0 0 1-6.74-2.74L3 16" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
-                <path d="M3 21v-5h5" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
-              </svg>
-            </button>
-          ))}
-        </div>
-      )}
-      <div
-        className="delete-buttons-column"
-        style={{
-          ["--row-height" as any]: `${sizes.row}px`,
-          ["--header-offset" as any]: `${sizes.headerOffset}px`
-        }}
-      >
-        {tipersData.map((tiper) => (
-          <button
-            key={tiper.id}
-            onClick={() => handleDeleteTiper(tiper.id as number)}
-            className="external-delete-btn"
-            title={
-              viewMode === "pending"
-                ? "Zamítnout tipaře"
-                : viewMode === "archived"
-                ? "Trvale smazat tipaře"
-                : "Archivovat tipaře"
-            }
+    <>
+      <div className="grid-container">
+        {viewMode === "pending" && (
+          <div
+            className="approve-buttons-column"
+            style={{
+              ["--row-height" as any]: `${sizes.row}px`,
+              ["--header-offset" as any]: `${sizes.headerOffset}px`
+            }}
           >
-            <svg width="14" height="14" viewBox="0 0 12 12" fill="none" xmlns="http://www.w3.org/2000/svg">
-              <path d="M9 3L3 9M3 3L9 9" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
-            </svg>
-          </button>
-        ))}
-      </div>
-      <div ref={wrapperRef} className="grid-wrapper ag-theme-quartz" style={{ height: 500 }}>
-        <AgGridReact<UserInterface>
-          ref={gridRef}
-          rowData={tipersData}
-          columnDefs={tipersColDefs}
-          onCellValueChanged={onTipersCellValueChanged}
-          defaultColDef={{
-            resizable: true,
-            sortable: true
+            {tipersData.map((tiper) => (
+              <button
+                key={tiper.id}
+                onClick={() => handleApproveTiper(tiper.id as number)}
+                className="external-approve-btn"
+                title="Schválit tipaře"
+              >
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                  <path d="M20 6L9 17L4 12" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+                </svg>
+              </button>
+            ))}
+          </div>
+        )}
+        {viewMode === "archived" && (
+          <div
+            className="approve-buttons-column"
+            style={{
+              ["--row-height" as any]: `${sizes.row}px`,
+              ["--header-offset" as any]: `${sizes.headerOffset}px`
+            }}
+          >
+            {tipersData.map((tiper) => (
+              <button
+                key={tiper.id}
+                onClick={() => handleRestoreTiper(tiper.id as number)}
+                className="external-approve-btn"
+                title="Obnovit tipaře"
+              >
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                  <path d="M3 12a9 9 0 0 1 9-9 9.75 9.75 0 0 1 6.74 2.74L21 8" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+                  <path d="M21 3v5h-5" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+                  <path d="M21 12a9 9 0 0 1-9 9 9.75 9.75 0 0 1-6.74-2.74L3 16" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+                  <path d="M3 21v-5h5" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+                </svg>
+              </button>
+            ))}
+          </div>
+        )}
+        <div
+          className="delete-buttons-column"
+          style={{
+            ["--row-height" as any]: `${sizes.row}px`,
+            ["--header-offset" as any]: `${sizes.headerOffset}px`
           }}
-          suppressRowClickSelection={true}
-          loading={isLoading}
-        />
+        >
+          {tipersData.map((tiper) => (
+            <button
+              key={tiper.id}
+              onClick={() => handleDeleteTiper(tiper.id as number)}
+              className="external-delete-btn"
+              title={
+                viewMode === "pending"
+                  ? "Zamítnout tipaře"
+                  : viewMode === "archived"
+                  ? "Trvale smazat tipaře"
+                  : "Archivovat tipaře"
+              }
+            >
+              <svg width="14" height="14" viewBox="0 0 12 12" fill="none" xmlns="http://www.w3.org/2000/svg">
+                <path d="M9 3L3 9M3 3L9 9" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+              </svg>
+            </button>
+          ))}
+        </div>
+        <div ref={wrapperRef} className="grid-wrapper ag-theme-quartz" style={{ height: 500 }}>
+          <AgGridReact<UserInterface>
+            ref={gridRef}
+            rowData={tipersData}
+            columnDefs={tipersColDefs}
+            onCellValueChanged={onTipersCellValueChanged}
+            defaultColDef={{
+              resizable: true,
+              sortable: true
+            }}
+            suppressRowClickSelection={true}
+            loading={isLoading}
+            context={gridContext}
+          />
+        </div>
       </div>
-    </div>
+
+      <ProfilePanel
+        open={selectedTiper !== null}
+        entityLabel="Tipař"
+        title={profileTitle}
+        subtitle={profileSubtitle}
+        badge={profileBadge}
+        meta={profileMeta}
+        sections={profileSections}
+        onClose={closeProfile}
+      />
+    </>
   );
 };
 

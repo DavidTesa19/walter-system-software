@@ -2,7 +2,17 @@ import express from "express";
 import cors from "cors";
 import fs from "fs";
 import path from "path";
+import dotenv from "dotenv";
+import OpenAI from "openai";
+import axios from "axios";
+import * as cheerio from "cheerio";
 import db, { initDatabase } from "./db.js";
+
+dotenv.config();
+
+const openai = new OpenAI({
+  apiKey: process.env.OPENAI_API_KEY
+});
 
 const app = express();
 const PORT = process.env.PORT ? Number(process.env.PORT) : 3004;
@@ -78,6 +88,488 @@ const DEFAULT_PALETTES = [
   }
 ];
 
+const DEFAULT_CHAT_MODEL = "gpt-4o-mini";
+const DEFAULT_PROVIDER = "openai";
+const SUPPORTED_PROVIDERS = {
+  openai: "openai",
+  claude: "claude"
+};
+
+const parseChatRequest = body => {
+  const payload = typeof body === "object" && body !== null ? body : {};
+  const messages = Array.isArray(payload.messages) ? payload.messages : null;
+  const model = typeof payload.model === "string" && payload.model ? payload.model : DEFAULT_CHAT_MODEL;
+  const provider = typeof payload.provider === "string" && payload.provider in SUPPORTED_PROVIDERS
+    ? payload.provider
+    : DEFAULT_PROVIDER;
+  const responseStyle = typeof payload.responseStyle === "string" ? payload.responseStyle : "concise";
+  const useWebSearch = Boolean(payload.useWebSearch);
+  const maxTokens = typeof payload.maxTokens === "number" && payload.maxTokens > 0 ? payload.maxTokens : 8000;
+  return { messages, model, provider, responseStyle, useWebSearch, maxTokens };
+};
+
+const buildStyleInstruction = responseStyle => (
+  responseStyle === "concise"
+    ? "Keep answers concise and helpful. Be brief but accurate."
+    : "Provide detailed, comprehensive answers. Explain concepts thoroughly with examples when relevant."
+);
+
+const buildSystemMessage = ({ model, provider, responseStyle, useWebSearch }) => {
+  const currentDate = new Date().toLocaleDateString("en-US", {
+    weekday: "long",
+    year: "numeric",
+    month: "long",
+    day: "numeric"
+  });
+
+  const providerLabel = provider === SUPPORTED_PROVIDERS.claude ? "Claude (Anthropic)" : "OpenAI";
+
+  const intro = `You are the Walter System in-app assistant. Today's date is ${currentDate}. You are accessed via the ${providerLabel} API using the model name: ${model}. ` +
+    `If a user asks what model you are, state the exact model string "${model}" and that you are provided by ${providerLabel}. Avoid speculating about other products (like ChatGPT web). `;
+  const webSearchInstruction = useWebSearch
+    ? "You have access to web search that fetches FULL webpage content. ALWAYS use web search for: current events, recent sports stats, weather, news, today's information, dates, or anything time-sensitive. Don't rely on your training data for current information - search the web! "
+    : "";
+
+  return {
+    role: "system",
+    content: intro + webSearchInstruction + buildStyleInstruction(responseStyle)
+  };
+};
+
+const shouldUseResponsesApi = model => {
+  const normalized = model.toLowerCase();
+  return normalized.includes("gpt-5-pro") || normalized.includes("gpt-6-pro");
+};
+
+const isRestrictedModelName = model => (
+  model.startsWith("o1") ||
+  model.startsWith("o3") ||
+  model.toLowerCase().includes("gpt-5")
+);
+
+const buildStandardChatParams = ({ model, messagesWithSystem, useWebSearch }) => {
+  const params = { model, messages: messagesWithSystem };
+
+  if (useWebSearch) {
+    params.tools = [webSearchTool];
+    params.tool_choice = "auto";
+  }
+
+  const restricted = isRestrictedModelName(model);
+
+  if (restricted) {
+    params.max_completion_tokens = 4000;
+    delete params.tools;
+    delete params.tool_choice;
+  } else {
+    params.temperature = 0.7;
+    params.max_tokens = 8000;
+  }
+
+  return { params, restricted };
+};
+
+const buildFollowUpParams = ({ model, messages }) => {
+  const params = { model, messages };
+  if (isRestrictedModelName(model)) {
+    params.max_completion_tokens = 4000;
+  } else {
+    params.temperature = 0.7;
+    params.max_tokens = 8000;
+  }
+  return params;
+};
+
+const executeWebSearchToolCall = async toolCall => {
+  try {
+    const args = JSON.parse(toolCall.function.arguments);
+    const searchResults = await searchWeb(args.query, args.max_results || 3);
+    const resultsText = searchResults.map((result, index) => {
+      let text = `${index + 1}. ${result.title}\n   URL: ${result.url}\n   Description: ${result.description}`;
+      if (result.content) {
+        text += `\n   Content: ${result.content}`;
+      }
+      return text;
+    }).join('\n\n');
+
+    return {
+      role: "tool",
+      tool_call_id: toolCall.id,
+      content: `Search results for "${args.query}":\n\n${resultsText}`
+    };
+  } catch (error) {
+    console.error("Web search error:", error);
+    return {
+      role: "tool",
+      tool_call_id: toolCall.id,
+      content: `Error performing web search: ${error.message}`
+    };
+  }
+};
+
+const processToolCalls = async ({ assistantMessage, baseConversation, model }) => {
+  if (!assistantMessage?.tool_calls || assistantMessage.tool_calls.length === 0) {
+    return null;
+  }
+
+  const conversation = [...baseConversation, assistantMessage];
+
+  for (const toolCall of assistantMessage.tool_calls) {
+    if (toolCall.function?.name === "web_search") {
+      const toolMessage = await executeWebSearchToolCall(toolCall);
+      conversation.push(toolMessage);
+    }
+  }
+
+  const followUpParams = buildFollowUpParams({ model, messages: conversation });
+  const completion = await openai.chat.completions.create(followUpParams);
+  return {
+    completion,
+    responseMessage: completion.choices?.[0]?.message?.content ?? ""
+  };
+};
+
+const ensureNonEmptyResponse = (responseMessage, model, completion) => {
+  if (responseMessage && responseMessage.trim().length > 0) {
+    return responseMessage;
+  }
+  console.error("Empty response received from API. Model:", model, "Completion:", completion);
+  return "I apologize, but I received an empty response. Please try again or rephrase your question.";
+};
+
+const runResponsesApiFlow = async ({ model, messagesWithSystem }) => {
+  const response = await fetch("https://api.openai.com/v1/responses", {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${process.env.OPENAI_API_KEY}`,
+      "Content-Type": "application/json"
+    },
+    body: JSON.stringify({
+      model,
+      input: messagesWithSystem
+    })
+  });
+
+  if (!response.ok) {
+    const errorData = await response.json().catch(() => ({}));
+    throw new Error(errorData?.error?.message || `Responses API error: ${response.status}`);
+  }
+
+  const data = await response.json();
+
+  let responseMessage = null;
+
+  if (typeof data.response === "string") {
+    responseMessage = data.response;
+  }
+
+  if (!responseMessage && data.data?.text) {
+    responseMessage = data.data.text;
+  }
+
+  if (!responseMessage && Array.isArray(data.output)) {
+    for (const item of data.output) {
+      if (item.type === "message") {
+        if (Array.isArray(item.content)) {
+          const textParts = item.content
+            .filter(chunk => chunk?.type === "text" && chunk?.text)
+            .map(chunk => chunk.text)
+            .join("");
+          if (textParts) {
+            responseMessage = textParts;
+            break;
+          }
+        } else if (typeof item.content === "string") {
+          responseMessage = item.content;
+          break;
+        }
+      }
+
+      if (!responseMessage && item.text) {
+        responseMessage = item.text;
+        break;
+      }
+    }
+  }
+
+  if (!responseMessage && data.choices?.[0]?.message?.content) {
+    responseMessage = data.choices[0].message.content;
+  }
+
+  if (!responseMessage && data.content) {
+    responseMessage = data.content;
+  }
+
+  if (!responseMessage) {
+    console.error("Could not extract response from Responses API. Full data structure keys:", Object.keys(data));
+    responseMessage = `[Debug] Unable to parse response. Received: ${JSON.stringify(data).substring(0, 200)}...`;
+  }
+
+  if (typeof responseMessage !== "string") {
+    responseMessage = JSON.stringify(responseMessage);
+  }
+
+  const completion = {
+    choices: [{ message: { content: responseMessage } }],
+    usage: data.usage || { prompt_tokens: 0, completion_tokens: 0, total_tokens: 0 }
+  };
+
+  return { completion, responseMessage, model };
+};
+
+const runStandardChatFlow = async ({ model, messagesWithSystem, useWebSearch }) => {
+  const { params, restricted } = buildStandardChatParams({ model, messagesWithSystem, useWebSearch });
+  const completion = await openai.chat.completions.create(params);
+
+  const assistantMessage = completion.choices?.[0]?.message ?? {};
+  let responseMessage = assistantMessage.content ?? "";
+
+  if (assistantMessage.tool_calls && assistantMessage.tool_calls.length > 0) {
+    const toolCallResult = await processToolCalls({
+      assistantMessage,
+      baseConversation: messagesWithSystem,
+      model
+    });
+
+    if (toolCallResult) {
+      return toolCallResult;
+    }
+  }
+
+  return { completion, responseMessage, restricted, model: completion.model || model };
+};
+
+const CLAUDE_DEFAULT_MODEL = "claude-sonnet-4-5";
+const CLAUDE_MODEL_FALLBACKS = {
+  "claude-sonnet-4-5": [
+    "claude-sonnet-4-5",
+    "claude-3-5-sonnet-20241022",
+    "claude-3-haiku-20240307"
+  ]
+};
+
+const normalizeClaudeMessages = messages => {
+  if (!Array.isArray(messages)) return [];
+
+  return messages
+    .map(msg => {
+      if (msg.role === "assistant" || msg.role === "user") {
+        return {
+          role: msg.role,
+          content: typeof msg.content === "string" ? msg.content : JSON.stringify(msg.content ?? "")
+        };
+      }
+      return null;
+    })
+    .filter(Boolean);
+};
+
+const ensureUserFirstMessage = claudeMessages => {
+  if (claudeMessages.length === 0) {
+    throw new Error("Claude requires at least one user message");
+  }
+
+  if (claudeMessages[0].role !== "user") {
+    throw new Error("Claude messages must start with a user role");
+  }
+};
+
+const callClaudeRequest = async ({ model, systemPrompt, chatMessages, maxTokens = 8000 }) => {
+  const apiKey = process.env.ANTHROPIC_API_KEY;
+  if (!apiKey) {
+    throw new Error("Claude API key not configured (ANTHROPIC_API_KEY)");
+  }
+
+  const mappedModel = model || CLAUDE_DEFAULT_MODEL;
+  const claudeMessages = normalizeClaudeMessages(chatMessages);
+  ensureUserFirstMessage(claudeMessages);
+
+  const response = await fetch("https://api.anthropic.com/v1/messages", {
+    method: "POST",
+    headers: {
+      "x-api-key": apiKey,
+      "anthropic-version": "2023-06-01",
+      "content-type": "application/json"
+    },
+    body: JSON.stringify({
+      model: mappedModel,
+      max_tokens: maxTokens,
+      system: typeof systemPrompt === "string" ? systemPrompt : undefined,
+      messages: claudeMessages
+    })
+  });
+
+  if (!response.ok) {
+    const errorData = await response.json().catch(() => ({}));
+    const message = errorData?.error?.message || `Claude API error: ${response.status}`;
+    const err = new Error(message);
+    const type = errorData?.error?.type;
+    const text = typeof message === "string" ? message.toLowerCase() : "";
+    err.isClaudeModelFallbackError = type === "model_not_found" || text.includes("model");
+    err.details = errorData;
+    err.status = response.status;
+    throw err;
+  }
+
+  const data = await response.json();
+
+  let text = "";
+  if (Array.isArray(data.content)) {
+    for (const block of data.content) {
+      if (block.type === "text" && typeof block.text === "string") {
+        text += block.text;
+      }
+    }
+  }
+
+  const usage = data.usage || { input_tokens: 0, output_tokens: 0 };
+
+  return {
+    completion: {
+      choices: [{ message: { content: text } }],
+      usage: {
+        prompt_tokens: usage.input_tokens || 0,
+        completion_tokens: usage.output_tokens || 0,
+        total_tokens: (usage.input_tokens || 0) + (usage.output_tokens || 0)
+      }
+    },
+    responseMessage: text,
+    model: mappedModel
+  };
+};
+
+const callClaude = async ({ model, ...rest }) => {
+  const attempts = CLAUDE_MODEL_FALLBACKS[model] || [model];
+  let lastError = null;
+
+  for (const attempt of attempts) {
+    try {
+      return await callClaudeRequest({ ...rest, model: attempt });
+    } catch (error) {
+      lastError = error;
+      if (!error?.isClaudeModelFallbackError) {
+        throw error;
+      }
+      console.warn(`Claude model "${attempt}" failed (${error.message}). Trying fallback if available...`);
+    }
+  }
+
+  throw lastError ?? new Error("Claude request failed");
+};
+
+async function fetchWebpageContent(url, maxLength = 3000) {
+  try {
+    const response = await axios.get(url, {
+      timeout: 5000,
+      headers: {
+        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36"
+      }
+    });
+
+    const $ = cheerio.load(response.data);
+    $("script, style, nav, footer, header, iframe, noscript").remove();
+
+    let content = "";
+    const selectors = ["article", "main", ".content", "#content", ".post-content", ".entry-content", "body"];
+
+    for (const selector of selectors) {
+      const element = $(selector);
+      if (element.length > 0) {
+        content = element.text();
+        break;
+      }
+    }
+
+    if (!content) {
+      content = $("body").text();
+    }
+
+    content = content
+      .replaceAll(/\s+/g, " ")
+      .replaceAll(/\n+/g, "\n")
+      .trim();
+
+    if (content.length > maxLength) {
+      content = content.substring(0, maxLength) + "...";
+    }
+
+    return content;
+  } catch (error) {
+    console.error(`Failed to fetch ${url}:`, error.message);
+    return null;
+  }
+}
+
+async function searchWeb(query, maxResults = 3, fetchContent = true) {
+  const braveApiKey = process.env.BRAVE_SEARCH_API_KEY;
+
+  if (!braveApiKey || braveApiKey === "your_brave_search_api_key_here") {
+    throw new Error("Brave Search API key not configured. Get one at https://brave.com/search/api/");
+  }
+
+  try {
+    const response = await axios.get("https://api.search.brave.com/res/v1/web/search", {
+      params: {
+        q: query,
+        count: maxResults
+      },
+      headers: {
+        Accept: "application/json",
+        "Accept-Encoding": "gzip",
+        "X-Subscription-Token": braveApiKey
+      }
+    });
+
+    const results = response.data.web?.results || [];
+    const enrichedResults = [];
+    for (const result of results) {
+      const enrichedResult = {
+        title: result.title,
+        url: result.url,
+        description: result.description,
+        snippet: result.extra_snippets?.join(" ") || result.description
+      };
+
+      if (fetchContent) {
+        const content = await fetchWebpageContent(result.url);
+        if (content) {
+          enrichedResult.content = content;
+        }
+      }
+
+      enrichedResults.push(enrichedResult);
+    }
+
+    return enrichedResults;
+  } catch (error) {
+    console.error("Brave Search error:", error.response?.data || error.message);
+    throw new Error(`Web search failed: ${error.message}`);
+  }
+}
+
+const webSearchTool = {
+  type: "function",
+  function: {
+    name: "web_search",
+    description: "Search the web and fetch actual webpage content for CURRENT, UP-TO-DATE information. This tool fetches full webpage content. YOU MUST USE THIS for: current sports statistics/scores, weather forecasts, today's news, recent events, current season data, or ANY time-sensitive information. Your training data is outdated - always search for current information!",
+    parameters: {
+      type: "object",
+      properties: {
+        query: {
+          type: "string",
+          description: "The search query to find information on the web"
+        },
+        max_results: {
+          type: "number",
+          description: "Maximum number of search results to return (default: 5)",
+          default: 5
+        }
+      },
+      required: ["query"]
+    }
+  }
+};
+
 // Initialize database
 if (db.isPostgres()) {
   await initDatabase();
@@ -150,6 +642,7 @@ function readDb() {
   if (!obj.users) obj.users = [];
   if (!obj.employees) obj.employees = [];
   if (!obj.futureFunctions) obj.futureFunctions = [];
+  if (!Array.isArray(obj.conversations)) obj.conversations = [];
     if (!Array.isArray(obj.color_palettes)) obj.color_palettes = cloneDefaultPalettes();
     ensureFilePalettes(obj);
     return obj;
@@ -360,6 +853,351 @@ function removePaletteFromStore(store, id) {
   ensureFilePalettes(store);
   return removed;
 }
+
+// ============================================
+// AI CHATBOT ENDPOINTS
+// ============================================
+
+app.post("/api/chat", async (req, res) => {
+  try {
+    const { messages, model, provider, responseStyle, useWebSearch, maxTokens } = parseChatRequest(req.body);
+
+    if (!messages) {
+      return res.status(400).json({ error: "Messages array is required" });
+    }
+
+    if (provider === SUPPORTED_PROVIDERS.openai && !process.env.OPENAI_API_KEY) {
+      return res.status(500).json({ error: "OpenAI API key not configured" });
+    }
+
+    if (provider === SUPPORTED_PROVIDERS.claude && !process.env.ANTHROPIC_API_KEY) {
+      return res.status(500).json({ error: "Claude API key not configured" });
+    }
+
+    const systemMessage = buildSystemMessage({ model, provider, responseStyle, useWebSearch });
+    const messagesWithSystem = [systemMessage, ...messages];
+    const claudeSystemPrompt = typeof systemMessage.content === "string" ? systemMessage.content : undefined;
+
+    let flowResult;
+    if (provider === SUPPORTED_PROVIDERS.claude) {
+      flowResult = await callClaude({
+        model,
+        systemPrompt: claudeSystemPrompt,
+        chatMessages: messages,
+        maxTokens
+      });
+    } else {
+      flowResult = shouldUseResponsesApi(model)
+        ? await runResponsesApiFlow({ model, messagesWithSystem, maxTokens })
+        : await runStandardChatFlow({ model, messagesWithSystem, useWebSearch, maxTokens });
+    }
+
+    const message = ensureNonEmptyResponse(flowResult.responseMessage, model, flowResult.completion);
+    const resolvedModel = flowResult.model ?? model;
+
+    res.json({
+      message,
+      model: resolvedModel,
+      usage: flowResult.completion.usage
+    });
+  } catch (error) {
+    const status = error.status || error.code || 500;
+    const errPayload = {
+      error: "Failed to get AI response",
+      message: error.message,
+      type: error?.error?.type || error?.name,
+      code: error?.error?.code || undefined,
+      details:
+        error?.error?.message ||
+        error?.response?.data?.error?.message ||
+        error?.response?.data ||
+        undefined
+    };
+    console.error("Chat API Error:", JSON.stringify(errPayload, null, 2));
+    res.status(Number.isInteger(status) ? status : 500).json(errPayload);
+  }
+});
+
+app.post("/api/chat/stream", async (req, res) => {
+  res.setHeader("Content-Type", "text/event-stream");
+  res.setHeader("Cache-Control", "no-cache");
+  res.setHeader("Connection", "keep-alive");
+
+  try {
+    const { messages, model = "gpt-4o-mini", responseStyle = "concise", useWebSearch = false, maxTokens = 8000 } = req.body ?? {};
+
+    if (!messages || !Array.isArray(messages)) {
+      res.write(`data: ${JSON.stringify({ error: "Messages array is required" })}\n\n`);
+      res.end();
+      return;
+    }
+
+    if (!process.env.OPENAI_API_KEY) {
+      res.write(`data: ${JSON.stringify({ error: "OpenAI API key not configured" })}\n\n`);
+      res.end();
+      return;
+    }
+
+    const styleInstruction = responseStyle === "concise"
+      ? "Keep answers concise and helpful. Be brief but accurate."
+      : "Provide detailed, comprehensive answers. Explain concepts thoroughly with examples when relevant.";
+
+    const currentDate = new Date().toLocaleDateString('en-US', {
+      weekday: 'long',
+      year: 'numeric',
+      month: 'long',
+      day: 'numeric'
+    });
+
+    const systemMessage = {
+      role: "system",
+      content:
+        `You are the Walter System in-app assistant. Today's date is ${currentDate}. You are accessed via the OpenAI API using the model name: ${model}. ` +
+        `If a user asks what model you are, state the exact model string "${model}". Avoid speculating about other products (like ChatGPT web). ` +
+        (useWebSearch
+          ? "You have access to web search that fetches FULL webpage content. ALWAYS use web search for: current events, recent sports stats, weather, news, today's information, dates, or anything time-sensitive. Don't rely on your training data for current information - search the web! "
+          : "") +
+        styleInstruction
+    };
+
+    const messagesWithSystem = Array.isArray(messages)
+      ? [systemMessage, ...messages]
+      : [systemMessage];
+
+    const apiParams = {
+      model,
+      messages: messagesWithSystem,
+      stream: true
+    };
+
+    if (useWebSearch) {
+      apiParams.tools = [webSearchTool];
+      apiParams.tool_choice = "auto";
+    }
+
+    const isRestrictedModel = model.startsWith('o1') ||
+      model.startsWith('o3') ||
+      model.toLowerCase().includes('gpt-5');
+
+    if (isRestrictedModel) {
+      apiParams.max_completion_tokens = Math.min(maxTokens, 4000);
+      delete apiParams.tools;
+      delete apiParams.tool_choice;
+    } else {
+      apiParams.temperature = 0.7;
+      apiParams.max_tokens = maxTokens;
+    }
+
+    const stream = await openai.chat.completions.create(apiParams);
+
+    let fullContent = "";
+    let totalTokens = { prompt: 0, completion: 0, total: 0 };
+    let toolCalls = [];
+
+    for await (const chunk of stream) {
+      const delta = chunk.choices[0]?.delta;
+      const content = delta?.content || "";
+      if (content) {
+        fullContent += content;
+        res.write(`data: ${JSON.stringify({ type: 'content', content })}\n\n`);
+      }
+
+      if (delta?.tool_calls) {
+        for (const toolCallDelta of delta.tool_calls) {
+          if (toolCallDelta.index !== undefined) {
+            if (!toolCalls[toolCallDelta.index]) {
+              toolCalls[toolCallDelta.index] = {
+                id: toolCallDelta.id || '',
+                type: 'function',
+                function: {
+                  name: toolCallDelta.function?.name || '',
+                  arguments: toolCallDelta.function?.arguments || ''
+                }
+              };
+            } else if (toolCallDelta.function?.arguments) {
+              toolCalls[toolCallDelta.index].function.arguments += toolCallDelta.function.arguments;
+            }
+          }
+        }
+      }
+
+      if (chunk.choices[0]?.finish_reason) {
+        const finishReason = chunk.choices[0].finish_reason;
+
+        if (finishReason === 'tool_calls' && toolCalls.length > 0) {
+          res.write(`data: ${JSON.stringify({ type: 'function_call', message: 'Searching the web...' })}\n\n`);
+
+          messagesWithSystem.push({
+            role: 'assistant',
+            content: null,
+            tool_calls: toolCalls
+          });
+
+          for (const toolCall of toolCalls) {
+            if (toolCall.function.name === 'web_search') {
+              try {
+                const args = JSON.parse(toolCall.function.arguments);
+                const searchResults = await searchWeb(args.query, args.max_results || 3);
+                const resultsText = searchResults.map((r, i) => {
+                  let resultText = `${i + 1}. ${r.title}\n   URL: ${r.url}\n   Description: ${r.description}`;
+                  if (r.content) {
+                    resultText += `\n   Content: ${r.content}`;
+                  }
+                  return resultText;
+                }).join('\n\n');
+
+                messagesWithSystem.push({
+                  role: "tool",
+                  tool_call_id: toolCall.id,
+                  content: `Search results for "${args.query}":\n\n${resultsText}`
+                });
+              } catch (error) {
+                console.error("Web search error:", error);
+                messagesWithSystem.push({
+                  role: "tool",
+                  tool_call_id: toolCall.id,
+                  content: `Error performing web search: ${error.message}`
+                });
+              }
+            }
+          }
+
+          const followUpParams = {
+            model,
+            messages: messagesWithSystem,
+            stream: true
+          };
+
+          if (!isRestrictedModel) {
+            followUpParams.temperature = 0.7;
+            followUpParams.max_tokens = 8000;
+          } else {
+            followUpParams.max_completion_tokens = 4000;
+          }
+
+          const followUpStream = await openai.chat.completions.create(followUpParams);
+
+          fullContent = '';
+
+          for await (const followUpChunk of followUpStream) {
+            const followUpContent = followUpChunk.choices[0]?.delta?.content || '';
+            if (followUpContent) {
+              fullContent += followUpContent;
+              res.write(`data: ${JSON.stringify({ type: 'content', content: followUpContent })}\n\n`);
+            }
+
+            if (followUpChunk.choices[0]?.finish_reason) {
+              if (followUpChunk.usage) {
+                totalTokens = {
+                  prompt: followUpChunk.usage.prompt_tokens || 0,
+                  completion: followUpChunk.usage.completion_tokens || 0,
+                  total: followUpChunk.usage.total_tokens || 0
+                };
+              }
+              res.write(`data: ${JSON.stringify({
+                type: 'done',
+                model,
+                usage: totalTokens,
+                finish_reason: followUpChunk.choices[0].finish_reason
+              })}\n\n`);
+            }
+          }
+        } else {
+          if (chunk.usage) {
+            totalTokens = {
+              prompt: chunk.usage.prompt_tokens || 0,
+              completion: chunk.usage.completion_tokens || 0,
+              total: chunk.usage.total_tokens || 0
+            };
+          }
+          res.write(`data: ${JSON.stringify({
+            type: 'done',
+            model,
+            usage: totalTokens,
+            finish_reason: finishReason
+          })}\n\n`);
+        }
+      }
+    }
+
+    res.end();
+  } catch (error) {
+    console.error("Streaming error:", error);
+    res.write(`data: ${JSON.stringify({
+      type: 'error',
+      error: error.message || 'Streaming failed'
+    })}\n\n`);
+    res.end();
+  }
+});
+
+// ============================================
+// CHAT CONVERSATION MANAGEMENT
+// ============================================
+
+app.get("/api/conversations", (_req, res) => {
+  const store = readDb();
+  res.json(store.conversations || []);
+});
+
+app.get("/api/conversations/:id", (req, res) => {
+  const store = readDb();
+  const conversation = store.conversations?.find(c => c.id === req.params.id);
+  if (!conversation) {
+    return res.status(404).json({ error: "Conversation not found" });
+  }
+  res.json(conversation);
+});
+
+app.post("/api/conversations", (req, res) => {
+  const store = readDb();
+  if (!Array.isArray(store.conversations)) store.conversations = [];
+
+  const conversation = {
+    id: `conv_${Date.now()}`,
+    title: req.body.title || "New Conversation",
+    messages: req.body.messages || [],
+    createdAt: new Date().toISOString(),
+    updatedAt: new Date().toISOString()
+  };
+
+  store.conversations.unshift(conversation);
+  if (!writeDb(store)) return res.status(500).json({ error: "Failed to save" });
+  res.json(conversation);
+});
+
+app.put("/api/conversations/:id", (req, res) => {
+  const store = readDb();
+  if (!Array.isArray(store.conversations)) store.conversations = [];
+
+  const index = store.conversations.findIndex(c => c.id === req.params.id);
+  if (index === -1) {
+    return res.status(404).json({ error: "Conversation not found" });
+  }
+
+  store.conversations[index] = {
+    ...store.conversations[index],
+    ...req.body,
+    updatedAt: new Date().toISOString()
+  };
+
+  if (!writeDb(store)) return res.status(500).json({ error: "Failed to save" });
+  res.json(store.conversations[index]);
+});
+
+app.delete("/api/conversations/:id", (req, res) => {
+  const store = readDb();
+  if (!Array.isArray(store.conversations)) store.conversations = [];
+
+  const index = store.conversations.findIndex(c => c.id === req.params.id);
+  if (index === -1) {
+    return res.status(404).json({ error: "Conversation not found" });
+  }
+
+  store.conversations.splice(index, 1);
+  if (!writeDb(store)) return res.status(500).json({ error: "Failed to delete" });
+  res.status(204).end();
+});
 
 // Color palette routes
 app.get("/color-palettes", async (req, res) => {

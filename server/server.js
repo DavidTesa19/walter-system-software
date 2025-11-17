@@ -1,7 +1,7 @@
 import express from "express";
 import cors from "cors";
-import fs from "fs";
-import path from "path";
+import fs from "node:fs";
+import path from "node:path";
 import OpenAI from "openai";
 import dotenv from "dotenv";
 import axios from "axios";
@@ -73,6 +73,29 @@ const cloneDefaultPalettes = () => DEFAULT_COLOR_PALETTES.map(palette => ({
   typography: { ...palette.typography }
 }));
 
+const toTrimmedString = value => (typeof value === "string" ? value.trim() : "");
+
+const isPlainObject = value => value !== null && typeof value === "object" && !Array.isArray(value);
+
+const sanitizeStringSection = (sectionName, keys, source, errors) => {
+  if (!isPlainObject(source)) {
+    errors.push(sectionName);
+    return null;
+  }
+
+  const sanitized = {};
+  for (const key of keys) {
+    const trimmed = toTrimmedString(source[key]);
+    if (!trimmed) {
+      errors.push(`${sectionName}.${key}`);
+    } else {
+      sanitized[key] = trimmed;
+    }
+  }
+
+  return Object.keys(sanitized).length === keys.length ? sanitized : null;
+};
+
 const ensurePalettes = db => {
   let mutated = false;
   if (!Array.isArray(db.color_palettes)) {
@@ -81,7 +104,7 @@ const ensurePalettes = db => {
   }
 
   const modes = ["light", "dark"];
-  let nextId = db.color_palettes.reduce((max, palette) => (palette.id > max ? palette.id : max), 0);
+  let nextId = db.color_palettes.reduce((max, palette) => Math.max(max, Number(palette.id) || 0), 0);
 
   for (const mode of modes) {
     const modePalettes = db.color_palettes.filter(palette => palette.mode === mode);
@@ -101,13 +124,15 @@ const ensurePalettes = db => {
       modePalettes[0].is_active = true;
       mutated = true;
     } else if (activePalettes.length > 1) {
-      activePalettes.forEach((palette, index) => {
+      let index = 0;
+      for (const palette of activePalettes) {
         palette.is_active = index === 0;
-      });
+        index += 1;
+      }
       mutated = true;
     }
 
-    modePalettes.forEach(palette => {
+    for (const palette of modePalettes) {
       if (!palette.colors || typeof palette.colors !== "object") {
         palette.colors = {};
       }
@@ -137,89 +162,450 @@ const ensurePalettes = db => {
           palette.typography[key] = value.trim();
         }
       }
-    });
+    }
   }
 
   return mutated;
 };
 
-const sanitizePalettePayload = (body, { partial = false, allowMode = true } = {}) => {
+const sanitizePalettePayload = (body = {}, { partial = false, allowMode = true } = {}) => {
   const errors = [];
   const payload = {};
+  const source = body ?? {};
+  const shouldValidate = field => !partial || source[field] !== undefined;
 
-  if (!partial || body.name !== undefined) {
-    if (typeof body.name !== "string" || !body.name.trim()) {
+  if (shouldValidate("name")) {
+    const trimmedName = toTrimmedString(source.name);
+    if (!trimmedName) {
       errors.push("name");
     } else {
-      payload.name = body.name.trim();
+      payload.name = trimmedName;
     }
   }
 
-  if (allowMode && (!partial || body.mode !== undefined)) {
-    if (body.mode !== "light" && body.mode !== "dark") {
+  if (allowMode && shouldValidate("mode")) {
+    if (source.mode === "light" || source.mode === "dark") {
+      payload.mode = source.mode;
+    } else {
       errors.push("mode");
-    } else {
-      payload.mode = body.mode;
     }
   }
 
-  if (!partial || body.colors !== undefined) {
-    if (typeof body.colors !== "object" || body.colors === null) {
-      errors.push("colors");
-    } else {
-      const colors = {};
-      for (const key of PALETTE_COLOR_KEYS) {
-        const value = body.colors[key];
-        if (typeof value !== "string" || !value.trim()) {
-          errors.push(`colors.${key}`);
-        } else {
-          colors[key] = value.trim();
-        }
-      }
-      if (Object.keys(colors).length === PALETTE_COLOR_KEYS.length) {
-        payload.colors = colors;
-      }
+  if (shouldValidate("colors")) {
+    const sanitizedColors = sanitizeStringSection("colors", PALETTE_COLOR_KEYS, source.colors, errors);
+    if (sanitizedColors) {
+      payload.colors = sanitizedColors;
     }
   }
 
-  if (!partial || body.typography !== undefined) {
-    if (typeof body.typography !== "object" || body.typography === null) {
-      errors.push("typography");
-    } else {
-      const typography = {};
-      for (const key of PALETTE_TYPOGRAPHY_KEYS) {
-        const value = body.typography[key];
-        if (typeof value !== "string" || !value.trim()) {
-          errors.push(`typography.${key}`);
-        } else {
-          typography[key] = value.trim();
-        }
-      }
-      if (Object.keys(typography).length === PALETTE_TYPOGRAPHY_KEYS.length) {
-        payload.typography = typography;
-      }
+  if (shouldValidate("typography")) {
+    const sanitizedTypography = sanitizeStringSection("typography", PALETTE_TYPOGRAPHY_KEYS, source.typography, errors);
+    if (sanitizedTypography) {
+      payload.typography = sanitizedTypography;
     }
   }
 
-  if (body.is_active !== undefined) {
-    payload.is_active = Boolean(body.is_active);
+  if (source.is_active !== undefined) {
+    payload.is_active = Boolean(source.is_active);
   }
 
   return { payload, errors };
 };
 
-const getNextPaletteId = palettes => palettes.reduce((max, palette) => (
-  typeof palette.id === "number" && palette.id > max ? palette.id : max
-), 0) + 1;
+const DEFAULT_CHAT_MODEL = "gpt-4o-mini";
+
+const DEFAULT_PROVIDER = "openai";
+
+const SUPPORTED_PROVIDERS = {
+  openai: "openai",
+  claude: "claude"
+};
+
+const parseChatRequest = body => {
+  const payload = isPlainObject(body) ? body : {};
+  const messages = Array.isArray(payload.messages) ? payload.messages : null;
+  const model = typeof payload.model === "string" && payload.model ? payload.model : DEFAULT_CHAT_MODEL;
+  const provider = typeof payload.provider === "string" && payload.provider in SUPPORTED_PROVIDERS
+    ? payload.provider
+    : DEFAULT_PROVIDER;
+  const responseStyle = typeof payload.responseStyle === "string" ? payload.responseStyle : "concise";
+  const useWebSearch = Boolean(payload.useWebSearch);
+  const maxTokens = typeof payload.maxTokens === "number" && payload.maxTokens > 0 ? payload.maxTokens : 8000;
+  return { messages, model, provider, responseStyle, useWebSearch, maxTokens };
+};
+
+const buildStyleInstruction = responseStyle => (
+  responseStyle === "concise"
+    ? "Keep answers concise and helpful. Be brief but accurate."
+    : "Provide detailed, comprehensive answers. Explain concepts thoroughly with examples when relevant."
+);
+
+const buildSystemMessage = ({ model, provider, responseStyle, useWebSearch }) => {
+  const currentDate = new Date().toLocaleDateString("en-US", {
+    weekday: "long",
+    year: "numeric",
+    month: "long",
+    day: "numeric"
+  });
+
+  const providerLabel = provider === SUPPORTED_PROVIDERS.claude ? "Claude (Anthropic)" : "OpenAI";
+
+  const intro = `You are the Walter System in-app assistant. Today's date is ${currentDate}. You are accessed via the ${providerLabel} API using the model name: ${model}. ` +
+    `If a user asks what model you are, state the exact model string "${model}" and that you are provided by ${providerLabel}. Avoid speculating about other products (like ChatGPT web). `;
+  const webSearchInstruction = useWebSearch
+    ? "You have access to web search that fetches FULL webpage content. ALWAYS use web search for: current events, recent sports stats, weather, news, today's information, dates, or anything time-sensitive. Don't rely on your training data for current information - search the web! "
+    : "";
+
+  return {
+    role: "system",
+    content: intro + webSearchInstruction + buildStyleInstruction(responseStyle)
+  };
+};
+
+const shouldUseResponsesApi = model => {
+  const normalized = model.toLowerCase();
+  return normalized.includes("gpt-5-pro") || normalized.includes("gpt-6-pro");
+};
+
+const isRestrictedModelName = model => (
+  model.startsWith("o1") ||
+  model.startsWith("o3") ||
+  model.toLowerCase().includes("gpt-5")
+);
+
+const buildStandardChatParams = ({ model, messagesWithSystem, useWebSearch }) => {
+  const params = { model, messages: messagesWithSystem };
+
+  if (useWebSearch) {
+    params.tools = [webSearchTool];
+    params.tool_choice = "auto";
+  }
+
+  const restricted = isRestrictedModelName(model);
+
+  if (restricted) {
+    params.max_completion_tokens = 4000;
+    delete params.tools;
+    delete params.tool_choice;
+  } else {
+    params.temperature = 0.7;
+    params.max_tokens = 8000;
+  }
+
+  return { params, restricted };
+};
+
+const buildFollowUpParams = ({ model, messages }) => {
+  const params = { model, messages };
+  if (isRestrictedModelName(model)) {
+    params.max_completion_tokens = 4000;
+  } else {
+    params.temperature = 0.7;
+    params.max_tokens = 8000;
+  }
+  return params;
+};
+
+const executeWebSearchToolCall = async toolCall => {
+  try {
+    const args = JSON.parse(toolCall.function.arguments);
+    console.log("Executing web search:", args.query);
+    const searchResults = await searchWeb(args.query, args.max_results || 3);
+    const resultsText = searchResults.map((result, index) => {
+      let text = `${index + 1}. ${result.title}\n   URL: ${result.url}\n   Description: ${result.description}`;
+      if (result.content) {
+        text += `\n   Content: ${result.content}`;
+      }
+      return text;
+    }).join('\n\n');
+
+    return {
+      role: "tool",
+      tool_call_id: toolCall.id,
+      content: `Search results for "${args.query}":\n\n${resultsText}`
+    };
+  } catch (error) {
+    console.error("Web search error:", error);
+    return {
+      role: "tool",
+      tool_call_id: toolCall.id,
+      content: `Error performing web search: ${error.message}`
+    };
+  }
+};
+
+const processToolCalls = async ({ assistantMessage, baseConversation, model }) => {
+  if (!assistantMessage?.tool_calls || assistantMessage.tool_calls.length === 0) {
+    return null;
+  }
+
+  const conversation = [...baseConversation, assistantMessage];
+
+  for (const toolCall of assistantMessage.tool_calls) {
+    if (toolCall.function?.name === "web_search") {
+      const toolMessage = await executeWebSearchToolCall(toolCall);
+      conversation.push(toolMessage);
+    }
+  }
+
+  const followUpParams = buildFollowUpParams({ model, messages: conversation });
+  console.log("Making follow-up call with function results");
+  const completion = await openai.chat.completions.create(followUpParams);
+  return {
+    completion,
+    responseMessage: completion.choices?.[0]?.message?.content ?? ""
+  };
+};
+
+const ensureNonEmptyResponse = (responseMessage, model, completion) => {
+  if (responseMessage && responseMessage.trim().length > 0) {
+    return responseMessage;
+  }
+  console.error("Empty response received from API. Model:", model, "Completion:", completion);
+  return "I apologize, but I received an empty response. Please try again or rephrase your question.";
+};
+
+const runResponsesApiFlow = async ({ model, messagesWithSystem }) => {
+  const response = await fetch("https://api.openai.com/v1/responses", {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${process.env.OPENAI_API_KEY}`,
+      "Content-Type": "application/json"
+    },
+    body: JSON.stringify({
+      model,
+      input: messagesWithSystem
+    })
+  });
+
+  if (!response.ok) {
+    const errorData = await response.json().catch(() => ({}));
+    throw new Error(errorData?.error?.message || `Responses API error: ${response.status}`);
+  }
+
+  const data = await response.json();
+  console.log("Responses API raw data:", JSON.stringify(data, null, 2));
+
+  let responseMessage = null;
+
+  if (typeof data.response === "string") {
+    responseMessage = data.response;
+  }
+
+  if (!responseMessage && data.data?.text) {
+    responseMessage = data.data.text;
+  }
+
+  if (!responseMessage && Array.isArray(data.output)) {
+    for (const item of data.output) {
+      if (item.type === "message") {
+        if (Array.isArray(item.content)) {
+          const textParts = item.content
+            .filter(chunk => chunk?.type === "text" && chunk?.text)
+            .map(chunk => chunk.text)
+            .join("");
+          if (textParts) {
+            responseMessage = textParts;
+            break;
+          }
+        } else if (typeof item.content === "string") {
+          responseMessage = item.content;
+          break;
+        }
+      }
+
+      if (!responseMessage && item.text) {
+        responseMessage = item.text;
+        break;
+      }
+    }
+  }
+
+  if (!responseMessage && data.choices?.[0]?.message?.content) {
+    responseMessage = data.choices[0].message.content;
+  }
+
+  if (!responseMessage && data.content) {
+    responseMessage = data.content;
+  }
+
+  if (!responseMessage) {
+    console.error("Could not extract response from Responses API. Full data structure keys:", Object.keys(data));
+    responseMessage = `[Debug] Unable to parse response. Received: ${JSON.stringify(data).substring(0, 200)}...`;
+  }
+
+  if (typeof responseMessage !== "string") {
+    console.warn("Non-string response, stringifying:", responseMessage);
+    responseMessage = JSON.stringify(responseMessage);
+  }
+
+  const completion = {
+    choices: [{ message: { content: responseMessage } }],
+    usage: data.usage || { prompt_tokens: 0, completion_tokens: 0, total_tokens: 0 }
+  };
+
+  return { completion, responseMessage, model };
+};
+
+const runStandardChatFlow = async ({ model, messagesWithSystem, useWebSearch }) => {
+  const { params, restricted } = buildStandardChatParams({ model, messagesWithSystem, useWebSearch });
+  console.log("Calling OpenAI with params:", { model, messageCount: messagesWithSystem.length, useWebSearch, ...params });
+  const completion = await openai.chat.completions.create(params);
+  console.log("OpenAI response - finish_reason:", completion.choices?.[0]?.finish_reason);
+
+  const assistantMessage = completion.choices?.[0]?.message ?? {};
+  let responseMessage = assistantMessage.content ?? "";
+
+  if (assistantMessage.tool_calls && assistantMessage.tool_calls.length > 0) {
+    const toolCallResult = await processToolCalls({
+      assistantMessage,
+      baseConversation: messagesWithSystem,
+      model
+    });
+
+    if (toolCallResult) {
+      return toolCallResult;
+    }
+  }
+
+  return { completion, responseMessage, restricted, model: completion.model || model };
+};
+
+// ================================
+// Claude (Anthropic) Integration
+// ================================
+
+const CLAUDE_DEFAULT_MODEL = "claude-sonnet-4-5";
+const CLAUDE_MODEL_FALLBACKS = {
+  "claude-sonnet-4-5": [
+    "claude-sonnet-4-5",
+    "claude-3-5-sonnet-20241022",
+    "claude-3-haiku-20240307"
+  ]
+};
+
+const normalizeClaudeMessages = messages => {
+  if (!Array.isArray(messages)) return [];
+
+  return messages
+    .map(msg => {
+      if (msg.role === "assistant" || msg.role === "user") {
+        return {
+          role: msg.role,
+          content: typeof msg.content === "string" ? msg.content : JSON.stringify(msg.content ?? "")
+        };
+      }
+      return null;
+    })
+    .filter(Boolean);
+};
+
+const ensureUserFirstMessage = claudeMessages => {
+  if (claudeMessages.length === 0) {
+    throw new Error("Claude requires at least one user message");
+  }
+
+  if (claudeMessages[0].role !== "user") {
+    throw new Error("Claude messages must start with a user role");
+  }
+};
+
+const callClaudeRequest = async ({ model, systemPrompt, chatMessages, maxTokens = 8000 }) => {
+  const apiKey = process.env.ANTHROPIC_API_KEY;
+  if (!apiKey) {
+    throw new Error("Claude API key not configured (ANTHROPIC_API_KEY)");
+  }
+
+  const mappedModel = model || CLAUDE_DEFAULT_MODEL;
+  const claudeMessages = normalizeClaudeMessages(chatMessages);
+  ensureUserFirstMessage(claudeMessages);
+
+  const response = await fetch("https://api.anthropic.com/v1/messages", {
+    method: "POST",
+    headers: {
+      "x-api-key": apiKey,
+      "anthropic-version": "2023-06-01",
+      "content-type": "application/json"
+    },
+    body: JSON.stringify({
+      model: mappedModel,
+      max_tokens: maxTokens,
+      system: typeof systemPrompt === "string" ? systemPrompt : undefined,
+      messages: claudeMessages
+    })
+  });
+
+  if (!response.ok) {
+    const errorData = await response.json().catch(() => ({}));
+    const message = errorData?.error?.message || `Claude API error: ${response.status}`;
+    const err = new Error(message);
+    const type = errorData?.error?.type;
+    const text = typeof message === "string" ? message.toLowerCase() : "";
+    err.isClaudeModelFallbackError = type === "model_not_found" || text.includes("model");
+    err.details = errorData;
+    err.status = response.status;
+    throw err;
+  }
+
+  const data = await response.json();
+
+  let text = "";
+  if (Array.isArray(data.content)) {
+    for (const block of data.content) {
+      if (block.type === "text" && typeof block.text === "string") {
+        text += block.text;
+      }
+    }
+  }
+
+  const usage = data.usage || { input_tokens: 0, output_tokens: 0 }; 
+
+  return {
+    completion: {
+      choices: [{ message: { content: text } }],
+      usage: {
+        prompt_tokens: usage.input_tokens || 0,
+        completion_tokens: usage.output_tokens || 0,
+        total_tokens: (usage.input_tokens || 0) + (usage.output_tokens || 0)
+      }
+    },
+    responseMessage: text,
+    model: mappedModel
+  };
+};
+
+const callClaude = async ({ model, ...rest }) => {
+  const attempts = CLAUDE_MODEL_FALLBACKS[model] || [model];
+  let lastError = null;
+
+  for (const attempt of attempts) {
+    try {
+      return await callClaudeRequest({ ...rest, model: attempt });
+    } catch (error) {
+      lastError = error;
+      if (!error?.isClaudeModelFallbackError) {
+        throw error;
+      }
+      console.warn(`Claude model "${attempt}" failed (${error.message}). Trying fallback if available...`);
+    }
+  }
+
+  throw lastError ?? new Error("Claude request failed");
+};
+
+const getNextPaletteId = palettes => palettes.reduce(
+  (max, palette) => Math.max(max, typeof palette.id === "number" ? palette.id : 0),
+  0
+) + 1;
 
 const setActivePalette = (palettes, id) => {
   const palette = palettes.find(item => item.id === id);
   if (!palette) return null;
-  palettes.forEach(item => {
+  for (const item of palettes) {
     if (item.mode === palette.mode) {
       item.is_active = item.id === palette.id;
     }
-  });
+  }
   return palette;
 };
 
@@ -277,8 +663,8 @@ async function fetchWebpageContent(url, maxLength = 3000) {
     
     // Clean up whitespace
     content = content
-      .replace(/\s+/g, ' ')
-      .replace(/\n+/g, '\n')
+      .replaceAll(/\s+/g, ' ')
+      .replaceAll(/\n+/g, '\n')
       .trim();
     
     // Truncate if too long
@@ -422,13 +808,25 @@ function readDb() {
   try {
     const raw = fs.readFileSync(DATA_FILE, "utf8");
     const obj = JSON.parse(raw || "{}");
-  if (!obj.partners) obj.partners = [];
-  if (!obj.clients) obj.clients = [];
-  if (!obj.tipers) obj.tipers = [];
-  if (!obj.futureFunctions) obj.futureFunctions = [];
+    if (!obj.partners) {
+      obj.partners = [];
+    }
+    if (!obj.clients) {
+      obj.clients = [];
+    }
+    if (!obj.tipers) {
+      obj.tipers = [];
+    }
+    if (!obj.futureFunctions) {
+      obj.futureFunctions = [];
+    }
     // Keep backwards compatibility
-    if (!obj.users) obj.users = [];
-    if (!obj.employees) obj.employees = [];
+    if (!obj.users) {
+      obj.users = [];
+    }
+    if (!obj.employees) {
+      obj.employees = [];
+    }
     const mutated = ensurePalettes(obj);
     if (mutated) {
       writeDb(obj);
@@ -471,7 +869,7 @@ app.post("/users", (req, res) => {
   const db = readDb();
   const user = req.body || {};
   // Simple id assignment (max + 1)
-  const maxId = db.users.reduce((m, u) => (u.id > m ? u.id : m), 0);
+  const maxId = db.users.reduce((m, u) => Math.max(m, Number(u.id) || 0), 0);
   const nextId = maxId + 1;
   const newUser = { id: nextId, ...user };
   db.users.push(newUser);
@@ -524,7 +922,7 @@ app.get("/partners", (req, res) => {
 app.post("/partners", (req, res) => {
   const db = readDb();
   const partner = req.body || {};
-  const maxId = db.partners.reduce((m, p) => (p.id > m ? p.id : m), 0);
+  const maxId = db.partners.reduce((m, p) => Math.max(m, Number(p.id) || 0), 0);
   const nextId = maxId + 1;
   // Default status is 'pending' if not specified, or use the provided status
   const newPartner = { id: nextId, status: 'pending', ...partner };
@@ -639,11 +1037,11 @@ app.post("/color-palettes", (req, res) => {
   };
 
   if (newPalette.is_active) {
-    db.color_palettes.forEach(item => {
+    for (const item of db.color_palettes) {
       if (item.mode === newPalette.mode) {
         item.is_active = false;
       }
-    });
+    }
   }
 
   db.color_palettes.push(newPalette);
@@ -761,7 +1159,7 @@ app.post("/employees", (req, res) => {
   const db = readDb();
   const employee = req.body || {};
   // Simple id assignment (max + 1)
-  const maxId = db.employees.reduce((m, e) => (e.id > m ? e.id : m), 0);
+  const maxId = db.employees.reduce((m, e) => Math.max(m, Number(e.id) || 0), 0);
   const nextId = maxId + 1;
   const newEmployee = { id: nextId, ...employee };
   db.employees.push(newEmployee);
@@ -814,7 +1212,7 @@ app.get("/clients", (req, res) => {
 app.post("/clients", (req, res) => {
   const db = readDb();
   const client = req.body || {};
-  const maxId = db.clients.reduce((m, c) => (c.id > m ? c.id : m), 0);
+  const maxId = db.clients.reduce((m, c) => Math.max(m, Number(c.id) || 0), 0);
   const nextId = maxId + 1;
   // Default status is 'pending' if not specified, or use the provided status
   const newClient = { id: nextId, status: 'pending', ...client };
@@ -901,7 +1299,7 @@ app.get("/tipers", (req, res) => {
 app.post("/tipers", (req, res) => {
   const db = readDb();
   const tiper = req.body || {};
-  const maxId = db.tipers.reduce((m, t) => (t.id > m ? t.id : m), 0);
+  const maxId = db.tipers.reduce((m, t) => Math.max(m, Number(t.id) || 0), 0);
   const nextId = maxId + 1;
   // Default status is 'pending' if not specified, or use the provided status
   const newTiper = { id: nextId, status: 'pending', ...tiper };
@@ -989,8 +1387,9 @@ app.get("/future-functions", (req, res) => {
 
 app.post("/future-functions", (req, res) => {
   const db = readDb();
-  const payload = { ...FUTURE_FUNCTION_DEFAULTS, ...(req.body ?? {}) };
-  const maxId = db.futureFunctions.reduce((max, item) => (item.id > max ? item.id : max), 0);
+  const body = isPlainObject(req.body) ? req.body : {};
+  const payload = { ...FUTURE_FUNCTION_DEFAULTS, ...body };
+  const maxId = db.futureFunctions.reduce((max, item) => Math.max(max, Number(item.id) || 0), 0);
   const entry = { id: maxId + 1, ...payload };
   db.futureFunctions.push(entry);
   if (!writeDb(db)) return res.status(500).json({ error: "Failed to persist" });
@@ -1002,7 +1401,8 @@ app.put("/future-functions/:id", (req, res) => {
   const db = readDb();
   const idx = db.futureFunctions.findIndex((record) => record.id === id);
   if (idx === -1) return res.status(404).json({ error: "Not found" });
-  const updated = { ...FUTURE_FUNCTION_DEFAULTS, ...db.futureFunctions[idx], ...(req.body ?? {}), id };
+  const body = isPlainObject(req.body) ? req.body : {};
+  const updated = { ...FUTURE_FUNCTION_DEFAULTS, ...db.futureFunctions[idx], ...body, id };
   db.futureFunctions[idx] = updated;
   if (!writeDb(db)) return res.status(500).json({ error: "Failed to persist" });
   res.json(updated);
@@ -1013,7 +1413,8 @@ app.patch("/future-functions/:id", (req, res) => {
   const db = readDb();
   const idx = db.futureFunctions.findIndex((record) => record.id === id);
   if (idx === -1) return res.status(404).json({ error: "Not found" });
-  db.futureFunctions[idx] = { ...db.futureFunctions[idx], ...(req.body ?? {}), id };
+  const body = isPlainObject(req.body) ? req.body : {};
+  db.futureFunctions[idx] = { ...db.futureFunctions[idx], ...body, id };
   if (!writeDb(db)) return res.status(500).json({ error: "Failed to persist" });
   res.json(db.futureFunctions[idx]);
 });
@@ -1035,264 +1436,50 @@ app.delete("/future-functions/:id", (req, res) => {
 app.post("/api/chat", async (req, res) => {
   console.log("/api/chat hit at", new Date().toISOString());
   console.log("API key set:", !!process.env.OPENAI_API_KEY);
-  try {
-    const { messages, model = "gpt-4o-mini", responseStyle = "concise", useWebSearch = false } = req.body ?? {};
 
-    if (!messages || !Array.isArray(messages)) {
+  try {
+  const { messages, model, provider, responseStyle, useWebSearch, maxTokens } = parseChatRequest(req.body);
+
+    if (!messages) {
       return res.status(400).json({ error: "Messages array is required" });
     }
 
-    if (!process.env.OPENAI_API_KEY) {
+    if (provider === SUPPORTED_PROVIDERS.openai && !process.env.OPENAI_API_KEY) {
       return res.status(500).json({ error: "OpenAI API key not configured" });
     }
 
-    // Build system instruction based on response style
-    let styleInstruction = "";
-    if (responseStyle === "concise") {
-      styleInstruction = "Keep answers concise and helpful. Be brief but accurate.";
-    } else {
-      styleInstruction = "Provide detailed, comprehensive answers. Explain concepts thoroughly with examples when relevant.";
+    if (provider === SUPPORTED_PROVIDERS.claude && !process.env.ANTHROPIC_API_KEY) {
+      return res.status(500).json({ error: "Claude API key not configured" });
     }
 
-    // Get current date for context
-    const currentDate = new Date().toLocaleDateString('en-US', { 
-      weekday: 'long', 
-      year: 'numeric', 
-      month: 'long', 
-      day: 'numeric' 
-    });
+    const systemMessage = buildSystemMessage({ model, provider, responseStyle, useWebSearch });
+    const messagesWithSystem = [systemMessage, ...messages];
+    const claudeSystemPrompt = typeof systemMessage.content === "string" ? systemMessage.content : undefined;
 
-    const systemMessage = {
-      role: "system",
-      content:
-        `You are the Walter System in-app assistant. Today's date is ${currentDate}. You are accessed via the OpenAI API using the model name: ${model}. ` +
-        `If a user asks what model you are, state the exact model string "${model}". Avoid speculating about other products (like ChatGPT web). ` +
-        (useWebSearch 
-          ? "You have access to web search that fetches FULL webpage content. ALWAYS use web search for: current events, recent sports stats, weather, news, today's information, dates, or anything time-sensitive. Don't rely on your training data for current information - search the web! " 
-          : "") +
-        styleInstruction,
-    };
-
-    const messagesWithSystem = Array.isArray(messages)
-      ? [systemMessage, ...messages]
-      : [systemMessage];
-
-    // GPT-5 Pro and some reasoning models require the /v1/responses endpoint
-    const requiresResponsesAPI = model.toLowerCase().includes('gpt-5-pro') || 
-                                  model.toLowerCase().includes('gpt-6-pro');
-    
-    let completion;
-    let responseMessage;
-
-    if (requiresResponsesAPI) {
-      // Use direct fetch for /v1/responses endpoint (not yet in SDK)
-      // Responses API uses 'input' instead of 'messages'
-      const response = await fetch('https://api.openai.com/v1/responses', {
-        method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${process.env.OPENAI_API_KEY}`,
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          model: model,
-          input: messagesWithSystem,  // 'input' instead of 'messages' for Responses API
-          // Responses API doesn't support temperature or token limits in the same way
-        }),
-      });
-
-      if (!response.ok) {
-        const errorData = await response.json().catch(() => ({}));
-        throw new Error(errorData?.error?.message || `Responses API error: ${response.status}`);
-      }
-
-      const data = await response.json();
-      console.log("Responses API raw data:", JSON.stringify(data, null, 2));
-      
-      // Responses API structure - try multiple extraction paths
-      responseMessage = null;
-      
-      // Path 1: Direct response field
-      if (data.response && typeof data.response === 'string') {
-        responseMessage = data.response;
-      }
-      
-      // Path 2: data field with text
-      if (!responseMessage && data.data?.text) {
-        responseMessage = data.data.text;
-      }
-      
-      // Path 3: output array with message items
-      if (!responseMessage && Array.isArray(data.output)) {
-        for (const item of data.output) {
-          // Look for message type with content
-          if (item.type === 'message') {
-            if (Array.isArray(item.content)) {
-              const textParts = item.content
-                .filter(c => c?.type === 'text' && c?.text)
-                .map(c => c.text)
-                .join('');
-              if (textParts) {
-                responseMessage = textParts;
-                break;
-              }
-            } else if (typeof item.content === 'string') {
-              responseMessage = item.content;
-              break;
-            }
-          }
-          // Look for direct text field
-          if (!responseMessage && item.text) {
-            responseMessage = item.text;
-            break;
-          }
-        }
-      }
-      
-      // Path 4: Standard choices format
-      if (!responseMessage && data.choices?.[0]?.message?.content) {
-        responseMessage = data.choices[0].message.content;
-      }
-      
-      // Path 5: response_format might indicate content location
-      if (!responseMessage && data.content) {
-        responseMessage = data.content;
-      }
-      
-      // Last resort - if still no content, log and return error message
-      if (!responseMessage) {
-        console.error("Could not extract response from Responses API. Full data structure keys:", Object.keys(data));
-        responseMessage = `[Debug] Unable to parse response. Received: ${JSON.stringify(data).substring(0, 200)}...`;
-      }
-      
-      // Ensure it's a string
-      if (typeof responseMessage !== 'string') {
-        console.warn("Non-string response, stringifying:", responseMessage);
-        responseMessage = JSON.stringify(responseMessage);
-      }
-      
-      console.log("Extracted response message:", responseMessage);
-      
-      // Mock completion object for consistent response format
-      completion = {
-        choices: [{ message: { content: responseMessage } }],
-        usage: data.usage || { prompt_tokens: 0, completion_tokens: 0, total_tokens: 0 }
-      };
-    } else {
-      // Standard chat completions API for GPT-4, GPT-5 (non-Pro), O1, etc.
-      const apiParams = {
+    let flowResult;
+    if (provider === SUPPORTED_PROVIDERS.claude) {
+      flowResult = await callClaude({
         model,
-        messages: messagesWithSystem,
-      };
-
-      // Add web search tool if enabled
-      if (useWebSearch) {
-        apiParams.tools = [webSearchTool];
-        apiParams.tool_choice = "auto"; // Let the model decide when to use the tool
-      }
-
-      // O1, O3, and GPT-5 (non-Pro) series have restricted parameters
-      const isRestrictedModel = model.startsWith('o1') || 
-                               model.startsWith('o3') || 
-                               model.toLowerCase().includes('gpt-5');
-      
-      if (isRestrictedModel) {
-        // Reasoning models: no temperature, use max_completion_tokens
-        apiParams.max_completion_tokens = 4000;  // Increased from 1000
-        // Reasoning models don't support function calling yet
-        delete apiParams.tools;
-        delete apiParams.tool_choice;
-      } else {
-        // Standard models: support temperature and max_tokens
-        apiParams.temperature = 0.7;
-        apiParams.max_tokens = 2000;  // Increased from 1000
-      }
-
-      console.log("Calling OpenAI with params:", { model, messageCount: messagesWithSystem.length, useWebSearch, ...apiParams });
-      
-      // First API call
-      completion = await openai.chat.completions.create(apiParams);
-      console.log("OpenAI response - finish_reason:", completion.choices[0].finish_reason);
-      
-      let assistantMessage = completion.choices[0].message;
-      responseMessage = assistantMessage.content;
-
-      // Handle function calling
-      if (assistantMessage.tool_calls && assistantMessage.tool_calls.length > 0) {
-        console.log("Function call detected:", assistantMessage.tool_calls);
-        
-        // Add assistant message with tool calls to conversation
-        messagesWithSystem.push(assistantMessage);
-        
-        // Execute each tool call
-        for (const toolCall of assistantMessage.tool_calls) {
-          if (toolCall.function.name === 'web_search') {
-            try {
-              const args = JSON.parse(toolCall.function.arguments);
-              console.log("Executing web search:", args.query);
-              
-              const searchResults = await searchWeb(args.query, args.max_results || 3);
-              
-              // Format search results for the AI with actual webpage content
-              const resultsText = searchResults.map((r, i) => {
-                let resultText = `${i + 1}. ${r.title}\n   URL: ${r.url}\n   Description: ${r.description}`;
-                if (r.content) {
-                  resultText += `\n   Content: ${r.content}`;
-                }
-                return resultText;
-              }).join('\n\n');
-              
-              // Add function response to conversation
-              messagesWithSystem.push({
-                role: "tool",
-                tool_call_id: toolCall.id,
-                content: `Search results for "${args.query}":\n\n${resultsText}`,
-              });
-            } catch (error) {
-              console.error("Web search error:", error);
-              messagesWithSystem.push({
-                role: "tool",
-                tool_call_id: toolCall.id,
-                content: `Error performing web search: ${error.message}`,
-              });
-            }
-          }
-        }
-        
-        // Make second API call with function results
-        const followUpParams = {
-          model,
-          messages: messagesWithSystem,
-        };
-        
-        if (!isRestrictedModel) {
-          followUpParams.temperature = 0.7;
-          followUpParams.max_tokens = 2000;
-        } else {
-          followUpParams.max_completion_tokens = 4000;
-        }
-        
-        console.log("Making follow-up call with function results");
-        completion = await openai.chat.completions.create(followUpParams);
-        responseMessage = completion.choices[0].message.content;
-      }
+        systemPrompt: claudeSystemPrompt,
+        chatMessages: messages,
+        maxTokens
+      });
+    } else {
+      flowResult = shouldUseResponsesApi(model)
+        ? await runResponsesApiFlow({ model, messagesWithSystem, maxTokens })
+        : await runStandardChatFlow({ model, messagesWithSystem, useWebSearch, maxTokens });
     }
 
-    // Final validation - ensure we have actual content
-    if (!responseMessage || responseMessage.trim().length === 0) {
-      console.error("Empty response received from API. Model:", model, "Completion:", completion);
-      responseMessage = "I apologize, but I received an empty response. Please try again or rephrase your question.";
-    }
-
-    console.log("Final response message length:", responseMessage.length, "chars");
+    const message = ensureNonEmptyResponse(flowResult.responseMessage, model, flowResult.completion);
+    const resolvedModel = flowResult.model ?? model;
+    console.log("Final response message length:", message.length, "chars");
 
     res.json({
-      message: responseMessage,
-      model: model,
-      usage: completion.usage,
+      message,
+      model: resolvedModel,
+      usage: flowResult.completion.usage
     });
-
   } catch (error) {
-    // Normalize OpenAI error shapes
     const status = error.status || error.code || 500;
     const errPayload = {
       error: "Failed to get AI response",
@@ -1303,7 +1490,7 @@ app.post("/api/chat", async (req, res) => {
         error?.error?.message ||
         error?.response?.data?.error?.message ||
         error?.response?.data ||
-        undefined,
+        undefined
     };
     console.error("OpenAI API Error:", JSON.stringify(errPayload, null, 2));
     res.status(Number.isInteger(status) ? status : 500).json(errPayload);
@@ -1323,7 +1510,7 @@ app.post("/api/chat/stream", async (req, res) => {
   res.setHeader('Connection', 'keep-alive');
   
   try {
-    const { messages, model = "gpt-4o-mini", responseStyle = "concise", useWebSearch = false } = req.body ?? {};
+    const { messages, model = "gpt-4o-mini", responseStyle = "concise", useWebSearch = false, maxTokens = 8000 } = req.body ?? {};
 
     if (!messages || !Array.isArray(messages)) {
       res.write(`data: ${JSON.stringify({ error: "Messages array is required" })}\n\n`);
@@ -1386,13 +1573,13 @@ app.post("/api/chat/stream", async (req, res) => {
                              model.toLowerCase().includes('gpt-5');
     
     if (isRestrictedModel) {
-      apiParams.max_completion_tokens = 4000;
+      apiParams.max_completion_tokens = Math.min(maxTokens, 4000);
       // Reasoning models don't support function calling yet
       delete apiParams.tools;
       delete apiParams.tool_choice;
     } else {
       apiParams.temperature = 0.7;
-      apiParams.max_tokens = 2000;
+      apiParams.max_tokens = maxTokens;
     }
 
     console.log("Starting stream with model:", model, "useWebSearch:", useWebSearch);
@@ -1496,7 +1683,7 @@ app.post("/api/chat/stream", async (req, res) => {
           
           if (!isRestrictedModel) {
             followUpParams.temperature = 0.7;
-            followUpParams.max_tokens = 2000;
+            followUpParams.max_tokens = 8000;
           } else {
             followUpParams.max_completion_tokens = 4000;
           }

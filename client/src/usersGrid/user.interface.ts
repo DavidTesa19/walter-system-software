@@ -9,4 +9,13 @@ export interface UserInterface {
   date?: string;
   status?: string;
   field?: string;
+  email?: string;
+  website?: string;
+  address?: string;
+  notes?: string;
+  assigned_to?: string;
+  last_contact?: string;
+  next_step?: string;
+  priority?: string;
+  tags?: string[];
 }

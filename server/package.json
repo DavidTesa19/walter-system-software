@@ -11,11 +11,14 @@
     "sync": "node sync-from-production.js"
   },
   "dependencies": {
+    "@anthropic-ai/sdk": "^0.68.0",
+    "@google/generative-ai": "^0.24.1",
     "axios": "^1.13.2",
     "cheerio": "^1.1.2",
     "cors": "^2.8.5",
     "dotenv": "^17.2.3",
     "express": "^4.19.2",
+    "groq-sdk": "^0.35.0",
     "openai": "^6.8.1",
     "pg": "^8.16.3"
   },

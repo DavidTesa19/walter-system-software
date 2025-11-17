@@ -3,9 +3,156 @@ import { AgGridReact } from "ag-grid-react";
 import type { ColDef } from "ag-grid-community";
 import type { UserInterface } from "../user.interface";
 import FieldCellRenderer from "../cells/FieldCellRenderer";
+import ProfileCellRenderer from "../cells/ProfileCellRenderer";
+import ProfilePanel from "../components/ProfilePanel";
 import { measureGrid, type GridSizes } from "../utils/gridSizing";
 import { API_BASE, mapViewToStatus } from "../constants";
+import { formatProfileDate, normalizeText, toStatusBadge } from "../utils/profileUtils";
+import type { ProfileSection } from "../types/profile";
 import type { SectionProps } from "./SectionTypes";
+
+const buildPartnerSections = (partner: UserInterface | null): ProfileSection[] => {
+  if (!partner) {
+    return [];
+  }
+
+  const sections: ProfileSection[] = [];
+
+  // Identifikace a stav
+  const idFields = [] as any[];
+  if (partner.id !== undefined && partner.id !== null) {
+    idFields.push({ label: "ID", value: String(partner.id) });
+  }
+  const status = normalizeText(partner.status);
+  if (status) {
+    idFields.push({ label: "Stav", value: status });
+  }
+  const name = normalizeText(partner.name);
+  if (name) {
+    idFields.push({ label: "Jméno", value: name });
+  }
+  if (idFields.length > 0) {
+    sections.push({ title: "Identifikace", fields: idFields });
+  }
+
+  const generalFields = [];
+  const specialization = normalizeText(partner.field);
+  if (specialization) {
+    generalFields.push({ label: "Specializace / Obor", value: specialization });
+  }
+  const company = normalizeText(partner.company);
+  if (company) {
+    generalFields.push({ label: "Společnost", value: company });
+  }
+  const location = normalizeText(partner.location);
+  if (location) {
+    generalFields.push({ label: "Lokalita", value: location });
+  }
+  const address = normalizeText(partner.address);
+  if (address) {
+    generalFields.push({ label: "Adresa", value: address });
+  }
+
+  if (generalFields.length > 0) {
+    sections.push({ title: "Základní informace", fields: generalFields });
+  }
+
+  const contactFields = [];
+  const contact = normalizeText(partner.mobile);
+  if (contact) {
+    contactFields.push({ label: "Kontakt", value: contact });
+  }
+  const email = normalizeText(partner.email);
+  if (email) {
+    contactFields.push({ label: "E-mail", value: email });
+  }
+  const website = normalizeText(partner.website);
+  if (website) {
+    contactFields.push({ label: "Web", value: website });
+  }
+
+  if (contactFields.length > 0) {
+    sections.push({ title: "Kontakt", fields: contactFields });
+  }
+
+  const cooperationFields = [];
+  const commission = normalizeText(partner.commission);
+  if (commission) {
+    cooperationFields.push({ label: "Odměna / Provize", value: commission });
+  }
+
+  const date = formatProfileDate(partner.date);
+  if (date) {
+    cooperationFields.push({ label: "Datum", value: date });
+  }
+
+  const lastContact = formatProfileDate(partner.last_contact);
+  if (lastContact) {
+    cooperationFields.push({ label: "Poslední kontakt", value: lastContact });
+  }
+
+  const assignedTo = normalizeText(partner.assigned_to);
+  if (assignedTo) {
+    cooperationFields.push({ label: "Odpovědná osoba", value: assignedTo });
+  }
+
+  const nextStep = normalizeText(partner.next_step);
+  if (nextStep) {
+    cooperationFields.push({ label: "Další krok", value: nextStep, isMultiline: true });
+  }
+
+  const priority = normalizeText(partner.priority);
+  if (priority) {
+    cooperationFields.push({ label: "Priorita", value: priority });
+  }
+
+  if (status) {
+    cooperationFields.push({ label: "Stav", value: status });
+  }
+
+  if (Array.isArray(partner.tags) && partner.tags.length > 0) {
+    cooperationFields.push({ label: "Štítky", value: partner.tags.join(", ") });
+  }
+
+  cooperationFields.push({
+    label: "Informace o společnosti",
+    value: normalizeText(partner.info) ?? "—",
+    always: true,
+    isMultiline: true
+  });
+
+  const notes = normalizeText(partner.notes);
+  if (notes) {
+    cooperationFields.push({ label: "Poznámky", value: notes, isMultiline: true });
+  }
+
+  if (cooperationFields.length > 0) {
+    sections.push({ title: "Spolupráce", fields: cooperationFields });
+  }
+
+  return sections;
+};
+
+const buildPartnerMeta = (partner: UserInterface | null): Array<{ label: string; value: string }> | undefined => {
+  if (!partner || partner.id === undefined || partner.id === null) {
+    return undefined;
+  }
+
+  const meta: Array<{ label: string; value: string }> = [{ label: "ID", value: String(partner.id) }];
+  const status = normalizeText(partner.status);
+  if (status) {
+    meta.push({ label: "Status", value: status });
+  }
+  const date = formatProfileDate(partner.date);
+  if (date) {
+    meta.push({ label: "Datum", value: date });
+  }
+  const priority = normalizeText(partner.priority);
+  if (priority) {
+    meta.push({ label: "Priorita", value: priority });
+  }
+  return meta;
+};
 
 const PartnersSection: React.FC<SectionProps> = ({
   viewMode,
@@ -18,6 +165,7 @@ const PartnersSection: React.FC<SectionProps> = ({
   const gridRef = useRef<AgGridReact<UserInterface>>(null);
   const wrapperRef = useRef<HTMLDivElement>(null);
   const [sizes, setSizes] = useState<GridSizes>({ row: 42, headerOffset: 80 });
+  const [selectedId, setSelectedId] = useState<number | null>(null);
 
   const status = useMemo(() => mapViewToStatus(viewMode), [viewMode]);
 
@@ -33,6 +181,42 @@ const PartnersSection: React.FC<SectionProps> = ({
       setIsLoading(false);
     }
   }, [status]);
+
+  const selectedPartner = useMemo(() => {
+    if (selectedId === null) {
+      return null;
+    }
+    return partnersData.find((partner) => partner.id === selectedId) ?? null;
+  }, [partnersData, selectedId]);
+
+  const openProfile = useCallback((partner: UserInterface) => {
+    if (partner?.id === undefined || partner.id === null) {
+      return;
+    }
+    setSelectedId(partner.id);
+  }, []);
+
+  const closeProfile = useCallback(() => {
+    setSelectedId(null);
+  }, []);
+
+  useEffect(() => {
+    if (selectedId === null) {
+      return;
+    }
+    const exists = partnersData.some((partner) => partner.id === selectedId);
+    if (!exists) {
+      setSelectedId(null);
+    }
+  }, [partnersData, selectedId]);
+
+  const gridContext = useMemo(() => ({ openProfile }), [openProfile]);
+
+  const profileSections = useMemo(() => buildPartnerSections(selectedPartner), [selectedPartner]);
+  const profileBadge = useMemo(() => toStatusBadge(selectedPartner?.status), [selectedPartner]);
+  const profileMeta = useMemo(() => buildPartnerMeta(selectedPartner), [selectedPartner]);
+  const profileTitle = normalizeText(selectedPartner?.name) ?? "Profil partnera";
+  const profileSubtitle = normalizeText(selectedPartner?.company) ?? null;
 
   const handleApprovePartner = useCallback(
     async (id: number) => {
@@ -198,6 +382,24 @@ const PartnersSection: React.FC<SectionProps> = ({
   const partnersColDefs = useMemo<ColDef<UserInterface>[]>(
     () => [
       {
+        headerName: "",
+        colId: "profile",
+        pinned: "left",
+        width: 60,
+        minWidth: 60,
+        maxWidth: 68,
+        suppressMovable: true,
+        lockPosition: true,
+        sortable: false,
+        filter: false,
+        resizable: false,
+        cellClass: "profile-cell",
+        headerClass: "profile-cell",
+        cellRenderer: ProfileCellRenderer,
+        editable: false,
+        menuTabs: []
+      },
+      {
         field: "id",
         headerName: "ID",
         flex: 0.5,
@@ -266,95 +468,109 @@ const PartnersSection: React.FC<SectionProps> = ({
   );
 
   return (
-    <div className="grid-container">
-      {viewMode === "pending" && (
-        <div
-          className="approve-buttons-column"
-          style={{
-            ["--row-height" as any]: `${sizes.row}px`,
-            ["--header-offset" as any]: `${sizes.headerOffset}px`
-          }}
-        >
-          {partnersData.map((partner) => (
-            <button
-              key={partner.id}
-              onClick={() => handleApprovePartner(partner.id as number)}
-              className="external-approve-btn"
-              title="Schválit partnera"
-            >
-              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-                <path d="M20 6L9 17L4 12" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
-              </svg>
-            </button>
-          ))}
-        </div>
-      )}
-      {viewMode === "archived" && (
-        <div
-          className="approve-buttons-column"
-          style={{
-            ["--row-height" as any]: `${sizes.row}px`,
-            ["--header-offset" as any]: `${sizes.headerOffset}px`
-          }}
-        >
-          {partnersData.map((partner) => (
-            <button
-              key={partner.id}
-              onClick={() => handleRestorePartner(partner.id as number)}
-              className="external-approve-btn"
-              title="Obnovit partnera"
-            >
-              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-                <path d="M3 12a9 9 0 0 1 9-9 9.75 9.75 0 0 1 6.74 2.74L21 8" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
-                <path d="M21 3v5h-5" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
-                <path d="M21 12a9 9 0 0 1-9 9 9.75 9.75 0 0 1-6.74-2.74L3 16" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
-                <path d="M3 21v-5h5" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
-              </svg>
-            </button>
-          ))}
-        </div>
-      )}
-      <div
-        className="delete-buttons-column"
-        style={{
-          ["--row-height" as any]: `${sizes.row}px`,
-          ["--header-offset" as any]: `${sizes.headerOffset}px`
-        }}
-      >
-        {partnersData.map((partner) => (
-          <button
-            key={partner.id}
-            onClick={() => handleDeletePartner(partner.id as number)}
-            className="external-delete-btn"
-            title={
-              viewMode === "pending"
-                ? "Zamítnout partnera"
-                : viewMode === "archived"
-                ? "Trvale smazat partnera"
-                : "Archivovat partnera"
-            }
+    <>
+      <div className="grid-container">
+        {viewMode === "pending" && (
+          <div
+            className="approve-buttons-column"
+            style={{
+              ["--row-height" as any]: `${sizes.row}px`,
+              ["--header-offset" as any]: `${sizes.headerOffset}px`
+            }}
           >
-            <svg width="14" height="14" viewBox="0 0 12 12" fill="none" xmlns="http://www.w3.org/2000/svg">
-              <path d="M9 3L3 9M3 3L9 9" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
-            </svg>
-          </button>
-        ))}
-      </div>
-      <div ref={wrapperRef} className="grid-wrapper ag-theme-quartz" style={{ height: 500 }}>
-        <AgGridReact<UserInterface>
-          ref={gridRef}
-          rowData={partnersData}
-          columnDefs={partnersColDefs}
-          onCellValueChanged={onPartnersCellValueChanged}
-          defaultColDef={{
-            resizable: true,
-            sortable: true
+            {partnersData.map((partner) => (
+              <button
+                key={partner.id}
+                onClick={() => handleApprovePartner(partner.id as number)}
+                className="external-approve-btn"
+                title="Schválit partnera"
+              >
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                  <path d="M20 6L9 17L4 12" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+                </svg>
+              </button>
+            ))}
+          </div>
+        )}
+        {viewMode === "archived" && (
+          <div
+            className="approve-buttons-column"
+            style={{
+              ["--row-height" as any]: `${sizes.row}px`,
+              ["--header-offset" as any]: `${sizes.headerOffset}px`
+            }}
+          >
+            {partnersData.map((partner) => (
+              <button
+                key={partner.id}
+                onClick={() => handleRestorePartner(partner.id as number)}
+                className="external-approve-btn"
+                title="Obnovit partnera"
+              >
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                  <path d="M3 12a9 9 0 0 1 9-9 9.75 9.75 0 0 1 6.74 2.74L21 8" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+                  <path d="M21 3v5h-5" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+                  <path d="M21 12a9 9 0 0 1-9 9 9.75 9.75 0 0 1-6.74-2.74L3 16" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+                  <path d="M3 21v-5h5" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+                </svg>
+              </button>
+            ))}
+          </div>
+        )}
+        <div
+          className="delete-buttons-column"
+          style={{
+            ["--row-height" as any]: `${sizes.row}px`,
+            ["--header-offset" as any]: `${sizes.headerOffset}px`
           }}
-          suppressRowClickSelection={true}
-          loading={isLoading}
-        />
+        >
+          {partnersData.map((partner) => (
+            <button
+              key={partner.id}
+              onClick={() => handleDeletePartner(partner.id as number)}
+              className="external-delete-btn"
+              title={
+                viewMode === "pending"
+                  ? "Zamítnout partnera"
+                  : viewMode === "archived"
+                  ? "Trvale smazat partnera"
+                  : "Archivovat partnera"
+              }
+            >
+              <svg width="14" height="14" viewBox="0 0 12 12" fill="none" xmlns="http://www.w3.org/2000/svg">
+                <path d="M9 3L3 9M3 3L9 9" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+              </svg>
+            </button>
+          ))}
+        </div>
+        <div ref={wrapperRef} className="grid-wrapper ag-theme-quartz" style={{ height: 500 }}>
+          <AgGridReact<UserInterface>
+            ref={gridRef}
+            rowData={partnersData}
+            columnDefs={partnersColDefs}
+            onCellValueChanged={onPartnersCellValueChanged}
+            defaultColDef={{
+              resizable: true,
+              sortable: true
+            }}
+            suppressRowClickSelection={true}
+            loading={isLoading}
+            context={gridContext}
+          />
+        </div>
       </div>
-    </div>
+
+      <ProfilePanel
+        open={selectedPartner !== null}
+        entityLabel="Partner"
+        title={profileTitle}
+        subtitle={profileSubtitle}
+        badge={profileBadge}
+        meta={profileMeta}
+        sections={profileSections}
+        onClose={closeProfile}
+      />
+    </>
   );
 };
 
