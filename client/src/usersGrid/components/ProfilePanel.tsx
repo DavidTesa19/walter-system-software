@@ -1,5 +1,5 @@
-import React, { useEffect, useMemo, useRef } from "react";
-import type { ProfileBadge, ProfileSection } from "../types/profile";
+import React, { useCallback, useEffect, useMemo, useRef } from "react";
+import type { ProfileBadge, ProfileDocument, ProfileSection } from "../types/profile";
 import "./ProfilePanel.css";
 
 interface ProfileMetaItem {
@@ -15,6 +15,12 @@ interface ProfilePanelProps {
   badge?: ProfileBadge | null;
   meta?: ProfileMetaItem[];
   sections: ProfileSection[];
+  documents?: ProfileDocument[];
+  documentsLoading?: boolean;
+  documentsUploading?: boolean;
+  onUploadDocument?: (file: File) => Promise<void> | void;
+  onDeleteDocument?: (documentId: number) => Promise<boolean | void> | boolean | void;
+  documentDownloadBaseUrl?: string;
   onClose: () => void;
 }
 
@@ -38,9 +44,16 @@ const ProfilePanel: React.FC<ProfilePanelProps> = ({
   badge,
   meta,
   sections,
+  documents,
+  documentsLoading = false,
+  documentsUploading = false,
+  onUploadDocument,
+  onDeleteDocument,
+  documentDownloadBaseUrl,
   onClose
 }) => {
   const panelRef = useRef<HTMLDivElement>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   const visibleSections = useMemo(() => {
     return sections
@@ -50,6 +63,43 @@ const ProfilePanel: React.FC<ProfilePanelProps> = ({
       }))
       .filter((section) => section.fields.length > 0);
   }, [sections]);
+
+  const handleFileChange = useCallback(
+    (event: React.ChangeEvent<HTMLInputElement>) => {
+      if (!onUploadDocument) {
+        return;
+      }
+      const file = event.target.files?.[0];
+      if (file) {
+        onUploadDocument(file);
+      }
+      if (fileInputRef.current) {
+        fileInputRef.current.value = "";
+      }
+    },
+    [onUploadDocument]
+  );
+
+  const handleDeleteDocument = useCallback(
+    (documentId: number, filename: string) => {
+      if (!onDeleteDocument) {
+        return;
+      }
+      const confirmed = window.confirm(`Opravdu chcete odstranit dokument \"${filename}\"? Tuto akci nelze vrátit.`);
+      if (!confirmed) {
+        return;
+      }
+      onDeleteDocument(documentId);
+    },
+    [onDeleteDocument]
+  );
+
+  const showDocumentsSection = Boolean(
+    onUploadDocument ||
+    onDeleteDocument ||
+    documentsLoading ||
+    (documents && documents.length > 0)
+  );
 
   useEffect(() => {
     if (!open) {
@@ -136,6 +186,70 @@ const ProfilePanel: React.FC<ProfilePanelProps> = ({
               </section>
             ))
           )}
+
+          {showDocumentsSection ? (
+            <section className="profile-section profile-documents">
+              <div className="profile-documents__header">
+                <h3 className="profile-section__title">Dokumenty</h3>
+                {onUploadDocument ? (
+                  <label className="profile-documents__upload">
+                    <input
+                      ref={fileInputRef}
+                      type="file"
+                      onChange={handleFileChange}
+                      disabled={documentsUploading}
+                    />
+                    <span>{documentsUploading ? "Nahrávám..." : "Přidat dokument"}</span>
+                  </label>
+                ) : null}
+              </div>
+
+              {documentsLoading ? (
+                <p className="profile-panel__empty">Načítám dokumenty…</p>
+              ) : documents && documents.length > 0 ? (
+                <ul className="profile-documents__list">
+                  {documents.map((doc) => {
+                    const downloadHref = documentDownloadBaseUrl
+                      ? `${documentDownloadBaseUrl.replace(/\/$/, "")}/${doc.id}/download`
+                      : undefined;
+                    return (
+                      <li key={doc.id} className="profile-document">
+                        <div className="profile-document__meta">
+                          <span className="profile-document__name">{doc.filename}</span>
+                          <span className="profile-document__details">
+                            {formatFileSize(doc.sizeBytes)} · {formatDocumentDate(doc.createdAt)}
+                          </span>
+                        </div>
+                        <div className="profile-document__actions">
+                          {downloadHref ? (
+                            <a
+                              className="profile-document__action"
+                              href={downloadHref}
+                              target="_blank"
+                              rel="noreferrer"
+                            >
+                              Stáhnout
+                            </a>
+                          ) : null}
+                          {onDeleteDocument ? (
+                            <button
+                              type="button"
+                              className="profile-document__action profile-document__action--danger"
+                              onClick={() => handleDeleteDocument(doc.id, doc.filename)}
+                            >
+                              Odstranit
+                            </button>
+                          ) : null}
+                        </div>
+                      </li>
+                    );
+                  })}
+                </ul>
+              ) : (
+                <p className="profile-panel__empty">Žádné dokumenty zatím nebyly přidány.</p>
+              )}
+            </section>
+          ) : null}
         </div>
       </div>
     </div>
@@ -145,3 +259,32 @@ const ProfilePanel: React.FC<ProfilePanelProps> = ({
 export default ProfilePanel;
 export type { ProfileBadge, ProfileSection } from "../types/profile";
 export type { ProfileBadgeTone, ProfileField } from "../types/profile";
+
+function formatFileSize(bytes?: number) {
+  if (!bytes || Number.isNaN(bytes)) {
+    return "0 B";
+  }
+  const thresh = 1024;
+  if (Math.abs(bytes) < thresh) {
+    return `${bytes} B`;
+  }
+  const units = ["KB", "MB", "GB", "TB"];
+  let u = -1;
+  let value = bytes;
+  do {
+    value /= thresh;
+    u += 1;
+  } while (Math.abs(value) >= thresh && u < units.length - 1);
+  return `${value.toFixed(1)} ${units[u]}`;
+}
+
+function formatDocumentDate(value?: string) {
+  if (!value) {
+    return "";
+  }
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) {
+    return value;
+  }
+  return date.toLocaleDateString("cs-CZ", { year: "numeric", month: "2-digit", day: "2-digit" });
+}

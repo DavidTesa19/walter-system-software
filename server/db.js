@@ -119,6 +119,25 @@ export async function initDatabase() {
       )
     `);
 
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS documents (
+        id SERIAL PRIMARY KEY,
+        entity_type VARCHAR(50) NOT NULL,
+        entity_id INTEGER NOT NULL,
+        filename VARCHAR(255) NOT NULL,
+        mime_type VARCHAR(120) NOT NULL,
+        size_bytes INTEGER NOT NULL,
+        data BYTEA NOT NULL,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+      )
+    `);
+
+    await client.query(`
+      CREATE INDEX IF NOT EXISTS idx_documents_entity
+        ON documents (entity_type, entity_id)
+    `);
+
     // Create color palettes table
     await client.query(`
       CREATE TABLE IF NOT EXISTS color_palettes (
@@ -269,6 +288,28 @@ async function ensureDefaultPalettes(client) {
       }
     }
   }
+}
+
+function toDocumentResponse(row, { includeData = false } = {}) {
+  if (!row) {
+    return null;
+  }
+
+  const base = {
+    id: row.id,
+    entityType: row.entity_type,
+    entityId: row.entity_id,
+    filename: row.filename,
+    mimeType: row.mime_type,
+    sizeBytes: typeof row.size_bytes === 'number' ? row.size_bytes : Number(row.size_bytes),
+    createdAt: row.created_at
+  };
+
+  if (includeData) {
+    base.data = row.data;
+  }
+
+  return base;
 }
 
 // Generic database operations
@@ -582,6 +623,61 @@ export const db = {
       [mode]
     );
     return result.rows[0] ?? null;
+  },
+
+  async getDocuments(entityType, entityId) {
+    if (!USE_POSTGRES) return null;
+
+    const result = await pool.query(
+      `SELECT id, entity_type, entity_id, filename, mime_type, size_bytes, created_at
+         FROM documents
+        WHERE entity_type = $1 AND entity_id = $2
+        ORDER BY created_at DESC`,
+      [entityType, entityId]
+    );
+
+    return result.rows.map((row) => toDocumentResponse(row));
+  },
+
+  async getDocumentById(id, { includeData = false } = {}) {
+    if (!USE_POSTGRES) return null;
+
+    const columns = includeData
+      ? 'id, entity_type, entity_id, filename, mime_type, size_bytes, created_at, data'
+      : 'id, entity_type, entity_id, filename, mime_type, size_bytes, created_at';
+
+    const result = await pool.query(
+      `SELECT ${columns} FROM documents WHERE id = $1`,
+      [id]
+    );
+
+    return toDocumentResponse(result.rows[0], { includeData });
+  },
+
+  async createDocument(entityType, entityId, { filename, mimeType, sizeBytes, buffer }) {
+    if (!USE_POSTGRES) return null;
+
+    const result = await pool.query(
+      `INSERT INTO documents (entity_type, entity_id, filename, mime_type, size_bytes, data)
+       VALUES ($1, $2, $3, $4, $5, $6)
+       RETURNING id, entity_type, entity_id, filename, mime_type, size_bytes, created_at`,
+      [entityType, entityId, filename, mimeType, sizeBytes, buffer]
+    );
+
+    return toDocumentResponse(result.rows[0]);
+  },
+
+  async deleteDocument(id) {
+    if (!USE_POSTGRES) return null;
+
+    const result = await pool.query(
+      `DELETE FROM documents
+        WHERE id = $1
+    RETURNING id, entity_type, entity_id, filename, mime_type, size_bytes, created_at`,
+      [id]
+    );
+
+    return toDocumentResponse(result.rows[0]);
   },
 
   // Approve a pending record (change status to accepted)

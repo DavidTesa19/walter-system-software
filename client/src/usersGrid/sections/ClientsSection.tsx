@@ -8,6 +8,7 @@ import StatusCellRenderer from "../cells/StatusCellRenderer";
 import FieldCellRenderer from "../cells/FieldCellRenderer";
 import ProfileCellRenderer from "../cells/ProfileCellRenderer";
 import ProfilePanel, { type ProfileSection } from "../components/ProfilePanel";
+import useProfileDocuments from "../hooks/useProfileDocuments";
 import { measureGrid, type GridSizes } from "../utils/gridSizing";
 import { API_BASE, mapViewToStatus } from "../constants";
 import { formatProfileDate, normalizeText, toStatusBadge } from "../utils/profileUtils";
@@ -165,6 +166,7 @@ const ClientsSection: React.FC<SectionProps> = ({
   const wrapperRef = useRef<HTMLDivElement>(null);
   const [sizes, setSizes] = useState<GridSizes>({ row: 42, headerOffset: 80 });
   const [selectedProfileId, setSelectedProfileId] = useState<number | null>(null);
+  const documentManager = useProfileDocuments("clients", selectedProfileId);
 
   const status = useMemo(() => mapViewToStatus(viewMode), [viewMode]);
 
@@ -573,6 +575,12 @@ const ClientsSection: React.FC<SectionProps> = ({
         badge={profileBadge}
         meta={profileMeta}
         sections={profileSections}
+        documents={documentManager.documents}
+        documentsLoading={documentManager.isLoading}
+        documentsUploading={documentManager.isUploading}
+        documentDownloadBaseUrl={documentManager.downloadBaseUrl}
+        onUploadDocument={documentManager.uploadDocument}
+        onDeleteDocument={documentManager.deleteDocument}
         onClose={handleCloseProfile}
       />
     </>

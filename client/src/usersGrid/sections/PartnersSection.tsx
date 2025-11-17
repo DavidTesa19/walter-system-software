@@ -10,6 +10,7 @@ import { API_BASE, mapViewToStatus } from "../constants";
 import { formatProfileDate, normalizeText, toStatusBadge } from "../utils/profileUtils";
 import type { ProfileSection } from "../types/profile";
 import type { SectionProps } from "./SectionTypes";
+import useProfileDocuments from "../hooks/useProfileDocuments";
 
 const buildPartnerSections = (partner: UserInterface | null): ProfileSection[] => {
   if (!partner) {
@@ -166,6 +167,7 @@ const PartnersSection: React.FC<SectionProps> = ({
   const wrapperRef = useRef<HTMLDivElement>(null);
   const [sizes, setSizes] = useState<GridSizes>({ row: 42, headerOffset: 80 });
   const [selectedId, setSelectedId] = useState<number | null>(null);
+  const documentManager = useProfileDocuments("partners", selectedId);
 
   const status = useMemo(() => mapViewToStatus(viewMode), [viewMode]);
 
@@ -568,6 +570,12 @@ const PartnersSection: React.FC<SectionProps> = ({
         badge={profileBadge}
         meta={profileMeta}
         sections={profileSections}
+        documents={documentManager.documents}
+        documentsLoading={documentManager.isLoading}
+        documentsUploading={documentManager.isUploading}
+        documentDownloadBaseUrl={documentManager.downloadBaseUrl}
+        onUploadDocument={documentManager.uploadDocument}
+        onDeleteDocument={documentManager.deleteDocument}
         onClose={closeProfile}
       />
     </>

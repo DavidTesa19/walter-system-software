@@ -6,6 +6,7 @@ import dotenv from "dotenv";
 import OpenAI from "openai";
 import axios from "axios";
 import * as cheerio from "cheerio";
+import multer from "multer";
 import db, { initDatabase } from "./db.js";
 
 dotenv.config();
@@ -87,6 +88,66 @@ const DEFAULT_PALETTES = [
     is_active: true
   }
 ];
+
+const DOCUMENT_ENTITY_TYPES = new Set(["clients", "partners", "tipers"]);
+const MAX_DOCUMENT_SIZE_BYTES = 50 * 1024 * 1024; // 50 MB
+const upload = multer({
+  storage: multer.memoryStorage(),
+  limits: { fileSize: MAX_DOCUMENT_SIZE_BYTES }
+});
+
+const sanitizeFilename = (value) => {
+  if (typeof value !== "string" || !value.trim()) {
+    return "document";
+  }
+  // Prevent directory traversal and trim length
+  const safe = path.basename(value).replace(/[\r\n]/g, "").trim();
+  return safe.length > 180 ? safe.slice(-180) : safe;
+};
+
+const stripDocumentData = (doc) => {
+  if (!doc) {
+    return null;
+  }
+
+  return {
+    id: doc.id,
+    entityType: doc.entityType ?? doc.entity_type,
+    entityId: doc.entityId ?? doc.entity_id,
+    filename: doc.filename,
+    mimeType: doc.mimeType ?? doc.mime_type,
+    sizeBytes: Number(doc.sizeBytes ?? doc.size_bytes ?? 0),
+    createdAt: doc.createdAt ?? doc.created_at
+  };
+};
+
+const ensureDocumentsCollection = (store) => {
+  if (!Array.isArray(store.documents)) {
+    store.documents = [];
+  }
+};
+
+const nextDocumentId = (store) => {
+  ensureDocumentsCollection(store);
+  return store.documents.reduce((max, doc) => Math.max(max, Number(doc.id) || 0), 0) + 1;
+};
+
+const findDocumentInStore = (store, id) => {
+  ensureDocumentsCollection(store);
+  return store.documents.find((doc) => Number(doc.id) === id) ?? null;
+};
+
+const removeDocumentFromStore = (store, id) => {
+  ensureDocumentsCollection(store);
+  const idx = store.documents.findIndex((doc) => Number(doc.id) === id);
+  if (idx === -1) {
+    return null;
+  }
+  const [removed] = store.documents.splice(idx, 1);
+  return removed ?? null;
+};
+
+const isDocumentEntity = (value = "") => DOCUMENT_ENTITY_TYPES.has(value);
 
 const DEFAULT_CHAT_MODEL = "gpt-4o-mini";
 const DEFAULT_PROVIDER = "openai";
@@ -388,6 +449,7 @@ const callClaudeRequest = async ({ model, systemPrompt, chatMessages, maxTokens 
   }
 
   const mappedModel = model || CLAUDE_DEFAULT_MODEL;
+  console.log("Claude API call with maxTokens:", maxTokens, "model:", mappedModel);
   const claudeMessages = normalizeClaudeMessages(chatMessages);
   ensureUserFirstMessage(claudeMessages);
 
@@ -707,6 +769,7 @@ if (db.isPostgres()) {
           users: [], 
           employees: [], 
           futureFunctions: [],
+          documents: [],
           color_palettes: cloneDefaultPalettes()
         };
         fs.writeFileSync(DATA_FILE, JSON.stringify(defaultData, null, 2));
@@ -754,6 +817,7 @@ function readDb() {
   if (!obj.users) obj.users = [];
   if (!obj.employees) obj.employees = [];
   if (!obj.futureFunctions) obj.futureFunctions = [];
+  if (!Array.isArray(obj.documents)) obj.documents = [];
   if (!Array.isArray(obj.conversations)) obj.conversations = [];
     if (!Array.isArray(obj.color_palettes)) obj.color_palettes = cloneDefaultPalettes();
     ensureFilePalettes(obj);
@@ -767,6 +831,7 @@ function readDb() {
       users: [], 
       employees: [], 
       futureFunctions: [],
+      documents: [],
       color_palettes: cloneDefaultPalettes()
     };
   }
@@ -973,6 +1038,7 @@ function removePaletteFromStore(store, id) {
 app.post("/api/chat", async (req, res) => {
   try {
     const { messages, model, provider, responseStyle, useWebSearch, maxTokens } = parseChatRequest(req.body);
+    console.log("Received maxTokens:", maxTokens, "for model:", model, "provider:", provider);
 
     if (!messages) {
       return res.status(400).json({ error: "Messages array is required" });
@@ -1038,6 +1104,7 @@ app.post("/api/chat/stream", async (req, res) => {
 
   try {
     const { messages, model = "gpt-4o-mini", responseStyle = "concise", useWebSearch = false, maxTokens = 8000 } = req.body ?? {};
+    console.log("Received maxTokens:", maxTokens, "for model:", model, "useWebSearch:", useWebSearch);
 
     if (!messages || !Array.isArray(messages)) {
       res.write(`data: ${JSON.stringify({ error: "Messages array is required" })}\n\n`);
@@ -1541,6 +1608,178 @@ app.delete("/color-palettes/:id", async (req, res) => {
   }
 });
 
+const respondUnsupportedEntity = (res) => res.status(400).json({ error: "Documents are only available for clients, partners, and tipers" });
+
+const ensureParentRecord = async (entity, entityId) => {
+  if (!isDocumentEntity(entity)) {
+    return { ok: false, status: 400, message: "Unsupported entity" };
+  }
+
+  if (db.isPostgres()) {
+    const record = await db.getById(entity, entityId);
+    return record ? { ok: true } : { ok: false, status: 404, message: "Parent record not found" };
+  }
+
+  const store = readDb();
+  const collection = Array.isArray(store[entity]) ? store[entity] : [];
+  const exists = collection.some((item) => Number(item.id) === entityId);
+  return exists ? { ok: true, store } : { ok: false, status: 404, message: "Parent record not found" };
+};
+
+app.get("/:entity/:id/documents", async (req, res) => {
+  const entity = req.params.entity;
+  const entityId = Number(req.params.id);
+
+  if (!isDocumentEntity(entity)) {
+    return respondUnsupportedEntity(res);
+  }
+
+  if (Number.isNaN(entityId)) {
+    return res.status(400).json({ error: "Invalid entity id" });
+  }
+
+  try {
+    if (db.isPostgres()) {
+      const docs = await db.getDocuments(entity, entityId);
+      return res.json(docs ?? []);
+    }
+
+    const store = readDb();
+    ensureDocumentsCollection(store);
+    const docs = store.documents
+      .filter((doc) => doc.entityType === entity && Number(doc.entityId) === entityId)
+      .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
+      .map((doc) => stripDocumentData(doc));
+    return res.json(docs);
+  } catch (error) {
+    console.error(`Error fetching ${entity} documents:`, error);
+    res.status(500).json({ error: "Failed to fetch documents" });
+  }
+});
+
+app.post("/:entity/:id/documents", upload.single("file"), async (req, res) => {
+  const entity = req.params.entity;
+  const entityId = Number(req.params.id);
+
+  if (!isDocumentEntity(entity)) {
+    return respondUnsupportedEntity(res);
+  }
+
+  if (Number.isNaN(entityId)) {
+    return res.status(400).json({ error: "Invalid entity id" });
+  }
+
+  if (!req.file) {
+    return res.status(400).json({ error: "Soubor nebyl odeslán" });
+  }
+
+  try {
+    const { ok, status, message, store } = await ensureParentRecord(entity, entityId);
+    if (!ok) {
+      return res.status(status).json({ error: message });
+    }
+
+    const filename = sanitizeFilename(req.file.originalname);
+    const mimeType = req.file.mimetype || "application/octet-stream";
+    const sizeBytes = req.file.size;
+
+    if (db.isPostgres()) {
+      const created = await db.createDocument(entity, entityId, {
+        filename,
+        mimeType,
+        sizeBytes,
+        buffer: req.file.buffer
+      });
+      return res.status(201).json(created);
+    }
+
+    const entry = {
+      id: nextDocumentId(store),
+      entityType: entity,
+      entityId,
+      filename,
+      mimeType,
+      sizeBytes,
+      createdAt: new Date().toISOString(),
+      data: req.file.buffer.toString("base64")
+    };
+    ensureDocumentsCollection(store);
+    store.documents.push(entry);
+    if (!writeDb(store)) {
+      return res.status(500).json({ error: "Failed to persist document" });
+    }
+    return res.status(201).json(stripDocumentData(entry));
+  } catch (error) {
+    console.error(`Error uploading document for ${entity}:`, error);
+    res.status(500).json({ error: "Failed to upload document" });
+  }
+});
+
+app.delete("/documents/:documentId", async (req, res) => {
+  const documentId = Number(req.params.documentId);
+  if (Number.isNaN(documentId)) {
+    return res.status(400).json({ error: "Invalid document id" });
+  }
+
+  try {
+    if (db.isPostgres()) {
+      const deleted = await db.deleteDocument(documentId);
+      if (!deleted) {
+        return res.status(404).json({ error: "Document not found" });
+      }
+      return res.json(deleted);
+    }
+
+    const store = readDb();
+    const removed = removeDocumentFromStore(store, documentId);
+    if (!removed) {
+      return res.status(404).json({ error: "Document not found" });
+    }
+    if (!writeDb(store)) {
+      return res.status(500).json({ error: "Failed to persist document removal" });
+    }
+    return res.json(stripDocumentData(removed));
+  } catch (error) {
+    console.error("Error deleting document:", error);
+    res.status(500).json({ error: "Failed to delete document" });
+  }
+});
+
+app.get("/documents/:documentId/download", async (req, res) => {
+  const documentId = Number(req.params.documentId);
+  if (Number.isNaN(documentId)) {
+    return res.status(400).json({ error: "Invalid document id" });
+  }
+
+  try {
+    if (db.isPostgres()) {
+      const doc = await db.getDocumentById(documentId, { includeData: true });
+      if (!doc || !doc.data) {
+        return res.status(404).json({ error: "Document not found" });
+      }
+      const buffer = Buffer.isBuffer(doc.data) ? doc.data : Buffer.from(doc.data);
+      res.setHeader("Content-Type", doc.mimeType || "application/octet-stream");
+      res.setHeader("Content-Length", buffer.length);
+      res.setHeader("Content-Disposition", `inline; filename="${encodeURIComponent(doc.filename)}"`);
+      return res.send(buffer);
+    }
+
+    const store = readDb();
+    const doc = findDocumentInStore(store, documentId);
+    if (!doc) {
+      return res.status(404).json({ error: "Document not found" });
+    }
+    const buffer = Buffer.from(doc.data || "", "base64");
+    res.setHeader("Content-Type", doc.mimeType || "application/octet-stream");
+    res.setHeader("Content-Length", buffer.length);
+    res.setHeader("Content-Disposition", `inline; filename="${encodeURIComponent(doc.filename)}"`);
+    return res.send(buffer);
+  } catch (error) {
+    console.error("Error downloading document:", error);
+    res.status(500).json({ error: "Failed to download document" });
+  }
+});
+
 // Generic CRUD route handler factory
 function createCrudRoutes(tableName) {
   // GET all (with optional status filter)
@@ -1881,6 +2120,18 @@ createCrudRoutes('tipers');
 createCrudRoutes('users');
 createCrudRoutes('employees');
 createFutureFunctionsRoutes();
+
+app.use((err, _req, res, _next) => {
+  if (err instanceof multer.MulterError) {
+    if (err.code === 'LIMIT_FILE_SIZE') {
+      return res.status(413).json({ error: `File is too large. Maximum size is ${Math.round(MAX_DOCUMENT_SIZE_BYTES / (1024 * 1024))} MB.` });
+    }
+    return res.status(400).json({ error: err.message });
+  }
+
+  console.error('Unhandled server error:', err);
+  return res.status(500).json({ error: 'Unexpected server error' });
+});
 
 // Start server
 app.listen(PORT, () => {

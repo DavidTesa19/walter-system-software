@@ -119,6 +119,7 @@
   flex-direction: column;
   gap: 1.5rem;
   padding-right: 0.25rem;
+  padding-bottom: 2.5rem;
 }
 
 .profile-panel__empty {
@@ -147,6 +148,106 @@
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
   gap: 0.85rem;
+}
+
+.profile-documents {
+  border-top: 1px solid var(--color-border);
+  padding-top: 1.25rem;
+  margin-bottom: 1.5rem;
+}
+
+.profile-documents__header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 1rem;
+}
+
+.profile-documents__upload {
+  position: relative;
+  overflow: hidden;
+  border-radius: 999px;
+  background: var(--color-primary);
+  color: var(--color-surface);
+  font-size: 0.85rem;
+  font-weight: 600;
+  padding: 0.4rem 1rem;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+}
+
+.profile-documents__upload input {
+  position: absolute;
+  inset: 0;
+  opacity: 0;
+  cursor: pointer;
+}
+
+.profile-documents__upload span {
+  pointer-events: none;
+}
+
+.profile-documents__list {
+  list-style: none;
+  margin: 1rem 0 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+.profile-document {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 1rem;
+  padding: 0.9rem 1rem;
+  border: 1px solid var(--color-border);
+  border-radius: 0.75rem;
+  background: var(--color-surface-alt);
+}
+
+.profile-document__meta {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+}
+
+.profile-document__name {
+  font-weight: 600;
+  color: var(--color-text);
+}
+
+.profile-document__details {
+  font-size: 0.8rem;
+  color: var(--color-text-muted);
+}
+
+.profile-document__actions {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.75rem;
+}
+
+.profile-document__action {
+  border: none;
+  background: transparent;
+  color: var(--color-primary);
+  font-weight: 600;
+  font-size: 0.85rem;
+  cursor: pointer;
+  text-decoration: none;
+}
+
+.profile-document__action--danger {
+  color: var(--color-danger);
+}
+
+.profile-document__action:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
 }
 
 .profile-field {

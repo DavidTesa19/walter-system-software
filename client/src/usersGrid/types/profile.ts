@@ -18,3 +18,13 @@ export interface ProfileSection {
   title: string;
   fields: ProfileField[];
 }
+
+export interface ProfileDocument {
+  id: number;
+  entityType: "clients" | "partners" | "tipers";
+  entityId: number;
+  filename: string;
+  mimeType: string;
+  sizeBytes: number;
+  createdAt: string;
+}
