@@ -273,7 +273,7 @@ const isRestrictedModelName = model => (
   model.toLowerCase().includes("gpt-5")
 );
 
-const buildStandardChatParams = ({ model, messagesWithSystem, useWebSearch }) => {
+const buildStandardChatParams = ({ model, messagesWithSystem, useWebSearch, maxTokens = 8000 }) => {
   const params = { model, messages: messagesWithSystem };
 
   if (useWebSearch) {
@@ -284,24 +284,24 @@ const buildStandardChatParams = ({ model, messagesWithSystem, useWebSearch }) =>
   const restricted = isRestrictedModelName(model);
 
   if (restricted) {
-    params.max_completion_tokens = 4000;
+    params.max_completion_tokens = Math.min(maxTokens, 4000);
     delete params.tools;
     delete params.tool_choice;
   } else {
     params.temperature = 0.7;
-    params.max_tokens = 8000;
+    params.max_tokens = maxTokens;
   }
 
   return { params, restricted };
 };
 
-const buildFollowUpParams = ({ model, messages }) => {
+const buildFollowUpParams = ({ model, messages, maxTokens = 8000 }) => {
   const params = { model, messages };
   if (isRestrictedModelName(model)) {
-    params.max_completion_tokens = 4000;
+    params.max_completion_tokens = Math.min(maxTokens, 4000);
   } else {
     params.temperature = 0.7;
-    params.max_tokens = 8000;
+    params.max_tokens = maxTokens;
   }
   return params;
 };
@@ -334,7 +334,7 @@ const executeWebSearchToolCall = async toolCall => {
   }
 };
 
-const processToolCalls = async ({ assistantMessage, baseConversation, model }) => {
+const processToolCalls = async ({ assistantMessage, baseConversation, model, maxTokens = 8000 }) => {
   if (!assistantMessage?.tool_calls || assistantMessage.tool_calls.length === 0) {
     return null;
   }
@@ -348,7 +348,7 @@ const processToolCalls = async ({ assistantMessage, baseConversation, model }) =
     }
   }
 
-  const followUpParams = buildFollowUpParams({ model, messages: conversation });
+  const followUpParams = buildFollowUpParams({ model, messages: conversation, maxTokens });
   console.log("Making follow-up call with function results");
   const completion = await openai.chat.completions.create(followUpParams);
   return {
@@ -447,8 +447,8 @@ const runResponsesApiFlow = async ({ model, messagesWithSystem }) => {
   return { completion, responseMessage, model };
 };
 
-const runStandardChatFlow = async ({ model, messagesWithSystem, useWebSearch }) => {
-  const { params, restricted } = buildStandardChatParams({ model, messagesWithSystem, useWebSearch });
+const runStandardChatFlow = async ({ model, messagesWithSystem, useWebSearch, maxTokens = 8000 }) => {
+  const { params, restricted } = buildStandardChatParams({ model, messagesWithSystem, useWebSearch, maxTokens });
   console.log("Calling OpenAI with params:", { model, messageCount: messagesWithSystem.length, useWebSearch, ...params });
   const completion = await openai.chat.completions.create(params);
   console.log("OpenAI response - finish_reason:", completion.choices?.[0]?.finish_reason);
@@ -460,7 +460,8 @@ const runStandardChatFlow = async ({ model, messagesWithSystem, useWebSearch }) 
     const toolCallResult = await processToolCalls({
       assistantMessage,
       baseConversation: messagesWithSystem,
-      model
+      model,
+      maxTokens
     });
 
     if (toolCallResult) {
@@ -1788,9 +1789,9 @@ app.post("/api/chat/stream", async (req, res) => {
           
           if (!isRestrictedModel) {
             followUpParams.temperature = 0.7;
-            followUpParams.max_tokens = 8000;
+            followUpParams.max_tokens = maxTokens || 8000;
           } else {
-            followUpParams.max_completion_tokens = 4000;
+            followUpParams.max_completion_tokens = maxTokens || 4000;
           }
           
           console.log("Making follow-up stream with function results");
