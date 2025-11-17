@@ -10,9 +10,9 @@ import db, { initDatabase } from "./db.js";
 
 dotenv.config();
 
-const openai = new OpenAI({
-  apiKey: process.env.OPENAI_API_KEY
-});
+const openai = process.env.OPENAI_API_KEY 
+  ? new OpenAI({ apiKey: process.env.OPENAI_API_KEY })
+  : null;
 
 const app = express();
 const PORT = process.env.PORT ? Number(process.env.PORT) : 3004;
@@ -222,6 +222,9 @@ const processToolCalls = async ({ assistantMessage, baseConversation, model }) =
   }
 
   const followUpParams = buildFollowUpParams({ model, messages: conversation });
+  if (!openai) {
+    throw new Error("OpenAI client not initialized. Please set OPENAI_API_KEY environment variable.");
+  }
   const completion = await openai.chat.completions.create(followUpParams);
   return {
     completion,
@@ -319,6 +322,9 @@ const runResponsesApiFlow = async ({ model, messagesWithSystem }) => {
 
 const runStandardChatFlow = async ({ model, messagesWithSystem, useWebSearch }) => {
   const { params, restricted } = buildStandardChatParams({ model, messagesWithSystem, useWebSearch });
+  if (!openai) {
+    throw new Error("OpenAI client not initialized. Please set OPENAI_API_KEY environment variable.");
+  }
   const completion = await openai.chat.completions.create(params);
 
   const assistantMessage = completion.choices?.[0]?.message ?? {};
@@ -988,6 +994,12 @@ app.post("/api/chat/stream", async (req, res) => {
       apiParams.max_tokens = maxTokens;
     }
 
+    if (!openai) {
+      res.write(`data: ${JSON.stringify({ error: "OpenAI client not initialized. Please set OPENAI_API_KEY environment variable." })}\n\n`);
+      res.end();
+      return;
+    }
+
     const stream = await openai.chat.completions.create(apiParams);
 
     let fullContent = "";
@@ -1073,6 +1085,12 @@ app.post("/api/chat/stream", async (req, res) => {
             followUpParams.max_tokens = 8000;
           } else {
             followUpParams.max_completion_tokens = 4000;
+          }
+
+          if (!openai) {
+            res.write(`data: ${JSON.stringify({ error: "OpenAI client not initialized" })}\n\n`);
+            res.end();
+            return;
           }
 
           const followUpStream = await openai.chat.completions.create(followUpParams);
