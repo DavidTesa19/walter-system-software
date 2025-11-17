@@ -380,7 +380,7 @@ const ensureUserFirstMessage = claudeMessages => {
   }
 };
 
-const callClaudeRequest = async ({ model, systemPrompt, chatMessages, maxTokens = 8000 }) => {
+const callClaudeRequest = async ({ model, systemPrompt, chatMessages, maxTokens = 8000, useWebSearch = false }) => {
   const apiKey = process.env.ANTHROPIC_API_KEY;
   if (!apiKey) {
     throw new Error("Claude API key not configured (ANTHROPIC_API_KEY)");
@@ -390,6 +390,31 @@ const callClaudeRequest = async ({ model, systemPrompt, chatMessages, maxTokens 
   const claudeMessages = normalizeClaudeMessages(chatMessages);
   ensureUserFirstMessage(claudeMessages);
 
+  const requestBody = {
+    model: mappedModel,
+    max_tokens: maxTokens,
+    system: typeof systemPrompt === "string" ? systemPrompt : undefined,
+    messages: claudeMessages
+  };
+
+  // Add web search tool if enabled
+  if (useWebSearch && process.env.BRAVE_SEARCH_API_KEY) {
+    requestBody.tools = [{
+      name: "web_search",
+      description: "Search the web for current information, news, facts, or any real-time data. Returns full webpage content.",
+      input_schema: {
+        type: "object",
+        properties: {
+          query: {
+            type: "string",
+            description: "The search query to look up on the web"
+          }
+        },
+        required: ["query"]
+      }
+    }];
+  }
+
   const response = await fetch("https://api.anthropic.com/v1/messages", {
     method: "POST",
     headers: {
@@ -397,12 +422,7 @@ const callClaudeRequest = async ({ model, systemPrompt, chatMessages, maxTokens 
       "anthropic-version": "2023-06-01",
       "content-type": "application/json"
     },
-    body: JSON.stringify({
-      model: mappedModel,
-      max_tokens: maxTokens,
-      system: typeof systemPrompt === "string" ? systemPrompt : undefined,
-      messages: claudeMessages
-    })
+    body: JSON.stringify(requestBody)
   });
 
   if (!response.ok) {
@@ -420,12 +440,97 @@ const callClaudeRequest = async ({ model, systemPrompt, chatMessages, maxTokens 
   const data = await response.json();
 
   let text = "";
+  let toolUse = null;
+
   if (Array.isArray(data.content)) {
     for (const block of data.content) {
       if (block.type === "text" && typeof block.text === "string") {
         text += block.text;
       }
+      if (block.type === "tool_use") {
+        toolUse = block;
+      }
     }
+  }
+
+  // If Claude wants to use a tool, execute it and make a follow-up request
+  if (toolUse && useWebSearch) {
+    console.log("Claude requested tool use:", toolUse.name, "with input:", toolUse.input);
+    
+    let toolResult = "";
+    if (toolUse.name === "web_search" && toolUse.input?.query) {
+      try {
+        const searchResults = await searchWeb(toolUse.input.query);
+        toolResult = JSON.stringify(searchResults, null, 2);
+      } catch (error) {
+        toolResult = `Error performing web search: ${error.message}`;
+      }
+    }
+
+    // Make follow-up request with tool result
+    const followUpMessages = [
+      ...claudeMessages,
+      {
+        role: "assistant",
+        content: data.content
+      },
+      {
+        role: "user",
+        content: [
+          {
+            type: "tool_result",
+            tool_use_id: toolUse.id,
+            content: toolResult
+          }
+        ]
+      }
+    ];
+
+    const followUpResponse = await fetch("https://api.anthropic.com/v1/messages", {
+      method: "POST",
+      headers: {
+        "x-api-key": apiKey,
+        "anthropic-version": "2023-06-01",
+        "content-type": "application/json"
+      },
+      body: JSON.stringify({
+        model: mappedModel,
+        max_tokens: maxTokens,
+        system: typeof systemPrompt === "string" ? systemPrompt : undefined,
+        messages: followUpMessages,
+        tools: requestBody.tools
+      })
+    });
+
+    if (!followUpResponse.ok) {
+      const errorData = await followUpResponse.json().catch(() => ({}));
+      throw new Error(errorData?.error?.message || `Claude follow-up API error: ${followUpResponse.status}`);
+    }
+
+    const followUpData = await followUpResponse.json();
+    text = "";
+    if (Array.isArray(followUpData.content)) {
+      for (const block of followUpData.content) {
+        if (block.type === "text" && typeof block.text === "string") {
+          text += block.text;
+        }
+      }
+    }
+
+    const usage = data.usage || { input_tokens: 0, output_tokens: 0 };
+    const followUpUsage = followUpData.usage || { input_tokens: 0, output_tokens: 0 };
+    return {
+      completion: {
+        choices: [{ message: { content: text } }],
+        usage: {
+          prompt_tokens: (usage.input_tokens || 0) + (followUpUsage.input_tokens || 0),
+          completion_tokens: (usage.output_tokens || 0) + (followUpUsage.output_tokens || 0),
+          total_tokens: (usage.input_tokens || 0) + (usage.output_tokens || 0) + (followUpUsage.input_tokens || 0) + (followUpUsage.output_tokens || 0)
+        }
+      },
+      responseMessage: text,
+      model: mappedModel
+    };
   }
 
   const usage = data.usage || { input_tokens: 0, output_tokens: 0 };
@@ -890,7 +995,8 @@ app.post("/api/chat", async (req, res) => {
         model,
         systemPrompt: claudeSystemPrompt,
         chatMessages: messages,
-        maxTokens
+        maxTokens,
+        useWebSearch
       });
     } else {
       flowResult = shouldUseResponsesApi(model)
