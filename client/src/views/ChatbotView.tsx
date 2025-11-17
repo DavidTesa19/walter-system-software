@@ -39,11 +39,11 @@ type AIModel = OpenAIModel | ClaudeModel;
 const DEFAULT_OPENAI_MODEL: OpenAIModel = 'gpt-4o-mini';
 const DEFAULT_CLAUDE_MODEL: ClaudeModel = 'claude-sonnet-4-5';
 
-const OPENAI_MODELS: OpenAIModel[] = [
-  'gpt-5-2025-08-07',
-  'gpt-5-mini-2025-08-07',
-  'gpt-4o',
-  'gpt-4o-mini',
+const OPENAI_MODELS: { id: OpenAIModel; label: string }[] = [
+  { id: 'gpt-5-2025-08-07', label: 'GPT-5 (Nejlepší)' },
+  { id: 'gpt-5-mini-2025-08-07', label: 'GPT-5 Mini (Rychlý)' },
+  { id: 'gpt-4o', label: 'GPT-4o (Výkonný)' },
+  { id: 'gpt-4o-mini', label: 'GPT-4o Mini (Ekonomický)' },
 ];
 
 const CLAUDE_MODELS: { id: ClaudeModel; label: string }[] = [
@@ -604,10 +604,11 @@ const ChatbotView: React.FC = () => {
           >
             {selectedProvider === 'openai' && (
               <>
-                <option value="gpt-5-2025-08-07">GPT-5 (Nejlepší)</option>
-                <option value="gpt-5-mini-2025-08-07">GPT-5 Mini (Rychlý)</option>
-                <option value="gpt-4o">GPT-4o (Výkonný)</option>
-                <option value="gpt-4o-mini">GPT-4o Mini (Ekonomický)</option>
+                {OPENAI_MODELS.map((model) => (
+                  <option key={model.id} value={model.id}>
+                    {model.label}
+                  </option>
+                ))}
               </>
             )}
             {selectedProvider === 'claude' && (
