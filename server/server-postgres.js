@@ -1934,6 +1934,14 @@ app.get("/documents/:documentId/download", async (req, res) => {
 });
 
 // AUTH ROUTES
+app.get("/debug-env", (req, res) => {
+  res.json({
+    hasDatabaseUrl: !!process.env.DATABASE_URL,
+    isPostgres: db.isPostgres(),
+    nodeEnv: process.env.NODE_ENV
+  });
+});
+
 app.post("/auth/login", async (req, res) => {
   const { username, password } = req.body;
   
@@ -1976,20 +1984,47 @@ app.post("/auth/register", async (req, res) => {
   const { username, password, role } = req.body;
   
   try {
-    const check = await db.query('SELECT id FROM users WHERE username = $1', [username]);
-    if (check.rows.length > 0) {
+    if (db.isPostgres()) {
+      const check = await db.query('SELECT id FROM users WHERE username = $1', [username]);
+      if (check.rows.length > 0) {
+        return res.status(400).json({ error: "User already exists" });
+      }
+
+      const salt = await bcrypt.genSalt(10);
+      const password_hash = await bcrypt.hash(password, salt);
+
+      const result = await db.query(
+        'INSERT INTO users (username, password_hash, role) VALUES ($1, $2, $3) RETURNING id',
+        [username, password_hash, role || 'employee']
+      );
+
+      return res.status(201).json({ message: "User created", userId: result.rows[0].id });
+    }
+
+    // Fallback to JSON file
+    const dbData = readDb();
+    if (!dbData.users) dbData.users = [];
+    
+    if (dbData.users.find(u => u.username === username)) {
       return res.status(400).json({ error: "User already exists" });
     }
 
     const salt = await bcrypt.genSalt(10);
     const password_hash = await bcrypt.hash(password, salt);
 
-    const result = await db.query(
-      'INSERT INTO users (username, password_hash, role) VALUES ($1, $2, $3) RETURNING id',
-      [username, password_hash, role || 'employee']
-    );
+    const maxId = dbData.users.reduce((m, u) => Math.max(m, Number(u.id) || 0), 0);
+    const newUser = {
+      id: maxId + 1,
+      username,
+      password_hash,
+      role: role || 'employee',
+      created_at: new Date().toISOString()
+    };
 
-    res.status(201).json({ message: "User created", userId: result.rows[0].id });
+    dbData.users.push(newUser);
+    writeDb(dbData);
+
+    res.status(201).json({ message: "User created", userId: newUser.id });
   } catch (error) {
     console.error("Register error:", error);
     res.status(500).json({ error: "Internal server error" });
