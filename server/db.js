@@ -84,8 +84,23 @@ export async function initDatabase() {
       CREATE TABLE IF NOT EXISTS users (
         id SERIAL PRIMARY KEY,
         username VARCHAR(255) UNIQUE NOT NULL,
-        email VARCHAR(255),
-        role VARCHAR(50),
+        password_hash VARCHAR(255),
+        role VARCHAR(50) DEFAULT 'employee',
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+      )
+    `);
+
+    // Create user_palettes table (for user-specific themes)
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS user_palettes (
+        id SERIAL PRIMARY KEY,
+        user_id INTEGER REFERENCES users(id) ON DELETE CASCADE,
+        name VARCHAR(120) NOT NULL,
+        mode VARCHAR(12) NOT NULL CHECK (mode IN ('light', 'dark')),
+        colors JSONB NOT NULL,
+        typography JSONB NOT NULL DEFAULT '{}'::jsonb,
+        is_active BOOLEAN DEFAULT FALSE,
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
         updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
       )

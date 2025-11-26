@@ -8,6 +8,7 @@ import React, {
 } from 'react';
 import { colord, extend, type Colord } from 'colord';
 import mixPlugin from 'colord/plugins/mix';
+import { useAuth } from '../auth/AuthContext';
 
 extend([mixPlugin]);
 
@@ -311,6 +312,7 @@ const applyPaletteToDocument = (mode: Theme, palette?: ColorPalette | null) => {
 };
 
 export const ThemeProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
+  const { user } = useAuth();
   const [theme, setThemeState] = useState<Theme>(() => {
     const saved = localStorage.getItem(LOCAL_THEME_KEY) as Theme | null;
     return saved === 'dark' ? 'dark' : 'light';
@@ -320,10 +322,16 @@ export const ThemeProvider: React.FC<{ children: React.ReactNode }> = ({ childre
   const [error, setError] = useState<string | null>(null);
 
   const fetchPalettes = useCallback(async () => {
+    if (!user?.token) return;
+    
     setIsLoadingPalettes(true);
     try {
       setError(null);
-      const response = await fetch(`${API_BASE}/color-palettes`);
+      const response = await fetch(`${API_BASE}/color-palettes`, {
+        headers: {
+          'Authorization': `Bearer ${user.token}`
+        }
+      });
       if (!response.ok) {
         throw new Error(`Failed to load palettes: ${response.status}`);
       }
@@ -335,7 +343,7 @@ export const ThemeProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     } finally {
       setIsLoadingPalettes(false);
     }
-  }, []);
+  }, [user?.token]);
 
   useEffect(() => {
     fetchPalettes();
@@ -381,9 +389,14 @@ export const ThemeProvider: React.FC<{ children: React.ReactNode }> = ({ childre
 
   const createPalette = useCallback(
     async (input: PaletteInput) => {
+      if (!user?.token) throw new Error('Not authenticated');
+
       const response = await fetch(`${API_BASE}/color-palettes`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${user.token}`
+        },
         body: JSON.stringify(input)
       });
 
@@ -400,14 +413,19 @@ export const ThemeProvider: React.FC<{ children: React.ReactNode }> = ({ childre
 
       return created;
     },
-    [fetchPalettes, theme]
+    [fetchPalettes, theme, user?.token]
   );
 
   const updatePalette = useCallback(
     async (id: number, input: Partial<Omit<PaletteInput, 'mode'>>) => {
+      if (!user?.token) throw new Error('Not authenticated');
+
       const response = await fetch(`${API_BASE}/color-palettes/${id}`, {
         method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${user.token}`
+        },
         body: JSON.stringify(input)
       });
 
@@ -424,13 +442,18 @@ export const ThemeProvider: React.FC<{ children: React.ReactNode }> = ({ childre
 
       return updated;
     },
-    [fetchPalettes, theme]
+    [fetchPalettes, theme, user?.token]
   );
 
   const deletePalette = useCallback(
     async (id: number) => {
+      if (!user?.token) throw new Error('Not authenticated');
+
       const response = await fetch(`${API_BASE}/color-palettes/${id}`, {
-        method: 'DELETE'
+        method: 'DELETE',
+        headers: {
+          'Authorization': `Bearer ${user.token}`
+        }
       });
 
       if (!response.ok) {
@@ -441,13 +464,18 @@ export const ThemeProvider: React.FC<{ children: React.ReactNode }> = ({ childre
       const palette = getActivePalette(theme);
       applyPaletteToDocument(theme, palette);
     },
-    [fetchPalettes, getActivePalette, theme]
+    [fetchPalettes, getActivePalette, theme, user?.token]
   );
 
   const activatePalette = useCallback(
     async (id: number) => {
+      if (!user?.token) throw new Error('Not authenticated');
+
       const response = await fetch(`${API_BASE}/color-palettes/${id}/activate`, {
-        method: 'POST'
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${user.token}`
+        }
       });
 
       if (!response.ok) {

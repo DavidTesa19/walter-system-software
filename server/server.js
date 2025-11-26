@@ -7,6 +7,8 @@ import dotenv from "dotenv";
 import axios from "axios";
 import * as cheerio from "cheerio";
 import multer from "multer";
+import bcrypt from "bcryptjs";
+import jwt from "jsonwebtoken";
 
 // Load environment variables
 dotenv.config();
@@ -997,10 +999,7 @@ function readDb() {
     if (!obj.employees) {
       obj.employees = [];
     }
-    const mutated = ensurePalettes(obj);
-    if (mutated) {
-      writeDb(obj);
-    }
+    // ensurePalettes(obj); // No longer needed for global palettes
     return obj;
   } catch (e) {
     console.error("Error reading DB:", e);
@@ -1012,7 +1011,7 @@ function readDb() {
       employees: [],
       futureFunctions: [],
       documents: [],
-      color_palettes: cloneDefaultPalettes()
+      // color_palettes: cloneDefaultPalettes() // No longer needed for global palettes
     };
   }
 }
@@ -1026,6 +1025,83 @@ function writeDb(db) {
     return false;
   }
 }
+
+const JWT_SECRET = process.env.JWT_SECRET || "walter-secret-key-change-in-prod";
+
+// AUTH ROUTES
+app.post("/auth/login", async (req, res) => {
+  const { username, password } = req.body;
+  const db = readDb();
+  
+  const user = db.users.find(u => u.username === username);
+  if (!user) {
+    return res.status(401).json({ error: "Invalid credentials" });
+  }
+
+  // Compare hashed password
+  const validPassword = await bcrypt.compare(password, user.password_hash);
+  if (!validPassword) {
+    return res.status(401).json({ error: "Invalid credentials" });
+  }
+
+  // Generate Token
+  const token = jwt.sign(
+    { id: user.id, username: user.username, role: user.role },
+    JWT_SECRET,
+    { expiresIn: "8h" }
+  );
+
+  res.json({
+    token,
+    user: {
+      id: user.id,
+      username: user.username,
+      role: user.role
+    }
+  });
+});
+
+app.post("/auth/register", async (req, res) => {
+  const { username, password, role } = req.body;
+  const db = readDb();
+  
+  if (db.users.find(u => u.username === username)) {
+    return res.status(400).json({ error: "User already exists" });
+  }
+
+  const salt = await bcrypt.genSalt(10);
+  const password_hash = await bcrypt.hash(password, salt);
+
+  const maxId = db.users.reduce((m, u) => Math.max(m, Number(u.id) || 0), 0);
+  const nextId = maxId + 1;
+
+  const newUser = {
+    id: nextId,
+    username,
+    password_hash,
+    role: role || 'employee',
+    created_at: new Date().toISOString()
+  };
+
+  db.users.push(newUser);
+  writeDb(db);
+
+  res.status(201).json({ message: "User created", userId: newUser.id });
+});
+
+// Middleware to authenticate token
+const authenticateToken = (req, res, next) => {
+  const authHeader = req.headers['authorization'];
+  const token = authHeader && authHeader.split(' ')[1];
+
+  if (!token) return res.sendStatus(401);
+
+  jwt.verify(token, JWT_SECRET, (err, user) => {
+    if (err) return res.sendStatus(403);
+    req.user = user;
+    next();
+  });
+};
 
 // Routes
 app.get("/health", (_req, res) => res.json({ ok: true }));
@@ -1156,29 +1232,50 @@ app.post("/partners/:id/archive", (req, res) => {
 });
 
 // Color palette routes for local JSON storage
-app.get("/color-palettes", (req, res) => {
+
+app.get("/color-palettes", authenticateToken, (req, res) => {
   const mode = req.query.mode;
   if (mode && mode !== "light" && mode !== "dark") {
     return res.status(400).json({ error: "Invalid mode" });
   }
 
   const db = readDb();
+  const userId = req.user.id;
+  const user = db.users.find(u => u.id === userId);
+  
+  if (!user) return res.status(404).json({ error: "User not found" });
+
+  // Initialize user palettes if not present
+  if (!user.palettes) {
+    user.palettes = cloneDefaultPalettes();
+    writeDb(db);
+  }
+
   const palettes = mode
-    ? db.color_palettes.filter(palette => palette.mode === mode)
-    : db.color_palettes;
+    ? user.palettes.filter(palette => palette.mode === mode)
+    : user.palettes;
   res.json(palettes);
 });
 
-app.get("/color-palettes/active", (req, res) => {
+app.get("/color-palettes/active", authenticateToken, (req, res) => {
   const mode = req.query.mode;
   if (mode && mode !== "light" && mode !== "dark") {
     return res.status(400).json({ error: "Invalid mode" });
   }
 
   const db = readDb();
+  const userId = req.user.id;
+  const user = db.users.find(u => u.id === userId);
+  
+  if (!user) return res.status(404).json({ error: "User not found" });
+
+  if (!user.palettes) {
+    user.palettes = cloneDefaultPalettes();
+    writeDb(db);
+  }
 
   if (mode) {
-    const palette = db.color_palettes.find(item => item.mode === mode && item.is_active);
+    const palette = user.palettes.find(item => item.mode === mode && item.is_active);
     if (!palette) {
       return res.status(404).json({ error: "Active palette not found" });
     }
@@ -1186,21 +1283,30 @@ app.get("/color-palettes/active", (req, res) => {
   }
 
   const response = {
-    light: db.color_palettes.find(item => item.mode === "light" && item.is_active) || null,
-    dark: db.color_palettes.find(item => item.mode === "dark" && item.is_active) || null
+    light: user.palettes.find(item => item.mode === "light" && item.is_active) || null,
+    dark: user.palettes.find(item => item.mode === "dark" && item.is_active) || null
   };
 
   res.json(response);
 });
 
-app.post("/color-palettes", (req, res) => {
+app.post("/color-palettes", authenticateToken, (req, res) => {
   const { payload, errors } = sanitizePalettePayload(req.body, { partial: false, allowMode: true });
   if (errors.length) {
     return res.status(400).json({ error: "Invalid payload", details: errors });
   }
 
   const db = readDb();
-  const id = getNextPaletteId(db.color_palettes);
+  const userId = req.user.id;
+  const user = db.users.find(u => u.id === userId);
+  
+  if (!user) return res.status(404).json({ error: "User not found" });
+
+  if (!user.palettes) {
+    user.palettes = cloneDefaultPalettes();
+  }
+
+  const id = getNextPaletteId(user.palettes);
   const newPalette = {
     id,
     ...payload,
@@ -1208,20 +1314,18 @@ app.post("/color-palettes", (req, res) => {
   };
 
   if (newPalette.is_active) {
-    for (const item of db.color_palettes) {
+    for (const item of user.palettes) {
       if (item.mode === newPalette.mode) {
         item.is_active = false;
       }
     }
   }
 
-  db.color_palettes.push(newPalette);
+  user.palettes.push(newPalette);
 
   if (newPalette.is_active) {
-    setActivePalette(db.color_palettes, newPalette.id);
+    setActivePalette(user.palettes, newPalette.id);
   }
-
-  ensurePalettes(db);
 
   if (!writeDb(db)) {
     return res.status(500).json({ error: "Failed to persist palette" });
@@ -1230,7 +1334,7 @@ app.post("/color-palettes", (req, res) => {
   res.status(201).json(newPalette);
 });
 
-app.put("/color-palettes/:id", (req, res) => {
+app.put("/color-palettes/:id", authenticateToken, (req, res) => {
   const id = Number(req.params.id);
   if (Number.isNaN(id)) {
     return res.status(400).json({ error: "Invalid palette id" });
@@ -1242,23 +1346,27 @@ app.put("/color-palettes/:id", (req, res) => {
   }
 
   const db = readDb();
-  const idx = db.color_palettes.findIndex(palette => palette.id === id);
+  const userId = req.user.id;
+  const user = db.users.find(u => u.id === userId);
+  
+  if (!user) return res.status(404).json({ error: "User not found" });
+  if (!user.palettes) user.palettes = cloneDefaultPalettes();
+
+  const idx = user.palettes.findIndex(palette => palette.id === id);
   if (idx === -1) {
     return res.status(404).json({ error: "Palette not found" });
   }
 
   const updated = {
-    ...db.color_palettes[idx],
+    ...user.palettes[idx],
     ...payload
   };
 
-  db.color_palettes[idx] = updated;
+  user.palettes[idx] = updated;
 
   if (payload.is_active) {
-    setActivePalette(db.color_palettes, id);
+    setActivePalette(user.palettes, id);
   }
-
-  ensurePalettes(db);
 
   if (!writeDb(db)) {
     return res.status(500).json({ error: "Failed to persist palette" });
@@ -1267,19 +1375,23 @@ app.put("/color-palettes/:id", (req, res) => {
   res.json(updated);
 });
 
-app.delete("/color-palettes/:id", (req, res) => {
+app.delete("/color-palettes/:id", authenticateToken, (req, res) => {
   const id = Number(req.params.id);
   if (Number.isNaN(id)) {
     return res.status(400).json({ error: "Invalid palette id" });
   }
 
   const db = readDb();
-  const removed = removePalette(db.color_palettes, id);
+  const userId = req.user.id;
+  const user = db.users.find(u => u.id === userId);
+  
+  if (!user) return res.status(404).json({ error: "User not found" });
+  if (!user.palettes) user.palettes = cloneDefaultPalettes();
+
+  const removed = removePalette(user.palettes, id);
   if (!removed) {
     return res.status(404).json({ error: "Palette not found" });
   }
-
-  ensurePalettes(db);
 
   if (!writeDb(db)) {
     return res.status(500).json({ error: "Failed to persist palette" });
@@ -1288,19 +1400,23 @@ app.delete("/color-palettes/:id", (req, res) => {
   res.status(204).end();
 });
 
-app.post("/color-palettes/:id/activate", (req, res) => {
+app.post("/color-palettes/:id/activate", authenticateToken, (req, res) => {
   const id = Number(req.params.id);
   if (Number.isNaN(id)) {
     return res.status(400).json({ error: "Invalid palette id" });
   }
 
   const db = readDb();
-  const activated = setActivePalette(db.color_palettes, id);
+  const userId = req.user.id;
+  const user = db.users.find(u => u.id === userId);
+  
+  if (!user) return res.status(404).json({ error: "User not found" });
+  if (!user.palettes) user.palettes = cloneDefaultPalettes();
+
+  const activated = setActivePalette(user.palettes, id);
   if (!activated) {
     return res.status(404).json({ error: "Palette not found" });
   }
-
-  ensurePalettes(db);
 
   if (!writeDb(db)) {
     return res.status(500).json({ error: "Failed to persist palette activation" });

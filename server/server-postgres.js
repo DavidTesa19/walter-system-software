@@ -7,6 +7,8 @@ import OpenAI from "openai";
 import axios from "axios";
 import * as cheerio from "cheerio";
 import multer from "multer";
+import bcrypt from "bcryptjs";
+import jwt from "jsonwebtoken";
 import db, { initDatabase } from "./db.js";
 
 dotenv.config();
@@ -17,6 +19,21 @@ const openai = process.env.OPENAI_API_KEY
 
 const app = express();
 const PORT = process.env.PORT ? Number(process.env.PORT) : 3004;
+const JWT_SECRET = process.env.JWT_SECRET || "walter-secret-key-change-in-prod";
+
+// Middleware to authenticate token
+const authenticateToken = (req, res, next) => {
+  const authHeader = req.headers['authorization'];
+  const token = authHeader && authHeader.split(' ')[1];
+
+  if (!token) return res.sendStatus(401);
+
+  jwt.verify(token, JWT_SECRET, (err, user) => {
+    if (err) return res.sendStatus(403);
+    req.user = user;
+    next();
+  });
+};
 
 // File-based storage (development mode)
 const DATA_DIR = process.env.DATA_DIR || path.resolve(process.cwd(), "data");
@@ -1392,23 +1409,58 @@ app.delete("/api/conversations/:id", (req, res) => {
 });
 
 // Color palette routes
-app.get("/color-palettes", async (req, res) => {
+app.get("/color-palettes", authenticateToken, async (req, res) => {
   try {
     const mode = req.query.mode;
     if (mode && mode !== "light" && mode !== "dark") {
       return res.status(400).json({ error: "Invalid mode" });
     }
 
+    const userId = req.user.id;
+
     if (db.isPostgres()) {
-      const palettes = await db.getColorPalettes();
+      // Fetch user-specific palettes from Postgres
+      const result = await db.query(
+        'SELECT * FROM user_palettes WHERE user_id = $1',
+        [userId]
+      );
+      let palettes = result.rows;
+
+      // If no palettes, create defaults
+      if (palettes.length === 0) {
+        const defaults = DEFAULT_PALETTES.map(p => ({
+          ...p,
+          user_id: userId
+        }));
+        
+        for (const p of defaults) {
+          await db.query(
+            `INSERT INTO user_palettes (user_id, name, mode, colors, typography, is_active)
+             VALUES ($1, $2, $3, $4, $5, $6)`,
+            [p.user_id, p.name, p.mode, JSON.stringify(p.colors), JSON.stringify(p.typography), p.is_active]
+          );
+        }
+        
+        const newResult = await db.query('SELECT * FROM user_palettes WHERE user_id = $1', [userId]);
+        palettes = newResult.rows;
+      }
+
       const filtered = mode ? palettes.filter(p => p.mode === mode) : palettes;
       return res.json(filtered);
     }
 
     const dbData = readDb();
+    const user = dbData.users.find(u => u.id === userId);
+    if (!user) return res.status(404).json({ error: "User not found" });
+
+    if (!user.palettes) {
+      user.palettes = DEFAULT_PALETTES.map(p => ({ ...p }));
+      writeDb(dbData);
+    }
+
     const palettes = mode
-      ? dbData.color_palettes.filter(p => p.mode === mode)
-      : dbData.color_palettes;
+      ? user.palettes.filter(p => p.mode === mode)
+      : user.palettes;
     res.json(palettes);
   } catch (error) {
     console.error("Error fetching color palettes:", error);
@@ -1416,20 +1468,45 @@ app.get("/color-palettes", async (req, res) => {
   }
 });
 
-app.get("/color-palettes/active", async (req, res) => {
+app.get("/color-palettes/active", authenticateToken, async (req, res) => {
   try {
     const mode = req.query.mode;
     if (mode && mode !== "light" && mode !== "dark") {
       return res.status(400).json({ error: "Invalid mode" });
     }
 
+    const userId = req.user.id;
+
     if (db.isPostgres()) {
+      // Ensure palettes exist
+      const check = await db.query('SELECT 1 FROM user_palettes WHERE user_id = $1', [userId]);
+      if (check.rows.length === 0) {
+         const defaults = DEFAULT_PALETTES.map(p => ({ ...p, user_id: userId }));
+         for (const p of defaults) {
+          await db.query(
+            `INSERT INTO user_palettes (user_id, name, mode, colors, typography, is_active)
+             VALUES ($1, $2, $3, $4, $5, $6)`,
+            [p.user_id, p.name, p.mode, JSON.stringify(p.colors), JSON.stringify(p.typography), p.is_active]
+          );
+        }
+      }
+
       if (mode) {
-        const palette = await db.getActivePaletteByMode(mode);
+        const result = await db.query(
+          'SELECT * FROM user_palettes WHERE user_id = $1 AND mode = $2 AND is_active = true',
+          [userId, mode]
+        );
+        const palette = result.rows[0];
         if (!palette) return res.status(404).json({ error: "Active palette not found" });
         return res.json(palette);
       }
-      const palettes = await db.getActivePalettes();
+      
+      const result = await db.query(
+        'SELECT * FROM user_palettes WHERE user_id = $1 AND is_active = true',
+        [userId]
+      );
+      const palettes = result.rows;
+      
       const response = {
         light: palettes.find(p => p.mode === "light") || null,
         dark: palettes.find(p => p.mode === "dark") || null
@@ -1438,15 +1515,23 @@ app.get("/color-palettes/active", async (req, res) => {
     }
 
     const dbData = readDb();
+    const user = dbData.users.find(u => u.id === userId);
+    if (!user) return res.status(404).json({ error: "User not found" });
+
+    if (!user.palettes) {
+      user.palettes = DEFAULT_PALETTES.map(p => ({ ...p }));
+      writeDb(dbData);
+    }
+
     if (mode) {
-      const palette = dbData.color_palettes.find(p => p.mode === mode && p.is_active);
+      const palette = user.palettes.find(p => p.mode === mode && p.is_active);
       if (!palette) return res.status(404).json({ error: "Active palette not found" });
       return res.json(palette);
     }
 
     const response = {
-      light: dbData.color_palettes.find(p => p.mode === "light" && p.is_active) || null,
-      dark: dbData.color_palettes.find(p => p.mode === "dark" && p.is_active) || null
+      light: user.palettes.find(p => p.mode === "light" && p.is_active) || null,
+      dark: user.palettes.find(p => p.mode === "dark" && p.is_active) || null
     };
     res.json(response);
   } catch (error) {
@@ -1455,41 +1540,64 @@ app.get("/color-palettes/active", async (req, res) => {
   }
 });
 
-app.post("/color-palettes", async (req, res) => {
+app.post("/color-palettes", authenticateToken, async (req, res) => {
   try {
     const { payload, errors } = sanitizePalettePayload(req.body, { partial: false, allowMode: true });
     if (errors.length) {
       return res.status(400).json({ error: "Invalid payload", details: errors });
     }
 
+    const userId = req.user.id;
+
     if (db.isPostgres()) {
-      const created = await db.createColorPalette(payload);
-      return res.status(201).json(created);
+      // Deactivate other palettes of same mode for this user
+      if (payload.is_active) {
+        await db.query(
+          'UPDATE user_palettes SET is_active = false WHERE user_id = $1 AND mode = $2',
+          [userId, payload.mode]
+        );
+      }
+
+      const result = await db.query(
+        `INSERT INTO user_palettes (user_id, name, mode, colors, typography, is_active)
+         VALUES ($1, $2, $3, $4, $5, $6)
+         RETURNING *`,
+        [userId, payload.name, payload.mode, JSON.stringify(payload.colors), JSON.stringify(payload.typography), payload.is_active]
+      );
+      
+      return res.status(201).json(result.rows[0]);
     }
 
     const dbData = readDb();
-    const newId = getNextPaletteId(dbData.color_palettes);
+    const user = dbData.users.find(u => u.id === userId);
+    if (!user) return res.status(404).json({ error: "User not found" });
+
+    if (!user.palettes) {
+      user.palettes = DEFAULT_PALETTES.map(p => ({ ...p }));
+    }
+
+    const newId = getNextPaletteId(user.palettes);
     const newPalette = {
       id: newId,
       ...payload
     };
 
     if (newPalette.is_active) {
-      dbData.color_palettes.forEach(palette => {
+      user.palettes.forEach(palette => {
         if (palette.mode === newPalette.mode) {
           palette.is_active = false;
         }
       });
     }
 
-    dbData.color_palettes.push(newPalette);
-    ensureFilePalettes(dbData);
+    user.palettes.push(newPalette);
+    // ensureFilePalettes(dbData); // No longer needed for global palettes
 
     if (!writeDb(dbData)) {
       return res.status(500).json({ error: "Failed to persist palette" });
     }
 
-    const stored = dbData.color_palettes.find(p => p.id === newId) || newPalette;
+    const stored = user.palettes.find(p => p.id === newId) || newPalette;
     res.status(201).json(stored);
   } catch (error) {
     console.error("Error creating color palette:", error);
@@ -1497,7 +1605,7 @@ app.post("/color-palettes", async (req, res) => {
   }
 });
 
-app.put("/color-palettes/:id", async (req, res) => {
+app.put("/color-palettes/:id", authenticateToken, async (req, res) => {
   try {
     const id = Number(req.params.id);
     if (Number.isNaN(id)) {
@@ -1509,14 +1617,51 @@ app.put("/color-palettes/:id", async (req, res) => {
       return res.status(400).json({ error: "Invalid payload", details: errors });
     }
 
+    const userId = req.user.id;
+
     if (db.isPostgres()) {
-      const updated = await db.updateColorPalette(id, payload);
-      if (!updated) return res.status(404).json({ error: "Palette not found" });
-      return res.json(updated);
+      // Verify ownership
+      const check = await db.query('SELECT * FROM user_palettes WHERE id = $1 AND user_id = $2', [id, userId]);
+      if (check.rows.length === 0) {
+        return res.status(404).json({ error: "Palette not found" });
+      }
+      const current = check.rows[0];
+
+      if (payload.is_active) {
+        await db.query(
+          'UPDATE user_palettes SET is_active = false WHERE user_id = $1 AND mode = $2',
+          [userId, current.mode]
+        );
+      }
+
+      // Build dynamic update query
+      const updates = [];
+      const values = [];
+      let idx = 1;
+
+      if (payload.name) { updates.push(`name = $${idx++}`); values.push(payload.name); }
+      if (payload.colors) { updates.push(`colors = $${idx++}`); values.push(JSON.stringify(payload.colors)); }
+      if (payload.typography) { updates.push(`typography = $${idx++}`); values.push(JSON.stringify(payload.typography)); }
+      if (payload.is_active !== undefined) { updates.push(`is_active = $${idx++}`); values.push(payload.is_active); }
+      
+      updates.push(`updated_at = CURRENT_TIMESTAMP`);
+      values.push(id);
+      values.push(userId);
+
+      const result = await db.query(
+        `UPDATE user_palettes SET ${updates.join(', ')} WHERE id = $${idx++} AND user_id = $${idx++} RETURNING *`,
+        values
+      );
+
+      return res.json(result.rows[0]);
     }
 
     const dbData = readDb();
-    const palette = dbData.color_palettes.find(p => p.id === id);
+    const user = dbData.users.find(u => u.id === userId);
+    if (!user) return res.status(404).json({ error: "User not found" });
+    if (!user.palettes) user.palettes = DEFAULT_PALETTES.map(p => ({ ...p }));
+
+    const palette = user.palettes.find(p => p.id === id);
     if (!palette) {
       return res.status(404).json({ error: "Palette not found" });
     }
@@ -1527,7 +1672,7 @@ app.put("/color-palettes/:id", async (req, res) => {
     if (payload.is_active !== undefined) {
       palette.is_active = payload.is_active;
       if (payload.is_active) {
-        dbData.color_palettes.forEach(item => {
+        user.palettes.forEach(item => {
           if (item.mode === palette.mode && item.id !== palette.id) {
             item.is_active = false;
           }
@@ -1535,7 +1680,7 @@ app.put("/color-palettes/:id", async (req, res) => {
       }
     }
 
-    ensureFilePalettes(dbData);
+    // ensureFilePalettes(dbData); // No longer needed
 
     if (!writeDb(dbData)) {
       return res.status(500).json({ error: "Failed to persist palette" });
@@ -1562,7 +1707,11 @@ app.post("/color-palettes/:id/activate", async (req, res) => {
     }
 
     const dbData = readDb();
-    const activated = setActivePaletteInStore(dbData, id);
+    const user = dbData.users.find(u => u.id === userId);
+    if (!user) return res.status(404).json({ error: "User not found" });
+    if (!user.palettes) user.palettes = DEFAULT_PALETTES.map(p => ({ ...p }));
+
+    const activated = setActivePaletteInStore(user.palettes, id);
     if (!activated) {
       return res.status(404).json({ error: "Palette not found" });
     }
@@ -1592,7 +1741,11 @@ app.delete("/color-palettes/:id", async (req, res) => {
     }
 
     const dbData = readDb();
-    const removed = removePaletteFromStore(dbData, id);
+    const user = dbData.users.find(u => u.id === userId);
+    if (!user) return res.status(404).json({ error: "User not found" });
+    if (!user.palettes) user.palettes = DEFAULT_PALETTES.map(p => ({ ...p }));
+
+    const removed = removePaletteFromStore(user.palettes, id);
     if (!removed) {
       return res.status(404).json({ error: "Palette not found" });
     }
@@ -1777,6 +1930,233 @@ app.get("/documents/:documentId/download", async (req, res) => {
   } catch (error) {
     console.error("Error downloading document:", error);
     res.status(500).json({ error: "Failed to download document" });
+  }
+});
+
+// AUTH ROUTES
+app.post("/auth/login", async (req, res) => {
+  const { username, password } = req.body;
+  
+  try {
+    const result = await db.query('SELECT * FROM users WHERE username = $1', [username]);
+    const user = result.rows[0];
+
+    if (!user) {
+      return res.status(401).json({ error: "Invalid credentials" });
+    }
+
+    // Compare hashed password
+    const validPassword = await bcrypt.compare(password, user.password_hash);
+    if (!validPassword) {
+      return res.status(401).json({ error: "Invalid credentials" });
+    }
+
+    // Generate Token
+    const token = jwt.sign(
+      { id: user.id, username: user.username, role: user.role },
+      JWT_SECRET,
+      { expiresIn: "8h" }
+    );
+
+    res.json({
+      token,
+      user: {
+        id: user.id,
+        username: user.username,
+        role: user.role
+      }
+    });
+  } catch (error) {
+    console.error("Login error:", error);
+    res.status(500).json({ error: "Internal server error" });
+  }
+});
+
+app.post("/auth/register", async (req, res) => {
+  const { username, password, role } = req.body;
+  
+  try {
+    const check = await db.query('SELECT id FROM users WHERE username = $1', [username]);
+    if (check.rows.length > 0) {
+      return res.status(400).json({ error: "User already exists" });
+    }
+
+    const salt = await bcrypt.genSalt(10);
+    const password_hash = await bcrypt.hash(password, salt);
+
+    const result = await db.query(
+      'INSERT INTO users (username, password_hash, role) VALUES ($1, $2, $3) RETURNING id',
+      [username, password_hash, role || 'employee']
+    );
+
+    res.status(201).json({ message: "User created", userId: result.rows[0].id });
+  } catch (error) {
+    console.error("Register error:", error);
+    res.status(500).json({ error: "Internal server error" });
+  }
+});
+
+// CRUD for users
+app.get("/users", async (req, res) => {
+  try {
+    if (db.isPostgres()) {
+      const users = await db.getAll('users');
+      return res.json(users);
+    }
+
+    const dbData = readDb();
+    res.json(dbData.users || []);
+  } catch (error) {
+    console.error("Error fetching users:", error);
+    res.status(500).json({ error: "Failed to fetch users" });
+  }
+});
+
+app.get("/users/:id", async (req, res) => {
+  const userId = req.params.id;
+
+  try {
+    if (db.isPostgres()) {
+      const result = await db.query('SELECT * FROM users WHERE id = $1', [userId]);
+      const user = result.rows[0];
+      if (!user) {
+        return res.status(404).json({ error: "User not found" });
+      }
+      return res.json(user);
+    }
+
+    const dbData = readDb();
+    const user = dbData.users?.find(u => u.id === userId);
+    if (!user) {
+      return res.status(404).json({ error: "User not found" });
+    }
+    res.json(user);
+  } catch (error) {
+    console.error("Error fetching user:", error);
+    res.status(500).json({ error: "Failed to fetch user" });
+  }
+});
+
+app.post("/users", async (req, res) => {
+  const { username, password, role } = req.body;
+
+  try {
+    const salt = await bcrypt.genSalt(10);
+    const password_hash = await bcrypt.hash(password, salt);
+
+    if (db.isPostgres()) {
+      const result = await db.query(
+        'INSERT INTO users (username, password_hash, role) VALUES ($1, $2, $3) RETURNING *',
+        [username, password_hash, role || 'employee']
+      );
+      return res.status(201).json(result.rows[0]);
+    }
+
+    const dbData = readDb();
+    const newId = dbData.users.reduce((max, user) => Math.max(max, Number(user.id)), 0) + 1;
+    const newUser = { id: newId, username, password_hash, role: role || 'employee' };
+    dbData.users.push(newUser);
+    if (!writeDb(dbData)) {
+      return res.status(500).json({ error: "Failed to persist user" });
+    }
+    res.status(201).json(newUser);
+  } catch (error) {
+    console.error("Error creating user:", error);
+    res.status(500).json({ error: "Failed to create user" });
+  }
+});
+
+app.put("/users/:id", async (req, res) => {
+  const userId = req.params.id;
+  const { username, password, role } = req.body;
+
+  try {
+    if (db.isPostgres()) {
+      const updates = [];
+      const params = [];
+
+      if (username !== undefined) {
+        updates.push('username = $' + (params.length + 1));
+        params.push(username);
+      }
+
+      if (password !== undefined) {
+        const salt = await bcrypt.genSalt(10);
+        const password_hash = await bcrypt.hash(password, salt);
+        updates.push('password_hash = $' + (params.length + 1));
+        params.push(password_hash);
+      }
+
+      if (role !== undefined) {
+        updates.push('role = $' + (params.length + 1));
+        params.push(role);
+      }
+
+      if (updates.length === 0) {
+        return res.status(400).json({ error: "No valid fields to update" });
+      }
+
+      const result = await db.query(
+        'UPDATE users SET ' + updates.join(', ') + ' WHERE id = $' + (params.length + 1) + ' RETURNING *',
+        [...params, userId]
+      );
+
+      const user = result.rows[0];
+      if (!user) {
+        return res.status(404).json({ error: "User not found" });
+      }
+      return res.json(user);
+    }
+
+    const dbData = readDb();
+    const user = dbData.users.find(u => u.id === userId);
+    if (!user) {
+      return res.status(404).json({ error: "User not found" });
+    }
+
+    if (username !== undefined) user.username = username;
+    if (password !== undefined) {
+      const salt = await bcrypt.genSalt(10);
+      user.password_hash = await bcrypt.hash(password, salt);
+    }
+    if (role !== undefined) user.role = role;
+
+    if (!writeDb(dbData)) {
+      return res.status(500).json({ error: "Failed to persist user" });
+    }
+    res.json(user);
+  } catch (error) {
+    console.error("Error updating user:", error);
+    res.status(500).json({ error: "Failed to update user" });
+  }
+});
+
+app.delete("/users/:id", async (req, res) => {
+  const userId = req.params.id;
+
+  try {
+    if (db.isPostgres()) {
+      const result = await db.query('DELETE FROM users WHERE id = $1 RETURNING *', [userId]);
+      const user = result.rows[0];
+      if (!user) {
+        return res.status(404).json({ error: "User not found" });
+      }
+      return res.json(user);
+    }
+
+    const dbData = readDb();
+    const idx = dbData.users.findIndex(u => u.id === userId);
+    if (idx === -1) {
+      return res.status(404).json({ error: "User not found" });
+    }
+    const [deleted] = dbData.users.splice(idx, 1);
+    if (!writeDb(dbData)) {
+      return res.status(500).json({ error: "Failed to persist user removal" });
+    }
+    res.json(deleted);
+  } catch (error) {
+    console.error("Error deleting user:", error);
+    res.status(500).json({ error: "Failed to delete user" });
   }
 });
 

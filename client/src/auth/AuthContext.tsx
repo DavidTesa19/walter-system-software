@@ -1,17 +1,28 @@
 import React, { createContext, useContext, useState, useEffect, useCallback, useRef } from 'react';
 import type { ReactNode } from 'react';
+import { API_BASE } from '../usersGrid/constants';
+
+// Define available roles
+export type UserRole = 'admin' | 'manager' | 'employee' | 'viewer';
+
+export interface User {
+  id: number;
+  username: string;
+  role: UserRole;
+  token?: string;
+}
 
 interface AuthContextType {
+  user: User | null;
   isAuthenticated: boolean;
-  login: (code: string) => boolean;
+  login: (username: string, password: string) => Promise<boolean>;
   logout: () => void;
   resetSessionTimer: () => void;
+  hasRole: (allowedRoles: UserRole[]) => boolean;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
-// Simple verification code (you can change this)
-const VERIFICATION_CODE = 'Walter2025';
 const SESSION_DURATION = 30 * 60 * 1000; // 30 minutes in milliseconds
 
 interface AuthProviderProps {
@@ -19,7 +30,7 @@ interface AuthProviderProps {
 }
 
 export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
-  const [isAuthenticated, setIsAuthenticated] = useState<boolean>(false);
+  const [user, setUser] = useState<User | null>(null);
   const sessionTimerRef = useRef<number | undefined>(undefined);
 
   const clearSessionTimer = useCallback(() => {
@@ -30,8 +41,8 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
   }, []);
 
   const logout = useCallback(() => {
-    setIsAuthenticated(false);
-    localStorage.removeItem('walterAuth');
+    setUser(null);
+    localStorage.removeItem('walterUser');
     localStorage.removeItem('walterSessionStart');
     clearSessionTimer();
   }, [clearSessionTimer]);
@@ -43,74 +54,86 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
     }, duration);
   }, [clearSessionTimer, logout]);
 
-  const login = (code: string): boolean => {
-    if (code === VERIFICATION_CODE) {
-      // Clear any existing timer first
-      clearSessionTimer();
+  const login = async (username: string, password: string): Promise<boolean> => {
+    try {
+      const response = await fetch(`${API_BASE}/auth/login`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ username, password }),
+      });
 
-      // Clear any existing session data
-      localStorage.removeItem('walterAuth');
-      localStorage.removeItem('walterSessionStart');
-      
-      // Set new session data
-      const now = Date.now();
-      localStorage.setItem('walterAuth', 'true');
-      localStorage.setItem('walterSessionStart', now.toString());
-      
-      setIsAuthenticated(true);
-      startSessionTimer();
-      
-      return true;
+      if (response.ok) {
+        const data = await response.json();
+        // Expecting backend to return { user: { id, username, role }, token: "..." }
+        const userData: User = { ...data.user, token: data.token };
+        
+        // Save to state and local storage
+        setUser(userData);
+        const now = Date.now();
+        localStorage.setItem('walterUser', JSON.stringify(userData));
+        localStorage.setItem('walterSessionStart', now.toString());
+        
+        startSessionTimer();
+        return true;
+      }
+      return false;
+    } catch (error) {
+      console.error("Login failed:", error);
+      return false;
     }
-    return false;
   };
 
   // Check for existing session on mount
   useEffect(() => {
     const checkExistingSession = () => {
-      const authValue = localStorage.getItem('walterAuth');
+      const storedUser = localStorage.getItem('walterUser');
       const sessionStart = localStorage.getItem('walterSessionStart');
       
-      if (authValue === 'true' && sessionStart) {
+      if (storedUser && sessionStart) {
         const startTime = parseInt(sessionStart, 10);
         const now = Date.now();
         const elapsed = now - startTime;
         const remaining = SESSION_DURATION - elapsed;
         
-        // If session is still valid
         if (remaining > 0) {
-          setIsAuthenticated(true);
+          setUser(JSON.parse(storedUser));
           startSessionTimer(remaining);
         } else {
-          // Session expired, clean up
-          localStorage.removeItem('walterAuth');
-          localStorage.removeItem('walterSessionStart');
+          logout();
         }
       }
     };
     
     checkExistingSession();
-  }, [startSessionTimer]);
+  }, [startSessionTimer, logout]);
 
   const resetSessionTimer = useCallback(() => {
-    if (isAuthenticated) {
+    if (user) {
       const now = Date.now();
       localStorage.setItem('walterSessionStart', now.toString());
       startSessionTimer();
     }
-  }, [isAuthenticated, startSessionTimer]);
+  }, [user, startSessionTimer]);
 
   // Reset timer on user activity
   useEffect(() => {
     let activityCleanup: (() => void) | null = null;
 
-    if (isAuthenticated) {
+    if (user) {
+      let lastActivity = 0;
+      const THROTTLE_MS = 30000; // Throttle updates to every 30 seconds
+
       const handleActivity = () => {
-        resetSessionTimer();
+        const now = Date.now();
+        if (now - lastActivity > THROTTLE_MS) {
+          lastActivity = now;
+          resetSessionTimer();
+        }
       };
 
       const events = ['mousedown', 'mousemove', 'keypress', 'scroll', 'touchstart', 'click'];
       events.forEach(event => {
+        // Use capture=true to ensure we catch events even if propagation is stopped
         document.addEventListener(event, handleActivity, true);
       });
 
@@ -126,16 +149,22 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
         activityCleanup();
       }
     };
-  }, [isAuthenticated, resetSessionTimer]);
+  }, [user, resetSessionTimer]);
 
-  const value: AuthContextType = {
-    isAuthenticated,
-    login,
-    logout,
-    resetSessionTimer
+  // Helper to check permissions
+  const hasRole = (allowedRoles: UserRole[]) => {
+    if (!user) return false;
+    return allowedRoles.includes(user.role);
   };
 
-  useEffect(() => clearSessionTimer, [clearSessionTimer]);
+  const value: AuthContextType = {
+    user,
+    isAuthenticated: !!user,
+    login,
+    logout,
+    resetSessionTimer,
+    hasRole
+  };
 
   return (
     <AuthContext.Provider value={value}>

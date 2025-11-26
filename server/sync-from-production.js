@@ -57,21 +57,29 @@ try {
     tipers: [],
     users: [],
     employees: [],
-    color_palettes: [],
-    future_functions: []
+    // color_palettes: [], // Removed global palettes
+    futureFunctions: []
   };
 
   // Fetch data from each table
-  const tables = ['partners', 'clients', 'tipers', 'users', 'employees', 'color_palettes', 'future_functions'];
+  const tables = ['partners', 'clients', 'tipers', 'employees', 'future_functions'];
 
   for (const table of tables) {
     try {
       const result = await pool.query(`SELECT * FROM ${table} ORDER BY id`);
-      data[table] = result.rows.map(row => {
+      const rows = result.rows.map(row => {
         // Remove PostgreSQL metadata fields
         const { created_at, updated_at, ...cleanData } = row;
         return cleanData;
       });
+
+      // Map table names to JSON keys if they differ
+      if (table === 'future_functions') {
+        data.futureFunctions = rows;
+      } else {
+        data[table] = rows;
+      }
+      
       console.log(`✓ ${table}: ${result.rows.length} records`);
     } catch (error) {
       if (error.code === '42P01') {
@@ -82,6 +90,36 @@ try {
       }
     }
   }
+
+  // Sync Users and their Palettes
+  try {
+    console.log('📦 Syncing users and palettes...');
+    const usersResult = await pool.query('SELECT * FROM users ORDER BY id');
+    const users = [];
+
+    for (const userRow of usersResult.rows) {
+      const { created_at, updated_at, ...userData } = userRow;
+      
+      // Fetch palettes for this user
+      const palettesResult = await pool.query('SELECT * FROM user_palettes WHERE user_id = $1', [userData.id]);
+      const palettes = palettesResult.rows.map(p => {
+        const { created_at, updated_at, user_id, ...paletteData } = p;
+        return paletteData;
+      });
+
+      users.push({
+        ...userData,
+        palettes
+      });
+    }
+    
+    data.users = users;
+    console.log(`✓ users: ${users.length} records (with palettes)`);
+  } catch (error) {
+    console.error('❌ Failed to sync users:', error.message);
+  }
+
+  // Write to local JSON file
 
   // Write to local JSON file
   fs.writeFileSync(OUTPUT_FILE, JSON.stringify(data, null, 2), 'utf8');

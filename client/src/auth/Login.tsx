@@ -4,7 +4,8 @@ import { useTheme } from '../theme/ThemeContext';
 import './Login.css';
 
 const Login: React.FC = () => {
-  const [code, setCode] = useState('');
+  const [username, setUsername] = useState('');
+  const [password, setPassword] = useState('');
   const [error, setError] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const { login } = useAuth();
@@ -15,22 +16,24 @@ const Login: React.FC = () => {
     setIsLoading(true);
     setError('');
 
-    // Simple delay to simulate authentication process
-    await new Promise(resolve => setTimeout(resolve, 500));
-
-    const success = login(code);
+    const success = await login(username, password);
     
     if (!success) {
-      setError('Neplatný ověřovací kód. Zkuste to prosím znovu.');
-      setCode('');
+      setError('Neplatné přihlašovací údaje. Zkuste to prosím znovu.');
+      setPassword('');
     }
     
     setIsLoading(false);
   };
 
-  const handleCodeChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    setCode(e.target.value);
-    if (error) setError(''); // Clear error when user starts typing
+  const handleUsernameChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    setUsername(e.target.value);
+    if (error) setError('');
+  };
+
+  const handlePasswordChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    setPassword(e.target.value);
+    if (error) setError('');
   };
 
   // Clear error after 5 seconds
@@ -46,24 +49,40 @@ const Login: React.FC = () => {
       <div className="login-card">
         <div className="login-header">
           <h1 className="login-title">Walter System</h1>
-          <p className="login-subtitle">Vyžadováno ověření přístupu</p>
+          <p className="login-subtitle">Přihlášení do systému</p>
         </div>
         
         <form onSubmit={handleSubmit} className="login-form">
           <div className="input-group">
-            <label htmlFor="verification-code" className="input-label">
-              Ověřovací kód
+            <label htmlFor="username" className="input-label">
+              Uživatelské jméno
             </label>
             <input
-              id="verification-code"
+              id="username"
+              type="text"
+              value={username}
+              onChange={handleUsernameChange}
+              placeholder="Zadejte uživatelské jméno"
+              className={`input-field ${error ? 'input-error' : ''}`}
+              disabled={isLoading}
+              autoComplete="username"
+              autoFocus
+            />
+          </div>
+
+          <div className="input-group">
+            <label htmlFor="password" className="input-label">
+              Heslo
+            </label>
+            <input
+              id="password"
               type="password"
-              value={code}
-              onChange={handleCodeChange}
-              placeholder="Zadejte ověřovací kód"
+              value={password}
+              onChange={handlePasswordChange}
+              placeholder="Zadejte heslo"
               className={`input-field ${error ? 'input-error' : ''}`}
               disabled={isLoading}
               autoComplete="current-password"
-              autoFocus
             />
           </div>
           
@@ -76,7 +95,7 @@ const Login: React.FC = () => {
           <button 
             type="submit" 
             className={`login-button ${isLoading ? 'loading' : ''}`}
-            disabled={!code.trim() || isLoading}
+            disabled={!username.trim() || !password.trim() || isLoading}
           >
             {isLoading ? (
               <>
@@ -84,7 +103,7 @@ const Login: React.FC = () => {
                 Ověřuji...
               </>
             ) : (
-              'Přístup do systému'
+              'Přihlásit se'
             )}
           </button>
         </form>
