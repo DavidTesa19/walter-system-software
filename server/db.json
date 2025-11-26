@@ -39,7 +39,7 @@
       "company": "Initech",
       "location": "Praha",
       "mobile": "(423) 564-7972",
-      "field": null,
+      "field": "Administrativa",
       "info": null,
       "commission": null,
       "status": "pending"
@@ -76,6 +76,17 @@
       "info": null,
       "commission": null,
       "status": "pending"
+    },
+    {
+      "id": 12,
+      "name": "Nový Partner",
+      "company": "Nová Společnost",
+      "location": "Nová Lokalita",
+      "mobile": "000 000 000",
+      "field": null,
+      "info": null,
+      "commission": null,
+      "status": "pending"
     }
   ],
   "clients": [
@@ -103,7 +114,7 @@
     },
     {
       "id": 4,
-      "name": "Martin Walter Zabiják",
+      "name": "Martin Walter",
       "company": "Nová Společnost",
       "location": "Nová Lokalita",
       "mobile": "000 000 000",
@@ -254,6 +265,17 @@
       "field": null,
       "date": null,
       "status": "pending"
+    },
+    {
+      "id": 21,
+      "name": "Nový Klient",
+      "company": "Nová Společnost",
+      "location": "Nová Lokalita",
+      "mobile": "000 000 000",
+      "info": null,
+      "field": null,
+      "date": null,
+      "status": "pending"
     }
   ],
   "tipers": [
@@ -325,5 +347,201 @@
     }
   ],
   "users": [],
-  "employees": []
+  "employees": [],
+  "color_palettes": [
+    {
+      "id": 1,
+      "name": "Walter Light",
+      "mode": "light",
+      "colors": {
+        "text": "hsl(224, 33%, 16%)",
+        "muted": "hsl(220, 12%, 46%)",
+        "accent": "hsl(172, 66%, 45%)",
+        "border": "hsl(214, 32%, 89%)",
+        "primary": "hsl(221, 83%, 55%)",
+        "surface": "hsl(0, 0%, 100%)",
+        "background": "hsl(210, 33%, 98%)"
+      },
+      "is_active": false,
+      "typography": {
+        "body": "'Inter', system-ui, sans-serif",
+        "heading": "'Inter', system-ui, sans-serif",
+        "subheading": "'Poppins', 'Segoe UI', sans-serif"
+      }
+    },
+    {
+      "id": 2,
+      "name": "Walter Dark",
+      "mode": "dark",
+      "colors": {
+        "text": "hsl(210, 40%, 96%)",
+        "muted": "hsl(215, 20%, 65%)",
+        "accent": "hsl(162, 87%, 60%)",
+        "border": "hsl(220, 23%, 28%)",
+        "primary": "hsl(217, 86%, 65%)",
+        "surface": "hsl(218, 39%, 14%)",
+        "background": "hsl(222, 47%, 11%)"
+      },
+      "is_active": false,
+      "typography": {
+        "body": "'Inter', system-ui, sans-serif",
+        "heading": "'Inter', system-ui, sans-serif",
+        "subheading": "'Inter', system-ui, sans-serif"
+      }
+    },
+    {
+      "id": 3,
+      "name": "Walter Light Purple",
+      "mode": "light",
+      "colors": {
+        "text": "hsl(224, 33%, 16%)",
+        "muted": "hsl(220, 12%, 46%)",
+        "accent": "hsl(192, 100%, 39%)",
+        "border": "hsl(214, 32%, 89%)",
+        "primary": "hsl(273, 100%, 18%)",
+        "surface": "hsl(0, 0%, 100%)",
+        "background": "hsl(0, 0%, 93%)"
+      },
+      "is_active": true,
+      "typography": {
+        "body": "'Inter', system-ui, sans-serif",
+        "heading": "'Poppins', 'Segoe UI', sans-serif",
+        "subheading": "'Inter', system-ui, sans-serif"
+      }
+    },
+    {
+      "id": 4,
+      "name": "Walter Dark Red",
+      "mode": "dark",
+      "colors": {
+        "text": "hsl(210, 40%, 96%)",
+        "muted": "hsl(215, 20%, 65%)",
+        "accent": "hsl(184, 100%, 50%)",
+        "border": "hsl(220, 23%, 28%)",
+        "primary": "hsl(336, 80%, 47%)",
+        "surface": "hsl(218, 39%, 14%)",
+        "background": "hsl(222, 47%, 11%)"
+      },
+      "is_active": true,
+      "typography": {
+        "body": "'Poppins', 'Segoe UI', sans-serif",
+        "heading": "'Inter', system-ui, sans-serif",
+        "subheading": "'Inter', system-ui, sans-serif"
+      }
+    },
+    {
+      "id": 5,
+      "name": "Walter Dark Green",
+      "mode": "dark",
+      "colors": {
+        "text": "hsl(210, 40%, 96%)",
+        "muted": "hsl(156, 20%, 65%)",
+        "accent": "hsl(180, 30%, 91%)",
+        "border": "hsl(170, 32%, 27%)",
+        "primary": "hsl(156, 91%, 35%)",
+        "surface": "hsl(170, 51%, 6%)",
+        "background": "hsl(148, 56%, 1%)"
+      },
+      "is_active": false,
+      "typography": {
+        "body": "'Poppins', 'Segoe UI', sans-serif",
+        "heading": "'Inter', system-ui, sans-serif",
+        "subheading": "'Inter', system-ui, sans-serif"
+      }
+    },
+    {
+      "id": 8,
+      "name": "Walter McDonald",
+      "mode": "light",
+      "colors": {
+        "text": "hsl(0, 100%, 50%)",
+        "muted": "hsl(59, 100%, 50%)",
+        "accent": "hsl(60, 100%, 50%)",
+        "border": "hsl(214, 32%, 89%)",
+        "primary": "hsl(0, 100%, 50%)",
+        "surface": "hsl(0, 0%, 100%)",
+        "background": "hsl(0, 0%, 0%)"
+      },
+      "is_active": false,
+      "typography": {
+        "body": "'Inter', system-ui, sans-serif",
+        "heading": "'Poppins', 'Segoe UI', sans-serif",
+        "subheading": "'Poppins', 'Segoe UI', sans-serif"
+      }
+    }
+  ],
+  "future_functions": [
+    {
+      "id": 1,
+      "name": "Google kalendář",
+      "priority": "Medium",
+      "complexity": "Moderate",
+      "phase": "Medium Term",
+      "info": "Buďto přes email a heslo, či přes propojení google účtu",
+      "status": "In Progress"
+    },
+    {
+      "id": 2,
+      "name": "Prokliky na aplikace",
+      "priority": "High",
+      "complexity": "Simple",
+      "phase": "Medium Term",
+      "info": "sdfasduigsv",
+      "status": "Planned"
+    },
+    {
+      "id": 3,
+      "name": "Team Chat",
+      "priority": "Medium",
+      "complexity": "Moderate",
+      "phase": "Medium Term",
+      "info": "",
+      "status": "Planned"
+    },
+    {
+      "id": 4,
+      "name": "AI Chatbot - Gemini 3.0 ",
+      "priority": "Medium",
+      "complexity": "Moderate",
+      "phase": "Medium Term",
+      "info": "",
+      "status": "Planned"
+    },
+    {
+      "id": 5,
+      "name": "Users",
+      "priority": "Medium",
+      "complexity": "Moderate",
+      "phase": "Medium Term",
+      "info": "",
+      "status": "Planned"
+    },
+    {
+      "id": 6,
+      "name": "Detailed Profiles",
+      "priority": "High",
+      "complexity": "Complex",
+      "phase": "Medium Term",
+      "info": "",
+      "status": "Planned"
+    },
+    {
+      "id": 7,
+      "name": "ID System",
+      "priority": "Low",
+      "complexity": "Complex",
+      "phase": "Medium Term",
+      "info": "",
+      "status": "Planned"
+    },
+    {
+      "id": 8,
+      "name": "Poznámky v profilu",
+      "priority": "High",
+      "complexity": "Moderate",
+      "phase": "Medium Term",
+      "info": "",
+      "status": "Planned"
+    }
+  ]
 }

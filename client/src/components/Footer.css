@@ -1,0 +1,51 @@
+.app-footer {
+  position: fixed;
+  bottom: 0;
+  left: 260px; /* Match sidebar width */
+  right: 0;
+  background: var(--color-surface);
+  border-top: 1px solid var(--color-border);
+  padding: 0.75rem 1.5rem;
+  z-index: 90; /* Below sidebar (100) but above content */
+  box-shadow: 0 -2px 10px rgba(0, 0, 0, 0.05);
+  display: flex;
+  justify-content: center;
+  align-items: center;
+}
+
+.footer-links {
+  display: flex;
+  gap: 1rem;
+  flex-wrap: wrap;
+  justify-content: center;
+}
+
+.footer-link {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0.5rem 1rem;
+  background: var(--color-surface-alt);
+  border: 1px solid var(--color-border);
+  border-radius: 0.5rem;
+  color: var(--color-text-muted);
+  text-decoration: none;
+  font-size: 0.85rem;
+  font-weight: 600;
+  font-family: var(--font-subheading);
+  transition: all 0.2s ease;
+}
+
+.footer-link:hover {
+  background: var(--color-surface-hover);
+  color: var(--color-primary);
+  border-color: var(--color-primary);
+  transform: translateY(-2px);
+  box-shadow: var(--color-shadow-sm);
+}
+
+@media (max-width: 960px) {
+  .app-footer {
+    left: 240px; /* Match sidebar width on smaller screens */
+  }
+}

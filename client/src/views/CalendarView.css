@@ -1,0 +1,519 @@
+/* Google Calendar Clone Styles */
+@import url('https://fonts.googleapis.com/css2?family=Google+Sans:wght@400;500&family=Roboto:wght@400;500&display=swap');
+
+:root {
+  --google-blue: #1a73e8;
+  --google-red: #ea4335;
+  --google-green: #34a853;
+  --google-yellow: #fbbc04;
+  --google-text: #3c4043;
+  --google-text-secondary: #70757a;
+  --google-border: #dadce0;
+  --google-bg: #ffffff;
+  --google-bg-hover: #f1f3f4;
+  --google-bg-active: #e8f0fe;
+  --google-sidebar-width: 256px;
+}
+
+/* Force Light Mode for Calendar Area */
+.google-calendar-layout {
+  display: flex;
+  height: 100%;
+  width: 100%;
+  background-color: var(--google-bg);
+  color: var(--google-text);
+  font-family: 'Roboto', sans-serif;
+  overflow: hidden;
+}
+
+/* Sidebar */
+.google-sidebar {
+  width: var(--google-sidebar-width);
+  min-width: var(--google-sidebar-width);
+  padding: 12px;
+  display: flex;
+  flex-direction: column;
+  border-right: 1px solid var(--google-border);
+}
+
+.create-btn {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  background-color: white;
+  border: 1px solid var(--google-border);
+  border-radius: 24px;
+  padding: 4px 16px 4px 8px;
+  box-shadow: 0 1px 2px 0 rgba(60,64,67,0.3), 0 1px 3px 1px rgba(60,64,67,0.15);
+  cursor: pointer;
+  transition: box-shadow 0.2s, background-color 0.2s;
+  margin-bottom: 20px;
+  height: 48px;
+}
+
+.create-btn:hover {
+  box-shadow: 0 1px 3px 0 rgba(60,64,67,0.3), 0 4px 8px 3px rgba(60,64,67,0.15);
+  background-color: #f8f9fa;
+}
+
+.create-btn-text {
+  font-family: 'Google Sans', sans-serif;
+  font-size: 14px;
+  font-weight: 500;
+  color: var(--google-text);
+}
+
+/* Mini Calendar Placeholder */
+.mini-calendar-wrapper {
+  margin-bottom: 20px;
+  padding: 0 12px;
+}
+
+.mini-cal-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 10px;
+  font-family: 'Google Sans', sans-serif;
+  font-size: 14px;
+  font-weight: 500;
+  color: var(--google-text);
+}
+
+.mini-cal-nav {
+  display: flex;
+  gap: 10px;
+  color: var(--google-text-secondary);
+  cursor: pointer;
+}
+
+.mini-cal-grid {
+  display: grid;
+  grid-template-columns: repeat(7, 1fr);
+  text-align: center;
+  font-size: 10px;
+  row-gap: 8px;
+}
+
+.mini-cal-day-header {
+  color: var(--google-text-secondary);
+  font-weight: 500;
+}
+
+.mini-cal-day {
+  width: 24px;
+  height: 24px;
+  line-height: 24px;
+  margin: 0 auto;
+  border-radius: 50%;
+  cursor: pointer;
+  color: var(--google-text);
+}
+
+.mini-cal-day:hover {
+  background-color: var(--google-bg-hover);
+}
+
+.mini-cal-day.active {
+  background-color: var(--google-blue);
+  color: white;
+}
+
+/* My Calendars */
+.my-calendars {
+  padding: 0 12px;
+}
+
+.section-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  font-family: 'Google Sans', sans-serif;
+  font-size: 14px;
+  font-weight: 500;
+  margin-bottom: 12px;
+  color: var(--google-text);
+}
+
+.calendar-list-item {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 8px;
+  font-size: 14px;
+  color: var(--google-text);
+  cursor: pointer;
+}
+
+.cal-color {
+  width: 16px;
+  height: 16px;
+  border-radius: 4px;
+}
+
+/* Main Calendar Area */
+.main-calendar-area {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+/* React Big Calendar Overrides */
+.rbc-calendar {
+  font-family: 'Roboto', sans-serif;
+  color: var(--google-text);
+}
+
+/* Toolbar */
+.rbc-toolbar {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 12px 20px;
+  border-bottom: 1px solid var(--google-border);
+  margin-bottom: 0 !important;
+}
+
+.rbc-toolbar-group {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.rbc-btn-today {
+  background: white;
+  border: 1px solid var(--google-border);
+  border-radius: 4px;
+  padding: 7px 12px;
+  font-family: 'Google Sans', sans-serif;
+  font-weight: 500;
+  font-size: 14px;
+  color: var(--google-text);
+  cursor: pointer;
+}
+
+.rbc-btn-today:hover {
+  background-color: var(--google-bg-hover);
+}
+
+.rbc-btn-group-nav button {
+  background: none;
+  border: none;
+  border-radius: 50%;
+  width: 32px;
+  height: 32px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  color: var(--google-text-secondary);
+}
+
+.rbc-btn-group-nav button:hover {
+  background-color: var(--google-bg-hover);
+  color: var(--google-text);
+}
+
+.rbc-toolbar-label {
+  font-family: 'Google Sans', sans-serif;
+  font-size: 22px;
+  color: var(--google-text);
+  margin-left: 12px;
+}
+
+.google-view-select {
+  background: white;
+  border: 1px solid var(--google-border);
+  border-radius: 4px;
+  padding: 6px 12px;
+  font-family: 'Google Sans', sans-serif;
+  font-size: 14px;
+  color: var(--google-text);
+  cursor: pointer;
+}
+
+.google-view-select:hover {
+  background-color: var(--google-bg-hover);
+}
+
+/* Header */
+.rbc-header {
+  padding: 8px 0;
+  font-weight: 500;
+  font-size: 11px;
+  color: var(--google-text-secondary);
+  text-transform: uppercase;
+  border-bottom: 1px solid var(--google-border) !important;
+  border-left: 1px solid var(--google-border) !important;
+}
+
+.rbc-header + .rbc-header {
+  border-left: 1px solid var(--google-border) !important;
+}
+
+/* Grid */
+.rbc-time-view {
+  border: none !important;
+}
+
+.rbc-time-header {
+  border-bottom: 1px solid var(--google-border) !important;
+}
+
+.rbc-time-content {
+  border-top: none !important;
+}
+
+.rbc-day-slot .rbc-time-slot {
+  border-top: 1px solid var(--google-border) !important;
+}
+
+.rbc-timeslot-group {
+  border-bottom: 1px solid var(--google-border) !important;
+  min-height: 48px !important; /* Taller slots */
+}
+
+.rbc-day-bg + .rbc-day-bg {
+  border-left: 1px solid var(--google-border) !important;
+}
+
+.rbc-time-gutter .rbc-timeslot-group {
+  border-bottom: none !important; /* Remove lines in gutter */
+}
+
+.rbc-label {
+  font-size: 10px;
+  color: var(--google-text-secondary);
+  position: relative;
+  top: -6px;
+  padding-right: 8px;
+}
+
+/* Current Time Indicator */
+.rbc-current-time-indicator {
+  background-color: var(--google-red) !important;
+  height: 2px !important;
+}
+
+.rbc-current-time-indicator::before {
+  content: '';
+  position: absolute;
+  left: -5px;
+  top: -4px;
+  width: 10px;
+  height: 10px;
+  background-color: var(--google-red);
+  border-radius: 50%;
+}
+
+/* Events */
+.rbc-event {
+  background-color: var(--google-blue) !important;
+  border: none !important;
+  border-radius: 4px !important;
+  padding: 2px 4px !important;
+  font-size: 12px !important;
+  box-shadow: 0 1px 2px 0 rgba(60,64,67,0.3), 0 1px 3px 1px rgba(60,64,67,0.15);
+}
+
+.rbc-event-label {
+  display: none !important;
+}
+
+.rbc-event-content {
+  font-weight: 500;
+}
+
+/* Today Highlight */
+.rbc-day-slot.rbc-today {
+  background-color: transparent !important;
+}
+
+.rbc-header.rbc-today {
+  color: var(--google-blue) !important;
+}
+
+/* Modal */
+.google-modal-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background-color: rgba(0, 0, 0, 0.2); /* Lighter overlay */
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  z-index: 1000;
+}
+
+.google-modal {
+  background: white;
+  border-radius: 8px;
+  width: 448px;
+  box-shadow: 0 24px 38px 3px rgba(0,0,0,0.14), 0 9px 46px 8px rgba(0,0,0,0.12), 0 11px 15px -7px rgba(0,0,0,0.2);
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  animation: slideIn 0.2s ease-out;
+}
+
+@keyframes slideIn {
+  from { opacity: 0; transform: translateY(10px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+.google-modal-header {
+  background-color: #f1f3f4;
+  padding: 8px 16px;
+  display: flex;
+  justify-content: flex-end;
+  height: 36px;
+  align-items: center;
+}
+
+.modal-actions {
+  display: flex;
+  gap: 8px;
+}
+
+.icon-btn {
+  background: none;
+  border: none;
+  cursor: pointer;
+  padding: 8px;
+  border-radius: 50%;
+  color: var(--google-text-secondary);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.icon-btn:hover {
+  background-color: rgba(0,0,0,0.04);
+  color: var(--google-text);
+}
+
+.google-modal-content {
+  padding: 20px 24px;
+}
+
+.google-input-title {
+  width: 100%;
+  border: none;
+  border-bottom: 1px solid transparent;
+  font-family: 'Google Sans', sans-serif;
+  font-size: 22px;
+  color: var(--google-text);
+  padding: 8px 0;
+  margin-bottom: 20px;
+  outline: none;
+}
+
+.google-input-title:focus {
+  border-bottom: 2px solid var(--google-blue);
+}
+
+.event-time-row, .event-desc-row {
+  display: flex;
+  gap: 16px;
+  margin-bottom: 16px;
+  align-items: flex-start;
+  color: var(--google-text);
+  font-size: 14px;
+}
+
+.event-time-row span {
+  padding-top: 2px;
+}
+
+.google-textarea {
+  flex: 1;
+  border: none;
+  background-color: #f1f3f4;
+  border-radius: 4px;
+  padding: 8px;
+  font-family: 'Roboto', sans-serif;
+  font-size: 14px;
+  resize: none;
+  height: 80px;
+  outline: none;
+}
+
+.google-textarea:focus {
+  background-color: #e8f0fe;
+}
+
+.google-modal-footer {
+  padding: 16px 24px;
+  display: flex;
+  justify-content: flex-end;
+}
+
+.google-save-btn {
+  background-color: var(--google-blue);
+  color: white;
+  border: none;
+  border-radius: 4px;
+  padding: 8px 24px;
+  font-family: 'Google Sans', sans-serif;
+  font-weight: 500;
+  cursor: pointer;
+  transition: background-color 0.2s;
+}
+
+.google-save-btn:hover {
+  background-color: #1765cc;
+  box-shadow: 0 1px 2px 0 rgba(60,64,67,0.3), 0 1px 3px 1px rgba(60,64,67,0.15);
+}
+
+/* Login Screen */
+.calendar-login-container {
+  height: 100%;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  background-color: #f0f2f5;
+}
+
+.google-login-card {
+  background: white;
+  padding: 48px;
+  border-radius: 8px;
+  box-shadow: 0 2px 4px rgba(0,0,0,0.1), 0 8px 16px rgba(0,0,0,0.1);
+  text-align: center;
+  max-width: 400px;
+}
+
+.google-logo {
+  width: 64px;
+  height: 64px;
+  margin-bottom: 24px;
+}
+
+.google-login-card h2 {
+  font-family: 'Google Sans', sans-serif;
+  margin-bottom: 12px;
+  color: var(--google-text);
+}
+
+.google-login-card p {
+  color: var(--google-text-secondary);
+  margin-bottom: 32px;
+}
+
+.google-login-btn {
+  background-color: var(--google-blue);
+  color: white;
+  border: none;
+  padding: 10px 24px;
+  border-radius: 4px;
+  font-weight: 500;
+  cursor: pointer;
+  font-size: 16px;
+}
+
+.google-login-btn:hover {
+  background-color: #1765cc;
+}

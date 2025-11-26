@@ -93,6 +93,8 @@
   box-shadow: 0 0 0 3px color-mix(in srgb, var(--color-accent) 45%, transparent);
 }
 
+
+
 .sidebar-link {
   text-decoration: none;
   margin-top: auto;
@@ -114,6 +116,7 @@
   background: var(--color-background);
   color: var(--color-text);
   overflow: auto;
+  padding-bottom: 80px; /* Space for fixed footer */
 }
 
 @media (max-width: 960px) {

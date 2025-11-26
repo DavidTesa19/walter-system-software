@@ -21,7 +21,14 @@ import dotenv from 'dotenv';
 // Load environment variables
 dotenv.config();
 
-const OUTPUT_FILE = path.resolve(process.cwd(), 'db.json');
+const DATA_DIR = path.resolve(process.cwd(), 'data');
+const OUTPUT_FILE = path.join(DATA_DIR, 'db.json');
+
+// Ensure data directory exists
+if (!fs.existsSync(DATA_DIR)) {
+  fs.mkdirSync(DATA_DIR, { recursive: true });
+}
+
 console.log('📥 Syncing data FROM production TO local...\n');
 
 // Check if RAILWAY_DATABASE_URL is set
@@ -49,11 +56,13 @@ try {
     clients: [],
     tipers: [],
     users: [],
-    employees: []
+    employees: [],
+    color_palettes: [],
+    future_functions: []
   };
 
   // Fetch data from each table
-  const tables = ['partners', 'clients', 'tipers', 'users', 'employees'];
+  const tables = ['partners', 'clients', 'tipers', 'users', 'employees', 'color_palettes', 'future_functions'];
 
   for (const table of tables) {
     try {

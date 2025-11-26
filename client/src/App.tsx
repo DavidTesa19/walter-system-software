@@ -1,16 +1,23 @@
 import React, { useState } from 'react';
+import { GoogleOAuthProvider } from '@react-oauth/google';
 import { AuthProvider, useAuth } from './auth/AuthContext';
 import { ThemeProvider } from './theme/ThemeContext';
 import Login from './auth/Login';
 import Sidebar from './components/Sidebar';
+import Footer from './components/Footer';
 import PaletteManager from './theme/PaletteManager';
 import ActiveCommissionsView from './views/ActiveCommissionsView';
 import PendingApprovalsView from './views/PendingApprovalsView';
 import ArchivedCommissionsView from './views/ArchivedCommissionsView';
 import FutureFunctionsView from './views/FutureFunctionsView';
 import ChatbotView from './views/ChatbotView';
+// import CalendarView from './views/CalendarView';
 import type { AppView } from './types/appView';
 import './components/Sidebar.css';
+
+// NOTE: You must create a Google Cloud Project and get a Client ID
+// Add VITE_GOOGLE_CLIENT_ID=your_client_id to client/.env
+const GOOGLE_CLIENT_ID = import.meta.env.VITE_GOOGLE_CLIENT_ID || "YOUR_CLIENT_ID_HERE";
 
 const AppContent: React.FC = () => {
   const { isAuthenticated } = useAuth();
@@ -38,22 +45,27 @@ const AppContent: React.FC = () => {
               return <PaletteManager />;
             case 'chatbot':
               return <ChatbotView />;
+            // case 'calendar':
+            //   return <CalendarView />;
             default:
               return null;
           }
         })()}
       </div>
+      <Footer />
     </div>
   );
 };
 
 const App: React.FC = () => {
   return (
-    <ThemeProvider>
-      <AuthProvider>
-        <AppContent />
-      </AuthProvider>
-    </ThemeProvider>
+    <GoogleOAuthProvider clientId={GOOGLE_CLIENT_ID}>
+      <ThemeProvider>
+        <AuthProvider>
+          <AppContent />
+        </AuthProvider>
+      </ThemeProvider>
+    </GoogleOAuthProvider>
   );
 };
 
