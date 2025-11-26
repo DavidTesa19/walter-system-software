@@ -2514,7 +2514,7 @@ app.use((err, _req, res, _next) => {
 });
 
 // Start server
-app.listen(PORT, () => {
+app.listen(PORT, async () => {
   console.log(`
 ╔════════════════════════════════════════╗
 ║   Walter System Server Running         ║
@@ -2524,4 +2524,13 @@ app.listen(PORT, () => {
 ║  Environment: ${process.env.NODE_ENV || 'development'}           
 ╚════════════════════════════════════════╝
   `);
+
+  if (db.isPostgres()) {
+    try {
+      await initDatabase();
+      console.log('✓ Database initialized successfully');
+    } catch (error) {
+      console.error('✗ Failed to initialize database:', error);
+    }
+  }
 });
