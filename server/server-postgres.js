@@ -1976,7 +1976,7 @@ app.post("/auth/login", async (req, res) => {
     });
   } catch (error) {
     console.error("Login error:", error);
-    res.status(500).json({ error: "Internal server error" });
+    res.status(500).json({ error: "Internal server error", details: error.message });
   }
 });
 
@@ -2027,7 +2027,7 @@ app.post("/auth/register", async (req, res) => {
     res.status(201).json({ message: "User created", userId: newUser.id });
   } catch (error) {
     console.error("Register error:", error);
-    res.status(500).json({ error: "Internal server error" });
+    res.status(500).json({ error: "Internal server error", details: error.message });
   }
 });
 

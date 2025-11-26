@@ -27,6 +27,12 @@ async function registerUser() {
     } else {
       const text = await response.text();
       console.error('✗ Registration failed:', response.status, text);
+      try {
+          const json = JSON.parse(text);
+          if (json.details) {
+              console.error('Error Details:', json.details);
+          }
+      } catch (e) {}
     }
   } catch (error) {
     console.error('Error:', error.message);
