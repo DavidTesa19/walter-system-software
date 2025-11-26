@@ -329,6 +329,12 @@ function toDocumentResponse(row, { includeData = false } = {}) {
 
 // Generic database operations
 export const db = {
+  // Execute raw query
+  async query(text, params) {
+    if (!USE_POSTGRES) return { rows: [] };
+    return pool.query(text, params);
+  },
+
   // Get all records from a table
   async getAll(table, filters = {}) {
     if (!USE_POSTGRES) return null; // Handled by JSON file logic
