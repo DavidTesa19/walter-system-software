@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import { Calendar, momentLocalizer, Views, type View } from 'react-big-calendar';
+import { Calendar, momentLocalizer, Views, Navigate, type View } from 'react-big-calendar';
 import withDragAndDrop from 'react-big-calendar/lib/addons/dragAndDrop';
 import moment from 'moment';
 import { useGoogleLogin } from '@react-oauth/google';
@@ -91,7 +91,7 @@ const CalendarView: React.FC = () => {
   const [selectedEvent, setSelectedEvent] = useState<CalendarEvent | null>(null);
   const [eventTitle, setEventTitle] = useState('');
   const [eventDescription, setEventDescription] = useState('');
-  const [isLoading, setIsLoading] = useState(false);
+  const [, setIsLoading] = useState(false);
   const [view, setView] = useState<View>(Views.WEEK);
   const [date, setDate] = useState(new Date());
 
@@ -363,11 +363,11 @@ const CalendarView: React.FC = () => {
         <DnDCalendar
           localizer={localizer}
           events={events}
-          startAccessor="start"
-          endAccessor="end"
+          startAccessor={(event: any) => new Date(event.start)}
+          endAccessor={(event: any) => new Date(event.end)}
           style={{ height: '100%' }}
           onSelectSlot={handleSelectSlot}
-          onSelectEvent={handleSelectEvent}
+          onSelectEvent={(event: any) => handleSelectEvent(event)}
           onEventDrop={onEventDrop}
           onEventResize={onEventResize}
           selectable
