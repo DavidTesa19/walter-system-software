@@ -133,6 +133,7 @@
   font-size: 0.8rem;
   color: var(--color-text-muted);
   text-transform: capitalize;
+  font-family: var(--font-body);
 }
 
 .logout-button {

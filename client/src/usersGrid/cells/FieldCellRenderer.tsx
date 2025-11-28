@@ -31,6 +31,7 @@ const FieldCellRenderer: React.FC<any> = (params) => {
     dropdown.style.boxShadow = isDark ? "0 2px 8px rgba(0, 0, 0, 0.4)" : "0 2px 8px rgba(0, 0, 0, 0.15)";
     dropdown.style.maxHeight = "300px";
     dropdown.style.overflowY = "auto";
+    dropdown.style.fontFamily = "var(--font-body)";
 
     let currentLetter = "";
     fieldOptions.forEach((option) => {
@@ -46,6 +47,7 @@ const FieldCellRenderer: React.FC<any> = (params) => {
         headerDiv.style.fontWeight = "bold";
         headerDiv.style.fontSize = "14px";
         headerDiv.style.borderBottom = isDark ? "2px solid #2d2d2d" : "2px solid #dee2e6";
+        headerDiv.style.fontFamily = "var(--font-subheading)";
         headerDiv.style.position = "sticky";
         headerDiv.style.top = "0";
         headerDiv.style.zIndex = "1";
@@ -61,6 +63,7 @@ const FieldCellRenderer: React.FC<any> = (params) => {
       optionDiv.style.backgroundColor = isDark ? "#1a1a1a" : "white";
       optionDiv.style.color = isDark ? "#e0e0e0" : "#333";
       optionDiv.style.borderBottom = isDark ? "1px solid #2d2d2d" : "1px solid #eee";
+      optionDiv.style.fontFamily = "var(--font-body)";
       optionDiv.textContent = option.label;
 
       optionDiv.addEventListener("mouseenter", () => {
@@ -102,6 +105,7 @@ const FieldCellRenderer: React.FC<any> = (params) => {
     searchInput.style.fontSize = "14px";
     searchInput.style.outline = "none";
     searchInput.style.boxSizing = "border-box";
+    searchInput.style.fontFamily = "var(--font-body)";
 
     searchContainer.appendChild(searchInput);
     dropdown.insertBefore(searchContainer, dropdown.firstChild);
