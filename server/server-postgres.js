@@ -1463,18 +1463,27 @@ app.get("/color-palettes", authenticateToken, async (req, res) => {
       );
       let palettes = result.rows;
 
-      // If no palettes, create defaults
+      // If no palettes, copy from shared color_palettes table or use defaults
       if (palettes.length === 0) {
-        const defaults = DEFAULT_PALETTES.map(p => ({
-          ...p,
-          user_id: userId
-        }));
+        // Try to get palettes from the shared color_palettes table first
+        const sharedResult = await db.query('SELECT * FROM color_palettes ORDER BY id');
+        const sharedPalettes = sharedResult.rows;
         
-        for (const p of defaults) {
+        const sourcePalettes = sharedPalettes.length > 0 
+          ? sharedPalettes.map(p => ({
+              name: p.name,
+              mode: p.mode,
+              colors: typeof p.colors === 'string' ? JSON.parse(p.colors) : p.colors,
+              typography: typeof p.typography === 'string' ? JSON.parse(p.typography) : (p.typography || DEFAULT_TYPOGRAPHY),
+              is_active: p.is_active
+            }))
+          : DEFAULT_PALETTES;
+        
+        for (const p of sourcePalettes) {
           await db.query(
             `INSERT INTO user_palettes (user_id, name, mode, colors, typography, is_active)
              VALUES ($1, $2, $3, $4, $5, $6)`,
-            [p.user_id, p.name, p.mode, JSON.stringify(p.colors), JSON.stringify(p.typography), p.is_active]
+            [userId, p.name, p.mode, JSON.stringify(p.colors), JSON.stringify(p.typography), p.is_active]
           );
         }
         
@@ -1518,8 +1527,22 @@ app.get("/color-palettes/active", authenticateToken, async (req, res) => {
       // Ensure palettes exist
       const check = await db.query('SELECT 1 FROM user_palettes WHERE user_id = $1', [userId]);
       if (check.rows.length === 0) {
-         const defaults = DEFAULT_PALETTES.map(p => ({ ...p, user_id: userId }));
-         for (const p of defaults) {
+        // Try to get palettes from the shared color_palettes table first
+        const sharedResult = await db.query('SELECT * FROM color_palettes ORDER BY id');
+        const sharedPalettes = sharedResult.rows;
+        
+        const sourcePalettes = sharedPalettes.length > 0 
+          ? sharedPalettes.map(p => ({
+              name: p.name,
+              mode: p.mode,
+              colors: typeof p.colors === 'string' ? JSON.parse(p.colors) : p.colors,
+              typography: typeof p.typography === 'string' ? JSON.parse(p.typography) : (p.typography || DEFAULT_TYPOGRAPHY),
+              is_active: p.is_active,
+              user_id: userId
+            }))
+          : DEFAULT_PALETTES.map(p => ({ ...p, user_id: userId }));
+        
+        for (const p of sourcePalettes) {
           await db.query(
             `INSERT INTO user_palettes (user_id, name, mode, colors, typography, is_active)
              VALUES ($1, $2, $3, $4, $5, $6)`,
