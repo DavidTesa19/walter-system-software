@@ -93,13 +93,6 @@ const ChatbotView: React.FC = () => {
     return headers;
   };
 
-  const suggestedPrompts = [
-    "Explain quantum computing in simple terms",
-    "Write a Python function to sort an array",
-    "What are the best practices for React development?",
-    "Help me debug this error message",
-  ];
-
   // Get max tokens limit for current model
   const getCurrentModelMaxTokens = (): number => {
     return MODEL_MAX_TOKENS[selectedModel] || 8000;
@@ -535,10 +528,6 @@ const ChatbotView: React.FC = () => {
     }
   };
 
-  const handleSuggestedPrompt = (prompt: string) => {
-    setInputValue(prompt);
-  };
-
   return (
     <div className="chatbot-view">
       {showConversations && (
@@ -553,7 +542,7 @@ const ChatbotView: React.FC = () => {
             + Nová konverzace
           </button>
           <div className="conversations-list">
-            {conversations.map((conv) => (
+            {[...conversations].sort((a, b) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime()).map((conv) => (
               <div
                 key={conv.id}
                 className={`conversation-item ${currentConversationId === conv.id ? 'active' : ''}`}
@@ -706,21 +695,6 @@ const ChatbotView: React.FC = () => {
             </svg>
             <h2>Začněte konverzaci</h2>
             <p>Zeptejte se na cokoliv, co vás zajímá</p>
-            
-            <div className="suggested-prompts">
-              <h3>Návrhy dotazů:</h3>
-              <div className="prompt-buttons">
-                {suggestedPrompts.map((prompt, index) => (
-                  <button
-                    key={index}
-                    className="prompt-button"
-                    onClick={() => handleSuggestedPrompt(prompt)}
-                  >
-                    {prompt}
-                  </button>
-                ))}
-              </div>
-            </div>
           </div>
         ) : (
           <>
