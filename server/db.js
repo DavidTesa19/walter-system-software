@@ -189,7 +189,9 @@ export async function initDatabase() {
       "ALTER TABLE future_functions ADD COLUMN IF NOT EXISTS complexity VARCHAR(50)",
       "ALTER TABLE future_functions ADD COLUMN IF NOT EXISTS phase VARCHAR(120)",
       "ALTER TABLE future_functions ADD COLUMN IF NOT EXISTS info TEXT",
-      "ALTER TABLE future_functions ADD COLUMN IF NOT EXISTS status VARCHAR(50) DEFAULT 'Planned'"
+      "ALTER TABLE future_functions ADD COLUMN IF NOT EXISTS status VARCHAR(50) DEFAULT 'Planned'",
+      "ALTER TABLE users ADD COLUMN IF NOT EXISTS password_hash VARCHAR(255)",
+      "ALTER TABLE users ADD COLUMN IF NOT EXISTS role VARCHAR(50) DEFAULT 'employee'"
     ];
 
     for (const sql of columnMigrations) {

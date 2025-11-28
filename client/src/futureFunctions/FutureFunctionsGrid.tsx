@@ -3,7 +3,7 @@ import "../usersGrid/UsersGrid.css";
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { AgGridReact } from "ag-grid-react";
 import { AllCommunityModule, ModuleRegistry, type CellValueChangedEvent, type ColDef } from "ag-grid-community";
-import { API_BASE } from "../usersGrid/constants";
+import { apiGet, apiPost, apiPut, apiDelete } from "../utils/api";
 import { measureGrid, type GridSizes } from "../usersGrid/utils/gridSizing";
 import InfoPopupEditor from "./cells/InfoPopupEditor";
 import OptionSelectEditor from "./cells/OptionSelectEditor";
@@ -37,15 +37,12 @@ const FutureFunctionsGrid: React.FC = () => {
   const fetchFutureFunctions = useCallback(async () => {
     setIsLoading(true);
     try {
-      const response = await fetch(`${API_BASE}/future-functions`);
-      if (!response.ok) {
-        throw new Error("Failed to fetch");
-      }
-      const data: FutureFunction[] = await response.json();
-      setFutureFunctions(data);
+      const data = await apiGet<FutureFunction[]>(`/future-functions`);
+      setFutureFunctions(Array.isArray(data) ? data : []);
     } catch (error) {
       console.error("Error fetching future functions:", error);
       alert("Nepodařilo se načíst plán funkcí");
+      setFutureFunctions([]);
     } finally {
       setIsLoading(false);
     }
@@ -67,18 +64,7 @@ const FutureFunctionsGrid: React.FC = () => {
 
     try {
       setIsLoading(true);
-      const response = await fetch(`${API_BASE}/future-functions`, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json"
-        },
-        body: JSON.stringify(newFunction)
-      });
-
-      if (!response.ok) {
-        throw new Error("Request failed");
-      }
-
+      await apiPost(`/future-functions`, newFunction);
       await fetchFutureFunctions();
     } catch (error) {
       console.error("Error adding future function:", error);
@@ -99,14 +85,7 @@ const FutureFunctionsGrid: React.FC = () => {
 
       try {
         setIsLoading(true);
-        const response = await fetch(`${API_BASE}/future-functions/${id}`, {
-          method: "DELETE"
-        });
-
-        if (!response.ok) {
-          throw new Error("Request failed");
-        }
-
+        await apiDelete(`/future-functions/${id}`);
         await fetchFutureFunctions();
       } catch (error) {
         console.error("Error deleting future function:", error);
@@ -125,18 +104,7 @@ const FutureFunctionsGrid: React.FC = () => {
       }
 
       try {
-        const response = await fetch(`${API_BASE}/future-functions/${params.data.id}`, {
-          method: "PUT",
-          headers: {
-            "Content-Type": "application/json"
-          },
-          body: JSON.stringify(params.data)
-        });
-
-        if (!response.ok) {
-          alert("Nepodařilo se uložit změny");
-          await fetchFutureFunctions();
-        }
+        await apiPut(`/future-functions/${params.data.id}`, params.data);
       } catch (error) {
         console.error("Error updating future function:", error);
         alert("Chyba při ukládání změn");

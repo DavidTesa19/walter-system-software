@@ -83,9 +83,33 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
     }
   };
 
+  // Validate token with the server
+  const validateToken = async (userData: User): Promise<boolean> => {
+    if (!userData.token) return false;
+    
+    try {
+      const response = await fetch(`${API_BASE}/auth/me`, {
+        headers: {
+          'Authorization': `Bearer ${userData.token}`,
+          'Content-Type': 'application/json',
+        },
+      });
+      
+      if (response.ok) {
+        return true;
+      }
+      
+      // Token is invalid or expired
+      return false;
+    } catch (error) {
+      console.error("Token validation failed:", error);
+      return false;
+    }
+  };
+
   // Check for existing session on mount
   useEffect(() => {
-    const checkExistingSession = () => {
+    const checkExistingSession = async () => {
       const storedUser = localStorage.getItem('walterUser');
       const sessionStart = localStorage.getItem('walterSessionStart');
       
@@ -96,8 +120,18 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
         const remaining = SESSION_DURATION - elapsed;
         
         if (remaining > 0) {
-          setUser(JSON.parse(storedUser));
-          startSessionTimer(remaining);
+          const userData = JSON.parse(storedUser);
+          
+          // Validate the token with the server before trusting it
+          const isValid = await validateToken(userData);
+          
+          if (isValid) {
+            setUser(userData);
+            startSessionTimer(remaining);
+          } else {
+            // Token is invalid, clear session
+            logout();
+          }
         } else {
           logout();
         }

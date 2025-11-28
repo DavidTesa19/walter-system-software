@@ -6,7 +6,8 @@ import FieldCellRenderer from "../cells/FieldCellRenderer";
 import ProfileCellRenderer from "../cells/ProfileCellRenderer";
 import ProfilePanel from "../components/ProfilePanel";
 import { measureGrid, type GridSizes } from "../utils/gridSizing";
-import { API_BASE, mapViewToStatus } from "../constants";
+import { mapViewToStatus } from "../constants";
+import { apiGet, apiPost, apiPut, apiDelete } from "../../utils/api";
 import { formatProfileDate, normalizeText, toStatusBadge } from "../utils/profileUtils";
 import type { ProfileSection } from "../types/profile";
 import type { SectionProps } from "./SectionTypes";
@@ -174,11 +175,11 @@ const TipersSection: React.FC<SectionProps> = ({
   const fetchTipersData = useCallback(async () => {
     setIsLoading(true);
     try {
-      const response = await fetch(`${API_BASE}/tipers?status=${status}`);
-      const data = await response.json();
-      setTipersData(data);
+      const data = await apiGet<UserInterface[]>(`/tipers?status=${status}`);
+      setTipersData(Array.isArray(data) ? data : []);
     } catch (error) {
       console.error("Error fetching tipers:", error);
+      setTipersData([]);
     } finally {
       setIsLoading(false);
     }
@@ -223,12 +224,8 @@ const TipersSection: React.FC<SectionProps> = ({
   const handleApproveTiper = useCallback(
     async (id: number) => {
       try {
-        const response = await fetch(`${API_BASE}/tipers/${id}/approve`, { method: "POST" });
-        if (response.ok) {
-          fetchTipersData();
-        } else {
-          alert("Nepodařilo se schválit tipaře");
-        }
+        await apiPost(`/tipers/${id}/approve`);
+        fetchTipersData();
       } catch (error) {
         console.error("Error approving tiper:", error);
         alert("Chyba při schvalování tipaře");
@@ -240,12 +237,8 @@ const TipersSection: React.FC<SectionProps> = ({
   const handleRestoreTiper = useCallback(
     async (id: number) => {
       try {
-        const response = await fetch(`${API_BASE}/tipers/${id}/restore`, { method: "POST" });
-        if (response.ok) {
-          fetchTipersData();
-        } else {
-          alert("Nepodařilo se obnovit tipaře");
-        }
+        await apiPost(`/tipers/${id}/restore`);
+        fetchTipersData();
       } catch (error) {
         console.error("Error restoring tiper:", error);
         alert("Chyba při obnovování tipaře");
@@ -261,22 +254,16 @@ const TipersSection: React.FC<SectionProps> = ({
       const isPending = tiper?.status === "pending";
 
       let confirmMessage = "";
-      let endpoint = "";
-      let method: "POST" | "DELETE" = "DELETE";
 
       if (isArchived) {
         confirmMessage =
           `Opravdu chcete TRVALE SMAZAT tohoto tipaře z databáze?\n\nJméno: ${tiper?.name || "N/A"}\nSpolečnost: ${tiper?.company || "N/A"}\n\nTato akce je NEzvratná!`;
-        endpoint = `${API_BASE}/tipers/${id}`;
       } else if (isPending) {
         confirmMessage =
           `Opravdu chcete zamítnout tohoto tipaře?\n\nJméno: ${tiper?.name || "N/A"}\nSpolečnost: ${tiper?.company || "N/A"}`;
-        endpoint = `${API_BASE}/tipers/${id}`;
       } else {
         confirmMessage =
           `Opravdu chcete přesunout tohoto tipaře do archivu k odstraňení?\n\nJméno: ${tiper?.name || "N/A"}\nSpolečnost: ${tiper?.company || "N/A"}`;
-        endpoint = `${API_BASE}/tipers/${id}/archive`;
-        method = "POST";
       }
 
       if (!confirm(confirmMessage)) {
@@ -284,12 +271,12 @@ const TipersSection: React.FC<SectionProps> = ({
       }
 
       try {
-        const response = await fetch(endpoint, { method });
-        if (response.ok) {
-          fetchTipersData();
+        if (isArchived || isPending) {
+          await apiDelete(`/tipers/${id}`);
         } else {
-          alert("Nepodařilo se provést akci");
+          await apiPost(`/tipers/${id}/archive`);
         }
+        fetchTipersData();
       } catch (error) {
         console.error("Error performing action on tiper:", error);
         alert("Chyba při mazání tipaře");
@@ -302,19 +289,7 @@ const TipersSection: React.FC<SectionProps> = ({
     async (params: any) => {
       try {
         const { created_at, updated_at, ...updatedTiper } = params.data;
-
-        const response = await fetch(`${API_BASE}/tipers/${updatedTiper.id}`, {
-          method: "PUT",
-          headers: {
-            "Content-Type": "application/json"
-          },
-          body: JSON.stringify(updatedTiper)
-        });
-
-        if (!response.ok) {
-          alert("Nepodařilo se aktualizovat tipaře");
-          fetchTipersData();
-        }
+        await apiPut(`/tipers/${updatedTiper.id}`, updatedTiper);
       } catch (error) {
         console.error("Error updating tiper:", error);
         alert("Chyba při aktualizaci tipaře");
@@ -333,19 +308,8 @@ const TipersSection: React.FC<SectionProps> = ({
     };
 
     try {
-      const response = await fetch(`${API_BASE}/tipers`, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json"
-        },
-        body: JSON.stringify(newTiper)
-      });
-
-      if (response.ok) {
-        fetchTipersData();
-      } else {
-        alert("Nepodařilo se přidat tipaře");
-      }
+      await apiPost(`/tipers`, newTiper);
+      fetchTipersData();
     } catch (error) {
       console.error("Error adding tiper:", error);
       alert("Chyba při přidávání tipaře");

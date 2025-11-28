@@ -6,7 +6,8 @@ import FieldCellRenderer from "../cells/FieldCellRenderer";
 import ProfileCellRenderer from "../cells/ProfileCellRenderer";
 import ProfilePanel from "../components/ProfilePanel";
 import { measureGrid, type GridSizes } from "../utils/gridSizing";
-import { API_BASE, mapViewToStatus } from "../constants";
+import { mapViewToStatus } from "../constants";
+import { apiGet, apiPost, apiPut, apiDelete } from "../../utils/api";
 import { formatProfileDate, normalizeText, toStatusBadge } from "../utils/profileUtils";
 import type { ProfileSection } from "../types/profile";
 import type { SectionProps } from "./SectionTypes";
@@ -174,11 +175,11 @@ const PartnersSection: React.FC<SectionProps> = ({
   const fetchPartnersData = useCallback(async () => {
     setIsLoading(true);
     try {
-      const response = await fetch(`${API_BASE}/partners?status=${status}`);
-      const data = await response.json();
-      setPartnersData(data);
+      const data = await apiGet<UserInterface[]>(`/partners?status=${status}`);
+      setPartnersData(Array.isArray(data) ? data : []);
     } catch (error) {
       console.error("Error fetching partners:", error);
+      setPartnersData([]);
     } finally {
       setIsLoading(false);
     }
@@ -223,12 +224,8 @@ const PartnersSection: React.FC<SectionProps> = ({
   const handleApprovePartner = useCallback(
     async (id: number) => {
       try {
-        const response = await fetch(`${API_BASE}/partners/${id}/approve`, { method: "POST" });
-        if (response.ok) {
-          fetchPartnersData();
-        } else {
-          alert("Nepodařilo se schválit partnera");
-        }
+        await apiPost(`/partners/${id}/approve`);
+        fetchPartnersData();
       } catch (error) {
         console.error("Error approving partner:", error);
         alert("Chyba při schvalování partnera");
@@ -240,12 +237,8 @@ const PartnersSection: React.FC<SectionProps> = ({
   const handleRestorePartner = useCallback(
     async (id: number) => {
       try {
-        const response = await fetch(`${API_BASE}/partners/${id}/restore`, { method: "POST" });
-        if (response.ok) {
-          fetchPartnersData();
-        } else {
-          alert("Nepodařilo se obnovit partnera");
-        }
+        await apiPost(`/partners/${id}/restore`);
+        fetchPartnersData();
       } catch (error) {
         console.error("Error restoring partner:", error);
         alert("Chyba při obnovování partnera");
@@ -261,22 +254,16 @@ const PartnersSection: React.FC<SectionProps> = ({
       const isPending = partner?.status === "pending";
 
       let confirmMessage = "";
-      let endpoint = "";
-      let method: "POST" | "DELETE" = "DELETE";
 
       if (isArchived) {
         confirmMessage =
           `Opravdu chcete TRVALE SMAZAT tohoto partnera z databáze?\n\nJméno: ${partner?.name || "N/A"}\nSpolečnost: ${partner?.company || "N/A"}\n\nTato akce je NEzvratná!`;
-        endpoint = `${API_BASE}/partners/${id}`;
       } else if (isPending) {
         confirmMessage =
           `Opravdu chcete zamítnout tohoto partnera?\n\nJméno: ${partner?.name || "N/A"}\nSpolečnost: ${partner?.company || "N/A"}`;
-        endpoint = `${API_BASE}/partners/${id}`;
       } else {
         confirmMessage =
           `Opravdu chcete přesunout tohoto partnera do archivu k odstraňení?\n\nJméno: ${partner?.name || "N/A"}\nSpolečnost: ${partner?.company || "N/A"}`;
-        endpoint = `${API_BASE}/partners/${id}/archive`;
-        method = "POST";
       }
 
       if (!confirm(confirmMessage)) {
@@ -284,12 +271,12 @@ const PartnersSection: React.FC<SectionProps> = ({
       }
 
       try {
-        const response = await fetch(endpoint, { method });
-        if (response.ok) {
-          fetchPartnersData();
+        if (isArchived || isPending) {
+          await apiDelete(`/partners/${id}`);
         } else {
-          alert("Nepodařilo se provést akci");
+          await apiPost(`/partners/${id}/archive`);
         }
+        fetchPartnersData();
       } catch (error) {
         console.error("Error performing action on partner:", error);
         alert("Chyba při provádění akce");
@@ -302,19 +289,7 @@ const PartnersSection: React.FC<SectionProps> = ({
     async (params: any) => {
       try {
         const { created_at, updated_at, ...updatedPartner } = params.data;
-
-        const response = await fetch(`${API_BASE}/partners/${updatedPartner.id}`, {
-          method: "PUT",
-          headers: {
-            "Content-Type": "application/json"
-          },
-          body: JSON.stringify(updatedPartner)
-        });
-
-        if (!response.ok) {
-          alert("Failed to update partner");
-          fetchPartnersData();
-        }
+        await apiPut(`/partners/${updatedPartner.id}`, updatedPartner);
       } catch (error) {
         console.error("Error updating partner:", error);
         alert("Error updating partner");
@@ -333,19 +308,8 @@ const PartnersSection: React.FC<SectionProps> = ({
     };
 
     try {
-      const response = await fetch(`${API_BASE}/partners`, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json"
-        },
-        body: JSON.stringify(newPartner)
-      });
-
-      if (response.ok) {
-        fetchPartnersData();
-      } else {
-        alert("Nepodařilo se přidat partnera");
-      }
+      await apiPost(`/partners`, newPartner);
+      fetchPartnersData();
     } catch (error) {
       console.error("Error adding partner:", error);
       alert("Chyba při přidávání partnera");

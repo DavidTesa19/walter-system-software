@@ -1,6 +1,8 @@
 import React, { useState, useRef, useEffect } from 'react';
 import './ChatbotView.css';
 import MarkdownMessage from '../components/MarkdownMessage';
+import { API_BASE } from '../usersGrid/constants';
+import { useAuth } from '../auth/AuthContext';
 
 type AIProvider = 'openai' | 'claude';
 
@@ -65,6 +67,7 @@ const MODEL_MAX_TOKENS: Record<string, number> = {
 };
 
 const ChatbotView: React.FC = () => {
+  const { user } = useAuth();
   const [messages, setMessages] = useState<Message[]>([]);
   const [conversations, setConversations] = useState<Conversation[]>([]);
   const [currentConversationId, setCurrentConversationId] = useState<string | null>(null);
@@ -80,6 +83,15 @@ const ChatbotView: React.FC = () => {
   const [useWebSearch, setUseWebSearch] = useState(true); // Default to enabled
   const [maxTokens, setMaxTokens] = useState<number>(8000);
   const messagesEndRef = useRef<HTMLDivElement>(null);
+
+  // Helper to get auth headers
+  const getAuthHeaders = (): HeadersInit => {
+    const headers: HeadersInit = { 'Content-Type': 'application/json' };
+    if (user?.token) {
+      headers['Authorization'] = `Bearer ${user.token}`;
+    }
+    return headers;
+  };
 
   const suggestedPrompts = [
     "Explain quantum computing in simple terms",
@@ -125,7 +137,9 @@ const ChatbotView: React.FC = () => {
 
   const loadConversations = async () => {
     try {
-      const response = await fetch('http://localhost:3004/api/conversations');
+      const response = await fetch(`${API_BASE}/api/conversations`, {
+        headers: getAuthHeaders(),
+      });
       if (response.ok) {
         const data = await response.json();
         setConversations(data);
@@ -140,9 +154,9 @@ const ChatbotView: React.FC = () => {
 
     const title = messages[0]?.content.slice(0, 50) || 'New Conversation';
     try {
-      const response = await fetch('http://localhost:3004/api/conversations', {
+      const response = await fetch(`${API_BASE}/api/conversations`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: getAuthHeaders(),
         body: JSON.stringify({ title, messages }),
       });
       if (response.ok) {
@@ -157,9 +171,9 @@ const ChatbotView: React.FC = () => {
 
   const updateConversation = async (id: string) => {
     try {
-      await fetch(`http://localhost:3004/api/conversations/${id}`, {
+      await fetch(`${API_BASE}/api/conversations/${id}`, {
         method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
+        headers: getAuthHeaders(),
         body: JSON.stringify({ messages }),
       });
     } catch (error) {
@@ -169,7 +183,9 @@ const ChatbotView: React.FC = () => {
 
   const loadConversation = async (id: string) => {
     try {
-      const response = await fetch(`http://localhost:3004/api/conversations/${id}`);
+      const response = await fetch(`${API_BASE}/api/conversations/${id}`, {
+        headers: getAuthHeaders(),
+      });
       if (response.ok) {
         const conversation = await response.json();
         setMessages(conversation.messages.map((msg: any) => ({
@@ -186,8 +202,9 @@ const ChatbotView: React.FC = () => {
 
   const deleteConversation = async (id: string) => {
     try {
-      const response = await fetch(`http://localhost:3004/api/conversations/${id}`, {
+      const response = await fetch(`${API_BASE}/api/conversations/${id}`, {
         method: 'DELETE',
+        headers: getAuthHeaders(),
       });
       if (response.ok) {
         setConversations((prev) => prev.filter((c) => c.id !== id));
@@ -234,11 +251,9 @@ const ChatbotView: React.FC = () => {
     setMessages((prev) => [...prev, assistantMessage]);
 
     try {
-      const response = await fetch('http://localhost:3004/api/chat/stream', {
+      const response = await fetch(`${API_BASE}/api/chat/stream`, {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
+        headers: getAuthHeaders(),
         body: JSON.stringify({
           messages: [
             ...messages.map((msg) => ({
@@ -360,11 +375,9 @@ const ChatbotView: React.FC = () => {
 
     try {
       // Call the backend API
-      const response = await fetch('http://localhost:3004/api/chat', {
+      const response = await fetch(`${API_BASE}/api/chat`, {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
+        headers: getAuthHeaders(),
         body: JSON.stringify({
           messages: [
             ...messages.map((msg) => ({
@@ -475,11 +488,9 @@ const ChatbotView: React.FC = () => {
     // Resend the user message
     setIsLoading(true);
     try {
-      const response = await fetch('http://localhost:3004/api/chat', {
+      const response = await fetch(`${API_BASE}/api/chat`, {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
+        headers: getAuthHeaders(),
         body: JSON.stringify({
           messages: messages.slice(0, messageIndex - 1).map((msg) => ({
             role: msg.role,

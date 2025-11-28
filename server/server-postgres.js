@@ -19,20 +19,57 @@ const openai = process.env.OPENAI_API_KEY
 
 const app = express();
 const PORT = process.env.PORT ? Number(process.env.PORT) : 3004;
-const JWT_SECRET = process.env.JWT_SECRET || "walter-secret-key-change-in-prod";
+
+// JWT Secret - MUST be set in production
+const JWT_SECRET = process.env.JWT_SECRET;
+if (!JWT_SECRET && process.env.NODE_ENV === 'production') {
+  console.error('FATAL: JWT_SECRET environment variable is required in production');
+  process.exit(1);
+}
+const EFFECTIVE_JWT_SECRET = JWT_SECRET || 'walter-dev-secret-local-only';
 
 // Middleware to authenticate token
 const authenticateToken = (req, res, next) => {
   const authHeader = req.headers['authorization'];
   const token = authHeader && authHeader.split(' ')[1];
 
-  if (!token) return res.sendStatus(401);
+  if (!token) return res.status(401).json({ error: 'Authentication required' });
 
-  jwt.verify(token, JWT_SECRET, (err, user) => {
-    if (err) return res.sendStatus(403);
+  jwt.verify(token, EFFECTIVE_JWT_SECRET, (err, user) => {
+    if (err) return res.status(403).json({ error: 'Invalid or expired token' });
     req.user = user;
     next();
   });
+};
+
+// Middleware to require specific roles
+const requireRole = (...allowedRoles) => {
+  return (req, res, next) => {
+    if (!req.user) {
+      return res.status(401).json({ error: 'Authentication required' });
+    }
+    if (!allowedRoles.includes(req.user.role)) {
+      return res.status(403).json({ error: 'Insufficient permissions' });
+    }
+    next();
+  };
+};
+
+// Optional auth - attaches user if token present, but doesn't require it
+const optionalAuth = (req, res, next) => {
+  const authHeader = req.headers['authorization'];
+  const token = authHeader && authHeader.split(' ')[1];
+
+  if (token) {
+    jwt.verify(token, EFFECTIVE_JWT_SECRET, (err, user) => {
+      if (!err) {
+        req.user = user;
+      }
+      next();
+    });
+  } else {
+    next();
+  }
 };
 
 // File-based storage (development mode)
@@ -1052,7 +1089,7 @@ function removePaletteFromStore(store, id) {
 // AI CHATBOT ENDPOINTS
 // ============================================
 
-app.post("/api/chat", async (req, res) => {
+app.post("/api/chat", authenticateToken, async (req, res) => {
   try {
     const { messages, model, provider, responseStyle, useWebSearch, maxTokens } = parseChatRequest(req.body);
     console.log("Received maxTokens:", maxTokens, "for model:", model, "provider:", provider);
@@ -1114,7 +1151,7 @@ app.post("/api/chat", async (req, res) => {
   }
 });
 
-app.post("/api/chat/stream", async (req, res) => {
+app.post("/api/chat/stream", authenticateToken, async (req, res) => {
   res.setHeader("Content-Type", "text/event-stream");
   res.setHeader("Cache-Control", "no-cache");
   res.setHeader("Connection", "keep-alive");
@@ -1344,12 +1381,12 @@ app.post("/api/chat/stream", async (req, res) => {
 // CHAT CONVERSATION MANAGEMENT
 // ============================================
 
-app.get("/api/conversations", (_req, res) => {
+app.get("/api/conversations", authenticateToken, (_req, res) => {
   const store = readDb();
   res.json(store.conversations || []);
 });
 
-app.get("/api/conversations/:id", (req, res) => {
+app.get("/api/conversations/:id", authenticateToken, (req, res) => {
   const store = readDb();
   const conversation = store.conversations?.find(c => c.id === req.params.id);
   if (!conversation) {
@@ -1358,7 +1395,7 @@ app.get("/api/conversations/:id", (req, res) => {
   res.json(conversation);
 });
 
-app.post("/api/conversations", (req, res) => {
+app.post("/api/conversations", authenticateToken, (req, res) => {
   const store = readDb();
   if (!Array.isArray(store.conversations)) store.conversations = [];
 
@@ -1375,7 +1412,7 @@ app.post("/api/conversations", (req, res) => {
   res.json(conversation);
 });
 
-app.put("/api/conversations/:id", (req, res) => {
+app.put("/api/conversations/:id", authenticateToken, (req, res) => {
   const store = readDb();
   if (!Array.isArray(store.conversations)) store.conversations = [];
 
@@ -1394,7 +1431,7 @@ app.put("/api/conversations/:id", (req, res) => {
   res.json(store.conversations[index]);
 });
 
-app.delete("/api/conversations/:id", (req, res) => {
+app.delete("/api/conversations/:id", authenticateToken, (req, res) => {
   const store = readDb();
   if (!Array.isArray(store.conversations)) store.conversations = [];
 
@@ -1693,9 +1730,10 @@ app.put("/color-palettes/:id", authenticateToken, async (req, res) => {
   }
 });
 
-app.post("/color-palettes/:id/activate", async (req, res) => {
+app.post("/color-palettes/:id/activate", authenticateToken, async (req, res) => {
   try {
     const id = Number(req.params.id);
+    const userId = req.user.id;
     if (Number.isNaN(id)) {
       return res.status(400).json({ error: "Invalid id" });
     }
@@ -1727,9 +1765,10 @@ app.post("/color-palettes/:id/activate", async (req, res) => {
   }
 });
 
-app.delete("/color-palettes/:id", async (req, res) => {
+app.delete("/color-palettes/:id", authenticateToken, async (req, res) => {
   try {
     const id = Number(req.params.id);
+    const userId = req.user.id;
     if (Number.isNaN(id)) {
       return res.status(400).json({ error: "Invalid id" });
     }
@@ -1779,7 +1818,7 @@ const ensureParentRecord = async (entity, entityId) => {
   return exists ? { ok: true, store } : { ok: false, status: 404, message: "Parent record not found" };
 };
 
-app.get("/:entity/:id/documents", async (req, res) => {
+app.get("/:entity/:id/documents", authenticateToken, async (req, res) => {
   const entity = req.params.entity;
   const entityId = Number(req.params.id);
 
@@ -1810,7 +1849,7 @@ app.get("/:entity/:id/documents", async (req, res) => {
   }
 });
 
-app.post("/:entity/:id/documents", upload.single("file"), async (req, res) => {
+app.post("/:entity/:id/documents", authenticateToken, upload.single("file"), async (req, res) => {
   const entity = req.params.entity;
   const entityId = Number(req.params.id);
 
@@ -1868,7 +1907,7 @@ app.post("/:entity/:id/documents", upload.single("file"), async (req, res) => {
   }
 });
 
-app.delete("/documents/:documentId", async (req, res) => {
+app.delete("/documents/:documentId", authenticateToken, async (req, res) => {
   const documentId = Number(req.params.documentId);
   if (Number.isNaN(documentId)) {
     return res.status(400).json({ error: "Invalid document id" });
@@ -1898,7 +1937,7 @@ app.delete("/documents/:documentId", async (req, res) => {
   }
 });
 
-app.get("/documents/:documentId/download", async (req, res) => {
+app.get("/documents/:documentId/download", authenticateToken, async (req, res) => {
   const documentId = Number(req.params.documentId);
   if (Number.isNaN(documentId)) {
     return res.status(400).json({ error: "Invalid document id" });
@@ -1934,7 +1973,11 @@ app.get("/documents/:documentId/download", async (req, res) => {
 });
 
 // AUTH ROUTES
+// Debug endpoint - only available in development
 app.get("/debug-env", (req, res) => {
+  if (process.env.NODE_ENV === 'production') {
+    return res.status(404).json({ error: "Not found" });
+  }
   res.json({
     hasDatabaseUrl: !!process.env.DATABASE_URL,
     isPostgres: db.isPostgres(),
@@ -1962,7 +2005,7 @@ app.post("/auth/login", async (req, res) => {
     // Generate Token
     const token = jwt.sign(
       { id: user.id, username: user.username, role: user.role },
-      JWT_SECRET,
+      EFFECTIVE_JWT_SECRET,
       { expiresIn: "8h" }
     );
 
@@ -1980,7 +2023,17 @@ app.post("/auth/login", async (req, res) => {
   }
 });
 
-app.post("/auth/register", async (req, res) => {
+// Verify token and return user info
+app.get("/auth/me", authenticateToken, (req, res) => {
+  res.json({
+    id: req.user.id,
+    username: req.user.username,
+    role: req.user.role
+  });
+});
+
+// Register - protected, only admins can create new users
+app.post("/auth/register", authenticateToken, requireRole('admin'), async (req, res) => {
   const { username, password, role } = req.body;
   
   try {
@@ -2195,10 +2248,10 @@ app.delete("/users/:id", async (req, res) => {
   }
 });
 
-// Generic CRUD route handler factory
+// Generic CRUD route handler factory - all routes require authentication
 function createCrudRoutes(tableName) {
-  // GET all (with optional status filter)
-  app.get(`/${tableName}`, async (req, res) => {
+  // GET all (with optional status filter) - requires auth
+  app.get(`/${tableName}`, authenticateToken, async (req, res) => {
     try {
       const status = req.query.status;
       
@@ -2220,8 +2273,8 @@ function createCrudRoutes(tableName) {
     }
   });
 
-  // GET by ID
-  app.get(`/${tableName}/:id`, async (req, res) => {
+  // GET by ID - requires auth
+  app.get(`/${tableName}/:id`, authenticateToken, async (req, res) => {
     try {
       const id = Number(req.params.id);
       
@@ -2241,8 +2294,8 @@ function createCrudRoutes(tableName) {
     }
   });
 
-  // POST (create) - defaults to pending status
-  app.post(`/${tableName}`, async (req, res) => {
+  // POST (create) - defaults to pending status, requires auth
+  app.post(`/${tableName}`, authenticateToken, async (req, res) => {
     try {
       const data = req.body || {};
       // Default status is 'pending' if not specified
@@ -2267,8 +2320,8 @@ function createCrudRoutes(tableName) {
     }
   });
 
-  // PUT (update)
-  app.put(`/${tableName}/:id`, async (req, res) => {
+  // PUT (update) - requires auth
+  app.put(`/${tableName}/:id`, authenticateToken, async (req, res) => {
     try {
       const id = Number(req.params.id);
       const data = req.body || {};
@@ -2291,8 +2344,8 @@ function createCrudRoutes(tableName) {
     }
   });
 
-  // DELETE
-  app.delete(`/${tableName}/:id`, async (req, res) => {
+  // DELETE - requires auth
+  app.delete(`/${tableName}/:id`, authenticateToken, async (req, res) => {
     try {
       const id = Number(req.params.id);
       
@@ -2314,8 +2367,8 @@ function createCrudRoutes(tableName) {
     }
   });
 
-  // APPROVE - Change status from pending to accepted
-  app.post(`/${tableName}/:id/approve`, async (req, res) => {
+  // APPROVE - Change status from pending to accepted - requires auth
+  app.post(`/${tableName}/:id/approve`, authenticateToken, async (req, res) => {
     try {
       const id = Number(req.params.id);
       
@@ -2337,8 +2390,8 @@ function createCrudRoutes(tableName) {
     }
   });
 
-  // ARCHIVE - Change status to archived (mark for removal)
-  app.post(`/${tableName}/:id/archive`, async (req, res) => {
+  // ARCHIVE - Change status to archived (mark for removal) - requires auth
+  app.post(`/${tableName}/:id/archive`, authenticateToken, async (req, res) => {
     try {
       const id = Number(req.params.id);
 
@@ -2360,8 +2413,8 @@ function createCrudRoutes(tableName) {
     }
   });
 
-  // RESTORE - Change status from archived back to accepted
-  app.post(`/${tableName}/:id/restore`, async (req, res) => {
+  // RESTORE - Change status from archived back to accepted - requires auth
+  app.post(`/${tableName}/:id/restore`, authenticateToken, async (req, res) => {
     try {
       const id = Number(req.params.id);
 

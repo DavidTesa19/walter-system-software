@@ -76,6 +76,18 @@ const cloneDefaultPalettes = () => DEFAULT_COLOR_PALETTES.map(palette => ({
   typography: { ...palette.typography }
 }));
 
+// Clone palettes from shared color_palettes table if available, otherwise use defaults
+const getInitialPalettes = (db) => {
+  if (db.color_palettes && db.color_palettes.length > 0) {
+    return db.color_palettes.map(palette => ({
+      ...palette,
+      colors: { ...palette.colors },
+      typography: palette.typography ? { ...palette.typography } : { ...DEFAULT_TYPOGRAPHY }
+    }));
+  }
+  return cloneDefaultPalettes();
+};
+
 const DOCUMENT_ENTITY_TYPES = new Set(["clients", "partners", "tipers"]);
 const MAX_DOCUMENT_SIZE_BYTES = 50 * 1024 * 1024; // 50 MB
 const upload = multer({
@@ -1028,6 +1040,50 @@ function writeDb(db) {
 
 const JWT_SECRET = process.env.JWT_SECRET || "walter-secret-key-change-in-prod";
 
+// Middleware to authenticate token
+const authenticateToken = (req, res, next) => {
+  const authHeader = req.headers['authorization'];
+  const token = authHeader && authHeader.split(' ')[1];
+
+  if (!token) return res.status(401).json({ error: 'Authentication required' });
+
+  jwt.verify(token, JWT_SECRET, (err, user) => {
+    if (err) return res.status(403).json({ error: 'Invalid or expired token' });
+    req.user = user;
+    next();
+  });
+};
+
+// Middleware to require specific role
+const requireRole = (...allowedRoles) => {
+  return (req, res, next) => {
+    if (!req.user) {
+      return res.status(401).json({ error: 'Authentication required' });
+    }
+    if (!allowedRoles.includes(req.user.role)) {
+      return res.status(403).json({ error: 'Insufficient permissions' });
+    }
+    next();
+  };
+};
+
+// Optional auth middleware - doesn't fail if no token, just sets req.user if valid
+const optionalAuth = (req, res, next) => {
+  const authHeader = req.headers['authorization'];
+  const token = authHeader && authHeader.split(' ')[1];
+
+  if (!token) {
+    return next();
+  }
+
+  jwt.verify(token, JWT_SECRET, (err, user) => {
+    if (!err) {
+      req.user = user;
+    }
+    next();
+  });
+};
+
 // AUTH ROUTES
 app.post("/auth/login", async (req, res) => {
   const { username, password } = req.body;
@@ -1061,7 +1117,8 @@ app.post("/auth/login", async (req, res) => {
   });
 });
 
-app.post("/auth/register", async (req, res) => {
+// Registration requires admin role (except for initial setup)
+app.post("/auth/register", authenticateToken, requireRole('admin'), async (req, res) => {
   const { username, password, role } = req.body;
   const db = readDb();
   
@@ -1089,30 +1146,25 @@ app.post("/auth/register", async (req, res) => {
   res.status(201).json({ message: "User created", userId: newUser.id });
 });
 
-// Middleware to authenticate token
-const authenticateToken = (req, res, next) => {
-  const authHeader = req.headers['authorization'];
-  const token = authHeader && authHeader.split(' ')[1];
-
-  if (!token) return res.sendStatus(401);
-
-  jwt.verify(token, JWT_SECRET, (err, user) => {
-    if (err) return res.sendStatus(403);
-    req.user = user;
-    next();
-  });
-};
-
 // Routes
 app.get("/health", (_req, res) => res.json({ ok: true }));
 
-// CRUD for users
-app.get("/users", (_req, res) => {
+// Auth validation endpoint
+app.get("/auth/me", authenticateToken, (req, res) => {
+  res.json({
+    id: req.user.id,
+    username: req.user.username,
+    role: req.user.role
+  });
+});
+
+// CRUD for users (admin only)
+app.get("/users", authenticateToken, requireRole('admin'), (_req, res) => {
   const db = readDb();
   res.json(db.users);
 });
 
-app.post("/users", (req, res) => {
+app.post("/users", authenticateToken, requireRole('admin'), (req, res) => {
   const db = readDb();
   const user = req.body || {};
   // Simple id assignment (max + 1)
@@ -1124,7 +1176,7 @@ app.post("/users", (req, res) => {
   res.status(201).json(newUser);
 });
 
-app.put("/users/:id", (req, res) => {
+app.put("/users/:id", authenticateToken, requireRole('admin'), (req, res) => {
   const id = Number(req.params.id);
   const db = readDb();
   const idx = db.users.findIndex((u) => u.id === id);
@@ -1135,7 +1187,7 @@ app.put("/users/:id", (req, res) => {
   res.json(updated);
 });
 
-app.patch("/users/:id", (req, res) => {
+app.patch("/users/:id", authenticateToken, requireRole('admin'), (req, res) => {
   const id = Number(req.params.id);
   const db = readDb();
   const idx = db.users.findIndex((u) => u.id === id);
@@ -1145,7 +1197,7 @@ app.patch("/users/:id", (req, res) => {
   res.json(db.users[idx]);
 });
 
-app.delete("/users/:id", (req, res) => {
+app.delete("/users/:id", authenticateToken, requireRole('admin'), (req, res) => {
   const id = Number(req.params.id);
   const db = readDb();
   const before = db.users.length;
@@ -1156,7 +1208,7 @@ app.delete("/users/:id", (req, res) => {
 });
 
 // CRUD for partners
-app.get("/partners", (req, res) => {
+app.get("/partners", authenticateToken, (req, res) => {
   const db = readDb();
   const status = req.query.status;
   if (status) {
@@ -1166,7 +1218,7 @@ app.get("/partners", (req, res) => {
   }
 });
 
-app.post("/partners", (req, res) => {
+app.post("/partners", authenticateToken, (req, res) => {
   const db = readDb();
   const partner = req.body || {};
   const maxId = db.partners.reduce((m, p) => Math.max(m, Number(p.id) || 0), 0);
@@ -1178,7 +1230,7 @@ app.post("/partners", (req, res) => {
   res.status(201).json(newPartner);
 });
 
-app.put("/partners/:id", (req, res) => {
+app.put("/partners/:id", authenticateToken, (req, res) => {
   const id = Number(req.params.id);
   const db = readDb();
   const idx = db.partners.findIndex((p) => p.id === id);
@@ -1189,7 +1241,7 @@ app.put("/partners/:id", (req, res) => {
   res.json(updated);
 });
 
-app.patch("/partners/:id", (req, res) => {
+app.patch("/partners/:id", authenticateToken, (req, res) => {
   const id = Number(req.params.id);
   const db = readDb();
   const idx = db.partners.findIndex((p) => p.id === id);
@@ -1199,7 +1251,7 @@ app.patch("/partners/:id", (req, res) => {
   res.json(db.partners[idx]);
 });
 
-app.delete("/partners/:id", (req, res) => {
+app.delete("/partners/:id", authenticateToken, (req, res) => {
   const id = Number(req.params.id);
   const db = readDb();
   const before = db.partners.length;
@@ -1210,7 +1262,7 @@ app.delete("/partners/:id", (req, res) => {
 });
 
 // Approve partner (change status from pending to accepted)
-app.post("/partners/:id/approve", (req, res) => {
+app.post("/partners/:id/approve", authenticateToken, (req, res) => {
   const id = Number(req.params.id);
   const db = readDb();
   const idx = db.partners.findIndex((p) => p.id === id);
@@ -1221,7 +1273,7 @@ app.post("/partners/:id/approve", (req, res) => {
 });
 
 // Archive partner (change status to archived for removal approval)
-app.post("/partners/:id/archive", (req, res) => {
+app.post("/partners/:id/archive", authenticateToken, (req, res) => {
   const id = Number(req.params.id);
   const db = readDb();
   const idx = db.partners.findIndex((p) => p.id === id);
@@ -1245,9 +1297,9 @@ app.get("/color-palettes", authenticateToken, (req, res) => {
   
   if (!user) return res.status(404).json({ error: "User not found" });
 
-  // Initialize user palettes if not present
+  // Initialize user palettes if not present - copy from shared color_palettes or defaults
   if (!user.palettes) {
-    user.palettes = cloneDefaultPalettes();
+    user.palettes = getInitialPalettes(db);
     writeDb(db);
   }
 
@@ -1270,7 +1322,7 @@ app.get("/color-palettes/active", authenticateToken, (req, res) => {
   if (!user) return res.status(404).json({ error: "User not found" });
 
   if (!user.palettes) {
-    user.palettes = cloneDefaultPalettes();
+    user.palettes = getInitialPalettes(db);
     writeDb(db);
   }
 
@@ -1303,7 +1355,7 @@ app.post("/color-palettes", authenticateToken, (req, res) => {
   if (!user) return res.status(404).json({ error: "User not found" });
 
   if (!user.palettes) {
-    user.palettes = cloneDefaultPalettes();
+    user.palettes = getInitialPalettes(db);
   }
 
   const id = getNextPaletteId(user.palettes);
@@ -1350,7 +1402,7 @@ app.put("/color-palettes/:id", authenticateToken, (req, res) => {
   const user = db.users.find(u => u.id === userId);
   
   if (!user) return res.status(404).json({ error: "User not found" });
-  if (!user.palettes) user.palettes = cloneDefaultPalettes();
+  if (!user.palettes) user.palettes = getInitialPalettes(db);
 
   const idx = user.palettes.findIndex(palette => palette.id === id);
   if (idx === -1) {
@@ -1386,7 +1438,7 @@ app.delete("/color-palettes/:id", authenticateToken, (req, res) => {
   const user = db.users.find(u => u.id === userId);
   
   if (!user) return res.status(404).json({ error: "User not found" });
-  if (!user.palettes) user.palettes = cloneDefaultPalettes();
+  if (!user.palettes) user.palettes = getInitialPalettes(db);
 
   const removed = removePalette(user.palettes, id);
   if (!removed) {
@@ -1411,7 +1463,7 @@ app.post("/color-palettes/:id/activate", authenticateToken, (req, res) => {
   const user = db.users.find(u => u.id === userId);
   
   if (!user) return res.status(404).json({ error: "User not found" });
-  if (!user.palettes) user.palettes = cloneDefaultPalettes();
+  if (!user.palettes) user.palettes = getInitialPalettes(db);
 
   const activated = setActivePalette(user.palettes, id);
   if (!activated) {
@@ -1434,7 +1486,7 @@ const ensureParentRecord = (entity, entityId) => {
   return exists ? { ok: true, store } : { ok: false, status: 404, message: "Parent record not found" };
 };
 
-app.get("/:entity/:id/documents", (req, res) => {
+app.get("/:entity/:id/documents", authenticateToken, (req, res) => {
   const entity = req.params.entity;
   const entityId = Number(req.params.id);
 
@@ -1460,7 +1512,7 @@ app.get("/:entity/:id/documents", (req, res) => {
   }
 });
 
-app.post("/:entity/:id/documents", upload.single("file"), (req, res) => {
+app.post("/:entity/:id/documents", authenticateToken, upload.single("file"), (req, res) => {
   const entity = req.params.entity;
   const entityId = Number(req.params.id);
 
@@ -1507,7 +1559,7 @@ app.post("/:entity/:id/documents", upload.single("file"), (req, res) => {
   }
 });
 
-app.delete("/documents/:documentId", (req, res) => {
+app.delete("/documents/:documentId", authenticateToken, (req, res) => {
   const documentId = Number(req.params.documentId);
   if (Number.isNaN(documentId)) {
     return res.status(400).json({ error: "Invalid document id" });
@@ -1531,7 +1583,7 @@ app.delete("/documents/:documentId", (req, res) => {
   }
 });
 
-app.get("/documents/:documentId/download", (req, res) => {
+app.get("/documents/:documentId/download", authenticateToken, (req, res) => {
   const documentId = Number(req.params.documentId);
   if (Number.isNaN(documentId)) {
     return res.status(400).json({ error: "Invalid document id" });
@@ -1556,7 +1608,7 @@ app.get("/documents/:documentId/download", (req, res) => {
 });
 
 // Restore partner from archive (change status back to accepted)
-app.post("/partners/:id/restore", (req, res) => {
+app.post("/partners/:id/restore", authenticateToken, (req, res) => {
   const id = Number(req.params.id);
   const db = readDb();
   const idx = db.partners.findIndex((p) => p.id === id);
@@ -1567,12 +1619,12 @@ app.post("/partners/:id/restore", (req, res) => {
 });
 
 // CRUD for employees
-app.get("/employees", (_req, res) => {
+app.get("/employees", authenticateToken, (_req, res) => {
   const db = readDb();
   res.json(db.employees);
 });
 
-app.post("/employees", (req, res) => {
+app.post("/employees", authenticateToken, (req, res) => {
   const db = readDb();
   const employee = req.body || {};
   // Simple id assignment (max + 1)
@@ -1584,7 +1636,7 @@ app.post("/employees", (req, res) => {
   res.status(201).json(newEmployee);
 });
 
-app.put("/employees/:id", (req, res) => {
+app.put("/employees/:id", authenticateToken, (req, res) => {
   const id = Number(req.params.id);
   const db = readDb();
   const idx = db.employees.findIndex((e) => e.id === id);
@@ -1595,7 +1647,7 @@ app.put("/employees/:id", (req, res) => {
   res.json(updated);
 });
 
-app.patch("/employees/:id", (req, res) => {
+app.patch("/employees/:id", authenticateToken, (req, res) => {
   const id = Number(req.params.id);
   const db = readDb();
   const idx = db.employees.findIndex((e) => e.id === id);
@@ -1605,7 +1657,7 @@ app.patch("/employees/:id", (req, res) => {
   res.json(db.employees[idx]);
 });
 
-app.delete("/employees/:id", (req, res) => {
+app.delete("/employees/:id", authenticateToken, (req, res) => {
   const id = Number(req.params.id);
   const db = readDb();
   const before = db.employees.length;
@@ -1628,7 +1680,7 @@ app.use((err, _req, res, _next) => {
 });
 
 // CRUD for clients
-app.get("/clients", (req, res) => {
+app.get("/clients", authenticateToken, (req, res) => {
   const db = readDb();
   const status = req.query.status;
   if (status) {
@@ -1638,7 +1690,7 @@ app.get("/clients", (req, res) => {
   }
 });
 
-app.post("/clients", (req, res) => {
+app.post("/clients", authenticateToken, (req, res) => {
   const db = readDb();
   const client = req.body || {};
   const maxId = db.clients.reduce((m, c) => Math.max(m, Number(c.id) || 0), 0);
@@ -1650,7 +1702,7 @@ app.post("/clients", (req, res) => {
   res.status(201).json(newClient);
 });
 
-app.put("/clients/:id", (req, res) => {
+app.put("/clients/:id", authenticateToken, (req, res) => {
   const id = Number(req.params.id);
   const db = readDb();
   const idx = db.clients.findIndex((c) => c.id === id);
@@ -1661,7 +1713,7 @@ app.put("/clients/:id", (req, res) => {
   res.json(updated);
 });
 
-app.patch("/clients/:id", (req, res) => {
+app.patch("/clients/:id", authenticateToken, (req, res) => {
   const id = Number(req.params.id);
   const db = readDb();
   const idx = db.clients.findIndex((c) => c.id === id);
@@ -1671,7 +1723,7 @@ app.patch("/clients/:id", (req, res) => {
   res.json(db.clients[idx]);
 });
 
-app.delete("/clients/:id", (req, res) => {
+app.delete("/clients/:id", authenticateToken, (req, res) => {
   const id = Number(req.params.id);
   const db = readDb();
   const before = db.clients.length;
@@ -1682,7 +1734,7 @@ app.delete("/clients/:id", (req, res) => {
 });
 
 // Approve client (change status from pending to accepted)
-app.post("/clients/:id/approve", (req, res) => {
+app.post("/clients/:id/approve", authenticateToken, (req, res) => {
   const id = Number(req.params.id);
   const db = readDb();
   const idx = db.clients.findIndex((c) => c.id === id);
@@ -1693,7 +1745,7 @@ app.post("/clients/:id/approve", (req, res) => {
 });
 
 // Archive client (change status to archived for removal approval)
-app.post("/clients/:id/archive", (req, res) => {
+app.post("/clients/:id/archive", authenticateToken, (req, res) => {
   const id = Number(req.params.id);
   const db = readDb();
   const idx = db.clients.findIndex((c) => c.id === id);
@@ -1704,7 +1756,7 @@ app.post("/clients/:id/archive", (req, res) => {
 });
 
 // Restore client from archive (change status back to accepted)
-app.post("/clients/:id/restore", (req, res) => {
+app.post("/clients/:id/restore", authenticateToken, (req, res) => {
   const id = Number(req.params.id);
   const db = readDb();
   const idx = db.clients.findIndex((c) => c.id === id);
@@ -1715,7 +1767,7 @@ app.post("/clients/:id/restore", (req, res) => {
 });
 
 // CRUD for tipers
-app.get("/tipers", (req, res) => {
+app.get("/tipers", authenticateToken, (req, res) => {
   const db = readDb();
   const status = req.query.status;
   if (status) {
@@ -1725,7 +1777,7 @@ app.get("/tipers", (req, res) => {
   }
 });
 
-app.post("/tipers", (req, res) => {
+app.post("/tipers", authenticateToken, (req, res) => {
   const db = readDb();
   const tiper = req.body || {};
   const maxId = db.tipers.reduce((m, t) => Math.max(m, Number(t.id) || 0), 0);
@@ -1737,7 +1789,7 @@ app.post("/tipers", (req, res) => {
   res.status(201).json(newTiper);
 });
 
-app.put("/tipers/:id", (req, res) => {
+app.put("/tipers/:id", authenticateToken, (req, res) => {
   const id = Number(req.params.id);
   const db = readDb();
   const idx = db.tipers.findIndex((t) => t.id === id);
@@ -1748,7 +1800,7 @@ app.put("/tipers/:id", (req, res) => {
   res.json(updated);
 });
 
-app.patch("/tipers/:id", (req, res) => {
+app.patch("/tipers/:id", authenticateToken, (req, res) => {
   const id = Number(req.params.id);
   const db = readDb();
   const idx = db.tipers.findIndex((t) => t.id === id);
@@ -1758,7 +1810,7 @@ app.patch("/tipers/:id", (req, res) => {
   res.json(db.tipers[idx]);
 });
 
-app.delete("/tipers/:id", (req, res) => {
+app.delete("/tipers/:id", authenticateToken, (req, res) => {
   const id = Number(req.params.id);
   const db = readDb();
   const before = db.tipers.length;
@@ -1769,7 +1821,7 @@ app.delete("/tipers/:id", (req, res) => {
 });
 
 // Approve tiper (change status from pending to accepted)
-app.post("/tipers/:id/approve", (req, res) => {
+app.post("/tipers/:id/approve", authenticateToken, (req, res) => {
   const id = Number(req.params.id);
   const db = readDb();
   const idx = db.tipers.findIndex((t) => t.id === id);
@@ -1780,7 +1832,7 @@ app.post("/tipers/:id/approve", (req, res) => {
 });
 
 // Archive tiper (change status to archived for removal approval)
-app.post("/tipers/:id/archive", (req, res) => {
+app.post("/tipers/:id/archive", authenticateToken, (req, res) => {
   const id = Number(req.params.id);
   const db = readDb();
   const idx = db.tipers.findIndex((t) => t.id === id);
@@ -1791,7 +1843,7 @@ app.post("/tipers/:id/archive", (req, res) => {
 });
 
 // Restore tiper from archive (change status back to accepted)
-app.post("/tipers/:id/restore", (req, res) => {
+app.post("/tipers/:id/restore", authenticateToken, (req, res) => {
   const id = Number(req.params.id);
   const db = readDb();
   const idx = db.tipers.findIndex((t) => t.id === id);
@@ -1802,7 +1854,7 @@ app.post("/tipers/:id/restore", (req, res) => {
 });
 
 // CRUD for future functions roadmap
-app.get("/future-functions", (req, res) => {
+app.get("/future-functions", authenticateToken, (req, res) => {
   const db = readDb();
   const status = typeof req.query.status === "string" ? req.query.status : undefined;
   let records = db.futureFunctions ?? [];
@@ -1814,7 +1866,7 @@ app.get("/future-functions", (req, res) => {
   res.json(records);
 });
 
-app.post("/future-functions", (req, res) => {
+app.post("/future-functions", authenticateToken, (req, res) => {
   const db = readDb();
   const body = isPlainObject(req.body) ? req.body : {};
   const payload = { ...FUTURE_FUNCTION_DEFAULTS, ...body };
@@ -1825,7 +1877,7 @@ app.post("/future-functions", (req, res) => {
   res.status(201).json(entry);
 });
 
-app.put("/future-functions/:id", (req, res) => {
+app.put("/future-functions/:id", authenticateToken, (req, res) => {
   const id = Number(req.params.id);
   const db = readDb();
   const idx = db.futureFunctions.findIndex((record) => record.id === id);
@@ -1837,7 +1889,7 @@ app.put("/future-functions/:id", (req, res) => {
   res.json(updated);
 });
 
-app.patch("/future-functions/:id", (req, res) => {
+app.patch("/future-functions/:id", authenticateToken, (req, res) => {
   const id = Number(req.params.id);
   const db = readDb();
   const idx = db.futureFunctions.findIndex((record) => record.id === id);
@@ -1848,7 +1900,7 @@ app.patch("/future-functions/:id", (req, res) => {
   res.json(db.futureFunctions[idx]);
 });
 
-app.delete("/future-functions/:id", (req, res) => {
+app.delete("/future-functions/:id", authenticateToken, (req, res) => {
   const id = Number(req.params.id);
   const db = readDb();
   const before = db.futureFunctions.length;
@@ -1862,7 +1914,7 @@ app.delete("/future-functions/:id", (req, res) => {
 // AI CHATBOT ENDPOINT
 // ============================================
 
-app.post("/api/chat", async (req, res) => {
+app.post("/api/chat", authenticateToken, async (req, res) => {
   console.log("/api/chat hit at", new Date().toISOString());
   console.log("API key set:", !!process.env.OPENAI_API_KEY);
 
@@ -1932,7 +1984,7 @@ app.post("/api/chat", async (req, res) => {
 // AI CHATBOT STREAMING ENDPOINT
 // ============================================
 
-app.post("/api/chat/stream", async (req, res) => {
+app.post("/api/chat/stream", authenticateToken, async (req, res) => {
   console.log("/api/chat/stream hit at", new Date().toISOString());
   
   // Set headers for SSE
@@ -2183,14 +2235,14 @@ app.post("/api/chat/stream", async (req, res) => {
 // ============================================
 
 // Get all conversations
-app.get("/api/conversations", (req, res) => {
+app.get("/api/conversations", authenticateToken, (req, res) => {
   const db = readDb();
   const conversations = db.conversations || [];
   res.json(conversations);
 });
 
 // Get single conversation
-app.get("/api/conversations/:id", (req, res) => {
+app.get("/api/conversations/:id", authenticateToken, (req, res) => {
   const db = readDb();
   const conversation = db.conversations?.find(c => c.id === req.params.id);
   if (!conversation) {
@@ -2200,7 +2252,7 @@ app.get("/api/conversations/:id", (req, res) => {
 });
 
 // Create new conversation
-app.post("/api/conversations", (req, res) => {
+app.post("/api/conversations", authenticateToken, (req, res) => {
   const db = readDb();
   if (!db.conversations) db.conversations = [];
   
@@ -2218,7 +2270,7 @@ app.post("/api/conversations", (req, res) => {
 });
 
 // Update conversation
-app.put("/api/conversations/:id", (req, res) => {
+app.put("/api/conversations/:id", authenticateToken, (req, res) => {
   const db = readDb();
   const index = db.conversations?.findIndex(c => c.id === req.params.id);
   
@@ -2237,7 +2289,7 @@ app.put("/api/conversations/:id", (req, res) => {
 });
 
 // Delete conversation
-app.delete("/api/conversations/:id", (req, res) => {
+app.delete("/api/conversations/:id", authenticateToken, (req, res) => {
   const db = readDb();
   const index = db.conversations?.findIndex(c => c.id === req.params.id);
   

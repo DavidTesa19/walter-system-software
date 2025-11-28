@@ -10,7 +10,8 @@ import ProfileCellRenderer from "../cells/ProfileCellRenderer";
 import ProfilePanel, { type ProfileSection } from "../components/ProfilePanel";
 import useProfileDocuments from "../hooks/useProfileDocuments";
 import { measureGrid, type GridSizes } from "../utils/gridSizing";
-import { API_BASE, mapViewToStatus } from "../constants";
+import { mapViewToStatus } from "../constants";
+import { apiGet, apiPost, apiPut, apiDelete } from "../../utils/api";
 import { formatProfileDate, normalizeText, toStatusBadge } from "../utils/profileUtils";
 import type { SectionProps } from "./SectionTypes";
 
@@ -173,11 +174,11 @@ const ClientsSection: React.FC<SectionProps> = ({
   const fetchClientsData = useCallback(async () => {
     setIsLoading(true);
     try {
-      const response = await fetch(`${API_BASE}/clients?status=${status}`);
-      const data = await response.json();
-      setClientsData(data);
+      const data = await apiGet<UserInterface[]>(`/clients?status=${status}`);
+      setClientsData(Array.isArray(data) ? data : []);
     } catch (error) {
       console.error("Error fetching clients:", error);
+      setClientsData([]);
     } finally {
       setIsLoading(false);
     }
@@ -225,12 +226,8 @@ const ClientsSection: React.FC<SectionProps> = ({
   const handleApproveClient = useCallback(
     async (id: number) => {
       try {
-        const response = await fetch(`${API_BASE}/clients/${id}/approve`, { method: "POST" });
-        if (response.ok) {
-          fetchClientsData();
-        } else {
-          alert("Nepodařilo se schválit klienta");
-        }
+        await apiPost(`/clients/${id}/approve`);
+        fetchClientsData();
       } catch (error) {
         console.error("Error approving client:", error);
         alert("Chyba při schvalování klienta");
@@ -242,12 +239,8 @@ const ClientsSection: React.FC<SectionProps> = ({
   const handleRestoreClient = useCallback(
     async (id: number) => {
       try {
-        const response = await fetch(`${API_BASE}/clients/${id}/restore`, { method: "POST" });
-        if (response.ok) {
-          fetchClientsData();
-        } else {
-          alert("Nepodařilo se obnovit klienta");
-        }
+        await apiPost(`/clients/${id}/restore`);
+        fetchClientsData();
       } catch (error) {
         console.error("Error restoring client:", error);
         alert("Chyba při obnovování klienta");
@@ -263,22 +256,16 @@ const ClientsSection: React.FC<SectionProps> = ({
       const isPending = client?.status === "pending";
 
       let confirmMessage = "";
-      let endpoint = "";
-      let method: "POST" | "DELETE" = "DELETE";
 
       if (isArchived) {
         confirmMessage =
           `Opravdu chcete TRVALE SMAZAT tohoto klienta z databáze?\n\nJméno: ${client?.name || "N/A"}\nSpolečnost: ${client?.company || "N/A"}\n\nTato akce je NEzvratná!`;
-        endpoint = `${API_BASE}/clients/${id}`;
       } else if (isPending) {
         confirmMessage =
           `Opravdu chcete zamítnout tohoto klienta?\n\nJméno: ${client?.name || "N/A"}\nSpolečnost: ${client?.company || "N/A"}`;
-        endpoint = `${API_BASE}/clients/${id}`;
       } else {
         confirmMessage =
           `Opravdu chcete přesunout tohoto klienta do archivu k odstraňení?\n\nJméno: ${client?.name || "N/A"}\nSpolečnost: ${client?.company || "N/A"}`;
-        endpoint = `${API_BASE}/clients/${id}/archive`;
-        method = "POST";
       }
 
       if (!confirm(confirmMessage)) {
@@ -286,12 +273,12 @@ const ClientsSection: React.FC<SectionProps> = ({
       }
 
       try {
-        const response = await fetch(endpoint, { method });
-        if (response.ok) {
-          fetchClientsData();
+        if (isArchived || isPending) {
+          await apiDelete(`/clients/${id}`);
         } else {
-          alert("Nepodařilo se provést akci");
+          await apiPost(`/clients/${id}/archive`);
         }
+        fetchClientsData();
       } catch (error) {
         console.error("Error performing action on client:", error);
         alert("Chyba při provádění akce");
@@ -304,19 +291,7 @@ const ClientsSection: React.FC<SectionProps> = ({
     async (params: any) => {
       try {
         const { created_at, updated_at, ...updatedClient } = params.data;
-
-        const response = await fetch(`${API_BASE}/clients/${updatedClient.id}`, {
-          method: "PUT",
-          headers: {
-            "Content-Type": "application/json"
-          },
-          body: JSON.stringify(updatedClient)
-        });
-
-        if (!response.ok) {
-          alert("Failed to update client");
-          fetchClientsData();
-        }
+        await apiPut(`/clients/${updatedClient.id}`, updatedClient);
       } catch (error) {
         console.error("Error updating client:", error);
         alert("Error updating client");
@@ -335,19 +310,8 @@ const ClientsSection: React.FC<SectionProps> = ({
     };
 
     try {
-      const response = await fetch(`${API_BASE}/clients`, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json"
-        },
-        body: JSON.stringify(newClient)
-      });
-
-      if (response.ok) {
-        fetchClientsData();
-      } else {
-        alert("Nepodařilo se přidat klienta");
-      }
+      await apiPost(`/clients`, newClient);
+      fetchClientsData();
     } catch (error) {
       console.error("Error adding client:", error);
       alert("Chyba při přidávání klienta");
