@@ -45,6 +45,7 @@
   letter-spacing: 0.08em;
   color: var(--color-text-muted);
   margin: 0;
+  font-family: var(--font-subheading);
 }
 
 .profile-panel__title {
@@ -58,6 +59,7 @@
   margin: 0;
   font-size: 1rem;
   color: var(--color-text-muted);
+  font-family: var(--font-body);
 }
 
 .profile-panel__close {
@@ -103,6 +105,7 @@
   text-transform: uppercase;
   letter-spacing: 0.06em;
   color: var(--color-text-muted);
+  font-family: var(--font-subheading);
 }
 
 .profile-panel__meta-item dd {
@@ -110,6 +113,7 @@
   font-size: 0.95rem;
   color: var(--color-text);
   font-weight: 600;
+  font-family: var(--font-body);
 }
 
 .profile-panel__body {
@@ -142,6 +146,7 @@
   letter-spacing: 0.06em;
   font-size: 0.85rem;
   opacity: 0.7;
+  font-family: var(--font-subheading);
 }
 
 .profile-section__fields {
@@ -218,11 +223,13 @@
 .profile-document__name {
   font-weight: 600;
   color: var(--color-text);
+  font-family: var(--font-body);
 }
 
 .profile-document__details {
   font-size: 0.8rem;
   color: var(--color-text-muted);
+  font-family: var(--font-body);
 }
 
 .profile-document__actions {
@@ -277,6 +284,7 @@
   letter-spacing: 0.06em;
   color: var(--color-text-muted);
   font-weight: 600;
+  font-family: var(--font-subheading);
 }
 
 .profile-field__value {
@@ -285,6 +293,7 @@
   line-height: 1.5;
   white-space: pre-line;
   word-wrap: break-word;
+  font-family: var(--font-body);
 }
 
 .profile-badge {
@@ -299,6 +308,7 @@
   margin-top: 0.25rem;
   text-transform: uppercase;
   letter-spacing: 0.08em;
+  font-family: var(--font-subheading);
 }
 
 .profile-badge--neutral {
