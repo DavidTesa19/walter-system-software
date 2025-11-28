@@ -3,7 +3,8 @@ export interface FieldOption {
   label: string;
 }
 
-export const fieldOptions: FieldOption[] = [
+// Unsorted list of all field options
+const unsortedFieldOptions: FieldOption[] = [
   // A
   { value: 'Administrativa', label: 'Administrativa' },
   { value: 'Aeronautika a letectví', label: 'Aeronautika a letectví' },
@@ -312,3 +313,8 @@ export const fieldOptions: FieldOption[] = [
   { value: 'Železniční doprava', label: 'Železniční doprava' },
   { value: 'Žurnalistika', label: 'Žurnalistika' }
 ];
+
+// Sort alphabetically using Czech locale (handles Č, Ř, Š, Ž properly)
+export const fieldOptions: FieldOption[] = unsortedFieldOptions.sort((a, b) =>
+  a.label.localeCompare(b.label, 'cs', { sensitivity: 'base' })
+);

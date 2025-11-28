@@ -81,6 +81,88 @@ const FieldCellRenderer: React.FC<any> = (params) => {
 
     document.body.appendChild(dropdown);
 
+    // Create search input container
+    const searchContainer = document.createElement("div");
+    searchContainer.style.position = "sticky";
+    searchContainer.style.top = "0";
+    searchContainer.style.zIndex = "2";
+    searchContainer.style.padding = "8px";
+    searchContainer.style.backgroundColor = isDark ? "#1a1a1a" : "white";
+    searchContainer.style.borderBottom = isDark ? "1px solid #2d2d2d" : "1px solid #ddd";
+
+    const searchInput = document.createElement("input");
+    searchInput.type = "text";
+    searchInput.placeholder = "Hledat obor...";
+    searchInput.style.width = "100%";
+    searchInput.style.padding = "8px 12px";
+    searchInput.style.border = isDark ? "1px solid #3d3d3d" : "1px solid #ccc";
+    searchInput.style.borderRadius = "4px";
+    searchInput.style.backgroundColor = isDark ? "#0d0d0d" : "#f8f9fa";
+    searchInput.style.color = isDark ? "#e0e0e0" : "#333";
+    searchInput.style.fontSize = "14px";
+    searchInput.style.outline = "none";
+    searchInput.style.boxSizing = "border-box";
+
+    searchContainer.appendChild(searchInput);
+    dropdown.insertBefore(searchContainer, dropdown.firstChild);
+
+    // Store all option elements for filtering
+    const allOptionElements: { element: HTMLElement; label: string; headerBefore?: HTMLElement }[] = [];
+    let currentHeader: HTMLElement | undefined;
+
+    // Collect all options and headers
+    const children = Array.from(dropdown.children);
+    children.forEach((child) => {
+      if (child === searchContainer) return;
+      const el = child as HTMLElement;
+      if (el.style.fontWeight === "bold") {
+        currentHeader = el;
+      } else if (el.textContent) {
+        allOptionElements.push({
+          element: el,
+          label: el.textContent,
+          headerBefore: currentHeader
+        });
+      }
+    });
+
+    // Filter function
+    const filterOptions = (searchTerm: string) => {
+      const term = searchTerm.toLowerCase().trim();
+      const visibleHeaders = new Set<HTMLElement>();
+
+      allOptionElements.forEach(({ element, label, headerBefore }) => {
+        const matches = term === "" || label.toLowerCase().includes(term);
+        element.style.display = matches ? "block" : "none";
+        if (matches && headerBefore) {
+          visibleHeaders.add(headerBefore);
+        }
+      });
+
+      // Show/hide headers based on whether they have visible options
+      children.forEach((child) => {
+        if (child === searchContainer) return;
+        const el = child as HTMLElement;
+        if (el.style.fontWeight === "bold") {
+          el.style.display = visibleHeaders.has(el) ? "block" : "none";
+        }
+      });
+    };
+
+    searchInput.addEventListener("input", (e) => {
+      filterOptions((e.target as HTMLInputElement).value);
+    });
+
+    // Prevent dropdown from closing when clicking in search
+    searchInput.addEventListener("click", (e) => {
+      e.stopPropagation();
+    });
+
+    // Focus search input after dropdown is shown
+    setTimeout(() => {
+      searchInput.focus();
+    }, 50);
+
     const cleanup = () => {
       if (document.body.contains(dropdown)) {
         document.removeEventListener("click", handleClickOutside);
