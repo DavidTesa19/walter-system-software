@@ -92,12 +92,12 @@ const FALLBACK_COLORS: Record<Theme, PaletteColors> = {
 
 const FALLBACK_TYPOGRAPHY: Record<Theme, PaletteTypography> = {
   light: {
-    heading: "'Playfair Display', 'Times New Roman', serif",
+    heading: "'Inter', system-ui, sans-serif",
     subheading: "'Poppins', 'Segoe UI', sans-serif",
     body: "'Inter', system-ui, sans-serif"
   },
   dark: {
-    heading: "'Playfair Display', 'Times New Roman', serif",
+    heading: "'Inter', system-ui, sans-serif",
     subheading: "'Poppins', 'Segoe UI', sans-serif",
     body: "'Inter', system-ui, sans-serif"
   }

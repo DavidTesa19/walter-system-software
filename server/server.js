@@ -30,7 +30,7 @@ const PALETTE_TYPOGRAPHY_KEYS = [
 ];
 
 const DEFAULT_TYPOGRAPHY = {
-  heading: "'Playfair Display', 'Times New Roman', serif",
+  heading: "'Inter', system-ui, sans-serif",
   subheading: "'Poppins', 'Segoe UI', sans-serif",
   body: "'Inter', system-ui, sans-serif"
 };

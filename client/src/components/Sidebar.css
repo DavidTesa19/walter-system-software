@@ -109,6 +109,44 @@
   box-shadow: inset 0 -1px 0 var(--color-accent);
 }
 
+.sidebar-footer {
+  padding: 1rem;
+  border-top: 1px solid var(--color-border);
+  background: var(--color-surface-alt);
+}
+
+.user-info {
+  display: flex;
+  flex-direction: column;
+  padding: 0.5rem 1rem;
+  margin-bottom: 0.5rem;
+}
+
+.user-name {
+  font-size: 0.95rem;
+  font-weight: 600;
+  color: var(--color-text);
+  font-family: var(--font-subheading);
+}
+
+.user-role {
+  font-size: 0.8rem;
+  color: var(--color-text-muted);
+  text-transform: capitalize;
+}
+
+.logout-button {
+  background: transparent;
+  color: var(--color-text-muted);
+  border: 1px solid var(--color-border);
+}
+
+.logout-button:hover {
+  background: color-mix(in srgb, var(--color-error, #ef4444) 10%, transparent);
+  color: var(--color-error, #ef4444);
+  border-color: var(--color-error, #ef4444);
+}
+
 .main-content {
   margin-left: 260px;
   width: calc(100% - 260px);

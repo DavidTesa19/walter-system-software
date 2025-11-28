@@ -1,5 +1,6 @@
 import React from 'react';
 import { useTheme } from '../theme/ThemeContext';
+import { useAuth } from '../auth/AuthContext';
 import type { AppView } from '../types/appView';
 import './Sidebar.css';
 
@@ -10,6 +11,7 @@ interface SidebarProps {
 
 const Sidebar: React.FC<SidebarProps> = ({ activeView, onViewChange }) => {
   const { theme, toggleTheme } = useTheme();
+  const { user, logout } = useAuth();
 
   return (
     <div className="sidebar">
@@ -244,6 +246,36 @@ const Sidebar: React.FC<SidebarProps> = ({ activeView, onViewChange }) => {
           </svg>
         </a>
       </nav>
+      
+      <div className="sidebar-footer">
+        {user && (
+          <div className="user-info">
+            <span className="user-name">{user.username}</span>
+            <span className="user-role">{user.role}</span>
+          </div>
+        )}
+        <button
+          className="sidebar-button logout-button"
+          onClick={logout}
+          title="Odhlásit se"
+        >
+          <svg
+            width="20"
+            height="20"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="2"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+          >
+            <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"></path>
+            <polyline points="16 17 21 12 16 7"></polyline>
+            <line x1="21" y1="12" x2="9" y2="12"></line>
+          </svg>
+          <span>Odhlásit se</span>
+        </button>
+      </div>
     </div>
   );
 };
