@@ -10,6 +10,7 @@ const Footer: React.FC = () => {
         <a href="https://calendar.google.com/" target="_blank" rel="noopener noreferrer" className="footer-link">Calendar</a>
         <a href="https://meet.google.com/" target="_blank" rel="noopener noreferrer" className="footer-link">Meet</a>
         <a href="https://www.office.com/launch/excel" target="_blank" rel="noopener noreferrer" className="footer-link">Excel</a>
+        <a href="https://email.seznam.cz/" target="_blank" rel="noopener noreferrer" className="footer-link">Seznam</a>
         <a href="https://mail.google.com/" target="_blank" rel="noopener noreferrer" className="footer-link">Gmail</a>
         <a href="https://trello.com/" target="_blank" rel="noopener noreferrer" className="footer-link">Trello</a>
         <a href="https://slack.com/signin" target="_blank" rel="noopener noreferrer" className="footer-link">Slack</a>
