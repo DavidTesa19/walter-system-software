@@ -2310,7 +2310,24 @@ app.delete("/api/conversations/:id", authenticateToken, (req, res) => {
 app.get("/api/chat-rooms", authenticateToken, (req, res) => {
   const db = readDb();
   if (!db.chatRooms) db.chatRooms = [];
-  res.json(db.chatRooms);
+  if (!db.chatMessages) db.chatMessages = [];
+  if (!db.chatReadStatus) db.chatReadStatus = {};
+  
+  const userId = req.user.id;
+  
+  // Calculate unread counts for each room
+  const roomsWithUnread = db.chatRooms.map(room => {
+    const lastRead = db.chatReadStatus[`${userId}_${room.id}`] || '1970-01-01T00:00:00.000Z';
+    const unreadCount = db.chatMessages.filter(m => 
+      m.roomId === room.id && 
+      m.userId !== userId &&
+      new Date(m.createdAt) > new Date(lastRead)
+    ).length;
+    
+    return { ...room, unreadCount };
+  });
+  
+  res.json(roomsWithUnread);
 });
 
 // Create a new chat room
@@ -2337,12 +2354,19 @@ app.post("/api/chat-rooms", authenticateToken, (req, res) => {
   res.status(201).json(room);
 });
 
-// Get messages for a room
+// Get messages for a room (and mark as read)
 app.get("/api/chat-rooms/:roomId/messages", authenticateToken, (req, res) => {
   const db = readDb();
   if (!db.chatMessages) db.chatMessages = [];
+  if (!db.chatReadStatus) db.chatReadStatus = {};
   
   const roomId = req.params.roomId;
+  const userId = req.user.id;
+  
+  // Mark room as read for this user
+  db.chatReadStatus[`${userId}_${roomId}`] = new Date().toISOString();
+  writeDb(db);
+  
   const messages = db.chatMessages
     .filter(m => m.roomId === roomId)
     .sort((a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime());

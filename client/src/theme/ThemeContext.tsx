@@ -491,7 +491,7 @@ export const ThemeProvider: React.FC<{ children: React.ReactNode }> = ({ childre
 
       return activated;
     },
-    [fetchPalettes, theme]
+    [fetchPalettes, theme, user?.token]
   );
 
   const value = useMemo<ThemeContextType>(() => ({

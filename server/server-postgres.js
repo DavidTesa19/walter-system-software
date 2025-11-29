@@ -1762,7 +1762,7 @@ app.post("/color-palettes/:id/activate", authenticateToken, async (req, res) => 
     }
 
     if (db.isPostgres()) {
-      const activated = await db.activateColorPalette(id);
+      const activated = await db.activateColorPalette(id, userId);
       if (!activated) return res.status(404).json({ error: "Palette not found" });
       return res.json(activated);
     }
@@ -1797,9 +1797,9 @@ app.delete("/color-palettes/:id", authenticateToken, async (req, res) => {
     }
 
     if (db.isPostgres()) {
-      const deleted = await db.deleteColorPalette(id);
+      const deleted = await db.deleteColorPalette(id, userId);
       if (!deleted) return res.status(404).json({ error: "Palette not found" });
-      return res.json(deleted);
+      return res.status(204).end();
     }
 
     const dbData = readDb();
@@ -2619,9 +2619,32 @@ createFutureFunctionsRoutes();
 // Get all chat rooms
 app.get("/api/chat-rooms", authenticateToken, async (req, res) => {
   try {
+    const userId = req.user.id;
+    
     if (db.isPostgres()) {
-      const result = await db.query('SELECT * FROM chat_rooms ORDER BY last_activity DESC NULLS LAST, created_at DESC');
-      return res.json(result.rows);
+      // Get rooms with unread counts
+      const result = await db.query(`
+        SELECT 
+          r.*,
+          COALESCE(
+            (SELECT COUNT(*) FROM chat_messages m 
+             WHERE m.room_id = r.id 
+             AND m.user_id != $1
+             AND m.created_at > COALESCE(
+               (SELECT last_read_at FROM chat_read_status WHERE user_id = $1 AND room_id = r.id),
+               '1970-01-01'::timestamp
+             )
+            ), 0
+          ) as unread_count
+        FROM chat_rooms r
+        ORDER BY r.last_activity DESC NULLS LAST, r.created_at DESC
+      `, [userId]);
+      
+      const rooms = result.rows.map(r => ({
+        ...r,
+        unreadCount: parseInt(r.unread_count) || 0
+      }));
+      return res.json(rooms);
     }
     
     const dbData = readDb();
@@ -2675,12 +2698,21 @@ app.post("/api/chat-rooms", authenticateToken, async (req, res) => {
   }
 });
 
-// Get messages for a room
+// Get messages for a room (and mark as read)
 app.get("/api/chat-rooms/:roomId/messages", authenticateToken, async (req, res) => {
   try {
     const roomId = req.params.roomId;
+    const userId = req.user.id;
     
     if (db.isPostgres()) {
+      // Mark room as read for this user
+      await db.query(`
+        INSERT INTO chat_read_status (user_id, room_id, last_read_at)
+        VALUES ($1, $2, NOW())
+        ON CONFLICT (user_id, room_id) 
+        DO UPDATE SET last_read_at = NOW()
+      `, [userId, roomId]);
+      
       const result = await db.query(
         'SELECT * FROM chat_messages WHERE room_id = $1 ORDER BY created_at ASC',
         [roomId]
@@ -2689,6 +2721,10 @@ app.get("/api/chat-rooms/:roomId/messages", authenticateToken, async (req, res) 
     }
     
     const dbData = readDb();
+    if (!dbData.chatReadStatus) dbData.chatReadStatus = {};
+    dbData.chatReadStatus[`${userId}_${roomId}`] = new Date().toISOString();
+    writeDb(dbData);
+    
     const messages = (dbData.chatMessages || [])
       .filter(m => m.roomId === roomId)
       .sort((a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime());

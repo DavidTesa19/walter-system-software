@@ -28,12 +28,10 @@ const AppContent: React.FC = () => {
     return <Login />;
   }
 
-  const isFullscreenView = viewMode === 'chatbot' || viewMode === 'teamchat';
-
   return (
     <div style={{ display: 'flex' }}>
       <Sidebar activeView={viewMode} onViewChange={setViewMode} />
-      <div className={`main-content ${isFullscreenView ? 'fullscreen-view' : ''}`}>
+      <div className="main-content">
         {(() => {
           switch (viewMode) {
             case 'active':
@@ -57,7 +55,7 @@ const AppContent: React.FC = () => {
           }
         })()}
       </div>
-      {!isFullscreenView && <Footer />}
+      <Footer />
     </div>
   );
 };

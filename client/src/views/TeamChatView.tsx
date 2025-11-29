@@ -13,6 +13,7 @@ interface ChatRoom {
   last_activity?: string;
   created_at?: string;
   createdAt?: string;
+  unreadCount?: number;
 }
 
 interface ChatMessage {
@@ -46,28 +47,44 @@ export default function TeamChatView() {
   const [showNewRoomModal, setShowNewRoomModal] = useState(false);
   const [newRoomName, setNewRoomName] = useState('');
   const [newRoomDescription, setNewRoomDescription] = useState('');
-  const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [loading, setLoading] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
-  const pollIntervalRef = useRef<number | null>(null);
+
+  // Mark room as read when selecting
+  const markRoomAsRead = useCallback((roomId: string | number) => {
+    const key = `teamchat_lastread_${user?.id}`;
+    const stored = localStorage.getItem(key);
+    const timestamps = stored ? JSON.parse(stored) : {};
+    timestamps[roomId] = new Date().toISOString();
+    localStorage.setItem(key, JSON.stringify(timestamps));
+  }, [user?.id]);
 
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   };
 
-  // Fetch all chat rooms
+  // Fetch all chat rooms with unread counts
   const fetchRooms = useCallback(async () => {
     try {
-      const res = await fetch(`${API_BASE}/api/chat-rooms`, {
+      const res = await fetch(`${API_BASE}/api/chat-rooms?includeUnread=true&userId=${user?.id}`, {
         headers: { Authorization: `Bearer ${token}` }
       });
       if (!res.ok) throw new Error('Failed to fetch rooms');
-      const data = await res.json();
-      setRooms(data);
+      const data: ChatRoom[] = await res.json();
+      
+      // Sort by last activity (newest first)
+      const sortedRooms = data.sort((a, b) => {
+        const aTime = a.lastActivity || a.last_activity || a.createdAt || a.created_at || '';
+        const bTime = b.lastActivity || b.last_activity || b.createdAt || b.created_at || '';
+        return new Date(bTime).getTime() - new Date(aTime).getTime();
+      });
+      
+      setRooms(sortedRooms);
     } catch (err) {
       console.error('Error fetching rooms:', err);
     }
-  }, [token]);
+  }, [token, user?.id]);
 
   // Fetch messages for selected room
   const fetchMessages = useCallback(async () => {
@@ -104,27 +121,31 @@ export default function TeamChatView() {
     fetchTeamUsers();
   }, [fetchRooms, fetchTeamUsers]);
 
-  // Fetch messages when room changes
+  // Fetch messages when room changes and mark as read
   useEffect(() => {
     if (selectedRoom) {
       fetchMessages();
+      markRoomAsRead(selectedRoom.id);
+      // Clear unread count for selected room
+      setRooms(prev => prev.map(r => 
+        r.id === selectedRoom.id ? { ...r, unreadCount: 0 } : r
+      ));
     }
-  }, [selectedRoom, fetchMessages]);
+  }, [selectedRoom, fetchMessages, markRoomAsRead]);
 
-  // Poll for new messages every 3 seconds
+  // Poll for new messages and room updates every 3 seconds
   useEffect(() => {
-    if (selectedRoom) {
-      pollIntervalRef.current = window.setInterval(() => {
+    const pollInterval = window.setInterval(() => {
+      fetchRooms(); // Update unread counts
+      if (selectedRoom) {
         fetchMessages();
-      }, 3000);
-    }
+      }
+    }, 3000);
 
     return () => {
-      if (pollIntervalRef.current) {
-        clearInterval(pollIntervalRef.current);
-      }
+      clearInterval(pollInterval);
     };
-  }, [selectedRoom, fetchMessages]);
+  }, [selectedRoom, fetchMessages, fetchRooms]);
 
   // Scroll to bottom when messages change
   useEffect(() => {
@@ -155,7 +176,8 @@ export default function TeamChatView() {
       if (!res.ok) throw new Error('Failed to create room');
 
       const newRoom = await res.json();
-      setRooms(prev => [...prev, newRoom]);
+      // Add new room at the top (it's the most recent)
+      setRooms(prev => [newRoom, ...prev]);
       setSelectedRoom(newRoom);
       setShowNewRoomModal(false);
       setNewRoomName('');
@@ -190,6 +212,20 @@ export default function TeamChatView() {
 
       const sentMessage = await res.json();
       setMessages(prev => [...prev, sentMessage]);
+      
+      // Update room order immediately (move current room to top)
+      setRooms(prev => {
+        const updatedRooms = prev.map(r => 
+          r.id === selectedRoom.id 
+            ? { ...r, lastActivity: new Date().toISOString(), last_activity: new Date().toISOString() }
+            : r
+        );
+        return updatedRooms.sort((a, b) => {
+          const aTime = a.lastActivity || a.last_activity || a.createdAt || a.created_at || '';
+          const bTime = b.lastActivity || b.last_activity || b.createdAt || b.created_at || '';
+          return new Date(bTime).getTime() - new Date(aTime).getTime();
+        });
+      });
     } catch (err) {
       console.error('Error sending message:', err);
       setNewMessage(messageContent); // Restore message on error
@@ -275,7 +311,7 @@ export default function TeamChatView() {
             rooms.map(room => (
               <div
                 key={room.id}
-                className={`room-item ${selectedRoom?.id === room.id ? 'active' : ''}`}
+                className={`room-item ${selectedRoom?.id === room.id ? 'active' : ''} ${room.unreadCount && room.unreadCount > 0 ? 'has-unread' : ''}`}
                 onClick={() => setSelectedRoom(room)}
               >
                 <div className="room-info">
@@ -284,18 +320,23 @@ export default function TeamChatView() {
                     <span className="room-description">{room.description}</span>
                   )}
                 </div>
-                {canDeleteRoom(room) && (
-                  <button
-                    className="delete-room-btn"
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      handleDeleteRoom(room.id);
-                    }}
-                    title="Smazat místnost"
-                  >
-                    🗑️
-                  </button>
-                )}
+                <div className="room-actions">
+                  {room.unreadCount && room.unreadCount > 0 && selectedRoom?.id !== room.id && (
+                    <span className="unread-badge">{room.unreadCount > 99 ? '99+' : room.unreadCount}</span>
+                  )}
+                  {canDeleteRoom(room) && (
+                    <button
+                      className="delete-room-btn"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        handleDeleteRoom(room.id);
+                      }}
+                      title="Smazat místnost"
+                    >
+                      🗑️
+                    </button>
+                  )}
+                </div>
               </div>
             ))
           )}
@@ -381,12 +422,18 @@ export default function TeamChatView() {
             </div>
 
             <form className="team-chat-input" onSubmit={handleSendMessage}>
-              <input
-                type="text"
+              <textarea
                 value={newMessage}
                 onChange={(e) => setNewMessage(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter' && !e.shiftKey) {
+                    e.preventDefault();
+                    handleSendMessage(e);
+                  }
+                }}
                 placeholder={`Napište zprávu do #${selectedRoom.name}...`}
                 autoFocus
+                rows={1}
               />
               <button type="submit" disabled={!newMessage.trim()}>
                 Odeslat

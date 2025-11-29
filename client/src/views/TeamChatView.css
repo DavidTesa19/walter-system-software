@@ -1,6 +1,6 @@
 .team-chat-view {
   display: flex;
-  height: 100vh;
+  height: calc(100vh - 60px); /* Account for footer */
   width: 100%;
   background-color: var(--color-background);
   font-family: var(--font-body);
@@ -98,11 +98,35 @@
   color: white;
 }
 
+.room-item.has-unread .room-name {
+  font-weight: 700;
+}
+
 .room-info {
   display: flex;
   flex-direction: column;
   gap: 0.125rem;
   overflow: hidden;
+  flex: 1;
+  min-width: 0;
+}
+
+.room-actions {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  flex-shrink: 0;
+}
+
+.unread-badge {
+  background: var(--color-accent);
+  color: white;
+  font-size: 0.6875rem;
+  font-weight: 700;
+  padding: 0.125rem 0.4rem;
+  border-radius: 10px;
+  min-width: 18px;
+  text-align: center;
 }
 
 .room-name {
@@ -359,6 +383,7 @@
   font-size: 0.9375rem;
   line-height: 1.5;
   word-break: break-word;
+  white-space: pre-wrap;
 }
 
 .message-time {
@@ -377,9 +402,10 @@
   background: var(--color-surface);
   border-top: 1px solid var(--color-border);
   flex-shrink: 0;
+  align-items: flex-end;
 }
 
-.team-chat-input input {
+.team-chat-input textarea {
   flex: 1;
   padding: 0.75rem 1rem;
   border: 1px solid var(--color-border);
@@ -389,9 +415,14 @@
   font-size: 0.9375rem;
   font-family: var(--font-body);
   transition: border-color 0.2s ease;
+  resize: none;
+  min-height: 42px;
+  max-height: 150px;
+  overflow-y: auto;
+  line-height: 1.5;
 }
 
-.team-chat-input input:focus {
+.team-chat-input textarea:focus {
   outline: none;
   border-color: var(--color-primary);
   box-shadow: 0 0 0 3px color-mix(in srgb, var(--color-primary) 12%, transparent);

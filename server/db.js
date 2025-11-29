@@ -187,6 +187,17 @@ export async function initDatabase() {
         ON chat_messages (room_id, created_at)
     `);
 
+    // Create chat_read_status table for tracking unread messages
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS chat_read_status (
+        id SERIAL PRIMARY KEY,
+        user_id INTEGER NOT NULL,
+        room_id INTEGER REFERENCES chat_rooms(id) ON DELETE CASCADE,
+        last_read_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        UNIQUE(user_id, room_id)
+      )
+    `);
+
     // Create color palettes table
     await client.query(`
       CREATE TABLE IF NOT EXISTS color_palettes (
@@ -578,7 +589,7 @@ export const db = {
     }
   },
 
-  async deleteColorPalette(id) {
+  async deleteColorPalette(id, userId) {
     if (!USE_POSTGRES) return null;
 
     const client = await pool.connect();
@@ -586,8 +597,8 @@ export const db = {
       await client.query('BEGIN');
 
       const { rows: toDelete } = await client.query(
-        'SELECT id, mode, is_active FROM color_palettes WHERE id = $1',
-        [id]
+        'SELECT id, mode, is_active FROM user_palettes WHERE id = $1 AND user_id = $2',
+        [id, userId]
       );
 
       if (toDelete.length === 0) {
@@ -597,17 +608,17 @@ export const db = {
 
       const palette = toDelete[0];
 
-      await client.query('DELETE FROM color_palettes WHERE id = $1', [id]);
+      await client.query('DELETE FROM user_palettes WHERE id = $1 AND user_id = $2', [id, userId]);
 
       if (palette.is_active) {
         const { rows } = await client.query(
-          'SELECT id FROM color_palettes WHERE mode = $1 ORDER BY id LIMIT 1',
-          [palette.mode]
+          'SELECT id FROM user_palettes WHERE mode = $1 AND user_id = $2 ORDER BY id LIMIT 1',
+          [palette.mode, userId]
         );
         if (rows.length > 0) {
           await client.query(
-            'UPDATE color_palettes SET is_active = true WHERE id = $1',
-            [rows[0].id]
+            'UPDATE user_palettes SET is_active = true WHERE id = $1 AND user_id = $2',
+            [rows[0].id, userId]
           );
         }
       }
@@ -622,7 +633,7 @@ export const db = {
     }
   },
 
-  async activateColorPalette(id) {
+  async activateColorPalette(id, userId) {
     if (!USE_POSTGRES) return null;
 
     const client = await pool.connect();
@@ -630,8 +641,8 @@ export const db = {
       await client.query('BEGIN');
 
       const { rows } = await client.query(
-        'SELECT mode FROM color_palettes WHERE id = $1',
-        [id]
+        'SELECT mode FROM user_palettes WHERE id = $1 AND user_id = $2',
+        [id, userId]
       );
 
       if (rows.length === 0) {
@@ -642,13 +653,13 @@ export const db = {
       const mode = rows[0].mode;
 
       await client.query(
-        'UPDATE color_palettes SET is_active = false WHERE mode = $1',
-        [mode]
+        'UPDATE user_palettes SET is_active = false WHERE mode = $1 AND user_id = $2',
+        [mode, userId]
       );
 
       const result = await client.query(
-        'UPDATE color_palettes SET is_active = true, updated_at = CURRENT_TIMESTAMP WHERE id = $1 RETURNING *',
-        [id]
+        'UPDATE user_palettes SET is_active = true, updated_at = CURRENT_TIMESTAMP WHERE id = $1 AND user_id = $2 RETURNING *',
+        [id, userId]
       );
 
       await client.query('COMMIT');
