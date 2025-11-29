@@ -2302,6 +2302,136 @@ app.delete("/api/conversations/:id", authenticateToken, (req, res) => {
   res.status(204).end();
 });
 
+// ============================================
+// TEAM CHAT ENDPOINTS
+// ============================================
+
+// Get all chat rooms
+app.get("/api/chat-rooms", authenticateToken, (req, res) => {
+  const db = readDb();
+  if (!db.chatRooms) db.chatRooms = [];
+  res.json(db.chatRooms);
+});
+
+// Create a new chat room
+app.post("/api/chat-rooms", authenticateToken, (req, res) => {
+  const db = readDb();
+  if (!db.chatRooms) db.chatRooms = [];
+  
+  const { name, description } = req.body;
+  if (!name || typeof name !== 'string' || !name.trim()) {
+    return res.status(400).json({ error: "Room name is required" });
+  }
+  
+  const room = {
+    id: `room_${Date.now()}`,
+    name: name.trim(),
+    description: description?.trim() || "",
+    createdBy: req.user.username,
+    createdAt: new Date().toISOString(),
+    members: [req.user.username] // Creator is automatically a member
+  };
+  
+  db.chatRooms.push(room);
+  if (!writeDb(db)) return res.status(500).json({ error: "Failed to save" });
+  res.status(201).json(room);
+});
+
+// Get messages for a room
+app.get("/api/chat-rooms/:roomId/messages", authenticateToken, (req, res) => {
+  const db = readDb();
+  if (!db.chatMessages) db.chatMessages = [];
+  
+  const roomId = req.params.roomId;
+  const messages = db.chatMessages
+    .filter(m => m.roomId === roomId)
+    .sort((a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime());
+  
+  res.json(messages);
+});
+
+// Send a message to a room
+app.post("/api/chat-rooms/:roomId/messages", authenticateToken, (req, res) => {
+  const db = readDb();
+  if (!db.chatRooms) db.chatRooms = [];
+  if (!db.chatMessages) db.chatMessages = [];
+  
+  const roomId = req.params.roomId;
+  const room = db.chatRooms.find(r => r.id === roomId);
+  
+  if (!room) {
+    return res.status(404).json({ error: "Room not found" });
+  }
+  
+  const { content } = req.body;
+  if (!content || typeof content !== 'string' || !content.trim()) {
+    return res.status(400).json({ error: "Message content is required" });
+  }
+  
+  const message = {
+    id: `msg_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`,
+    roomId,
+    content: content.trim(),
+    username: req.user.username,
+    userId: req.user.id,
+    createdAt: new Date().toISOString()
+  };
+  
+  db.chatMessages.push(message);
+  
+  // Update room's last activity
+  const roomIdx = db.chatRooms.findIndex(r => r.id === roomId);
+  if (roomIdx !== -1) {
+    db.chatRooms[roomIdx].lastActivity = new Date().toISOString();
+  }
+  
+  if (!writeDb(db)) return res.status(500).json({ error: "Failed to save" });
+  res.status(201).json(message);
+});
+
+// Delete a chat room (admin or creator only)
+app.delete("/api/chat-rooms/:roomId", authenticateToken, (req, res) => {
+  const db = readDb();
+  if (!db.chatRooms) db.chatRooms = [];
+  
+  const roomId = req.params.roomId;
+  const roomIdx = db.chatRooms.findIndex(r => r.id === roomId);
+  
+  if (roomIdx === -1) {
+    return res.status(404).json({ error: "Room not found" });
+  }
+  
+  const room = db.chatRooms[roomIdx];
+  
+  // Only admin or creator can delete
+  if (req.user.role !== 'admin' && room.createdBy !== req.user.username) {
+    return res.status(403).json({ error: "Only admin or room creator can delete this room" });
+  }
+  
+  // Remove room
+  db.chatRooms.splice(roomIdx, 1);
+  
+  // Remove all messages for this room
+  if (db.chatMessages) {
+    db.chatMessages = db.chatMessages.filter(m => m.roomId !== roomId);
+  }
+  
+  if (!writeDb(db)) return res.status(500).json({ error: "Failed to delete" });
+  res.status(204).end();
+});
+
+// Get online users / all users for team chat
+app.get("/api/team-users", authenticateToken, (req, res) => {
+  const db = readDb();
+  // Return list of usernames (without sensitive data)
+  const users = (db.users || []).map(u => ({
+    id: u.id,
+    username: u.username,
+    role: u.role
+  }));
+  res.json(users);
+});
+
 app.listen(PORT, "0.0.0.0", () => {
   console.log(`API listening on http://0.0.0.0:${PORT}`);
   console.log(`Data file: ${DATA_FILE}`);

@@ -2612,6 +2612,230 @@ createCrudRoutes('users');
 createCrudRoutes('employees');
 createFutureFunctionsRoutes();
 
+// ============================================
+// TEAM CHAT ENDPOINTS
+// ============================================
+
+// Get all chat rooms
+app.get("/api/chat-rooms", authenticateToken, async (req, res) => {
+  try {
+    if (db.isPostgres()) {
+      const result = await db.query('SELECT * FROM chat_rooms ORDER BY last_activity DESC NULLS LAST, created_at DESC');
+      return res.json(result.rows);
+    }
+    
+    const dbData = readDb();
+    res.json(dbData.chatRooms || []);
+  } catch (error) {
+    console.error("Error fetching chat rooms:", error);
+    res.status(500).json({ error: "Failed to fetch chat rooms" });
+  }
+});
+
+// Create a new chat room
+app.post("/api/chat-rooms", authenticateToken, async (req, res) => {
+  try {
+    const { name, description } = req.body;
+    if (!name || typeof name !== 'string' || !name.trim()) {
+      return res.status(400).json({ error: "Room name is required" });
+    }
+    
+    const roomData = {
+      name: name.trim(),
+      description: description?.trim() || "",
+      created_by: req.user.username,
+      members: JSON.stringify([req.user.username])
+    };
+    
+    if (db.isPostgres()) {
+      const result = await db.query(
+        `INSERT INTO chat_rooms (name, description, created_by, members) 
+         VALUES ($1, $2, $3, $4::jsonb) RETURNING *`,
+        [roomData.name, roomData.description, roomData.created_by, roomData.members]
+      );
+      return res.status(201).json(result.rows[0]);
+    }
+    
+    const dbData = readDb();
+    if (!dbData.chatRooms) dbData.chatRooms = [];
+    
+    const room = {
+      id: `room_${Date.now()}`,
+      ...roomData,
+      members: [req.user.username],
+      createdAt: new Date().toISOString()
+    };
+    
+    dbData.chatRooms.push(room);
+    if (!writeDb(dbData)) return res.status(500).json({ error: "Failed to save" });
+    res.status(201).json(room);
+  } catch (error) {
+    console.error("Error creating chat room:", error);
+    res.status(500).json({ error: "Failed to create chat room" });
+  }
+});
+
+// Get messages for a room
+app.get("/api/chat-rooms/:roomId/messages", authenticateToken, async (req, res) => {
+  try {
+    const roomId = req.params.roomId;
+    
+    if (db.isPostgres()) {
+      const result = await db.query(
+        'SELECT * FROM chat_messages WHERE room_id = $1 ORDER BY created_at ASC',
+        [roomId]
+      );
+      return res.json(result.rows);
+    }
+    
+    const dbData = readDb();
+    const messages = (dbData.chatMessages || [])
+      .filter(m => m.roomId === roomId)
+      .sort((a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime());
+    
+    res.json(messages);
+  } catch (error) {
+    console.error("Error fetching messages:", error);
+    res.status(500).json({ error: "Failed to fetch messages" });
+  }
+});
+
+// Send a message to a room
+app.post("/api/chat-rooms/:roomId/messages", authenticateToken, async (req, res) => {
+  try {
+    const roomId = req.params.roomId;
+    const { content } = req.body;
+    
+    if (!content || typeof content !== 'string' || !content.trim()) {
+      return res.status(400).json({ error: "Message content is required" });
+    }
+    
+    if (db.isPostgres()) {
+      // Verify room exists
+      const roomCheck = await db.query('SELECT id FROM chat_rooms WHERE id = $1', [roomId]);
+      if (roomCheck.rows.length === 0) {
+        return res.status(404).json({ error: "Room not found" });
+      }
+      
+      const result = await db.query(
+        `INSERT INTO chat_messages (room_id, content, username, user_id) 
+         VALUES ($1, $2, $3, $4) RETURNING *`,
+        [roomId, content.trim(), req.user.username, req.user.id]
+      );
+      
+      // Update room's last activity
+      await db.query(
+        'UPDATE chat_rooms SET last_activity = CURRENT_TIMESTAMP WHERE id = $1',
+        [roomId]
+      );
+      
+      return res.status(201).json(result.rows[0]);
+    }
+    
+    const dbData = readDb();
+    if (!dbData.chatRooms) dbData.chatRooms = [];
+    if (!dbData.chatMessages) dbData.chatMessages = [];
+    
+    const room = dbData.chatRooms.find(r => r.id === roomId);
+    if (!room) {
+      return res.status(404).json({ error: "Room not found" });
+    }
+    
+    const message = {
+      id: `msg_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`,
+      roomId,
+      content: content.trim(),
+      username: req.user.username,
+      userId: req.user.id,
+      createdAt: new Date().toISOString()
+    };
+    
+    dbData.chatMessages.push(message);
+    
+    // Update room's last activity
+    const roomIdx = dbData.chatRooms.findIndex(r => r.id === roomId);
+    if (roomIdx !== -1) {
+      dbData.chatRooms[roomIdx].lastActivity = new Date().toISOString();
+    }
+    
+    if (!writeDb(dbData)) return res.status(500).json({ error: "Failed to save" });
+    res.status(201).json(message);
+  } catch (error) {
+    console.error("Error sending message:", error);
+    res.status(500).json({ error: "Failed to send message" });
+  }
+});
+
+// Delete a chat room (admin or creator only)
+app.delete("/api/chat-rooms/:roomId", authenticateToken, async (req, res) => {
+  try {
+    const roomId = req.params.roomId;
+    
+    if (db.isPostgres()) {
+      const roomCheck = await db.query('SELECT * FROM chat_rooms WHERE id = $1', [roomId]);
+      if (roomCheck.rows.length === 0) {
+        return res.status(404).json({ error: "Room not found" });
+      }
+      
+      const room = roomCheck.rows[0];
+      if (req.user.role !== 'admin' && room.created_by !== req.user.username) {
+        return res.status(403).json({ error: "Only admin or room creator can delete this room" });
+      }
+      
+      // Delete messages first, then room
+      await db.query('DELETE FROM chat_messages WHERE room_id = $1', [roomId]);
+      await db.query('DELETE FROM chat_rooms WHERE id = $1', [roomId]);
+      
+      return res.status(204).end();
+    }
+    
+    const dbData = readDb();
+    if (!dbData.chatRooms) dbData.chatRooms = [];
+    
+    const roomIdx = dbData.chatRooms.findIndex(r => r.id === roomId);
+    if (roomIdx === -1) {
+      return res.status(404).json({ error: "Room not found" });
+    }
+    
+    const room = dbData.chatRooms[roomIdx];
+    if (req.user.role !== 'admin' && room.createdBy !== req.user.username) {
+      return res.status(403).json({ error: "Only admin or room creator can delete this room" });
+    }
+    
+    dbData.chatRooms.splice(roomIdx, 1);
+    if (dbData.chatMessages) {
+      dbData.chatMessages = dbData.chatMessages.filter(m => m.roomId !== roomId);
+    }
+    
+    if (!writeDb(dbData)) return res.status(500).json({ error: "Failed to delete" });
+    res.status(204).end();
+  } catch (error) {
+    console.error("Error deleting chat room:", error);
+    res.status(500).json({ error: "Failed to delete chat room" });
+  }
+});
+
+// Get all users for team chat
+app.get("/api/team-users", authenticateToken, async (req, res) => {
+  try {
+    if (db.isPostgres()) {
+      const result = await db.query('SELECT id, username, role FROM users ORDER BY username');
+      return res.json(result.rows);
+    }
+    
+    const dbData = readDb();
+    const users = (dbData.users || []).map(u => ({
+      id: u.id,
+      username: u.username,
+      role: u.role
+    }));
+    res.json(users);
+  } catch (error) {
+    console.error("Error fetching team users:", error);
+    res.status(500).json({ error: "Failed to fetch users" });
+  }
+});
+
 app.use((err, _req, res, _next) => {
   if (err instanceof multer.MulterError) {
     if (err.code === 'LIMIT_FILE_SIZE') {

@@ -158,6 +158,11 @@
   padding-bottom: 80px; /* Space for fixed footer */
 }
 
+.main-content.fullscreen-view {
+  padding-bottom: 0;
+  overflow: hidden;
+}
+
 @media (max-width: 960px) {
   .sidebar {
     width: 240px;

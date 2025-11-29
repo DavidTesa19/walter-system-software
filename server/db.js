@@ -156,6 +156,37 @@ export async function initDatabase() {
         ON documents (entity_type, entity_id)
     `);
 
+    // Create chat_rooms table for team chat
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS chat_rooms (
+        id SERIAL PRIMARY KEY,
+        name VARCHAR(255) NOT NULL,
+        description TEXT,
+        created_by VARCHAR(255) NOT NULL,
+        members JSONB DEFAULT '[]'::jsonb,
+        last_activity TIMESTAMP,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+      )
+    `);
+
+    // Create chat_messages table for team chat
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS chat_messages (
+        id SERIAL PRIMARY KEY,
+        room_id INTEGER REFERENCES chat_rooms(id) ON DELETE CASCADE,
+        content TEXT NOT NULL,
+        username VARCHAR(255) NOT NULL,
+        user_id INTEGER,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+      )
+    `);
+
+    await client.query(`
+      CREATE INDEX IF NOT EXISTS idx_chat_messages_room
+        ON chat_messages (room_id, created_at)
+    `);
+
     // Create color palettes table
     await client.query(`
       CREATE TABLE IF NOT EXISTS color_palettes (

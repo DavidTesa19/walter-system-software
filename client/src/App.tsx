@@ -11,6 +11,7 @@ import PendingApprovalsView from './views/PendingApprovalsView';
 import ArchivedCommissionsView from './views/ArchivedCommissionsView';
 import FutureFunctionsView from './views/FutureFunctionsView';
 import ChatbotView from './views/ChatbotView';
+import TeamChatView from './views/TeamChatView';
 // import CalendarView from './views/CalendarView';
 import type { AppView } from './types/appView';
 import './components/Sidebar.css';
@@ -27,10 +28,12 @@ const AppContent: React.FC = () => {
     return <Login />;
   }
 
+  const isFullscreenView = viewMode === 'chatbot' || viewMode === 'teamchat';
+
   return (
     <div style={{ display: 'flex' }}>
       <Sidebar activeView={viewMode} onViewChange={setViewMode} />
-      <div className="main-content">
+      <div className={`main-content ${isFullscreenView ? 'fullscreen-view' : ''}`}>
         {(() => {
           switch (viewMode) {
             case 'active':
@@ -45,6 +48,8 @@ const AppContent: React.FC = () => {
               return <PaletteManager />;
             case 'chatbot':
               return <ChatbotView />;
+            case 'teamchat':
+              return <TeamChatView />;
             // case 'calendar':
             //   return <CalendarView />;
             default:
@@ -52,7 +57,7 @@ const AppContent: React.FC = () => {
           }
         })()}
       </div>
-      <Footer />
+      {!isFullscreenView && <Footer />}
     </div>
   );
 };
