@@ -306,7 +306,8 @@ const ClientsSection: React.FC<SectionProps> = ({
       name: "Nový Klient",
       company: "Nová Společnost",
       location: "Nová Lokalita",
-      mobile: "000 000 000"
+      mobile: "000 000 000",
+      status: status
     };
 
     try {
@@ -316,7 +317,7 @@ const ClientsSection: React.FC<SectionProps> = ({
       console.error("Error adding client:", error);
       alert("Chyba při přidávání klienta");
     }
-  }, [fetchClientsData]);
+  }, [fetchClientsData, status]);
 
   useEffect(() => {
     fetchClientsData();

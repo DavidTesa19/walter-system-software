@@ -304,7 +304,8 @@ const TipersSection: React.FC<SectionProps> = ({
       name: "Nový Tipař",
       company: "Nová Společnost",
       location: "Nová Lokalita",
-      mobile: "000 000 000"
+      mobile: "000 000 000",
+      status: status
     };
 
     try {
@@ -314,7 +315,7 @@ const TipersSection: React.FC<SectionProps> = ({
       console.error("Error adding tiper:", error);
       alert("Chyba při přidávání tipaře");
     }
-  }, [fetchTipersData]);
+  }, [fetchTipersData, status]);
 
   useEffect(() => {
     fetchTipersData();

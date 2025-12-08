@@ -152,10 +152,17 @@
   margin-left: 260px;
   width: calc(100% - 260px);
   min-height: 100vh;
+  max-height: 100vh;
   background: var(--color-background);
   color: var(--color-text);
   overflow: auto;
-  padding-bottom: 80px; /* Space for fixed footer */
+  display: flex;
+  flex-direction: column;
+}
+
+.main-content--fullscreen {
+  overflow: hidden;
+  padding: 0;
 }
 
 @media (max-width: 960px) {
@@ -166,5 +173,10 @@
   .main-content {
     margin-left: 240px;
     width: calc(100% - 240px);
+  }
+
+  .main-content--fullscreen {
+    overflow: hidden;
+    padding: 0;
   }
 }

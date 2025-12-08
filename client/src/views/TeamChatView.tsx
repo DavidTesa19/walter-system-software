@@ -49,7 +49,9 @@ export default function TeamChatView() {
   const [newRoomDescription, setNewRoomDescription] = useState('');
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
+  const [shouldScrollToBottom, setShouldScrollToBottom] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
+  const prevMessageCountRef = useRef<number>(0);
 
   // Mark room as read when selecting
   const markRoomAsRead = useCallback((roomId: string | number) => {
@@ -124,6 +126,8 @@ export default function TeamChatView() {
   // Fetch messages when room changes and mark as read
   useEffect(() => {
     if (selectedRoom) {
+      prevMessageCountRef.current = 0; // Reset count for new room
+      setShouldScrollToBottom(true); // Scroll to bottom when switching rooms
       fetchMessages();
       markRoomAsRead(selectedRoom.id);
       // Clear unread count for selected room
@@ -147,10 +151,19 @@ export default function TeamChatView() {
     };
   }, [selectedRoom, fetchMessages, fetchRooms]);
 
-  // Scroll to bottom when messages change
+  // Scroll to bottom only when new messages arrive or explicitly requested
   useEffect(() => {
-    scrollToBottom();
-  }, [messages]);
+    const currentCount = messages.length;
+    const prevCount = prevMessageCountRef.current;
+    
+    // Scroll if: explicitly requested, or new messages arrived (not initial load during polling)
+    if (shouldScrollToBottom || (currentCount > prevCount && prevCount > 0)) {
+      scrollToBottom();
+      setShouldScrollToBottom(false);
+    }
+    
+    prevMessageCountRef.current = currentCount;
+  }, [messages, shouldScrollToBottom]);
 
   // Create a new room
   const handleCreateRoom = async (e: React.FormEvent) => {
@@ -212,6 +225,7 @@ export default function TeamChatView() {
 
       const sentMessage = await res.json();
       setMessages(prev => [...prev, sentMessage]);
+      setShouldScrollToBottom(true); // Scroll after sending message
       
       // Update room order immediately (move current room to top)
       setRooms(prev => {

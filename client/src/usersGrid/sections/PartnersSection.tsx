@@ -304,7 +304,8 @@ const PartnersSection: React.FC<SectionProps> = ({
       name: "Nový Partner",
       company: "Nová Společnost",
       location: "Nová Lokalita",
-      mobile: "000 000 000"
+      mobile: "000 000 000",
+      status: status
     };
 
     try {
@@ -314,7 +315,7 @@ const PartnersSection: React.FC<SectionProps> = ({
       console.error("Error adding partner:", error);
       alert("Chyba při přidávání partnera");
     }
-  }, [fetchPartnersData]);
+  }, [fetchPartnersData, status]);
 
   useEffect(() => {
     fetchPartnersData();

@@ -1,7 +1,7 @@
 .chatbot-view {
   display: flex;
   flex-direction: column;
-  height: calc(100vh - 60px); /* Account for footer */
+  height: calc(100vh - 55px); /* Account for fixed footer */
   background-color: var(--color-background);
   position: relative;
 }
