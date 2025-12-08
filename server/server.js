@@ -1004,6 +1004,9 @@ function readDb() {
     if (!Array.isArray(obj.documents)) {
       obj.documents = [];
     }
+    if (!Array.isArray(obj.notes)) {
+      obj.notes = [];
+    }
     // Keep backwards compatibility
     if (!obj.users) {
       obj.users = [];
@@ -1604,6 +1607,104 @@ app.get("/documents/:documentId/download", authenticateToken, (req, res) => {
   } catch (error) {
     console.error("Error downloading document:", error);
     res.status(500).json({ error: "Failed to download document" });
+  }
+});
+
+// --- Notes Endpoints ---
+
+app.get("/:entity/:id/notes", authenticateToken, (req, res) => {
+  const { entity, id } = req.params;
+  const entityId = Number(id);
+
+  if (!DOCUMENT_ENTITY_TYPES.has(entity)) {
+    return res.status(400).json({ error: "Invalid entity type" });
+  }
+  if (Number.isNaN(entityId)) {
+    return res.status(400).json({ error: "Invalid entity id" });
+  }
+
+  try {
+    const store = readDb();
+    const notes = (store.notes || [])
+      .filter((n) => n.entityType === entity && n.entityId === entityId)
+      .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+
+    return res.json(notes);
+  } catch (error) {
+    console.error("Error fetching notes:", error);
+    res.status(500).json({ error: "Failed to fetch notes" });
+  }
+});
+
+app.post("/:entity/:id/notes", authenticateToken, (req, res) => {
+  const { entity, id } = req.params;
+  const entityId = Number(id);
+  const { content } = req.body;
+
+  if (!DOCUMENT_ENTITY_TYPES.has(entity)) {
+    return res.status(400).json({ error: "Invalid entity type" });
+  }
+  if (Number.isNaN(entityId)) {
+    return res.status(400).json({ error: "Invalid entity id" });
+  }
+  if (!content || typeof content !== "string" || !content.trim()) {
+    return res.status(400).json({ error: "Content is required" });
+  }
+
+  try {
+    const store = readDb();
+    const newNote = {
+      id: Date.now(),
+      entityType: entity,
+      entityId: entityId,
+      content: content.trim(),
+      author: req.user?.username || "Admin",
+      createdAt: new Date().toISOString()
+    };
+
+    if (!store.notes) {
+      store.notes = [];
+    }
+    store.notes.push(newNote);
+
+    if (!writeDb(store)) {
+      return res.status(500).json({ error: "Failed to save note" });
+    }
+
+    return res.status(201).json(newNote);
+  } catch (error) {
+    console.error("Error creating note:", error);
+    res.status(500).json({ error: "Failed to create note" });
+  }
+});
+
+app.delete("/notes/:noteId", authenticateToken, (req, res) => {
+  const noteId = Number(req.params.noteId);
+  if (Number.isNaN(noteId)) {
+    return res.status(400).json({ error: "Invalid note id" });
+  }
+
+  try {
+    const store = readDb();
+    if (!store.notes) {
+      return res.status(404).json({ error: "Note not found" });
+    }
+
+    const idx = store.notes.findIndex((n) => n.id === noteId);
+    if (idx === -1) {
+      return res.status(404).json({ error: "Note not found" });
+    }
+
+    const removed = store.notes.splice(idx, 1)[0];
+
+    if (!writeDb(store)) {
+      return res.status(500).json({ error: "Failed to delete note" });
+    }
+
+    return res.json(removed);
+  } catch (error) {
+    console.error("Error deleting note:", error);
+    res.status(500).json({ error: "Failed to delete note" });
   }
 });
 
@@ -2369,7 +2470,8 @@ app.get("/api/chat-rooms/:roomId/messages", authenticateToken, (req, res) => {
   
   const messages = db.chatMessages
     .filter(m => m.roomId === roomId)
-    .sort((a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime());
+    .sort((a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime())
+    .map(m => ({ ...m, reactions: m.reactions || {} }));
   
   res.json(messages);
 });
@@ -2387,7 +2489,7 @@ app.post("/api/chat-rooms/:roomId/messages", authenticateToken, (req, res) => {
     return res.status(404).json({ error: "Room not found" });
   }
   
-  const { content } = req.body;
+  const { content, replyToMessageId } = req.body;
   if (!content || typeof content !== 'string' || !content.trim()) {
     return res.status(400).json({ error: "Message content is required" });
   }
@@ -2398,7 +2500,9 @@ app.post("/api/chat-rooms/:roomId/messages", authenticateToken, (req, res) => {
     content: content.trim(),
     username: req.user.username,
     userId: req.user.id,
-    createdAt: new Date().toISOString()
+    replyToMessageId: replyToMessageId || null,
+    createdAt: new Date().toISOString(),
+    reactions: {}
   };
   
   db.chatMessages.push(message);
@@ -2411,6 +2515,44 @@ app.post("/api/chat-rooms/:roomId/messages", authenticateToken, (req, res) => {
   
   if (!writeDb(db)) return res.status(500).json({ error: "Failed to save" });
   res.status(201).json(message);
+});
+
+// Toggle a reaction on a message
+app.post("/api/chat-rooms/:roomId/messages/:messageId/reactions", authenticateToken, (req, res) => {
+  const db = readDb();
+  if (!db.chatMessages) db.chatMessages = [];
+  const { emoji } = req.body;
+  const roomId = req.params.roomId;
+  const messageId = req.params.messageId;
+  const userId = req.user.id;
+
+  if (!emoji || typeof emoji !== "string") {
+    return res.status(400).json({ error: "Emoji is required" });
+  }
+
+  const messageIdx = db.chatMessages.findIndex(m => m.id === messageId && m.roomId === roomId);
+  if (messageIdx === -1) {
+    return res.status(404).json({ error: "Message not found" });
+  }
+
+  const message = db.chatMessages[messageIdx];
+  const reactions = message.reactions || {};
+  const current = reactions[emoji] || [];
+
+  const hasReacted = current.includes(userId);
+  const updatedUsers = hasReacted
+    ? current.filter(id => id !== userId)
+    : [...current, userId];
+
+  if (updatedUsers.length > 0) {
+    reactions[emoji] = updatedUsers;
+  } else {
+    delete reactions[emoji];
+  }
+
+  db.chatMessages[messageIdx] = { ...message, reactions };
+  if (!writeDb(db)) return res.status(500).json({ error: "Failed to save" });
+  res.json(db.chatMessages[messageIdx]);
 });
 
 // Delete a chat room (admin or creator only)

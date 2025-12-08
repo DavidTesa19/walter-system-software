@@ -28,3 +28,12 @@ export interface ProfileDocument {
   sizeBytes: number;
   createdAt: string;
 }
+
+export interface ProfileNote {
+  id: number;
+  entityType: string;
+  entityId: number;
+  content: string;
+  author: string;
+  createdAt: string;
+}

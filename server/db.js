@@ -156,6 +156,23 @@ export async function initDatabase() {
         ON documents (entity_type, entity_id)
     `);
 
+    // Create notes table
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS notes (
+        id SERIAL PRIMARY KEY,
+        entity_type VARCHAR(50) NOT NULL,
+        entity_id INTEGER NOT NULL,
+        content TEXT NOT NULL,
+        author VARCHAR(255),
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+      )
+    `);
+
+    await client.query(`
+      CREATE INDEX IF NOT EXISTS idx_notes_entity
+        ON notes (entity_type, entity_id)
+    `);
+
     // Create chat_rooms table for team chat
     await client.query(`
       CREATE TABLE IF NOT EXISTS chat_rooms (
@@ -178,6 +195,7 @@ export async function initDatabase() {
         content TEXT NOT NULL,
         username VARCHAR(255) NOT NULL,
         user_id INTEGER,
+        reply_to_message_id INTEGER,
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
       )
     `);
@@ -185,6 +203,26 @@ export async function initDatabase() {
     await client.query(`
       CREATE INDEX IF NOT EXISTS idx_chat_messages_room
         ON chat_messages (room_id, created_at)
+    `);
+
+    await client.query(
+      'ALTER TABLE chat_messages ADD COLUMN IF NOT EXISTS reply_to_message_id INTEGER'
+    );
+
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS chat_message_reactions (
+        id SERIAL PRIMARY KEY,
+        message_id INTEGER REFERENCES chat_messages(id) ON DELETE CASCADE,
+        user_id INTEGER NOT NULL,
+        emoji TEXT NOT NULL,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        UNIQUE(message_id, user_id, emoji)
+      )
+    `);
+
+    await client.query(`
+      CREATE INDEX IF NOT EXISTS idx_chat_message_reactions_message
+        ON chat_message_reactions (message_id)
     `);
 
     // Create chat_read_status table for tracking unread messages
@@ -746,6 +784,59 @@ export const db = {
     );
 
     return toDocumentResponse(result.rows[0]);
+  },
+
+  async getNotes(entityType, entityId) {
+    if (!USE_POSTGRES) return null;
+
+    const result = await pool.query(
+      `SELECT id, entity_type, entity_id, content, author, created_at
+         FROM notes
+        WHERE entity_type = $1 AND entity_id = $2
+        ORDER BY created_at DESC`,
+      [entityType, entityId]
+    );
+
+    return result.rows.map(row => ({
+      id: row.id,
+      entityType: row.entity_type,
+      entityId: row.entity_id,
+      content: row.content,
+      author: row.author,
+      createdAt: row.created_at
+    }));
+  },
+
+  async createNote(entityType, entityId, { content, author }) {
+    if (!USE_POSTGRES) return null;
+
+    const result = await pool.query(
+      `INSERT INTO notes (entity_type, entity_id, content, author)
+       VALUES ($1, $2, $3, $4)
+       RETURNING id, entity_type, entity_id, content, author, created_at`,
+      [entityType, entityId, content, author]
+    );
+
+    const row = result.rows[0];
+    return {
+      id: row.id,
+      entityType: row.entity_type,
+      entityId: row.entity_id,
+      content: row.content,
+      author: row.author,
+      createdAt: row.created_at
+    };
+  },
+
+  async deleteNote(id) {
+    if (!USE_POSTGRES) return null;
+
+    const result = await pool.query(
+      `DELETE FROM notes WHERE id = $1 RETURNING id`,
+      [id]
+    );
+
+    return result.rows[0] || null;
   },
 
   // Approve a pending record (change status to accepted)

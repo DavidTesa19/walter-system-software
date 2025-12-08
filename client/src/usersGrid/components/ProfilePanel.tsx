@@ -1,5 +1,5 @@
-import React, { useCallback, useEffect, useMemo, useRef } from "react";
-import type { ProfileBadge, ProfileDocument, ProfileSection } from "../types/profile";
+import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import type { ProfileBadge, ProfileDocument, ProfileSection, ProfileNote } from "../types/profile";
 import "./ProfilePanel.css";
 
 interface ProfileMetaItem {
@@ -21,6 +21,11 @@ interface ProfilePanelProps {
   onUploadDocument?: (file: File) => Promise<void> | void;
   onDeleteDocument?: (documentId: number) => Promise<boolean | void> | boolean | void;
   documentDownloadBaseUrl?: string;
+  notes?: ProfileNote[];
+  notesLoading?: boolean;
+  notesCreating?: boolean;
+  onAddNote?: (content: string) => Promise<void> | void;
+  onDeleteNote?: (noteId: number) => Promise<boolean | void> | boolean | void;
   onClose: () => void;
 }
 
@@ -50,10 +55,16 @@ const ProfilePanel: React.FC<ProfilePanelProps> = ({
   onUploadDocument,
   onDeleteDocument,
   documentDownloadBaseUrl,
+  notes,
+  notesLoading = false,
+  notesCreating = false,
+  onAddNote,
+  onDeleteNote,
   onClose
 }) => {
   const panelRef = useRef<HTMLDivElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const [newNote, setNewNote] = useState("");
 
   const visibleSections = useMemo(() => {
     return sections
@@ -92,6 +103,22 @@ const ProfilePanel: React.FC<ProfilePanelProps> = ({
       onDeleteDocument(documentId);
     },
     [onDeleteDocument]
+  );
+
+  const handleAddNote = useCallback(() => {
+    if (!onAddNote || !newNote.trim()) return;
+    onAddNote(newNote);
+    setNewNote("");
+  }, [onAddNote, newNote]);
+
+  const handleDeleteNote = useCallback(
+    (noteId: number) => {
+      if (!onDeleteNote) return;
+      const confirmed = window.confirm("Opravdu chcete smazat tuto poznámku?");
+      if (!confirmed) return;
+      onDeleteNote(noteId);
+    },
+    [onDeleteNote]
   );
 
   const showDocumentsSection = Boolean(
@@ -143,114 +170,181 @@ const ProfilePanel: React.FC<ProfilePanelProps> = ({
   return (
     <div className="profile-overlay" onMouseDown={handleOverlayMouseDown} role="presentation">
       <div className="profile-panel" ref={panelRef} role="dialog" aria-modal="true">
-        <header className="profile-panel__header">
-          <div className="profile-panel__header-text">
-            <p className="profile-panel__entity">{entityLabel}</p>
-            <h2 className="profile-panel__title">{title}</h2>
-            {subtitle ? <p className="profile-panel__subtitle">{subtitle}</p> : null}
-            {badge ? <span className={`profile-badge profile-badge--${badge.tone}`}>{badge.text}</span> : null}
-            {meta && meta.length > 0 ? (
-              <dl className="profile-panel__meta">
-                {meta.map((item) => (
-                  <div key={`${item.label}-${item.value}`} className="profile-panel__meta-item">
-                    <dt>{item.label}</dt>
-                    <dd>{item.value}</dd>
-                  </div>
-                ))}
-              </dl>
-            ) : null}
-          </div>
-          <button type="button" className="profile-panel__close" onClick={onClose} aria-label="Zavřít profil">
-            <svg width="18" height="18" viewBox="0 0 18 18" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
-              <path d="M4 4L14 14" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
-              <path d="M14 4L4 14" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
-            </svg>
-          </button>
-        </header>
-
-        <div className="profile-panel__body">
-          {visibleSections.length === 0 ? (
-            <p className="profile-panel__empty">Pro tento profil zatím nejsou žádné detaily.</p>
-          ) : (
-            visibleSections.map((section) => (
-              <section key={section.title} className="profile-section">
-                <h3 className="profile-section__title">{section.title}</h3>
-                <div className="profile-section__fields">
-                  {section.fields.map((field) => (
-                    <div key={field.label} className={`profile-field${field.isMultiline ? " profile-field--multiline" : ""}`}>
-                      <span className="profile-field__label">{field.label}</span>
-                      <span className="profile-field__value">{field.value}</span>
+        {/* Left side - main content */}
+        <div className="profile-panel__left">
+          <header className="profile-panel__header">
+            <div className="profile-panel__header-text">
+              <p className="profile-panel__entity">{entityLabel}</p>
+              <h2 className="profile-panel__title">{title}</h2>
+              {subtitle ? <p className="profile-panel__subtitle">{subtitle}</p> : null}
+              {badge ? <span className={`profile-badge profile-badge--${badge.tone}`}>{badge.text}</span> : null}
+              {meta && meta.length > 0 ? (
+                <dl className="profile-panel__meta">
+                  {meta.map((item) => (
+                    <div key={`${item.label}-${item.value}`} className="profile-panel__meta-item">
+                      <dt>{item.label}</dt>
+                      <dd>{item.value}</dd>
                     </div>
                   ))}
-                </div>
-              </section>
-            ))
-          )}
+                </dl>
+              ) : null}
+            </div>
+          </header>
 
-          {showDocumentsSection ? (
-            <section className="profile-section profile-documents">
-              <div className="profile-documents__header">
-                <h3 className="profile-section__title">Dokumenty</h3>
-                {onUploadDocument ? (
-                  <label className="profile-documents__upload">
-                    <input
-                      ref={fileInputRef}
-                      type="file"
-                      onChange={handleFileChange}
-                      disabled={documentsUploading}
-                    />
-                    <span>{documentsUploading ? "Nahrávám..." : "Přidat dokument"}</span>
-                  </label>
-                ) : null}
+          <div className="profile-panel__content">
+            <div className="profile-panel__main">
+              {visibleSections.length === 0 ? (
+                <p className="profile-panel__empty">Pro tento profil zatím nejsou žádné detaily.</p>
+              ) : (
+                visibleSections.map((section) => (
+                  <section key={section.title} className="profile-section">
+                    <h3 className="profile-section__title">{section.title}</h3>
+                    <div className="profile-section__fields">
+                      {section.fields.map((field) => (
+                        <div key={field.label} className={`profile-field${field.isMultiline ? " profile-field--multiline" : ""}`}>
+                          <span className="profile-field__label">{field.label}</span>
+                          <span className="profile-field__value">{field.value}</span>
+                        </div>
+                      ))}
+                    </div>
+                  </section>
+                ))
+              )}
+
+              {showDocumentsSection ? (
+                <section className="profile-section profile-documents">
+                  <div className="profile-documents__header">
+                    <h3 className="profile-section__title">Dokumenty</h3>
+                    {onUploadDocument ? (
+                      <label className="profile-documents__upload">
+                        <input
+                          ref={fileInputRef}
+                          type="file"
+                          onChange={handleFileChange}
+                          disabled={documentsUploading}
+                        />
+                        <span>{documentsUploading ? "Nahrávám..." : "Přidat dokument"}</span>
+                      </label>
+                    ) : null}
+                  </div>
+
+                  {documentsLoading ? (
+                    <p className="profile-panel__empty">Načítám dokumenty…</p>
+                  ) : documents && documents.length > 0 ? (
+                    <ul className="profile-documents__list">
+                      {documents.map((doc) => {
+                        const downloadHref = documentDownloadBaseUrl
+                          ? `${documentDownloadBaseUrl.replace(/\/$/, "")}/${doc.id}/download`
+                          : undefined;
+                        return (
+                          <li key={doc.id} className="profile-document">
+                            <div className="profile-document__meta">
+                              <span className="profile-document__name">{doc.filename}</span>
+                              <span className="profile-document__details">
+                                {formatFileSize(doc.sizeBytes)} · {formatDocumentDate(doc.createdAt)}
+                              </span>
+                            </div>
+                            <div className="profile-document__actions">
+                              {downloadHref ? (
+                                <a
+                                  className="profile-document__action"
+                                  href={downloadHref}
+                                  target="_blank"
+                                  rel="noreferrer"
+                                >
+                                  Stáhnout
+                                </a>
+                              ) : null}
+                              {onDeleteDocument ? (
+                                <button
+                                  type="button"
+                                  className="profile-document__action profile-document__action--danger"
+                                  onClick={() => handleDeleteDocument(doc.id, doc.filename)}
+                                >
+                                  Odstranit
+                                </button>
+                              ) : null}
+                            </div>
+                          </li>
+                        );
+                      })}
+                    </ul>
+                  ) : (
+                    <p className="profile-panel__empty">Žádné dokumenty zatím nebyly přidány.</p>
+                  )}
+                </section>
+              ) : null}
+            </div>
+          </div>
+        </div>
+
+        {/* Right side - notes sidebar */}
+        {(onAddNote || (notes && notes.length > 0)) && (
+          <div className="profile-panel__sidebar">
+            <div className="profile-panel__sidebar-header">
+              <h3 className="profile-section__title">Poznámky</h3>
+              <button type="button" className="profile-panel__close" onClick={onClose} aria-label="Zavřít profil">
+                <svg width="18" height="18" viewBox="0 0 18 18" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+                  <path d="M4 4L14 14" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
+                  <path d="M14 4L4 14" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
+                </svg>
+              </button>
+            </div>
+            <div className="profile-notes">
+              <div className="profile-notes__list">
+                {notesLoading ? (
+                  <p className="profile-panel__empty">Načítám poznámky...</p>
+                ) : notes && notes.length > 0 ? (
+                  notes.map(note => (
+                    <div key={note.id} className="profile-note-wrapper">
+                      <div className="profile-note-meta">
+                        <span className="profile-note-author">{note.author}</span>
+                        <span className="profile-note-date">{formatDocumentDate(note.createdAt)}</span>
+                        {onDeleteNote && (
+                          <button 
+                            className="profile-note-delete"
+                            onClick={() => handleDeleteNote(note.id)}
+                            title="Smazat poznámku"
+                          >
+                            ×
+                          </button>
+                        )}
+                      </div>
+                      <div className="profile-note-bubble">{note.content}</div>
+                    </div>
+                  ))
+                ) : (
+                  <p className="profile-panel__empty">Žádné poznámky.</p>
+                )}
               </div>
 
-              {documentsLoading ? (
-                <p className="profile-panel__empty">Načítám dokumenty…</p>
-              ) : documents && documents.length > 0 ? (
-                <ul className="profile-documents__list">
-                  {documents.map((doc) => {
-                    const downloadHref = documentDownloadBaseUrl
-                      ? `${documentDownloadBaseUrl.replace(/\/$/, "")}/${doc.id}/download`
-                      : undefined;
-                    return (
-                      <li key={doc.id} className="profile-document">
-                        <div className="profile-document__meta">
-                          <span className="profile-document__name">{doc.filename}</span>
-                          <span className="profile-document__details">
-                            {formatFileSize(doc.sizeBytes)} · {formatDocumentDate(doc.createdAt)}
-                          </span>
-                        </div>
-                        <div className="profile-document__actions">
-                          {downloadHref ? (
-                            <a
-                              className="profile-document__action"
-                              href={downloadHref}
-                              target="_blank"
-                              rel="noreferrer"
-                            >
-                              Stáhnout
-                            </a>
-                          ) : null}
-                          {onDeleteDocument ? (
-                            <button
-                              type="button"
-                              className="profile-document__action profile-document__action--danger"
-                              onClick={() => handleDeleteDocument(doc.id, doc.filename)}
-                            >
-                              Odstranit
-                            </button>
-                          ) : null}
-                        </div>
-                      </li>
-                    );
-                  })}
-                </ul>
-              ) : (
-                <p className="profile-panel__empty">Žádné dokumenty zatím nebyly přidány.</p>
+              {onAddNote && (
+                <div className="profile-notes__input-area">
+                  <textarea
+                    className="profile-notes__textarea"
+                    placeholder="Napsat poznámku..."
+                    value={newNote}
+                    onChange={(e) => setNewNote(e.target.value)}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter' && !e.shiftKey) {
+                        e.preventDefault();
+                        handleAddNote();
+                      }
+                    }}
+                    disabled={notesCreating}
+                  />
+                  <button 
+                    className="profile-notes__submit"
+                    onClick={handleAddNote}
+                    disabled={!newNote.trim() || notesCreating}
+                  >
+                    {notesCreating ? "..." : "Odeslat"}
+                  </button>
+                </div>
               )}
-            </section>
-          ) : null}
-        </div>
+            </div>
+          </div>
+        )}
       </div>
     </div>
   );

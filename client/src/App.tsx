@@ -57,7 +57,7 @@ const AppContent: React.FC = () => {
           }
         })()}
       </div>
-      <Footer />
+      {!isFullscreenView && <Footer />}
     </div>
   );
 };

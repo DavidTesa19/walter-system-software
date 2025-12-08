@@ -26,6 +26,9 @@ interface ChatMessage {
   user_id?: number;
   createdAt?: string;
   created_at?: string;
+  reactions?: Record<string, number[]>;
+  replyToMessageId?: string | number | null;
+  reply_to_message_id?: string | number | null;
 }
 
 interface TeamUser {
@@ -35,6 +38,9 @@ interface TeamUser {
 }
 
 const API_BASE = import.meta.env.VITE_API_URL || 'http://localhost:3004';
+const EMOJI_LIST = [
+  '😀','😃','😄','😁','😆','🥹','🤣','😂','🙂','🙃','😉','😊','😇','🥰','😍','😘','😗','😙','😚','😋','😛','😜','🤪','😝','🤑','🤗','🤭','🤫','🤔','🤐','🤨','😐','😑','😶','😏','😒','🙄','😬','🤥','😌','😔','😪','🤤','😴','🥱','😷','🤒','🤕','🤢','🤮','🤧','🥵','🥶','🥴','😵','🤯','🤠','😎','🤓','🫠','🥳','🥸','😺','😸','😹','😻','😼','😽','🙀','😿','😾','👍','👎','👏','🙌','👐','🤲','🤝','🙏','✍️','💪','🦾','🫶','🤌','🤏','✌️','🤞','🤟','🤘','👌','👈','👉','👆','👇','☝️','✊','👊','🤛','🤜','🤚','✋','🖐️','🖖','🤙','🫳','🫴','👋'
+];
 
 export default function TeamChatView() {
   const { user } = useAuth();
@@ -50,7 +56,12 @@ export default function TeamChatView() {
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const [shouldScrollToBottom, setShouldScrollToBottom] = useState(false);
+  const [showEmojiPicker, setShowEmojiPicker] = useState(false);
+  const [activeReactionPicker, setActiveReactionPicker] = useState<string | number | null>(null);
+  const [replyingTo, setReplyingTo] = useState<ChatMessage | null>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
+  const messageInputRef = useRef<HTMLTextAreaElement>(null);
+  const messageRefs = useRef<Record<string, HTMLDivElement | null>>({});
   const prevMessageCountRef = useRef<number>(0);
 
   // Mark room as read when selecting
@@ -137,6 +148,11 @@ export default function TeamChatView() {
     }
   }, [selectedRoom, fetchMessages, markRoomAsRead]);
 
+  useEffect(() => {
+    setActiveReactionPicker(null);
+    setShowEmojiPicker(false);
+  }, [selectedRoom]);
+
   // Poll for new messages and room updates every 3 seconds
   useEffect(() => {
     const pollInterval = window.setInterval(() => {
@@ -203,6 +219,26 @@ export default function TeamChatView() {
     }
   };
 
+  const handleInsertEmoji = (emoji: string) => {
+    const textarea = messageInputRef.current;
+    setNewMessage(prev => {
+      const start = textarea?.selectionStart ?? prev.length;
+      const end = textarea?.selectionEnd ?? prev.length;
+      const nextValue = `${prev.slice(0, start)}${emoji}${prev.slice(end)}`;
+
+      window.setTimeout(() => {
+        if (textarea) {
+          const cursor = start + emoji.length;
+          textarea.focus();
+          textarea.setSelectionRange(cursor, cursor);
+        }
+      }, 0);
+
+      return nextValue;
+    });
+    setShowEmojiPicker(false);
+  };
+
   // Send a message
   const handleSendMessage = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -210,6 +246,9 @@ export default function TeamChatView() {
 
     const messageContent = newMessage.trim();
     setNewMessage('');
+    setShowEmojiPicker(false);
+    const replyToMessageId = replyingTo?.id ?? null;
+    setReplyingTo(null);
 
     try {
       const res = await fetch(`${API_BASE}/api/chat-rooms/${selectedRoom.id}/messages`, {
@@ -218,7 +257,7 @@ export default function TeamChatView() {
           'Content-Type': 'application/json',
           Authorization: `Bearer ${token}`
         },
-        body: JSON.stringify({ content: messageContent })
+        body: JSON.stringify({ content: messageContent, replyToMessageId })
       });
 
       if (!res.ok) throw new Error('Failed to send message');
@@ -243,6 +282,57 @@ export default function TeamChatView() {
     } catch (err) {
       console.error('Error sending message:', err);
       setNewMessage(messageContent); // Restore message on error
+    }
+  };
+
+  const handleToggleReaction = async (messageId: string | number, emoji: string) => {
+    if (!selectedRoom) return;
+    try {
+      const res = await fetch(`${API_BASE}/api/chat-rooms/${selectedRoom.id}/messages/${messageId}/reactions`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`
+        },
+        body: JSON.stringify({ emoji })
+      });
+
+      if (!res.ok) {
+        const text = await res.text();
+        throw new Error(`Failed to update reaction (${res.status}): ${text || res.statusText}`);
+      }
+      const updatedMessage = await res.json();
+      setMessages(prev => prev.map(m => {
+        if (String(m.id) !== String(messageId)) return m;
+        return {
+          ...m,
+          ...updatedMessage,
+          reactions: updatedMessage.reactions || m.reactions || {}
+        };
+      }));
+    } catch (err) {
+      console.error('Error toggling reaction:', err);
+    }
+  };
+
+  const handleStartReply = (message: ChatMessage) => {
+    setReplyingTo(message);
+    setShowEmojiPicker(false);
+    messageInputRef.current?.focus();
+  };
+
+  const handleCancelReply = () => {
+    setReplyingTo(null);
+  };
+
+  const handleScrollToMessage = (messageId: string | number) => {
+    const target = messageRefs.current[String(messageId)];
+    if (target) {
+      target.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      target.classList.add('message--highlight');
+      window.setTimeout(() => {
+        target.classList.remove('message--highlight');
+      }, 1500);
     }
   };
 
@@ -403,9 +493,13 @@ export default function TeamChatView() {
                     const isOwn = msg.username === user?.username;
                     const showDateHeader = idx === 0 || 
                       formatDate(getMessageTime(msg)) !== formatDate(getMessageTime(messages[idx - 1]));
+                    const reactions = msg.reactions || {};
+                    const reactionEntries = Object.entries(reactions);
+                    const replyToId = msg.replyToMessageId ?? msg.reply_to_message_id ?? null;
+                    const replyTarget = replyToId ? messages.find(m => String(m.id) === String(replyToId)) : undefined;
                     
                     return (
-                      <div key={msg.id}>
+                      <div key={msg.id} ref={(el) => { if (el) messageRefs.current[String(msg.id)] = el; }}>
                         {showDateHeader && (
                           <div className="date-divider">
                             <span>{formatDate(getMessageTime(msg))}</span>
@@ -421,10 +515,77 @@ export default function TeamChatView() {
                             {!isOwn && (
                               <span className="message-author">{msg.username}</span>
                             )}
+                            {replyTarget && (
+                              <button
+                                type="button"
+                                className="message-reply-preview"
+                                onClick={() => replyToId && handleScrollToMessage(replyToId)}
+                                title="Zobrazit odpovězenou zprávu"
+                              >
+                                <span className="reply-preview-author">{replyTarget.username}</span>
+                                <span className="reply-preview-text">{replyTarget.content.slice(0, 120)}{replyTarget.content.length > 120 ? '…' : ''}</span>
+                              </button>
+                            )}
                             <p className="message-content">{msg.content}</p>
-                            <span className="message-time">
-                              {formatTime(getMessageTime(msg))}
-                            </span>
+                            <div className="message-reactions">
+                              {reactionEntries.map(([emoji, userIds]) => {
+                                const reacted = userIds.includes(user?.id ?? -1);
+                                return (
+                                  <button
+                                    key={`${msg.id}-${emoji}`}
+                                    type="button"
+                                    className={`reaction-chip ${reacted ? 'active' : ''}`}
+                                    onClick={() => handleToggleReaction(msg.id, emoji)}
+                                    title={reacted ? 'Odebrat reakci' : 'Přidat reakci'}
+                                  >
+                                    <span className="reaction-emoji">{emoji}</span>
+                                    <span className="reaction-count">{userIds.length}</span>
+                                  </button>
+                                );
+                              })}
+                              <div className="reaction-add">
+                                <button
+                                  type="button"
+                                  className="reaction-chip add"
+                                  onClick={() => setActiveReactionPicker(prev => prev === msg.id ? null : msg.id)}
+                                  title="Přidat reakci"
+                                >
+                                  +
+                                </button>
+                                {activeReactionPicker === msg.id && (
+                                  <div className="reaction-picker">
+                                    {EMOJI_LIST.map((emoji, index) => (
+                                      <button
+                                        key={`${msg.id}-${emoji}-picker-${index}`}
+                                        type="button"
+                                        className="reaction-picker-item"
+                                        onClick={() => {
+                                          handleToggleReaction(msg.id, emoji);
+                                          setActiveReactionPicker(null);
+                                        }}
+                                      >
+                                        {emoji}
+                                      </button>
+                                    ))}
+                                  </div>
+                                )}
+                              </div>
+                            </div>
+                            <div className="message-meta">
+                              <span className="message-time">
+                                {formatTime(getMessageTime(msg))}
+                              </span>
+                              <div className="message-actions">
+                                <button
+                                  type="button"
+                                  className="message-action-btn"
+                                  onClick={() => handleStartReply(msg)}
+                                  title="Odpovědět"
+                                >
+                                  ↩
+                                </button>
+                              </div>
+                            </div>
                           </div>
                         </div>
                       </div>
@@ -436,19 +597,56 @@ export default function TeamChatView() {
             </div>
 
             <form className="team-chat-input" onSubmit={handleSendMessage}>
-              <textarea
-                value={newMessage}
-                onChange={(e) => setNewMessage(e.target.value)}
-                onKeyDown={(e) => {
-                  if (e.key === 'Enter' && !e.shiftKey) {
-                    e.preventDefault();
-                    handleSendMessage(e);
-                  }
-                }}
-                placeholder={`Napište zprávu do #${selectedRoom.name}...`}
-                autoFocus
-                rows={1}
-              />
+              {replyingTo && (
+                <div className="replying-bar">
+                  <div className="replying-info">
+                    <span className="replying-label">Odpovídáte na</span>
+                    <span className="replying-author">{replyingTo.username}</span>
+                    <span className="replying-text">{replyingTo.content.slice(0, 120)}{replyingTo.content.length > 120 ? '…' : ''}</span>
+                  </div>
+                  <button type="button" className="replying-cancel" onClick={handleCancelReply} title="Zrušit odpověď">✕</button>
+                </div>
+              )}
+              <div className="input-with-emoji">
+                <textarea
+                  ref={messageInputRef}
+                  value={newMessage}
+                  onChange={(e) => setNewMessage(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter' && !e.shiftKey) {
+                      e.preventDefault();
+                      handleSendMessage(e);
+                    }
+                  }}
+                  placeholder={`Napište zprávu do #${selectedRoom.name}...`}
+                  autoFocus
+                  rows={1}
+                />
+                <div className="emoji-picker-wrapper">
+                  <button
+                    type="button"
+                    className="emoji-btn"
+                    onClick={() => setShowEmojiPicker(prev => !prev)}
+                    title="Vložit emoji"
+                  >
+                    😊
+                  </button>
+                  {showEmojiPicker && (
+                    <div className="emoji-picker-popover">
+                      {EMOJI_LIST.map((emoji, index) => (
+                        <button
+                          key={`input-emoji-${emoji}-${index}`}
+                          type="button"
+                          className="emoji-picker-item"
+                          onClick={() => handleInsertEmoji(emoji)}
+                        >
+                          {emoji}
+                        </button>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              </div>
               <button type="submit" disabled={!newMessage.trim()}>
                 Odeslat
               </button>

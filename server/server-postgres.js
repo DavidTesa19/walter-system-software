@@ -1995,6 +1995,124 @@ app.get("/documents/:documentId/download", authenticateToken, async (req, res) =
   }
 });
 
+// --- Notes Endpoints ---
+
+app.get("/:entity/:id/notes", authenticateToken, async (req, res) => {
+  const { entity, id } = req.params;
+  const entityId = Number(id);
+
+  if (!DOCUMENT_ENTITY_TYPES.has(entity)) {
+    return res.status(400).json({ error: "Invalid entity type" });
+  }
+  if (Number.isNaN(entityId)) {
+    return res.status(400).json({ error: "Invalid entity id" });
+  }
+
+  try {
+    if (db.isPostgres()) {
+      const notes = await db.getNotes(entity, entityId);
+      return res.json(notes);
+    }
+
+    const store = readDb();
+    const notes = (store.notes || [])
+      .filter((n) => n.entityType === entity && n.entityId === entityId)
+      .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+
+    return res.json(notes);
+  } catch (error) {
+    console.error("Error fetching notes:", error);
+    res.status(500).json({ error: "Failed to fetch notes" });
+  }
+});
+
+app.post("/:entity/:id/notes", authenticateToken, async (req, res) => {
+  const { entity, id } = req.params;
+  const entityId = Number(id);
+  const { content } = req.body;
+
+  if (!DOCUMENT_ENTITY_TYPES.has(entity)) {
+    return res.status(400).json({ error: "Invalid entity type" });
+  }
+  if (Number.isNaN(entityId)) {
+    return res.status(400).json({ error: "Invalid entity id" });
+  }
+  if (!content || typeof content !== "string" || !content.trim()) {
+    return res.status(400).json({ error: "Content is required" });
+  }
+
+  try {
+    const author = req.user?.username || "Admin";
+
+    if (db.isPostgres()) {
+      const newNote = await db.createNote(entity, entityId, { content, author });
+      return res.status(201).json(newNote);
+    }
+
+    const store = readDb();
+    const newNote = {
+      id: Date.now(),
+      entityType: entity,
+      entityId: entityId,
+      content: content.trim(),
+      author,
+      createdAt: new Date().toISOString()
+    };
+
+    if (!store.notes) {
+      store.notes = [];
+    }
+    store.notes.push(newNote);
+
+    if (!writeDb(store)) {
+      return res.status(500).json({ error: "Failed to save note" });
+    }
+
+    return res.status(201).json(newNote);
+  } catch (error) {
+    console.error("Error creating note:", error);
+    res.status(500).json({ error: "Failed to create note" });
+  }
+});
+
+app.delete("/notes/:noteId", authenticateToken, async (req, res) => {
+  const noteId = Number(req.params.noteId);
+  if (Number.isNaN(noteId)) {
+    return res.status(400).json({ error: "Invalid note id" });
+  }
+
+  try {
+    if (db.isPostgres()) {
+      const result = await db.deleteNote(noteId);
+      if (!result) {
+        return res.status(404).json({ error: "Note not found" });
+      }
+      return res.json({ id: noteId });
+    }
+
+    const store = readDb();
+    if (!store.notes) {
+      return res.status(404).json({ error: "Note not found" });
+    }
+
+    const idx = store.notes.findIndex((n) => n.id === noteId);
+    if (idx === -1) {
+      return res.status(404).json({ error: "Note not found" });
+    }
+
+    const removed = store.notes.splice(idx, 1)[0];
+
+    if (!writeDb(store)) {
+      return res.status(500).json({ error: "Failed to delete note" });
+    }
+
+    return res.json(removed);
+  } catch (error) {
+    console.error("Error deleting note:", error);
+    res.status(500).json({ error: "Failed to delete note" });
+  }
+});
+
 // AUTH ROUTES
 // Debug endpoint - only available in development
 app.get("/debug-env", (req, res) => {
@@ -2717,7 +2835,34 @@ app.get("/api/chat-rooms/:roomId/messages", authenticateToken, async (req, res) 
         'SELECT * FROM chat_messages WHERE room_id = $1 ORDER BY created_at ASC',
         [roomId]
       );
-      return res.json(result.rows);
+
+      const messages = result.rows;
+      if (messages.length === 0) {
+        return res.json([]);
+      }
+
+      const messageIds = messages.map(m => m.id);
+      const reactionsResult = await db.query(
+        `SELECT message_id, emoji, array_agg(user_id) AS user_ids
+         FROM chat_message_reactions
+         WHERE message_id = ANY($1::int[])
+         GROUP BY message_id, emoji`,
+        [messageIds]
+      );
+
+      const reactionMap = new Map();
+      reactionsResult.rows.forEach(row => {
+        const existing = reactionMap.get(row.message_id) || {};
+        existing[row.emoji] = row.user_ids || [];
+        reactionMap.set(row.message_id, existing);
+      });
+
+      const messagesWithReactions = messages.map(m => ({
+        ...m,
+        reactions: reactionMap.get(m.id) || {}
+      }));
+
+      return res.json(messagesWithReactions);
     }
     
     const dbData = readDb();
@@ -2727,7 +2872,8 @@ app.get("/api/chat-rooms/:roomId/messages", authenticateToken, async (req, res) 
     
     const messages = (dbData.chatMessages || [])
       .filter(m => m.roomId === roomId)
-      .sort((a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime());
+      .sort((a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime())
+      .map(m => ({ ...m, reactions: m.reactions || {} }));
     
     res.json(messages);
   } catch (error) {
@@ -2740,7 +2886,7 @@ app.get("/api/chat-rooms/:roomId/messages", authenticateToken, async (req, res) 
 app.post("/api/chat-rooms/:roomId/messages", authenticateToken, async (req, res) => {
   try {
     const roomId = req.params.roomId;
-    const { content } = req.body;
+    const { content, replyToMessageId } = req.body;
     
     if (!content || typeof content !== 'string' || !content.trim()) {
       return res.status(400).json({ error: "Message content is required" });
@@ -2754,9 +2900,9 @@ app.post("/api/chat-rooms/:roomId/messages", authenticateToken, async (req, res)
       }
       
       const result = await db.query(
-        `INSERT INTO chat_messages (room_id, content, username, user_id) 
-         VALUES ($1, $2, $3, $4) RETURNING *`,
-        [roomId, content.trim(), req.user.username, req.user.id]
+        `INSERT INTO chat_messages (room_id, content, username, user_id, reply_to_message_id) 
+         VALUES ($1, $2, $3, $4, $5) RETURNING *`,
+        [roomId, content.trim(), req.user.username, req.user.id, replyToMessageId || null]
       );
       
       // Update room's last activity
@@ -2765,7 +2911,8 @@ app.post("/api/chat-rooms/:roomId/messages", authenticateToken, async (req, res)
         [roomId]
       );
       
-      return res.status(201).json(result.rows[0]);
+      const savedMessage = { ...result.rows[0], reactions: {} };
+      return res.status(201).json(savedMessage);
     }
     
     const dbData = readDb();
@@ -2783,7 +2930,9 @@ app.post("/api/chat-rooms/:roomId/messages", authenticateToken, async (req, res)
       content: content.trim(),
       username: req.user.username,
       userId: req.user.id,
-      createdAt: new Date().toISOString()
+        replyToMessageId: replyToMessageId || null,
+      createdAt: new Date().toISOString(),
+      reactions: {}
     };
     
     dbData.chatMessages.push(message);
@@ -2799,6 +2948,97 @@ app.post("/api/chat-rooms/:roomId/messages", authenticateToken, async (req, res)
   } catch (error) {
     console.error("Error sending message:", error);
     res.status(500).json({ error: "Failed to send message" });
+  }
+});
+
+// Toggle a reaction on a message
+app.post("/api/chat-rooms/:roomId/messages/:messageId/reactions", authenticateToken, async (req, res) => {
+  const { emoji } = req.body;
+  const roomId = req.params.roomId;
+  const messageId = req.params.messageId;
+
+  if (!emoji || typeof emoji !== "string") {
+    return res.status(400).json({ error: "Emoji is required" });
+  }
+
+  try {
+    if (db.isPostgres()) {
+      const messageCheck = await db.query('SELECT * FROM chat_messages WHERE id = $1', [messageId]);
+      if (messageCheck.rows.length === 0) {
+        return res.status(404).json({ error: "Message not found" });
+      }
+
+      const foundMessage = messageCheck.rows[0];
+      if (String(foundMessage.room_id) !== String(roomId)) {
+        return res.status(400).json({ error: "Message does not belong to this room" });
+      }
+
+      let committed = false;
+      await db.query('BEGIN');
+      try {
+        const existing = await db.query(
+          'SELECT id FROM chat_message_reactions WHERE message_id = $1 AND user_id = $2 AND emoji = $3',
+          [messageId, req.user.id, emoji]
+        );
+
+        if (existing.rows.length > 0) {
+          await db.query('DELETE FROM chat_message_reactions WHERE id = $1', [existing.rows[0].id]);
+        } else {
+          await db.query(
+            'INSERT INTO chat_message_reactions (message_id, user_id, emoji) VALUES ($1, $2, $3)',
+            [messageId, req.user.id, emoji]
+          );
+        }
+
+        const reactionsResult = await db.query(
+          'SELECT emoji, array_agg(user_id) AS user_ids FROM chat_message_reactions WHERE message_id = $1 GROUP BY emoji',
+          [messageId]
+        );
+
+        await db.query('COMMIT');
+        committed = true;
+
+        const reactions = {};
+        reactionsResult.rows.forEach(r => {
+          reactions[r.emoji] = r.user_ids || [];
+        });
+
+        const messageWithReactions = { ...foundMessage, reactions };
+        return res.json(messageWithReactions);
+      } finally {
+        if (!committed) {
+          await db.query('ROLLBACK').catch(() => {});
+        }
+      }
+    }
+
+    const dbData = readDb();
+    if (!dbData.chatMessages) dbData.chatMessages = [];
+    const messageIdx = dbData.chatMessages.findIndex(m => m.id === messageId && m.roomId === roomId);
+    if (messageIdx === -1) {
+      return res.status(404).json({ error: "Message not found" });
+    }
+
+    const message = dbData.chatMessages[messageIdx];
+    const reactions = message.reactions || {};
+    const current = reactions[emoji] || [];
+    const hasReacted = current.includes(req.user.id);
+    const updatedUsers = hasReacted
+      ? current.filter(id => id !== req.user.id)
+      : [...current, req.user.id];
+
+    if (updatedUsers.length > 0) {
+      reactions[emoji] = updatedUsers;
+    } else {
+      delete reactions[emoji];
+    }
+
+    dbData.chatMessages[messageIdx] = { ...message, reactions };
+    if (!writeDb(dbData)) return res.status(500).json({ error: "Failed to save" });
+    res.json(dbData.chatMessages[messageIdx]);
+  } catch (error) {
+    console.error("Error toggling reaction:", error);
+    res.status(500).json({ error: "Failed to toggle reaction" });
   }
 });
 

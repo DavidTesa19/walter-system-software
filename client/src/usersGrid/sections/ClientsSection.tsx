@@ -9,6 +9,7 @@ import FieldCellRenderer from "../cells/FieldCellRenderer";
 import ProfileCellRenderer from "../cells/ProfileCellRenderer";
 import ProfilePanel, { type ProfileSection } from "../components/ProfilePanel";
 import useProfileDocuments from "../hooks/useProfileDocuments";
+import useProfileNotes from "../hooks/useProfileNotes";
 import { measureGrid, type GridSizes } from "../utils/gridSizing";
 import { mapViewToStatus } from "../constants";
 import { apiGet, apiPost, apiPut, apiDelete } from "../../utils/api";
@@ -168,6 +169,7 @@ const ClientsSection: React.FC<SectionProps> = ({
   const [sizes, setSizes] = useState<GridSizes>({ row: 42, headerOffset: 80 });
   const [selectedProfileId, setSelectedProfileId] = useState<number | null>(null);
   const documentManager = useProfileDocuments("clients", selectedProfileId);
+  const notesManager = useProfileNotes("clients", selectedProfileId);
 
   const status = useMemo(() => mapViewToStatus(viewMode), [viewMode]);
 
@@ -546,6 +548,11 @@ const ClientsSection: React.FC<SectionProps> = ({
         documentDownloadBaseUrl={documentManager.downloadBaseUrl}
         onUploadDocument={documentManager.uploadDocument}
         onDeleteDocument={documentManager.deleteDocument}
+        notes={notesManager.notes}
+        notesLoading={notesManager.isLoading}
+        notesCreating={notesManager.isCreating}
+        onAddNote={notesManager.createNote}
+        onDeleteNote={notesManager.deleteNote}
         onClose={handleCloseProfile}
       />
     </>

@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { API_BASE } from "../constants";
+import { API_BASE, apiGet, apiDelete, apiUpload } from "../../utils/api";
 import type { ProfileDocument } from "../types/profile";
 
 type DocumentResource = "clients" | "partners" | "tipers";
@@ -27,11 +27,7 @@ export const useProfileDocuments = (resource: DocumentResource, entityId: number
     }
     setIsLoading(true);
     try {
-      const response = await fetch(`${API_BASE}/${resource}/${entityId}/documents`);
-      if (!response.ok) {
-        throw new Error(`Failed to fetch documents: ${response.status}`);
-      }
-      const payload = await response.json();
+      const payload = await apiGet<ProfileDocument[]>(`/${resource}/${entityId}/documents`);
       setDocuments(Array.isArray(payload) ? payload : []);
     } catch (error) {
       console.error(`Error fetching ${resource} documents:`, error);
@@ -52,13 +48,7 @@ export const useProfileDocuments = (resource: DocumentResource, entityId: number
     try {
       const formData = new FormData();
       formData.append("file", file);
-      const response = await fetch(`${API_BASE}/${resource}/${entityId}/documents`, {
-        method: "POST",
-        body: formData
-      });
-      if (!response.ok) {
-        throw new Error(`Failed to upload document: ${response.status}`);
-      }
+      await apiUpload(`/${resource}/${entityId}/documents`, formData);
       await fetchDocuments();
     } catch (error) {
       console.error(`Error uploading ${resource} document:`, error);
@@ -70,10 +60,7 @@ export const useProfileDocuments = (resource: DocumentResource, entityId: number
 
   const deleteDocument = useCallback(async (documentId: number) => {
     try {
-      const response = await fetch(`${API_BASE}/documents/${documentId}`, { method: "DELETE" });
-      if (!response.ok) {
-        throw new Error(`Failed to delete document: ${response.status}`);
-      }
+      await apiDelete(`/documents/${documentId}`);
       setDocuments((prev) => prev.filter((doc) => doc.id !== documentId));
       return true;
     } catch (error) {
