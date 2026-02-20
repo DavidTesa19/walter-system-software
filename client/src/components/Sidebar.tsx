@@ -12,13 +12,13 @@ interface SidebarProps {
 type SidebarGroupItem = {
   id: AppView;
   label: string;
-  icon: JSX.Element;
+  icon: React.ReactNode;
 };
 
 type SidebarGroup = {
   id: string;
   label: string;
-  icon?: JSX.Element;
+  icon?: React.ReactNode;
   items: SidebarGroupItem[];
 };
 
@@ -263,11 +263,6 @@ const Sidebar: React.FC<SidebarProps> = ({ activeView, onViewChange }) => {
         })}
 
         <div className="sidebar-separator"></div>
-
-        {/* Old buttons removed (temporarily kept in source but commented out by replacement logic if I could, but I am just inserting before them) */}
-
-
-
 
 
 
