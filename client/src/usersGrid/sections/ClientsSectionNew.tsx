@@ -616,6 +616,7 @@ const ClientsSectionNew: React.FC<SectionProps> = ({
         onUploadDocument={documentManager.uploadDocument}
         onDeleteDocument={documentManager.deleteDocument}
         onArchiveDocument={documentManager.archiveDocument}
+        onUnarchiveDocument={documentManager.unarchiveDocument}
         archivedDocuments={documentManager.archivedDocuments}
         notes={notesManager.notes}
         notesLoading={notesManager.isLoading}

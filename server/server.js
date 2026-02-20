@@ -1626,6 +1626,36 @@ app.post("/documents/:documentId/archive", authenticateToken, (req, res) => {
   }
 });
 
+app.post("/documents/:documentId/unarchive", authenticateToken, (req, res) => {
+  const documentId = Number(req.params.documentId);
+  if (Number.isNaN(documentId)) {
+    return res.status(400).json({ error: "Invalid document id" });
+  }
+
+  try {
+    const store = readDb();
+    const doc = findDocumentInStore(store, documentId);
+    if (!doc) {
+      return res.status(404).json({ error: "Document not found" });
+    }
+
+    if (!doc.archivedAt) {
+      return res.json(stripDocumentData(doc));
+    }
+
+    doc.archivedAt = null;
+
+    if (!writeDb(store)) {
+      return res.status(500).json({ error: "Failed to persist document unarchive" });
+    }
+
+    return res.json(stripDocumentData(doc));
+  } catch (error) {
+    console.error("Error unarchiving document:", error);
+    res.status(500).json({ error: "Failed to unarchive document" });
+  }
+});
+
 app.get("/documents/:documentId/download", authenticateToken, (req, res) => {
   const documentId = Number(req.params.documentId);
   if (Number.isNaN(documentId)) {

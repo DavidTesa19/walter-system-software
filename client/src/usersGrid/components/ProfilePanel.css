@@ -304,6 +304,14 @@
   color: var(--color-muted);
 }
 
+.profile-document__action--unarchive {
+  color: var(--color-primary);
+}
+
+.profile-document__action--unarchive:hover {
+  color: var(--color-text);
+}
+
 .profile-document__action:disabled {
   opacity: 0.5;
   cursor: not-allowed;

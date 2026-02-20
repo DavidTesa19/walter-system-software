@@ -829,6 +829,20 @@ export const db = {
     return toDocumentResponse(result.rows[0]);
   },
 
+  async unarchiveDocument(id) {
+    if (!USE_POSTGRES) return null;
+
+    const result = await pool.query(
+      `UPDATE documents
+         SET archived_at = NULL, updated_at = CURRENT_TIMESTAMP
+       WHERE id = $1 AND archived_at IS NOT NULL
+   RETURNING id, entity_type, entity_id, filename, mime_type, size_bytes, created_at, archived_at`,
+      [id]
+    );
+
+    return toDocumentResponse(result.rows[0]);
+  },
+
   async getNotes(entityType, entityId) {
     if (!USE_POSTGRES) return null;
 

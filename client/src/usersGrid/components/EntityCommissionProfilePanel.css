@@ -496,6 +496,15 @@
   color: var(--color-muted, #6b7280);
 }
 
+.ec-doc-action.unarchive {
+  color: var(--color-primary, #3b82f6);
+}
+
+.ec-doc-action.unarchive:hover {
+  background: var(--color-primary, #3b82f6);
+  color: white;
+}
+
 /* Sidebar - Notes */
 .ec-profile-sidebar {
   width: 320px;

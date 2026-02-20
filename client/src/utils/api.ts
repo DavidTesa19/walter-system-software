@@ -147,4 +147,43 @@ export const apiUpload = async <T = any>(endpoint: string, formData: FormData): 
   return handleResponse<T>(response);
 };
 
+/**
+ * Download file with authentication - fetches as blob and triggers browser download
+ */
+export const apiDownload = async (endpoint: string, filename: string): Promise<void> => {
+  const url = endpoint.startsWith('http') ? endpoint : `${API_BASE}${endpoint}`;
+  const token = getAuthToken();
+
+  const headers: Record<string, string> = {};
+  if (token) {
+    headers['Authorization'] = `Bearer ${token}`;
+  }
+
+  const response = await fetch(url, {
+    method: 'GET',
+    headers,
+  });
+
+  if (response.status === 401 || response.status === 403) {
+    localStorage.removeItem('walterUser');
+    localStorage.removeItem('walterSessionStart');
+    window.location.reload();
+    throw new Error('Session expired. Please log in again.');
+  }
+
+  if (!response.ok) {
+    throw new Error(`Download failed with status ${response.status}`);
+  }
+
+  const blob = await response.blob();
+  const blobUrl = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = blobUrl;
+  a.download = filename;
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  URL.revokeObjectURL(blobUrl);
+};
+
 export { API_BASE };

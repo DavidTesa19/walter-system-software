@@ -1,5 +1,6 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { ProfileDocument, ProfileNote } from "../types/profile";
+import { apiDownload } from "../../utils/api";
 import "./EntityCommissionProfilePanel.css";
 
 // =============================================================================
@@ -54,6 +55,7 @@ interface EntityCommissionProfilePanelProps {
   onUploadDocument?: (file: File) => Promise<void> | void;
   onDeleteDocument?: (documentId: number) => Promise<boolean | void> | boolean | void;
   onArchiveDocument?: (documentId: number) => Promise<boolean | void> | boolean | void;
+  onUnarchiveDocument?: (documentId: number) => Promise<boolean | void> | boolean | void;
   archivedDocuments?: ProfileDocument[];
   documentDownloadBaseUrl?: string;
   
@@ -296,6 +298,7 @@ const EntityCommissionProfilePanel: React.FC<EntityCommissionProfilePanelProps> 
   onUploadDocument,
   onDeleteDocument,
   onArchiveDocument,
+  onUnarchiveDocument,
   archivedDocuments = [],
   documentDownloadBaseUrl,
   notes,
@@ -506,9 +509,6 @@ const EntityCommissionProfilePanel: React.FC<EntityCommissionProfilePanelProps> 
                 ) : documents && documents.length > 0 ? (
                   <ul className="ec-documents-list">
                     {documents.map((doc) => {
-                      const downloadHref = documentDownloadBaseUrl
-                        ? `${documentDownloadBaseUrl.replace(/\/$/, "")}/${doc.id}/download`
-                        : undefined;
                       return (
                         <li key={doc.id} className="ec-document-item">
                           <div className="ec-document-info">
@@ -518,10 +518,14 @@ const EntityCommissionProfilePanel: React.FC<EntityCommissionProfilePanelProps> 
                             </span>
                           </div>
                           <div className="ec-document-actions">
-                            {downloadHref && (
-                              <a className="ec-doc-action" href={downloadHref} target="_blank" rel="noreferrer">
+                            {documentDownloadBaseUrl && (
+                              <button
+                                type="button"
+                                className="ec-doc-action"
+                                onClick={() => apiDownload(`/documents/${doc.id}/download`, doc.filename)}
+                              >
                                 Stáhnout
-                              </a>
+                              </button>
                             )}
                             {onArchiveDocument && (
                               <button
@@ -562,9 +566,6 @@ const EntityCommissionProfilePanel: React.FC<EntityCommissionProfilePanelProps> 
                     {showArchivedDocs && (
                       <ul className="ec-documents-list ec-documents-list--archived">
                         {archivedDocuments.map((doc) => {
-                          const downloadHref = documentDownloadBaseUrl
-                            ? `${documentDownloadBaseUrl.replace(/\/$/, "")}/${doc.id}/download`
-                            : undefined;
                           return (
                             <li key={doc.id} className="ec-document-item ec-document-item--archived">
                               <div className="ec-document-info">
@@ -574,10 +575,23 @@ const EntityCommissionProfilePanel: React.FC<EntityCommissionProfilePanelProps> 
                                 </span>
                               </div>
                               <div className="ec-document-actions">
-                                {downloadHref && (
-                                  <a className="ec-doc-action" href={downloadHref} target="_blank" rel="noreferrer">
+                                {documentDownloadBaseUrl && (
+                                  <button
+                                    type="button"
+                                    className="ec-doc-action"
+                                    onClick={() => apiDownload(`/documents/${doc.id}/download`, doc.filename)}
+                                  >
                                     Stáhnout
-                                  </a>
+                                  </button>
+                                )}
+                                {onUnarchiveDocument && (
+                                  <button
+                                    type="button"
+                                    className="ec-doc-action unarchive"
+                                    onClick={() => onUnarchiveDocument(doc.id)}
+                                  >
+                                    Obnovit
+                                  </button>
                                 )}
                               </div>
                             </li>

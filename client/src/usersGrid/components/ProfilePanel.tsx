@@ -1,5 +1,6 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { ProfileBadge, ProfileDocument, ProfileSection, ProfileNote } from "../types/profile";
+import { apiDownload } from "../../utils/api";
 import "./ProfilePanel.css";
 
 interface ProfileMetaItem {
@@ -21,6 +22,7 @@ interface ProfilePanelProps {
   onUploadDocument?: (file: File) => Promise<void> | void;
   onDeleteDocument?: (documentId: number) => Promise<boolean | void> | boolean | void;
   onArchiveDocument?: (documentId: number) => Promise<boolean | void> | boolean | void;
+  onUnarchiveDocument?: (documentId: number) => Promise<boolean | void> | boolean | void;
   archivedDocuments?: ProfileDocument[];
   documentDownloadBaseUrl?: string;
   notes?: ProfileNote[];
@@ -57,6 +59,7 @@ const ProfilePanel: React.FC<ProfilePanelProps> = ({
   onUploadDocument,
   onDeleteDocument,
   onArchiveDocument,
+  onUnarchiveDocument,
   archivedDocuments = [],
   documentDownloadBaseUrl,
   notes,
@@ -252,9 +255,6 @@ const ProfilePanel: React.FC<ProfilePanelProps> = ({
                   ) : documents && documents.length > 0 ? (
                     <ul className="profile-documents__list">
                       {documents.map((doc) => {
-                        const downloadHref = documentDownloadBaseUrl
-                          ? `${documentDownloadBaseUrl.replace(/\/$/, "")}/${doc.id}/download`
-                          : undefined;
                         return (
                           <li key={doc.id} className="profile-document">
                             <div className="profile-document__meta">
@@ -264,15 +264,14 @@ const ProfilePanel: React.FC<ProfilePanelProps> = ({
                               </span>
                             </div>
                             <div className="profile-document__actions">
-                              {downloadHref ? (
-                                <a
+                              {documentDownloadBaseUrl ? (
+                                <button
+                                  type="button"
                                   className="profile-document__action"
-                                  href={downloadHref}
-                                  target="_blank"
-                                  rel="noreferrer"
+                                  onClick={() => apiDownload(`/documents/${doc.id}/download`, doc.filename)}
                                 >
                                   Stáhnout
-                                </a>
+                                </button>
                               ) : null}
                               {onArchiveDocument ? (
                                 <button
@@ -313,9 +312,6 @@ const ProfilePanel: React.FC<ProfilePanelProps> = ({
                       {showArchivedDocs && (
                         <ul className="profile-documents__list profile-documents__list--archived">
                           {archivedDocuments.map((doc) => {
-                            const downloadHref = documentDownloadBaseUrl
-                              ? `${documentDownloadBaseUrl.replace(/\/$/, "")}/${doc.id}/download`
-                              : undefined;
                             return (
                               <li key={doc.id} className="profile-document profile-document--archived">
                                 <div className="profile-document__meta">
@@ -325,15 +321,23 @@ const ProfilePanel: React.FC<ProfilePanelProps> = ({
                                   </span>
                                 </div>
                                 <div className="profile-document__actions">
-                                  {downloadHref ? (
-                                    <a
+                                  {documentDownloadBaseUrl ? (
+                                    <button
+                                      type="button"
                                       className="profile-document__action"
-                                      href={downloadHref}
-                                      target="_blank"
-                                      rel="noreferrer"
+                                      onClick={() => apiDownload(`/documents/${doc.id}/download`, doc.filename)}
                                     >
                                       Stáhnout
-                                    </a>
+                                    </button>
+                                  ) : null}
+                                  {onUnarchiveDocument ? (
+                                    <button
+                                      type="button"
+                                      className="profile-document__action profile-document__action--unarchive"
+                                      onClick={() => onUnarchiveDocument(doc.id)}
+                                    >
+                                      Obnovit
+                                    </button>
                                   ) : null}
                                 </div>
                               </li>

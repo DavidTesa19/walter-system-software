@@ -13,6 +13,7 @@ type UseProfileDocumentsResult = {
   uploadDocument: (file: File) => Promise<void>;
   deleteDocument: (documentId: number) => Promise<boolean>;
   archiveDocument: (documentId: number) => Promise<boolean>;
+  unarchiveDocument: (documentId: number) => Promise<boolean>;
 };
 
 export const useProfileDocuments = (resource: DocumentResource, entityId: number | null): UseProfileDocumentsResult => {
@@ -95,6 +96,25 @@ export const useProfileDocuments = (resource: DocumentResource, entityId: number
     }
   }, []);
 
+  const unarchiveDocument = useCallback(async (documentId: number) => {
+    try {
+      await apiPost(`/documents/${documentId}/unarchive`);
+      setArchivedDocuments((prev) => {
+        const doc = prev.find((d) => d.id === documentId);
+        if (doc) {
+          const restored = { ...doc, archivedAt: null };
+          setDocuments((prevDocs) => [restored, ...prevDocs]);
+        }
+        return prev.filter((d) => d.id !== documentId);
+      });
+      return true;
+    } catch (error) {
+      console.error("Error unarchiving document:", error);
+      alert("Nepodařilo se obnovit dokument. Zkuste to prosím znovu.");
+      return false;
+    }
+  }, []);
+
   return {
     documents,
     archivedDocuments,
@@ -103,7 +123,8 @@ export const useProfileDocuments = (resource: DocumentResource, entityId: number
     downloadBaseUrl,
     uploadDocument,
     deleteDocument,
-    archiveDocument
+    archiveDocument,
+    unarchiveDocument
   };
 };
 
