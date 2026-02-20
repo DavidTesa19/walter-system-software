@@ -54,6 +54,7 @@ interface EntityCommissionProfilePanelProps {
   onUploadDocument?: (file: File) => Promise<void> | void;
   onDeleteDocument?: (documentId: number) => Promise<boolean | void> | boolean | void;
   onArchiveDocument?: (documentId: number) => Promise<boolean | void> | boolean | void;
+  archivedDocuments?: ProfileDocument[];
   documentDownloadBaseUrl?: string;
   
   // Notes
@@ -295,6 +296,7 @@ const EntityCommissionProfilePanel: React.FC<EntityCommissionProfilePanelProps> 
   onUploadDocument,
   onDeleteDocument,
   onArchiveDocument,
+  archivedDocuments = [],
   documentDownloadBaseUrl,
   notes,
   notesLoading = false,
@@ -305,6 +307,7 @@ const EntityCommissionProfilePanel: React.FC<EntityCommissionProfilePanelProps> 
   const panelRef = useRef<HTMLDivElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [newNote, setNewNote] = useState("");
+  const [showArchivedDocs, setShowArchivedDocs] = useState(false);
 
   // Entity type labels
   const entityTypeLabels = {
@@ -405,7 +408,7 @@ const EntityCommissionProfilePanel: React.FC<EntityCommissionProfilePanelProps> 
   }
 
   const showDocumentsSection = Boolean(
-    onUploadDocument || onDeleteDocument || onArchiveDocument || documentsLoading || (documents && documents.length > 0)
+    onUploadDocument || onDeleteDocument || onArchiveDocument || documentsLoading || (documents && documents.length > 0) || archivedDocuments.length > 0
   );
 
   return (
@@ -545,6 +548,44 @@ const EntityCommissionProfilePanel: React.FC<EntityCommissionProfilePanelProps> 
                   </ul>
                 ) : (
                   <p className="ec-empty-text">Žádné dokumenty.</p>
+                )}
+
+                {archivedDocuments.length > 0 && (
+                  <div className="ec-documents-archived">
+                    <button
+                      type="button"
+                      className="ec-documents-archived-toggle"
+                      onClick={() => setShowArchivedDocs((v) => !v)}
+                    >
+                      {showArchivedDocs ? "▾" : "▸"} Archivované dokumenty ({archivedDocuments.length})
+                    </button>
+                    {showArchivedDocs && (
+                      <ul className="ec-documents-list ec-documents-list--archived">
+                        {archivedDocuments.map((doc) => {
+                          const downloadHref = documentDownloadBaseUrl
+                            ? `${documentDownloadBaseUrl.replace(/\/$/, "")}/${doc.id}/download`
+                            : undefined;
+                          return (
+                            <li key={doc.id} className="ec-document-item ec-document-item--archived">
+                              <div className="ec-document-info">
+                                <span className="ec-document-name">{doc.filename}</span>
+                                <span className="ec-document-meta">
+                                  {formatFileSize(doc.sizeBytes)} · archivováno {formatDate(doc.archivedAt ?? doc.createdAt)}
+                                </span>
+                              </div>
+                              <div className="ec-document-actions">
+                                {downloadHref && (
+                                  <a className="ec-doc-action" href={downloadHref} target="_blank" rel="noreferrer">
+                                    Stáhnout
+                                  </a>
+                                )}
+                              </div>
+                            </li>
+                          );
+                        })}
+                      </ul>
+                    )}
+                  </div>
                 )}
               </section>
             )}

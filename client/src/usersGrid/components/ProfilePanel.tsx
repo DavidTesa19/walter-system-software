@@ -21,6 +21,7 @@ interface ProfilePanelProps {
   onUploadDocument?: (file: File) => Promise<void> | void;
   onDeleteDocument?: (documentId: number) => Promise<boolean | void> | boolean | void;
   onArchiveDocument?: (documentId: number) => Promise<boolean | void> | boolean | void;
+  archivedDocuments?: ProfileDocument[];
   documentDownloadBaseUrl?: string;
   notes?: ProfileNote[];
   notesLoading?: boolean;
@@ -56,6 +57,7 @@ const ProfilePanel: React.FC<ProfilePanelProps> = ({
   onUploadDocument,
   onDeleteDocument,
   onArchiveDocument,
+  archivedDocuments = [],
   documentDownloadBaseUrl,
   notes,
   notesLoading = false,
@@ -67,6 +69,7 @@ const ProfilePanel: React.FC<ProfilePanelProps> = ({
   const panelRef = useRef<HTMLDivElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [newNote, setNewNote] = useState("");
+  const [showArchivedDocs, setShowArchivedDocs] = useState(false);
 
   const visibleSections = useMemo(() => {
     return sections
@@ -140,7 +143,8 @@ const ProfilePanel: React.FC<ProfilePanelProps> = ({
     onDeleteDocument ||
     onArchiveDocument ||
     documentsLoading ||
-    (documents && documents.length > 0)
+    (documents && documents.length > 0) ||
+    archivedDocuments.length > 0
   );
 
   useEffect(() => {
@@ -295,6 +299,49 @@ const ProfilePanel: React.FC<ProfilePanelProps> = ({
                     </ul>
                   ) : (
                     <p className="profile-panel__empty">Žádné dokumenty zatím nebyly přidány.</p>
+                  )}
+
+                  {archivedDocuments.length > 0 && (
+                    <div className="profile-documents__archived">
+                      <button
+                        type="button"
+                        className="profile-documents__archived-toggle"
+                        onClick={() => setShowArchivedDocs((v) => !v)}
+                      >
+                        {showArchivedDocs ? "▾" : "▸"} Archivované dokumenty ({archivedDocuments.length})
+                      </button>
+                      {showArchivedDocs && (
+                        <ul className="profile-documents__list profile-documents__list--archived">
+                          {archivedDocuments.map((doc) => {
+                            const downloadHref = documentDownloadBaseUrl
+                              ? `${documentDownloadBaseUrl.replace(/\/$/, "")}/${doc.id}/download`
+                              : undefined;
+                            return (
+                              <li key={doc.id} className="profile-document profile-document--archived">
+                                <div className="profile-document__meta">
+                                  <span className="profile-document__name">{doc.filename}</span>
+                                  <span className="profile-document__details">
+                                    {formatFileSize(doc.sizeBytes)} · archivováno {formatDocumentDate(doc.archivedAt ?? doc.createdAt)}
+                                  </span>
+                                </div>
+                                <div className="profile-document__actions">
+                                  {downloadHref ? (
+                                    <a
+                                      className="profile-document__action"
+                                      href={downloadHref}
+                                      target="_blank"
+                                      rel="noreferrer"
+                                    >
+                                      Stáhnout
+                                    </a>
+                                  ) : null}
+                                </div>
+                              </li>
+                            );
+                          })}
+                        </ul>
+                      )}
+                    </div>
                   )}
                 </section>
               ) : null}

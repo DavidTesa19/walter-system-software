@@ -6,6 +6,7 @@ type DocumentResource = "clients" | "partners" | "tipers";
 
 type UseProfileDocumentsResult = {
   documents: ProfileDocument[];
+  archivedDocuments: ProfileDocument[];
   isLoading: boolean;
   isUploading: boolean;
   downloadBaseUrl: string;
@@ -16,6 +17,7 @@ type UseProfileDocumentsResult = {
 
 export const useProfileDocuments = (resource: DocumentResource, entityId: number | null): UseProfileDocumentsResult => {
   const [documents, setDocuments] = useState<ProfileDocument[]>([]);
+  const [archivedDocuments, setArchivedDocuments] = useState<ProfileDocument[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [isUploading, setIsUploading] = useState(false);
 
@@ -24,12 +26,15 @@ export const useProfileDocuments = (resource: DocumentResource, entityId: number
   const fetchDocuments = useCallback(async () => {
     if (!entityId) {
       setDocuments([]);
+      setArchivedDocuments([]);
       return;
     }
     setIsLoading(true);
     try {
-      const payload = await apiGet<ProfileDocument[]>(`/${resource}/${entityId}/documents`);
-      setDocuments(Array.isArray(payload) ? payload : []);
+      const payload = await apiGet<ProfileDocument[]>(`/${resource}/${entityId}/documents?includeArchived=true`);
+      const all = Array.isArray(payload) ? payload : [];
+      setDocuments(all.filter((d) => !d.archivedAt));
+      setArchivedDocuments(all.filter((d) => !!d.archivedAt));
     } catch (error) {
       console.error(`Error fetching ${resource} documents:`, error);
     } finally {
@@ -74,7 +79,14 @@ export const useProfileDocuments = (resource: DocumentResource, entityId: number
   const archiveDocument = useCallback(async (documentId: number) => {
     try {
       await apiPost(`/documents/${documentId}/archive`);
-      setDocuments((prev) => prev.filter((doc) => doc.id !== documentId));
+      setDocuments((prev) => {
+        const doc = prev.find((d) => d.id === documentId);
+        if (doc) {
+          const archived = { ...doc, archivedAt: new Date().toISOString() };
+          setArchivedDocuments((prevArchived) => [archived, ...prevArchived]);
+        }
+        return prev.filter((d) => d.id !== documentId);
+      });
       return true;
     } catch (error) {
       console.error("Error archiving document:", error);
@@ -85,6 +97,7 @@ export const useProfileDocuments = (resource: DocumentResource, entityId: number
 
   return {
     documents,
+    archivedDocuments,
     isLoading,
     isUploading,
     downloadBaseUrl,
