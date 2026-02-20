@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { AuthProvider, useAuth } from './auth/AuthContext';
 import { ThemeProvider } from './theme/ThemeContext';
 import Login from './auth/Login';
@@ -12,12 +12,25 @@ import FutureFunctionsView from './views/FutureFunctionsView';
 import ChatbotView from './views/ChatbotView';
 import TeamChatView from './views/TeamChatView';
 import FullCalendarView from './views/FullCalendarView';
+import AnalyticsView from './views/AnalyticsView';
+import { trackEvent } from './utils/analytics';
 import type { AppView } from './types/appView';
 import './components/Sidebar.css';
 
 const AppContent: React.FC = () => {
   const { isAuthenticated } = useAuth();
   const [viewMode, setViewMode] = useState<AppView>('active');
+
+  // Track section visits
+  useEffect(() => {
+    if (isAuthenticated) {
+      trackEvent('section_visit', { section: viewMode });
+    }
+  }, [viewMode, isAuthenticated]);
+
+  const handleViewChange = useCallback((view: AppView) => {
+    setViewMode(view);
+  }, []);
 
   if (!isAuthenticated) {
     return <Login />;
@@ -27,7 +40,7 @@ const AppContent: React.FC = () => {
 
   return (
     <div style={{ display: 'flex' }}>
-      <Sidebar activeView={viewMode} onViewChange={setViewMode} />
+      <Sidebar activeView={viewMode} onViewChange={handleViewChange} />
       <div className={`main-content ${isFullscreenView ? 'main-content--fullscreen' : ''}`}>
         {(() => {
           switch (viewMode) {
@@ -47,6 +60,8 @@ const AppContent: React.FC = () => {
               return <TeamChatView />;
             case 'calendar':
               return <FullCalendarView />;
+            case 'analytics':
+              return <AnalyticsView />;
             default:
               return null;
           }

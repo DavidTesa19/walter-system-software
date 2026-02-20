@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useTheme } from '../theme/ThemeContext';
 import { useAuth } from '../auth/AuthContext';
+import { trackEvent } from '../utils/analytics';
 import type { AppView } from '../types/appView';
 import './Sidebar.css';
 
@@ -100,6 +101,13 @@ const Icons = {
       <circle cx="15.5" cy="11.5" r="1.5" />
     </svg>
   ),
+  Analytics: () => (
+    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <line x1="18" y1="20" x2="18" y2="10" />
+      <line x1="12" y1="20" x2="12" y2="4" />
+      <line x1="6" y1="20" x2="6" y2="14" />
+    </svg>
+  ),
   Moon: () => (
     <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
       <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"></path>
@@ -155,7 +163,7 @@ const Sidebar: React.FC<SidebarProps> = ({ activeView, onViewChange }) => {
       { id: 'tables', views: ['active', 'pending', 'archived'] },
       { id: 'calendar', views: ['calendar'] },
       { id: 'teamchat', views: ['teamchat'] },
-      { id: 'other', views: ['future', 'chatbot', 'palettes'] }
+      { id: 'other', views: ['future', 'chatbot', 'palettes', 'analytics'] }
     ];
 
     const activeGroup = groups.find(g => g.views.includes(activeView as string));
@@ -201,7 +209,8 @@ const Sidebar: React.FC<SidebarProps> = ({ activeView, onViewChange }) => {
       items: [
         { id: 'future', label: 'Budoucí funkce', icon: <Icons.Future /> },
         { id: 'chatbot', label: 'AI Asistent', icon: <Icons.Chatbot /> },
-        { id: 'palettes', label: 'Motivy', icon: <Icons.Palettes /> }
+        { id: 'palettes', label: 'Motivy', icon: <Icons.Palettes /> },
+        { id: 'analytics', label: 'Analytika', icon: <Icons.Analytics /> }
       ]
     }
   ];
@@ -291,6 +300,7 @@ const Sidebar: React.FC<SidebarProps> = ({ activeView, onViewChange }) => {
           target="_blank"
           rel="noopener noreferrer"
           className="sidebar-button sidebar-link"
+          onClick={() => trackEvent('form_link_click', { source: 'app' })}
         >
           <svg
             width="20"

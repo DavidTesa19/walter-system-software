@@ -1,6 +1,7 @@
 import React, { createContext, useContext, useState, useEffect, useCallback, useRef } from 'react';
 import type { ReactNode } from 'react';
 import { API_BASE } from '../usersGrid/constants';
+import { trackEvent, startActiveTimeTracking, stopActiveTimeTracking } from '../utils/analytics';
 
 // Define available roles
 export type UserRole = 'admin' | 'manager' | 'employee' | 'viewer';
@@ -41,6 +42,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
   }, []);
 
   const logout = useCallback(() => {
+    stopActiveTimeTracking();
     setUser(null);
     localStorage.removeItem('walterUser');
     localStorage.removeItem('walterSessionStart');
@@ -74,6 +76,9 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
         localStorage.setItem('walterSessionStart', now.toString());
         
         startSessionTimer();
+        // Track successful login & start active time
+        trackEvent('login_success');
+        startActiveTimeTracking();
         return true;
       }
       return false;
@@ -128,6 +133,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
           if (isValid) {
             setUser(userData);
             startSessionTimer(remaining);
+            startActiveTimeTracking();
           } else {
             // Token is invalid, clear session
             logout();

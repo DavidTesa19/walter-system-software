@@ -3112,6 +3112,170 @@ app.get("/api/team-users", authenticateToken, async (req, res) => {
   }
 });
 
+// ====== ANALYTICS ENDPOINTS ======
+
+// Record an analytics event (authenticated - for in-app events)
+app.post("/api/analytics/event", authenticateToken, async (req, res) => {
+  try {
+    const { event_type, section, source, duration_seconds, metadata } = req.body;
+    if (!event_type) return res.status(400).json({ error: "event_type is required" });
+
+    if (db.isPostgres()) {
+      const result = await db.query(
+        `INSERT INTO analytics_events (event_type, section, user_id, username, source, duration_seconds, metadata)
+         VALUES ($1, $2, $3, $4, $5, $6, $7) RETURNING *`,
+        [event_type, section || null, req.user?.id || null, req.user?.username || null, source || null, duration_seconds || null, JSON.stringify(metadata || {})]
+      );
+      return res.status(201).json(result.rows[0]);
+    }
+
+    // JSON fallback
+    const dbData = readDb();
+    if (!Array.isArray(dbData.analyticsEvents)) dbData.analyticsEvents = [];
+    const event = {
+      id: dbData.analyticsEvents.length > 0 ? Math.max(...dbData.analyticsEvents.map(e => e.id)) + 1 : 1,
+      event_type, section: section || null, user_id: req.user?.id || null, username: req.user?.username || null,
+      source: source || null, duration_seconds: duration_seconds || null, metadata: metadata || {},
+      created_at: new Date().toISOString()
+    };
+    dbData.analyticsEvents.push(event);
+    writeDb(dbData);
+    res.status(201).json(event);
+  } catch (error) {
+    console.error("Error recording analytics event:", error);
+    res.status(500).json({ error: "Failed to record event" });
+  }
+});
+
+// Record an analytics event (public - for login page / form page visits)
+app.post("/api/analytics/public-event", async (req, res) => {
+  try {
+    const { event_type, section, source, metadata } = req.body;
+    if (!event_type) return res.status(400).json({ error: "event_type is required" });
+
+    if (db.isPostgres()) {
+      const result = await db.query(
+        `INSERT INTO analytics_events (event_type, section, source, metadata)
+         VALUES ($1, $2, $3, $4) RETURNING *`,
+        [event_type, section || null, source || null, JSON.stringify(metadata || {})]
+      );
+      return res.status(201).json(result.rows[0]);
+    }
+
+    const dbData = readDb();
+    if (!Array.isArray(dbData.analyticsEvents)) dbData.analyticsEvents = [];
+    const event = {
+      id: dbData.analyticsEvents.length > 0 ? Math.max(...dbData.analyticsEvents.map(e => e.id)) + 1 : 1,
+      event_type, section: section || null, user_id: null, username: null,
+      source: source || null, duration_seconds: null, metadata: metadata || {},
+      created_at: new Date().toISOString()
+    };
+    dbData.analyticsEvents.push(event);
+    writeDb(dbData);
+    res.status(201).json(event);
+  } catch (error) {
+    console.error("Error recording public analytics event:", error);
+    res.status(500).json({ error: "Failed to record event" });
+  }
+});
+
+// Get analytics summary
+app.get("/api/analytics/summary", authenticateToken, async (req, res) => {
+  try {
+    let events = [];
+
+    if (db.isPostgres()) {
+      const result = await db.query('SELECT * FROM analytics_events ORDER BY created_at');
+      events = result.rows;
+    } else {
+      const dbData = readDb();
+      events = dbData.analyticsEvents || [];
+    }
+
+    const loginPageViews = events.filter(e => e.event_type === "login_page_view").length;
+    const successfulLogins = events.filter(e => e.event_type === "login_success").length;
+    const failedLogins = events.filter(e => e.event_type === "login_failure").length;
+    const totalLoginAttempts = successfulLogins + failedLogins;
+
+    const userSignIns = {};
+    events.filter(e => e.event_type === "login_success" && e.username).forEach(e => {
+      userSignIns[e.username] = (userSignIns[e.username] || 0) + 1;
+    });
+
+    const totalActiveSeconds = events
+      .filter(e => e.event_type === "active_time")
+      .reduce((sum, e) => sum + (e.duration_seconds || 0), 0);
+
+    const userActiveTime = {};
+    events.filter(e => e.event_type === "active_time" && e.username).forEach(e => {
+      userActiveTime[e.username] = (userActiveTime[e.username] || 0) + (e.duration_seconds || 0);
+    });
+
+    const sectionVisits = {};
+    events.filter(e => e.event_type === "section_visit" && e.section).forEach(e => {
+      sectionVisits[e.section] = (sectionVisits[e.section] || 0) + 1;
+    });
+
+    const userSectionVisits = {};
+    events.filter(e => e.event_type === "section_visit" && e.section && e.username).forEach(e => {
+      if (!userSectionVisits[e.username]) userSectionVisits[e.username] = {};
+      userSectionVisits[e.username][e.section] = (userSectionVisits[e.username][e.section] || 0) + 1;
+    });
+
+    const formClicksFromLogin = events.filter(e => e.event_type === "form_link_click" && e.source === "login").length;
+    const formClicksFromApp = events.filter(e => e.event_type === "form_link_click" && e.source === "app").length;
+    const formClicksTotal = formClicksFromLogin + formClicksFromApp;
+
+    res.json({
+      loginPageViews, successfulLogins, failedLogins, totalLoginAttempts,
+      userSignIns, totalActiveSeconds, userActiveTime,
+      sectionVisits, userSectionVisits,
+      formClicks: { fromLogin: formClicksFromLogin, fromApp: formClicksFromApp, total: formClicksTotal }
+    });
+  } catch (error) {
+    console.error("Error fetching analytics summary:", error);
+    res.status(500).json({ error: "Failed to fetch analytics" });
+  }
+});
+
+// Get raw analytics events
+app.get("/api/analytics/events", authenticateToken, async (req, res) => {
+  try {
+    let events = [];
+
+    if (db.isPostgres()) {
+      let query = 'SELECT * FROM analytics_events WHERE 1=1';
+      const params = [];
+      if (req.query.event_type) {
+        params.push(req.query.event_type);
+        query += ` AND event_type = $${params.length}`;
+      }
+      if (req.query.username) {
+        params.push(req.query.username);
+        query += ` AND username = $${params.length}`;
+      }
+      query += ' ORDER BY created_at DESC';
+      const limit = parseInt(req.query.limit) || 500;
+      params.push(limit);
+      query += ` LIMIT $${params.length}`;
+      const result = await db.query(query, params);
+      events = result.rows;
+    } else {
+      const dbData = readDb();
+      events = dbData.analyticsEvents || [];
+      if (req.query.event_type) events = events.filter(e => e.event_type === req.query.event_type);
+      if (req.query.username) events = events.filter(e => e.username === req.query.username);
+      const limit = parseInt(req.query.limit) || 500;
+      events = events.slice(-limit);
+    }
+
+    res.json(events);
+  } catch (error) {
+    console.error("Error fetching analytics events:", error);
+    res.status(500).json({ error: "Failed to fetch events" });
+  }
+});
+
 app.use((err, _req, res, _next) => {
   if (err instanceof multer.MulterError) {
     if (err.code === 'LIMIT_FILE_SIZE') {

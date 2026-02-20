@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useAuth } from './AuthContext';
 import { useTheme } from '../theme/ThemeContext';
+import { trackPublicEvent } from '../utils/analytics';
 import './Login.css';
 
 const Login: React.FC = () => {
@@ -11,6 +12,11 @@ const Login: React.FC = () => {
   const { login } = useAuth();
   const { theme, toggleTheme } = useTheme(); // Add theme context
 
+  // Track login page view on mount
+  useEffect(() => {
+    trackPublicEvent('login_page_view');
+  }, []);
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setIsLoading(true);
@@ -19,6 +25,7 @@ const Login: React.FC = () => {
     const success = await login(username, password);
     
     if (!success) {
+      trackPublicEvent('login_failure');
       setError('Neplatné přihlašovací údaje. Zkuste to prosím znovu.');
       setPassword('');
     }
@@ -161,6 +168,7 @@ const Login: React.FC = () => {
           target="_blank" 
           rel="noopener noreferrer"
           className="public-form-link"
+          onClick={() => trackPublicEvent('form_link_click', { source: 'login' })}
         >
           <svg
             width="18"

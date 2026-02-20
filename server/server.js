@@ -1018,6 +1018,9 @@ function readDb() {
     if (!obj.employees) {
       obj.employees = [];
     }
+    if (!Array.isArray(obj.analyticsEvents)) {
+      obj.analyticsEvents = [];
+    }
     // ensurePalettes(obj); // No longer needed for global palettes
     return obj;
   } catch (e) {
@@ -3316,6 +3319,149 @@ app.get("/api/team-users", authenticateToken, (req, res) => {
     role: u.role
   }));
   res.json(users);
+});
+
+// ====== ANALYTICS ENDPOINTS ======
+
+// Record an analytics event (authenticated - for in-app events)
+app.post("/api/analytics/event", authenticateToken, (req, res) => {
+  const db = readDb();
+  const { event_type, section, source, duration_seconds, metadata } = req.body;
+
+  if (!event_type) return res.status(400).json({ error: "event_type is required" });
+
+  const event = {
+    id: (db.analyticsEvents || []).length > 0
+      ? Math.max(...db.analyticsEvents.map(e => e.id)) + 1
+      : 1,
+    event_type,
+    section: section || null,
+    user_id: req.user?.id || null,
+    username: req.user?.username || null,
+    source: source || null,
+    duration_seconds: duration_seconds || null,
+    metadata: metadata || {},
+    created_at: new Date().toISOString()
+  };
+
+  db.analyticsEvents.push(event);
+  if (!writeDb(db)) return res.status(500).json({ error: "Failed to save" });
+  res.status(201).json(event);
+});
+
+// Record an analytics event (public - for login page / form page visits)
+app.post("/api/analytics/public-event", (req, res) => {
+  const db = readDb();
+  const { event_type, section, source, metadata } = req.body;
+
+  if (!event_type) return res.status(400).json({ error: "event_type is required" });
+
+  const event = {
+    id: (db.analyticsEvents || []).length > 0
+      ? Math.max(...db.analyticsEvents.map(e => e.id)) + 1
+      : 1,
+    event_type,
+    section: section || null,
+    user_id: null,
+    username: null,
+    source: source || null,
+    duration_seconds: null,
+    metadata: metadata || {},
+    created_at: new Date().toISOString()
+  };
+
+  db.analyticsEvents.push(event);
+  if (!writeDb(db)) return res.status(500).json({ error: "Failed to save" });
+  res.status(201).json(event);
+});
+
+// Get analytics summary
+app.get("/api/analytics/summary", authenticateToken, (req, res) => {
+  const db = readDb();
+  const events = db.analyticsEvents || [];
+
+  // Total login page views
+  const loginPageViews = events.filter(e => e.event_type === "login_page_view").length;
+
+  // Successful logins
+  const successfulLogins = events.filter(e => e.event_type === "login_success").length;
+
+  // Failed logins
+  const failedLogins = events.filter(e => e.event_type === "login_failure").length;
+
+  // Total login attempts
+  const totalLoginAttempts = successfulLogins + failedLogins;
+
+  // Per-user sign-in counts
+  const userSignIns = {};
+  events.filter(e => e.event_type === "login_success" && e.username).forEach(e => {
+    userSignIns[e.username] = (userSignIns[e.username] || 0) + 1;
+  });
+
+  // Active time - sum of all heartbeat durations
+  const totalActiveSeconds = events
+    .filter(e => e.event_type === "active_time")
+    .reduce((sum, e) => sum + (e.duration_seconds || 0), 0);
+
+  // Per-user active time
+  const userActiveTime = {};
+  events.filter(e => e.event_type === "active_time" && e.username).forEach(e => {
+    userActiveTime[e.username] = (userActiveTime[e.username] || 0) + (e.duration_seconds || 0);
+  });
+
+  // Section visits (total)
+  const sectionVisits = {};
+  events.filter(e => e.event_type === "section_visit" && e.section).forEach(e => {
+    sectionVisits[e.section] = (sectionVisits[e.section] || 0) + 1;
+  });
+
+  // Section visits per user
+  const userSectionVisits = {};
+  events.filter(e => e.event_type === "section_visit" && e.section && e.username).forEach(e => {
+    if (!userSectionVisits[e.username]) userSectionVisits[e.username] = {};
+    userSectionVisits[e.username][e.section] = (userSectionVisits[e.username][e.section] || 0) + 1;
+  });
+
+  // Form link clicks
+  const formClicksFromLogin = events.filter(e => e.event_type === "form_link_click" && e.source === "login").length;
+  const formClicksFromApp = events.filter(e => e.event_type === "form_link_click" && e.source === "app").length;
+  const formClicksTotal = formClicksFromLogin + formClicksFromApp;
+
+  res.json({
+    loginPageViews,
+    successfulLogins,
+    failedLogins,
+    totalLoginAttempts,
+    userSignIns,
+    totalActiveSeconds,
+    userActiveTime,
+    sectionVisits,
+    userSectionVisits,
+    formClicks: {
+      fromLogin: formClicksFromLogin,
+      fromApp: formClicksFromApp,
+      total: formClicksTotal
+    }
+  });
+});
+
+// Get raw analytics events (with optional filtering)
+app.get("/api/analytics/events", authenticateToken, (req, res) => {
+  const db = readDb();
+  let events = db.analyticsEvents || [];
+
+  if (req.query.event_type) {
+    events = events.filter(e => e.event_type === req.query.event_type);
+  }
+  if (req.query.username) {
+    events = events.filter(e => e.username === req.query.username);
+  }
+
+  // Return latest 500 events by default
+  const limit = parseInt(req.query.limit) || 500;
+  events = events.slice(-limit);
+
+  res.json(events);
 });
 
 app.listen(PORT, "0.0.0.0", () => {

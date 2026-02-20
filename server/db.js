@@ -284,6 +284,31 @@ export async function initDatabase() {
     await client.query("UPDATE tipers SET status = 'accepted' WHERE status IS NULL");
   await client.query("UPDATE future_functions SET status = 'Planned' WHERE status IS NULL");
 
+    // Create analytics_events table
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS analytics_events (
+        id SERIAL PRIMARY KEY,
+        event_type VARCHAR(100) NOT NULL,
+        section VARCHAR(100),
+        user_id INTEGER,
+        username VARCHAR(255),
+        source VARCHAR(100),
+        duration_seconds INTEGER,
+        metadata JSONB DEFAULT '{}'::jsonb,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+      )
+    `);
+
+    await client.query(`
+      CREATE INDEX IF NOT EXISTS idx_analytics_events_type
+        ON analytics_events (event_type, created_at)
+    `);
+
+    await client.query(`
+      CREATE INDEX IF NOT EXISTS idx_analytics_events_user
+        ON analytics_events (user_id, created_at)
+    `);
+
     await ensureDefaultPalettes(client);
 
     console.log('✓ Database tables initialized');
