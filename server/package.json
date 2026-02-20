@@ -2,6 +2,9 @@
   "name": "walter-system-server",
   "version": "1.0.0",
   "type": "module",
+  "engines": {
+    "node": ">=20.0.0"
+  },
   "main": "server-postgres.js",
   "scripts": {
     "start": "node server-postgres.js",
