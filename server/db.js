@@ -147,7 +147,8 @@ export async function initDatabase() {
         size_bytes INTEGER NOT NULL,
         data BYTEA NOT NULL,
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        archived_at TIMESTAMP DEFAULT NULL
       )
     `);
 
@@ -271,7 +272,8 @@ export async function initDatabase() {
       "ALTER TABLE future_functions ADD COLUMN IF NOT EXISTS info TEXT",
       "ALTER TABLE future_functions ADD COLUMN IF NOT EXISTS status VARCHAR(50) DEFAULT 'Planned'",
       "ALTER TABLE users ADD COLUMN IF NOT EXISTS password_hash VARCHAR(255)",
-      "ALTER TABLE users ADD COLUMN IF NOT EXISTS role VARCHAR(50) DEFAULT 'employee'"
+      "ALTER TABLE users ADD COLUMN IF NOT EXISTS role VARCHAR(50) DEFAULT 'employee'",
+      "ALTER TABLE documents ADD COLUMN IF NOT EXISTS archived_at TIMESTAMP DEFAULT NULL"
     ];
 
     for (const sql of columnMigrations) {
@@ -427,7 +429,8 @@ function toDocumentResponse(row, { includeData = false } = {}) {
     filename: row.filename,
     mimeType: row.mime_type,
     sizeBytes: typeof row.size_bytes === 'number' ? row.size_bytes : Number(row.size_bytes),
-    createdAt: row.created_at
+    createdAt: row.created_at,
+    archivedAt: row.archived_at ?? null
   };
 
   if (includeData) {
@@ -756,13 +759,14 @@ export const db = {
     return result.rows[0] ?? null;
   },
 
-  async getDocuments(entityType, entityId) {
+  async getDocuments(entityType, entityId, { includeArchived = false } = {}) {
     if (!USE_POSTGRES) return null;
 
+    const archivedFilter = includeArchived ? '' : ' AND archived_at IS NULL';
     const result = await pool.query(
-      `SELECT id, entity_type, entity_id, filename, mime_type, size_bytes, created_at
+      `SELECT id, entity_type, entity_id, filename, mime_type, size_bytes, created_at, archived_at
          FROM documents
-        WHERE entity_type = $1 AND entity_id = $2
+        WHERE entity_type = $1 AND entity_id = $2${archivedFilter}
         ORDER BY created_at DESC`,
       [entityType, entityId]
     );
@@ -804,7 +808,21 @@ export const db = {
     const result = await pool.query(
       `DELETE FROM documents
         WHERE id = $1
-    RETURNING id, entity_type, entity_id, filename, mime_type, size_bytes, created_at`,
+    RETURNING id, entity_type, entity_id, filename, mime_type, size_bytes, created_at, archived_at`,
+      [id]
+    );
+
+    return toDocumentResponse(result.rows[0]);
+  },
+
+  async archiveDocument(id) {
+    if (!USE_POSTGRES) return null;
+
+    const result = await pool.query(
+      `UPDATE documents
+         SET archived_at = CURRENT_TIMESTAMP, updated_at = CURRENT_TIMESTAMP
+       WHERE id = $1 AND archived_at IS NULL
+   RETURNING id, entity_type, entity_id, filename, mime_type, size_bytes, created_at, archived_at`,
       [id]
     );
 

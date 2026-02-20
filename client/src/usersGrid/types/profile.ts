@@ -27,6 +27,7 @@ export interface ProfileDocument {
   mimeType: string;
   sizeBytes: number;
   createdAt: string;
+  archivedAt?: string | null;
 }
 
 export interface ProfileNote {

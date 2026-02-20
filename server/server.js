@@ -116,7 +116,8 @@ const stripDocumentData = (doc) => {
     filename: doc.filename,
     mimeType: doc.mimeType,
     sizeBytes: Number(doc.sizeBytes ?? 0),
-    createdAt: doc.createdAt
+    createdAt: doc.createdAt,
+    archivedAt: doc.archivedAt ?? null
   };
 };
 
@@ -1511,8 +1512,10 @@ app.get("/:entity/:id/documents", authenticateToken, (req, res) => {
   try {
     const store = readDb();
     ensureDocumentsCollection(store);
+    const includeArchived = req.query.includeArchived === 'true';
     const docs = store.documents
       .filter((doc) => doc.entityType === entity && Number(doc.entityId) === entityId)
+      .filter((doc) => includeArchived || !doc.archivedAt)
       .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
       .map((doc) => stripDocumentData(doc));
     return res.json(docs);
@@ -1590,6 +1593,36 @@ app.delete("/documents/:documentId", authenticateToken, (req, res) => {
   } catch (error) {
     console.error("Error deleting document:", error);
     res.status(500).json({ error: "Failed to delete document" });
+  }
+});
+
+app.post("/documents/:documentId/archive", authenticateToken, (req, res) => {
+  const documentId = Number(req.params.documentId);
+  if (Number.isNaN(documentId)) {
+    return res.status(400).json({ error: "Invalid document id" });
+  }
+
+  try {
+    const store = readDb();
+    const doc = findDocumentInStore(store, documentId);
+    if (!doc) {
+      return res.status(404).json({ error: "Document not found" });
+    }
+
+    if (doc.archivedAt) {
+      return res.json(stripDocumentData(doc));
+    }
+
+    doc.archivedAt = new Date().toISOString();
+
+    if (!writeDb(store)) {
+      return res.status(500).json({ error: "Failed to persist document archive" });
+    }
+
+    return res.json(stripDocumentData(doc));
+  } catch (error) {
+    console.error("Error archiving document:", error);
+    res.status(500).json({ error: "Failed to archive document" });
   }
 });
 

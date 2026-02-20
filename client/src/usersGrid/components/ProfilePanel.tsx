@@ -20,6 +20,7 @@ interface ProfilePanelProps {
   documentsUploading?: boolean;
   onUploadDocument?: (file: File) => Promise<void> | void;
   onDeleteDocument?: (documentId: number) => Promise<boolean | void> | boolean | void;
+  onArchiveDocument?: (documentId: number) => Promise<boolean | void> | boolean | void;
   documentDownloadBaseUrl?: string;
   notes?: ProfileNote[];
   notesLoading?: boolean;
@@ -54,6 +55,7 @@ const ProfilePanel: React.FC<ProfilePanelProps> = ({
   documentsUploading = false,
   onUploadDocument,
   onDeleteDocument,
+  onArchiveDocument,
   documentDownloadBaseUrl,
   notes,
   notesLoading = false,
@@ -104,7 +106,19 @@ const ProfilePanel: React.FC<ProfilePanelProps> = ({
     },
     [onDeleteDocument]
   );
-
+  const handleArchiveDocument = useCallback(
+    (documentId: number, filename: string) => {
+      if (!onArchiveDocument) {
+        return;
+      }
+      const confirmed = window.confirm(`Opravdu chcete archivovat dokument "${filename}"?`);
+      if (!confirmed) {
+        return;
+      }
+      onArchiveDocument(documentId);
+    },
+    [onArchiveDocument]
+  );
   const handleAddNote = useCallback(() => {
     if (!onAddNote || !newNote.trim()) return;
     onAddNote(newNote);
@@ -124,6 +138,7 @@ const ProfilePanel: React.FC<ProfilePanelProps> = ({
   const showDocumentsSection = Boolean(
     onUploadDocument ||
     onDeleteDocument ||
+    onArchiveDocument ||
     documentsLoading ||
     (documents && documents.length > 0)
   );
@@ -254,6 +269,15 @@ const ProfilePanel: React.FC<ProfilePanelProps> = ({
                                 >
                                   Stáhnout
                                 </a>
+                              ) : null}
+                              {onArchiveDocument ? (
+                                <button
+                                  type="button"
+                                  className="profile-document__action profile-document__action--archive"
+                                  onClick={() => handleArchiveDocument(doc.id, doc.filename)}
+                                >
+                                  Archivovat
+                                </button>
                               ) : null}
                               {onDeleteDocument ? (
                                 <button

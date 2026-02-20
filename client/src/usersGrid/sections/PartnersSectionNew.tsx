@@ -623,6 +623,7 @@ const PartnersSectionNew: React.FC<SectionProps> = ({
         documentDownloadBaseUrl={documentManager.downloadBaseUrl}
         onUploadDocument={documentManager.uploadDocument}
         onDeleteDocument={documentManager.deleteDocument}
+        onArchiveDocument={documentManager.archiveDocument}
         notes={notesManager.notes}
         notesLoading={notesManager.isLoading}
         notesCreating={notesManager.isCreating}

@@ -53,6 +53,7 @@ interface EntityCommissionProfilePanelProps {
   documentsUploading?: boolean;
   onUploadDocument?: (file: File) => Promise<void> | void;
   onDeleteDocument?: (documentId: number) => Promise<boolean | void> | boolean | void;
+  onArchiveDocument?: (documentId: number) => Promise<boolean | void> | boolean | void;
   documentDownloadBaseUrl?: string;
   
   // Notes
@@ -293,6 +294,7 @@ const EntityCommissionProfilePanel: React.FC<EntityCommissionProfilePanelProps> 
   documentsUploading = false,
   onUploadDocument,
   onDeleteDocument,
+  onArchiveDocument,
   documentDownloadBaseUrl,
   notes,
   notesLoading = false,
@@ -347,6 +349,16 @@ const EntityCommissionProfilePanel: React.FC<EntityCommissionProfilePanelProps> 
     [onDeleteDocument]
   );
 
+  const handleArchiveDocument = useCallback(
+    (documentId: number, filename: string) => {
+      if (!onArchiveDocument) return;
+      const confirmed = window.confirm(`Opravdu chcete archivovat dokument "${filename}"?`);
+      if (!confirmed) return;
+      onArchiveDocument(documentId);
+    },
+    [onArchiveDocument]
+  );
+
   const handleAddNote = useCallback(() => {
     if (!onAddNote || !newNote.trim()) return;
     onAddNote(newNote);
@@ -393,7 +405,7 @@ const EntityCommissionProfilePanel: React.FC<EntityCommissionProfilePanelProps> 
   }
 
   const showDocumentsSection = Boolean(
-    onUploadDocument || onDeleteDocument || documentsLoading || (documents && documents.length > 0)
+    onUploadDocument || onDeleteDocument || onArchiveDocument || documentsLoading || (documents && documents.length > 0)
   );
 
   return (
@@ -507,6 +519,15 @@ const EntityCommissionProfilePanel: React.FC<EntityCommissionProfilePanelProps> 
                               <a className="ec-doc-action" href={downloadHref} target="_blank" rel="noreferrer">
                                 Stáhnout
                               </a>
+                            )}
+                            {onArchiveDocument && (
+                              <button
+                                type="button"
+                                className="ec-doc-action archive"
+                                onClick={() => handleArchiveDocument(doc.id, doc.filename)}
+                              >
+                                Archivovat
+                              </button>
                             )}
                             {onDeleteDocument && (
                               <button

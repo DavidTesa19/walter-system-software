@@ -171,7 +171,8 @@ const stripDocumentData = (doc) => {
     filename: doc.filename,
     mimeType: doc.mimeType ?? doc.mime_type,
     sizeBytes: Number(doc.sizeBytes ?? doc.size_bytes ?? 0),
-    createdAt: doc.createdAt ?? doc.created_at
+    createdAt: doc.createdAt ?? doc.created_at,
+    archivedAt: doc.archivedAt ?? doc.archived_at ?? null
   };
 };
 
@@ -1855,14 +1856,17 @@ app.get("/:entity/:id/documents", authenticateToken, async (req, res) => {
 
   try {
     if (db.isPostgres()) {
-      const docs = await db.getDocuments(entity, entityId);
+      const includeArchived = req.query.includeArchived === 'true';
+      const docs = await db.getDocuments(entity, entityId, { includeArchived });
       return res.json(docs ?? []);
     }
 
     const store = readDb();
     ensureDocumentsCollection(store);
+    const includeArchived = req.query.includeArchived === 'true';
     const docs = store.documents
       .filter((doc) => doc.entityType === entity && Number(doc.entityId) === entityId)
+      .filter((doc) => includeArchived || !doc.archivedAt)
       .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
       .map((doc) => stripDocumentData(doc));
     return res.json(docs);
@@ -1957,6 +1961,44 @@ app.delete("/documents/:documentId", authenticateToken, async (req, res) => {
   } catch (error) {
     console.error("Error deleting document:", error);
     res.status(500).json({ error: "Failed to delete document" });
+  }
+});
+
+app.post("/documents/:documentId/archive", authenticateToken, async (req, res) => {
+  const documentId = Number(req.params.documentId);
+  if (Number.isNaN(documentId)) {
+    return res.status(400).json({ error: "Invalid document id" });
+  }
+
+  try {
+    if (db.isPostgres()) {
+      const archived = await db.archiveDocument(documentId);
+      if (!archived) {
+        return res.status(404).json({ error: "Document not found" });
+      }
+      return res.json(archived);
+    }
+
+    const store = readDb();
+    const doc = findDocumentInStore(store, documentId);
+    if (!doc) {
+      return res.status(404).json({ error: "Document not found" });
+    }
+
+    if (doc.archivedAt) {
+      return res.json(stripDocumentData(doc));
+    }
+
+    doc.archivedAt = new Date().toISOString();
+
+    if (!writeDb(store)) {
+      return res.status(500).json({ error: "Failed to persist document archive" });
+    }
+
+    return res.json(stripDocumentData(doc));
+  } catch (error) {
+    console.error("Error archiving document:", error);
+    res.status(500).json({ error: "Failed to archive document" });
   }
 });
 

@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { API_BASE, apiGet, apiDelete, apiUpload } from "../../utils/api";
+import { API_BASE, apiGet, apiDelete, apiPost, apiUpload } from "../../utils/api";
 import type { ProfileDocument } from "../types/profile";
 
 type DocumentResource = "clients" | "partners" | "tipers";
@@ -11,6 +11,7 @@ type UseProfileDocumentsResult = {
   downloadBaseUrl: string;
   uploadDocument: (file: File) => Promise<void>;
   deleteDocument: (documentId: number) => Promise<boolean>;
+  archiveDocument: (documentId: number) => Promise<boolean>;
 };
 
 export const useProfileDocuments = (resource: DocumentResource, entityId: number | null): UseProfileDocumentsResult => {
@@ -70,13 +71,26 @@ export const useProfileDocuments = (resource: DocumentResource, entityId: number
     }
   }, []);
 
+  const archiveDocument = useCallback(async (documentId: number) => {
+    try {
+      await apiPost(`/documents/${documentId}/archive`);
+      setDocuments((prev) => prev.filter((doc) => doc.id !== documentId));
+      return true;
+    } catch (error) {
+      console.error("Error archiving document:", error);
+      alert("Nepodařilo se archivovat dokument. Zkuste to prosím znovu.");
+      return false;
+    }
+  }, []);
+
   return {
     documents,
     isLoading,
     isUploading,
     downloadBaseUrl,
     uploadDocument,
-    deleteDocument
+    deleteDocument,
+    archiveDocument
   };
 };
 
