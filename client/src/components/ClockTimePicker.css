@@ -1,0 +1,153 @@
+.clock-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100vw;
+  height: 100vh;
+  background-color: rgba(0, 0, 0, 0.4);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 10000;
+  backdrop-filter: blur(2px);
+}
+
+.clock-modal {
+  width: 280px;
+  background: #ffffff;
+  border-radius: 12px;
+  box-shadow: 0 12px 32px rgba(0, 0, 0, 0.2);
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  font-family: 'Inter', system-ui, sans-serif;
+  user-select: none;
+}
+
+.clock-header {
+  background: #3b82f6; /* Function Blue */
+  padding: 24px;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  color: rgba(255, 255, 255, 0.6);
+}
+
+.time-display {
+  font-size: 56px;
+  line-height: 1;
+  font-weight: 500;
+  cursor: pointer;
+  transition: color 0.2s;
+}
+
+.time-display:hover {
+  color: rgba(255, 255, 255, 0.85);
+}
+
+.time-display.active {
+  color: #ffffff;
+}
+
+.time-separator {
+  font-size: 52px;
+  line-height: 1;
+  margin: 0 4px; /* Reduced from 8px to bring them closer */
+  padding-bottom: 8px; /* Slight alignment fix */
+  color: rgba(255, 255, 255, 0.6);
+}
+
+.clock-face-container {
+  padding: 24px;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  background: #ffffff;
+}
+
+.clock-face {
+  position: relative;
+  width: 232px;
+  height: 232px;
+  background: #f1f5f9;
+  border-radius: 50%;
+  cursor: pointer;
+  /* Disable touch scrolling/actions on the face */
+  touch-action: none; 
+}
+
+/* Numbers */
+.clock-number {
+  position: absolute;
+  width: 32px;
+  height: 32px;
+  text-align: center;
+  line-height: 32px;
+  border-radius: 50%;
+  font-size: 14px;
+  color: #1e293b;
+  pointer-events: none; /* Let clicks pass through to the SVG/face */
+  transform: translate(-50%, -50%); /* Center the number on its coordinates */
+}
+
+.clock-number.inner {
+  font-size: 12px;
+  color: #64748b;
+}
+
+.clock-number.selected {
+  color: #ffffff;
+}
+
+/* SVG Styling */
+.clock-hand-svg {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  pointer-events: none; /* Let clicks pass through */
+}
+
+.clock-center-dot {
+  fill: #3b82f6;
+}
+
+.clock-hand-line {
+  stroke: #3b82f6;
+  stroke-width: 2;
+  stroke-linecap: round;
+}
+
+.clock-hand-circle {
+  fill: #3b82f6;
+  opacity: 1;
+}
+/* If using a selection circle behind number */
+.clock-selection-circle {
+  fill: #3b82f6;
+}
+
+.clock-actions {
+  display: flex;
+  justify-content: flex-end;
+  padding: 16px 24px 20px;
+  gap: 16px;
+}
+
+.clock-btn {
+  background: none;
+  border: none;
+  color: #3b82f6;
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+  padding: 8px 12px;
+  border-radius: 4px;
+  transition: background 0.1s;
+  text-transform: uppercase;
+}
+
+.clock-btn:hover {
+  background: #eff6ff;
+}

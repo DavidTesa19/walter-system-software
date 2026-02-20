@@ -1,5 +1,4 @@
 import React, { useState } from 'react';
-import { GoogleOAuthProvider } from '@react-oauth/google';
 import { AuthProvider, useAuth } from './auth/AuthContext';
 import { ThemeProvider } from './theme/ThemeContext';
 import Login from './auth/Login';
@@ -12,13 +11,9 @@ import ArchivedCommissionsView from './views/ArchivedCommissionsView';
 import FutureFunctionsView from './views/FutureFunctionsView';
 import ChatbotView from './views/ChatbotView';
 import TeamChatView from './views/TeamChatView';
-// import CalendarView from './views/CalendarView';
+import FullCalendarView from './views/FullCalendarView';
 import type { AppView } from './types/appView';
 import './components/Sidebar.css';
-
-// NOTE: You must create a Google Cloud Project and get a Client ID
-// Add VITE_GOOGLE_CLIENT_ID=your_client_id to client/.env
-const GOOGLE_CLIENT_ID = import.meta.env.VITE_GOOGLE_CLIENT_ID || "YOUR_CLIENT_ID_HERE";
 
 const AppContent: React.FC = () => {
   const { isAuthenticated } = useAuth();
@@ -28,7 +23,7 @@ const AppContent: React.FC = () => {
     return <Login />;
   }
 
-  const isFullscreenView = viewMode === 'chatbot' || viewMode === 'teamchat';
+  const isFullscreenView = viewMode === 'chatbot' || viewMode === 'teamchat' || viewMode === 'calendar';
 
   return (
     <div style={{ display: 'flex' }}>
@@ -50,8 +45,8 @@ const AppContent: React.FC = () => {
               return <ChatbotView />;
             case 'teamchat':
               return <TeamChatView />;
-            // case 'calendar':
-            //   return <CalendarView />;
+            case 'calendar':
+              return <FullCalendarView />;
             default:
               return null;
           }
@@ -64,13 +59,11 @@ const AppContent: React.FC = () => {
 
 const App: React.FC = () => {
   return (
-    <GoogleOAuthProvider clientId={GOOGLE_CLIENT_ID}>
-      <AuthProvider>
-        <ThemeProvider>
-          <AppContent />
-        </ThemeProvider>
-      </AuthProvider>
-    </GoogleOAuthProvider>
+    <AuthProvider>
+      <ThemeProvider>
+        <AppContent />
+      </ThemeProvider>
+    </AuthProvider>
   );
 };
 

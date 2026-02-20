@@ -9,6 +9,7 @@ import * as cheerio from "cheerio";
 import multer from "multer";
 import bcrypt from "bcryptjs";
 import jwt from "jsonwebtoken";
+import * as entityCommissionJson from "./entity-commission-json.js";
 
 // Load environment variables
 dotenv.config();
@@ -1007,6 +1008,9 @@ function readDb() {
     if (!Array.isArray(obj.notes)) {
       obj.notes = [];
     }
+    if (!Array.isArray(obj.calendarEvents)) {
+      obj.calendarEvents = [];
+    }
     // Keep backwards compatibility
     if (!obj.users) {
       obj.users = [];
@@ -1954,6 +1958,649 @@ app.post("/tipers/:id/restore", authenticateToken, (req, res) => {
   res.json(db.tipers[idx]);
 });
 
+// =============================================================================
+// NEW ENTITY-COMMISSION API ENDPOINTS
+// =============================================================================
+
+// Helper to migrate old data if needed
+const ensureMigrated = (db) => {
+  if (!db.partner_entities || db.partner_entities.length === 0) {
+    if (db.partners && db.partners.length > 0) {
+      entityCommissionJson.migrateOldData(db);
+      return true;
+    }
+  }
+  entityCommissionJson.ensureEntityCommissionCollections(db);
+  return false;
+};
+
+// --- PARTNER ENTITIES ---
+
+app.get("/api/partner-entities", authenticateToken, (req, res) => {
+  try {
+    const db = readDb();
+    ensureMigrated(db);
+    res.json(entityCommissionJson.getPartnerEntities(db));
+  } catch (error) {
+    console.error("Error fetching partner entities:", error);
+    res.status(500).json({ error: "Failed to fetch partner entities" });
+  }
+});
+
+app.get("/api/partner-entities/:id", authenticateToken, (req, res) => {
+  try {
+    const id = Number(req.params.id);
+    const db = readDb();
+    ensureMigrated(db);
+    const entity = entityCommissionJson.getPartnerEntityById(db, id);
+    if (!entity) return res.status(404).json({ error: "Not found" });
+    res.json(entity);
+  } catch (error) {
+    console.error("Error fetching partner entity:", error);
+    res.status(500).json({ error: "Failed to fetch partner entity" });
+  }
+});
+
+app.put("/api/partner-entities/:id", authenticateToken, (req, res) => {
+  try {
+    const id = Number(req.params.id);
+    const db = readDb();
+    ensureMigrated(db);
+    const updated = entityCommissionJson.updatePartnerEntity(db, id, req.body);
+    if (!updated) return res.status(404).json({ error: "Not found" });
+    if (!writeDb(db)) return res.status(500).json({ error: "Failed to persist" });
+    res.json(updated);
+  } catch (error) {
+    console.error("Error updating partner entity:", error);
+    res.status(500).json({ error: "Failed to update partner entity" });
+  }
+});
+
+// Create partner entity with commission
+app.post("/api/partner-entities/with-commission", authenticateToken, (req, res) => {
+  try {
+    const db = readDb();
+    ensureMigrated(db);
+    const { entity, commission } = req.body;
+    if (!entity) {
+      return res.status(400).json({ error: "entity data is required" });
+    }
+    const result = entityCommissionJson.createPartnerWithCommission(db, entity, commission || {});
+    if (!writeDb(db)) return res.status(500).json({ error: "Failed to persist" });
+    res.status(201).json(result);
+  } catch (error) {
+    console.error("Error creating partner with commission:", error);
+    res.status(500).json({ error: error.message || "Failed to create partner with commission" });
+  }
+});
+
+// --- PARTNER COMMISSIONS ---
+
+app.get("/api/partner-commissions", authenticateToken, (req, res) => {
+  try {
+    const db = readDb();
+    const migrated = ensureMigrated(db);
+    if (migrated) writeDb(db);
+    
+    const status = req.query.status;
+    const filters = status ? { status } : {};
+    res.json(entityCommissionJson.getPartnerCommissions(db, filters));
+  } catch (error) {
+    console.error("Error fetching partner commissions:", error);
+    res.status(500).json({ error: "Failed to fetch partner commissions" });
+  }
+});
+
+app.get("/api/partner-commissions/:id", authenticateToken, (req, res) => {
+  try {
+    const id = Number(req.params.id);
+    const db = readDb();
+    ensureMigrated(db);
+    const commission = entityCommissionJson.getPartnerCommissionById(db, id);
+    if (!commission) return res.status(404).json({ error: "Not found" });
+    res.json(commission);
+  } catch (error) {
+    console.error("Error fetching partner commission:", error);
+    res.status(500).json({ error: "Failed to fetch partner commission" });
+  }
+});
+
+app.post("/api/partner-commissions", authenticateToken, (req, res) => {
+  try {
+    const db = readDb();
+    ensureMigrated(db);
+    
+    const { entity_data, commission_data } = req.body;
+    
+    // If entity_data is provided, create new entity with commission
+    if (entity_data) {
+      const result = entityCommissionJson.createPartnerWithCommission(db, entity_data, commission_data || {});
+      if (!writeDb(db)) return res.status(500).json({ error: "Failed to persist" });
+      res.status(201).json(result.commission);
+    } 
+    // Otherwise, add commission to existing entity
+    else if (req.body.entity_id) {
+      const commission = entityCommissionJson.createPartnerCommission(db, req.body.entity_id, req.body);
+      if (!writeDb(db)) return res.status(500).json({ error: "Failed to persist" });
+      res.status(201).json(commission);
+    }
+    else {
+      return res.status(400).json({ error: "Either entity_data or entity_id is required" });
+    }
+  } catch (error) {
+    console.error("Error creating partner commission:", error);
+    res.status(500).json({ error: error.message || "Failed to create partner commission" });
+  }
+});
+
+app.put("/api/partner-commissions/:id", authenticateToken, (req, res) => {
+  try {
+    const id = Number(req.params.id);
+    const db = readDb();
+    ensureMigrated(db);
+    const updated = entityCommissionJson.updatePartnerCommission(db, id, req.body);
+    if (!updated) return res.status(404).json({ error: "Not found" });
+    if (!writeDb(db)) return res.status(500).json({ error: "Failed to persist" });
+    res.json(updated);
+  } catch (error) {
+    console.error("Error updating partner commission:", error);
+    res.status(500).json({ error: "Failed to update partner commission" });
+  }
+});
+
+app.patch("/api/partner-commissions/:id", authenticateToken, (req, res) => {
+  try {
+    const id = Number(req.params.id);
+    const db = readDb();
+    ensureMigrated(db);
+    const updated = entityCommissionJson.updatePartnerCommission(db, id, req.body);
+    if (!updated) return res.status(404).json({ error: "Not found" });
+    if (!writeDb(db)) return res.status(500).json({ error: "Failed to persist" });
+    res.json(updated);
+  } catch (error) {
+    console.error("Error patching partner commission:", error);
+    res.status(500).json({ error: "Failed to update partner commission" });
+  }
+});
+
+app.delete("/api/partner-commissions/:id", authenticateToken, (req, res) => {
+  try {
+    const id = Number(req.params.id);
+    const db = readDb();
+    ensureMigrated(db);
+    const deleted = entityCommissionJson.deletePartnerCommission(db, id);
+    if (!deleted) return res.status(404).json({ error: "Not found" });
+    if (!writeDb(db)) return res.status(500).json({ error: "Failed to persist" });
+    res.status(204).end();
+  } catch (error) {
+    console.error("Error deleting partner commission:", error);
+    res.status(500).json({ error: "Failed to delete partner commission" });
+  }
+});
+
+app.post("/api/partner-commissions/:id/approve", authenticateToken, (req, res) => {
+  try {
+    const id = Number(req.params.id);
+    const db = readDb();
+    ensureMigrated(db);
+    const updated = entityCommissionJson.updatePartnerCommission(db, id, { status: "accepted" });
+    if (!updated) return res.status(404).json({ error: "Not found" });
+    if (!writeDb(db)) return res.status(500).json({ error: "Failed to persist" });
+    res.json(updated);
+  } catch (error) {
+    console.error("Error approving partner commission:", error);
+    res.status(500).json({ error: "Failed to approve partner commission" });
+  }
+});
+
+app.post("/api/partner-commissions/:id/archive", authenticateToken, (req, res) => {
+  try {
+    const id = Number(req.params.id);
+    const db = readDb();
+    ensureMigrated(db);
+    const updated = entityCommissionJson.updatePartnerCommission(db, id, { status: "archived" });
+    if (!updated) return res.status(404).json({ error: "Not found" });
+    if (!writeDb(db)) return res.status(500).json({ error: "Failed to persist" });
+    res.json(updated);
+  } catch (error) {
+    console.error("Error archiving partner commission:", error);
+    res.status(500).json({ error: "Failed to archive partner commission" });
+  }
+});
+
+app.post("/api/partner-commissions/:id/restore", authenticateToken, (req, res) => {
+  try {
+    const id = Number(req.params.id);
+    const db = readDb();
+    ensureMigrated(db);
+    const updated = entityCommissionJson.updatePartnerCommission(db, id, { status: "accepted" });
+    if (!updated) return res.status(404).json({ error: "Not found" });
+    if (!writeDb(db)) return res.status(500).json({ error: "Failed to persist" });
+    res.json(updated);
+  } catch (error) {
+    console.error("Error restoring partner commission:", error);
+    res.status(500).json({ error: "Failed to restore partner commission" });
+  }
+});
+
+// --- CLIENT ENTITIES ---
+
+app.get("/api/client-entities", authenticateToken, (req, res) => {
+  try {
+    const db = readDb();
+    ensureMigrated(db);
+    res.json(entityCommissionJson.getClientEntities(db));
+  } catch (error) {
+    console.error("Error fetching client entities:", error);
+    res.status(500).json({ error: "Failed to fetch client entities" });
+  }
+});
+
+app.get("/api/client-entities/:id", authenticateToken, (req, res) => {
+  try {
+    const id = Number(req.params.id);
+    const db = readDb();
+    ensureMigrated(db);
+    const entity = entityCommissionJson.getClientEntityById(db, id);
+    if (!entity) return res.status(404).json({ error: "Not found" });
+    res.json(entity);
+  } catch (error) {
+    console.error("Error fetching client entity:", error);
+    res.status(500).json({ error: "Failed to fetch client entity" });
+  }
+});
+
+app.put("/api/client-entities/:id", authenticateToken, (req, res) => {
+  try {
+    const id = Number(req.params.id);
+    const db = readDb();
+    ensureMigrated(db);
+    const updated = entityCommissionJson.updateClientEntity(db, id, req.body);
+    if (!updated) return res.status(404).json({ error: "Not found" });
+    if (!writeDb(db)) return res.status(500).json({ error: "Failed to persist" });
+    res.json(updated);
+  } catch (error) {
+    console.error("Error updating client entity:", error);
+    res.status(500).json({ error: "Failed to update client entity" });
+  }
+});
+
+// Create client entity with commission
+app.post("/api/client-entities/with-commission", authenticateToken, (req, res) => {
+  try {
+    const db = readDb();
+    ensureMigrated(db);
+    const { entity, commission } = req.body;
+    if (!entity) {
+      return res.status(400).json({ error: "entity data is required" });
+    }
+    const result = entityCommissionJson.createClientWithCommission(db, entity, commission || {});
+    if (!writeDb(db)) return res.status(500).json({ error: "Failed to persist" });
+    res.status(201).json(result);
+  } catch (error) {
+    console.error("Error creating client with commission:", error);
+    res.status(500).json({ error: error.message || "Failed to create client with commission" });
+  }
+});
+
+// --- CLIENT COMMISSIONS ---
+
+app.get("/api/client-commissions", authenticateToken, (req, res) => {
+  try {
+    const db = readDb();
+    const migrated = ensureMigrated(db);
+    if (migrated) writeDb(db);
+    
+    const status = req.query.status;
+    const filters = status ? { status } : {};
+    res.json(entityCommissionJson.getClientCommissions(db, filters));
+  } catch (error) {
+    console.error("Error fetching client commissions:", error);
+    res.status(500).json({ error: "Failed to fetch client commissions" });
+  }
+});
+
+app.get("/api/client-commissions/:id", authenticateToken, (req, res) => {
+  try {
+    const id = Number(req.params.id);
+    const db = readDb();
+    ensureMigrated(db);
+    const commission = entityCommissionJson.getClientCommissionById(db, id);
+    if (!commission) return res.status(404).json({ error: "Not found" });
+    res.json(commission);
+  } catch (error) {
+    console.error("Error fetching client commission:", error);
+    res.status(500).json({ error: "Failed to fetch client commission" });
+  }
+});
+
+app.post("/api/client-commissions", authenticateToken, (req, res) => {
+  try {
+    const db = readDb();
+    ensureMigrated(db);
+    
+    const { entity_data, commission_data } = req.body;
+    
+    if (entity_data) {
+      const result = entityCommissionJson.createClientWithCommission(db, entity_data, commission_data || {});
+      if (!writeDb(db)) return res.status(500).json({ error: "Failed to persist" });
+      res.status(201).json(result.commission);
+    } 
+    else if (req.body.entity_id) {
+      const commission = entityCommissionJson.createClientCommission(db, req.body.entity_id, req.body);
+      if (!writeDb(db)) return res.status(500).json({ error: "Failed to persist" });
+      res.status(201).json(commission);
+    }
+    else {
+      return res.status(400).json({ error: "Either entity_data or entity_id is required" });
+    }
+  } catch (error) {
+    console.error("Error creating client commission:", error);
+    res.status(500).json({ error: error.message || "Failed to create client commission" });
+  }
+});
+
+app.put("/api/client-commissions/:id", authenticateToken, (req, res) => {
+  try {
+    const id = Number(req.params.id);
+    const db = readDb();
+    ensureMigrated(db);
+    const updated = entityCommissionJson.updateClientCommission(db, id, req.body);
+    if (!updated) return res.status(404).json({ error: "Not found" });
+    if (!writeDb(db)) return res.status(500).json({ error: "Failed to persist" });
+    res.json(updated);
+  } catch (error) {
+    console.error("Error updating client commission:", error);
+    res.status(500).json({ error: "Failed to update client commission" });
+  }
+});
+
+app.patch("/api/client-commissions/:id", authenticateToken, (req, res) => {
+  try {
+    const id = Number(req.params.id);
+    const db = readDb();
+    ensureMigrated(db);
+    const updated = entityCommissionJson.updateClientCommission(db, id, req.body);
+    if (!updated) return res.status(404).json({ error: "Not found" });
+    if (!writeDb(db)) return res.status(500).json({ error: "Failed to persist" });
+    res.json(updated);
+  } catch (error) {
+    console.error("Error patching client commission:", error);
+    res.status(500).json({ error: "Failed to update client commission" });
+  }
+});
+
+app.delete("/api/client-commissions/:id", authenticateToken, (req, res) => {
+  try {
+    const id = Number(req.params.id);
+    const db = readDb();
+    ensureMigrated(db);
+    const deleted = entityCommissionJson.deleteClientCommission(db, id);
+    if (!deleted) return res.status(404).json({ error: "Not found" });
+    if (!writeDb(db)) return res.status(500).json({ error: "Failed to persist" });
+    res.status(204).end();
+  } catch (error) {
+    console.error("Error deleting client commission:", error);
+    res.status(500).json({ error: "Failed to delete client commission" });
+  }
+});
+
+app.post("/api/client-commissions/:id/approve", authenticateToken, (req, res) => {
+  try {
+    const id = Number(req.params.id);
+    const db = readDb();
+    ensureMigrated(db);
+    const updated = entityCommissionJson.updateClientCommission(db, id, { status: "accepted" });
+    if (!updated) return res.status(404).json({ error: "Not found" });
+    if (!writeDb(db)) return res.status(500).json({ error: "Failed to persist" });
+    res.json(updated);
+  } catch (error) {
+    console.error("Error approving client commission:", error);
+    res.status(500).json({ error: "Failed to approve client commission" });
+  }
+});
+
+app.post("/api/client-commissions/:id/archive", authenticateToken, (req, res) => {
+  try {
+    const id = Number(req.params.id);
+    const db = readDb();
+    ensureMigrated(db);
+    const updated = entityCommissionJson.updateClientCommission(db, id, { status: "archived" });
+    if (!updated) return res.status(404).json({ error: "Not found" });
+    if (!writeDb(db)) return res.status(500).json({ error: "Failed to persist" });
+    res.json(updated);
+  } catch (error) {
+    console.error("Error archiving client commission:", error);
+    res.status(500).json({ error: "Failed to archive client commission" });
+  }
+});
+
+app.post("/api/client-commissions/:id/restore", authenticateToken, (req, res) => {
+  try {
+    const id = Number(req.params.id);
+    const db = readDb();
+    ensureMigrated(db);
+    const updated = entityCommissionJson.updateClientCommission(db, id, { status: "accepted" });
+    if (!updated) return res.status(404).json({ error: "Not found" });
+    if (!writeDb(db)) return res.status(500).json({ error: "Failed to persist" });
+    res.json(updated);
+  } catch (error) {
+    console.error("Error restoring client commission:", error);
+    res.status(500).json({ error: "Failed to restore client commission" });
+  }
+});
+
+// --- TIPER ENTITIES ---
+
+app.get("/api/tiper-entities", authenticateToken, (req, res) => {
+  try {
+    const db = readDb();
+    ensureMigrated(db);
+    res.json(entityCommissionJson.getTiperEntities(db));
+  } catch (error) {
+    console.error("Error fetching tiper entities:", error);
+    res.status(500).json({ error: "Failed to fetch tiper entities" });
+  }
+});
+
+app.get("/api/tiper-entities/:id", authenticateToken, (req, res) => {
+  try {
+    const id = Number(req.params.id);
+    const db = readDb();
+    ensureMigrated(db);
+    const entity = entityCommissionJson.getTiperEntityById(db, id);
+    if (!entity) return res.status(404).json({ error: "Not found" });
+    res.json(entity);
+  } catch (error) {
+    console.error("Error fetching tiper entity:", error);
+    res.status(500).json({ error: "Failed to fetch tiper entity" });
+  }
+});
+
+app.put("/api/tiper-entities/:id", authenticateToken, (req, res) => {
+  try {
+    const id = Number(req.params.id);
+    const db = readDb();
+    ensureMigrated(db);
+    const updated = entityCommissionJson.updateTiperEntity(db, id, req.body);
+    if (!updated) return res.status(404).json({ error: "Not found" });
+    if (!writeDb(db)) return res.status(500).json({ error: "Failed to persist" });
+    res.json(updated);
+  } catch (error) {
+    console.error("Error updating tiper entity:", error);
+    res.status(500).json({ error: "Failed to update tiper entity" });
+  }
+});
+
+// Create tiper entity with commission
+app.post("/api/tiper-entities/with-commission", authenticateToken, (req, res) => {
+  try {
+    const db = readDb();
+    ensureMigrated(db);
+    const { entity, commission } = req.body;
+    if (!entity) {
+      return res.status(400).json({ error: "entity data is required" });
+    }
+    const result = entityCommissionJson.createTiperWithCommission(db, entity, commission || {});
+    if (!writeDb(db)) return res.status(500).json({ error: "Failed to persist" });
+    res.status(201).json(result);
+  } catch (error) {
+    console.error("Error creating tiper with commission:", error);
+    res.status(500).json({ error: error.message || "Failed to create tiper with commission" });
+  }
+});
+
+// --- TIPER COMMISSIONS ---
+
+app.get("/api/tiper-commissions", authenticateToken, (req, res) => {
+  try {
+    const db = readDb();
+    const migrated = ensureMigrated(db);
+    if (migrated) writeDb(db);
+    
+    const status = req.query.status;
+    const filters = status ? { status } : {};
+    res.json(entityCommissionJson.getTiperCommissions(db, filters));
+  } catch (error) {
+    console.error("Error fetching tiper commissions:", error);
+    res.status(500).json({ error: "Failed to fetch tiper commissions" });
+  }
+});
+
+app.get("/api/tiper-commissions/:id", authenticateToken, (req, res) => {
+  try {
+    const id = Number(req.params.id);
+    const db = readDb();
+    ensureMigrated(db);
+    const commission = entityCommissionJson.getTiperCommissionById(db, id);
+    if (!commission) return res.status(404).json({ error: "Not found" });
+    res.json(commission);
+  } catch (error) {
+    console.error("Error fetching tiper commission:", error);
+    res.status(500).json({ error: "Failed to fetch tiper commission" });
+  }
+});
+
+app.post("/api/tiper-commissions", authenticateToken, (req, res) => {
+  try {
+    const db = readDb();
+    ensureMigrated(db);
+    
+    const { entity_data, commission_data } = req.body;
+    
+    if (entity_data) {
+      const result = entityCommissionJson.createTiperWithCommission(db, entity_data, commission_data || {});
+      if (!writeDb(db)) return res.status(500).json({ error: "Failed to persist" });
+      res.status(201).json(result.commission);
+    } 
+    else if (req.body.entity_id) {
+      const commission = entityCommissionJson.createTiperCommission(db, req.body.entity_id, req.body);
+      if (!writeDb(db)) return res.status(500).json({ error: "Failed to persist" });
+      res.status(201).json(commission);
+    }
+    else {
+      return res.status(400).json({ error: "Either entity_data or entity_id is required" });
+    }
+  } catch (error) {
+    console.error("Error creating tiper commission:", error);
+    res.status(500).json({ error: error.message || "Failed to create tiper commission" });
+  }
+});
+
+app.put("/api/tiper-commissions/:id", authenticateToken, (req, res) => {
+  try {
+    const id = Number(req.params.id);
+    const db = readDb();
+    ensureMigrated(db);
+    const updated = entityCommissionJson.updateTiperCommission(db, id, req.body);
+    if (!updated) return res.status(404).json({ error: "Not found" });
+    if (!writeDb(db)) return res.status(500).json({ error: "Failed to persist" });
+    res.json(updated);
+  } catch (error) {
+    console.error("Error updating tiper commission:", error);
+    res.status(500).json({ error: "Failed to update tiper commission" });
+  }
+});
+
+app.patch("/api/tiper-commissions/:id", authenticateToken, (req, res) => {
+  try {
+    const id = Number(req.params.id);
+    const db = readDb();
+    ensureMigrated(db);
+    const updated = entityCommissionJson.updateTiperCommission(db, id, req.body);
+    if (!updated) return res.status(404).json({ error: "Not found" });
+    if (!writeDb(db)) return res.status(500).json({ error: "Failed to persist" });
+    res.json(updated);
+  } catch (error) {
+    console.error("Error patching tiper commission:", error);
+    res.status(500).json({ error: "Failed to update tiper commission" });
+  }
+});
+
+app.delete("/api/tiper-commissions/:id", authenticateToken, (req, res) => {
+  try {
+    const id = Number(req.params.id);
+    const db = readDb();
+    ensureMigrated(db);
+    const deleted = entityCommissionJson.deleteTiperCommission(db, id);
+    if (!deleted) return res.status(404).json({ error: "Not found" });
+    if (!writeDb(db)) return res.status(500).json({ error: "Failed to persist" });
+    res.status(204).end();
+  } catch (error) {
+    console.error("Error deleting tiper commission:", error);
+    res.status(500).json({ error: "Failed to delete tiper commission" });
+  }
+});
+
+app.post("/api/tiper-commissions/:id/approve", authenticateToken, (req, res) => {
+  try {
+    const id = Number(req.params.id);
+    const db = readDb();
+    ensureMigrated(db);
+    const updated = entityCommissionJson.updateTiperCommission(db, id, { status: "accepted" });
+    if (!updated) return res.status(404).json({ error: "Not found" });
+    if (!writeDb(db)) return res.status(500).json({ error: "Failed to persist" });
+    res.json(updated);
+  } catch (error) {
+    console.error("Error approving tiper commission:", error);
+    res.status(500).json({ error: "Failed to approve tiper commission" });
+  }
+});
+
+app.post("/api/tiper-commissions/:id/archive", authenticateToken, (req, res) => {
+  try {
+    const id = Number(req.params.id);
+    const db = readDb();
+    ensureMigrated(db);
+    const updated = entityCommissionJson.updateTiperCommission(db, id, { status: "archived" });
+    if (!updated) return res.status(404).json({ error: "Not found" });
+    if (!writeDb(db)) return res.status(500).json({ error: "Failed to persist" });
+    res.json(updated);
+  } catch (error) {
+    console.error("Error archiving tiper commission:", error);
+    res.status(500).json({ error: "Failed to archive tiper commission" });
+  }
+});
+
+app.post("/api/tiper-commissions/:id/restore", authenticateToken, (req, res) => {
+  try {
+    const id = Number(req.params.id);
+    const db = readDb();
+    ensureMigrated(db);
+    const updated = entityCommissionJson.updateTiperCommission(db, id, { status: "accepted" });
+    if (!updated) return res.status(404).json({ error: "Not found" });
+    if (!writeDb(db)) return res.status(500).json({ error: "Failed to persist" });
+    res.json(updated);
+  } catch (error) {
+    console.error("Error restoring tiper commission:", error);
+    res.status(500).json({ error: "Failed to restore tiper commission" });
+  }
+});
+
+// =============================================================================
+// END OF ENTITY-COMMISSION API ENDPOINTS
+// =============================================================================
+
 // CRUD for future functions roadmap
 app.get("/future-functions", authenticateToken, (req, res) => {
   const db = readDb();
@@ -2007,6 +2654,79 @@ app.delete("/future-functions/:id", authenticateToken, (req, res) => {
   const before = db.futureFunctions.length;
   db.futureFunctions = db.futureFunctions.filter((record) => record.id !== id);
   if (db.futureFunctions.length === before) return res.status(404).json({ error: "Not found" });
+  if (!writeDb(db)) return res.status(500).json({ error: "Failed to persist" });
+  res.status(204).end();
+});
+
+// =============================================================================
+// CALENDAR EVENTS CRUD
+// =============================================================================
+
+app.get("/api/calendar-events", authenticateToken, (req, res) => {
+  const db = readDb();
+  const { start, end } = req.query;
+  const userId = req.user.id;
+  // Filter to only this user's events
+  let events = (db.calendarEvents ?? []).filter((ev) => ev.userId === userId);
+  // Optional date range filtering
+  if (start && end) {
+    events = events.filter((ev) => {
+      const evStart = ev.start || ev.date;
+      const evEnd = ev.end || evStart;
+      return evEnd >= start && evStart <= end;
+    });
+  }
+  res.json(events);
+});
+
+app.post("/api/calendar-events", authenticateToken, (req, res) => {
+  const db = readDb();
+  if (!Array.isArray(db.calendarEvents)) db.calendarEvents = [];
+  const body = isPlainObject(req.body) ? req.body : {};
+  const maxId = db.calendarEvents.reduce((max, ev) => Math.max(max, Number(ev.id) || 0), 0);
+  const event = {
+    id: maxId + 1,
+    userId: req.user.id,
+    title: body.title || "Untitled",
+    start: body.start || null,
+    end: body.end || null,
+    allDay: body.allDay ?? false,
+    color: body.color || null,
+    description: body.description || "",
+    rrule: body.rrule || null,
+    duration: body.duration || null,
+    extendedProps: body.extendedProps || {},
+    created_at: new Date().toISOString(),
+    updated_at: new Date().toISOString()
+  };
+  db.calendarEvents.push(event);
+  if (!writeDb(db)) return res.status(500).json({ error: "Failed to persist" });
+  res.status(201).json(event);
+});
+
+app.put("/api/calendar-events/:id", authenticateToken, (req, res) => {
+  const id = Number(req.params.id);
+  const db = readDb();
+  if (!Array.isArray(db.calendarEvents)) db.calendarEvents = [];
+  const idx = db.calendarEvents.findIndex((ev) => Number(ev.id) === id);
+  if (idx === -1) return res.status(404).json({ error: "Not found" });
+  if (db.calendarEvents[idx].userId !== req.user.id) return res.status(403).json({ error: "Forbidden" });
+  const body = isPlainObject(req.body) ? req.body : {};
+  // Prevent userId from being overwritten
+  const updated = { ...db.calendarEvents[idx], ...body, id, userId: req.user.id, updated_at: new Date().toISOString() };
+  db.calendarEvents[idx] = updated;
+  if (!writeDb(db)) return res.status(500).json({ error: "Failed to persist" });
+  res.json(updated);
+});
+
+app.delete("/api/calendar-events/:id", authenticateToken, (req, res) => {
+  const id = Number(req.params.id);
+  const db = readDb();
+  if (!Array.isArray(db.calendarEvents)) db.calendarEvents = [];
+  const event = db.calendarEvents.find((ev) => Number(ev.id) === id);
+  if (!event) return res.status(404).json({ error: "Not found" });
+  if (event.userId !== req.user.id) return res.status(403).json({ error: "Forbidden" });
+  db.calendarEvents = db.calendarEvents.filter((ev) => Number(ev.id) !== id);
   if (!writeDb(db)) return res.status(500).json({ error: "Failed to persist" });
   res.status(204).end();
 });

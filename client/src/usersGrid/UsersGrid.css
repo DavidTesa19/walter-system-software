@@ -140,17 +140,7 @@
   box-shadow: 0 0 0 3px color-mix(in srgb, var(--color-primary) 30%, transparent);
 }
 
-.delete-buttons-column {
-  display: grid;
-  grid-auto-rows: var(--row-height, 42px);
-  align-content: start;
-  align-items: center;
-  justify-items: center;
-  position: relative;
-  width: 40px;
-  flex-shrink: 0;
-  padding-top: var(--header-offset, 80px);
-}
+
 
 .info-cell-truncate {
   white-space: nowrap;
@@ -298,11 +288,61 @@
   border-radius: 4px;
   cursor: pointer;
   transition: all 0.15s ease;
-  width: 100%;
-  height: 100%;
+  width: 26px;
+  height: 26px;
   display: flex;
   align-items: center;
   justify-content: center;
+  margin: 0 auto;
+}
+
+/* In-row approve/restore button styles (pinned column) */
+.inrow-approve-btn {
+  background: transparent;
+  color: var(--color-success);
+  border: none;
+  padding: 0;
+  border-radius: 4px;
+  cursor: pointer;
+  transition: all 0.15s ease;
+  width: 26px;
+  height: 26px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin: 0 auto;
+}
+
+.inrow-approve-btn:hover {
+  background: color-mix(in srgb, var(--color-success) 14%, transparent);
+  color: var(--color-success-hover);
+  transform: scale(1.05);
+}
+
+.inrow-approve-btn:active {
+  background: color-mix(in srgb, var(--color-success) 22%, transparent);
+  color: color-mix(in srgb, var(--color-success) 75%, black);
+  transform: scale(1.02);
+}
+
+.inrow-approve-btn svg {
+  pointer-events: none;
+}
+
+.action-cell {
+  padding: 0 !important;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.action-cell .ag-cell-wrapper,
+.action-cell .ag-cell-value {
+  padding: 0 !important;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
 }
 
 .inrow-delete-btn:hover {
@@ -321,81 +361,7 @@
   pointer-events: none;
 }
 
-/* External delete buttons (outside grid) */
-.external-delete-btn {
-  background: transparent;
-  color: var(--color-text-muted);
-  border: none;
-  padding: 0;
-  border-radius: 4px;
-  cursor: pointer;
-  transition: all 0.15s ease;
-  width: 20px;
-  height: 20px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  align-self: center; /* Centers button vertically within its grid cell */
-}
 
-.external-delete-btn:hover {
-  background: transparent;
-  color: var(--color-danger);
-  transform: scale(1.05);
-}
-
-.external-delete-btn:active {
-  background: transparent;
-  color: var(--color-danger-hover);
-  transform: scale(1.02);
-}
-
-.external-delete-btn svg {
-  pointer-events: none;
-}
-
-/* Approve buttons column (for pending view) */
-.approve-buttons-column {
-  display: grid;
-  grid-auto-rows: var(--row-height, 42px);
-  align-content: start;
-  position: relative;
-  width: 40px;
-  flex-shrink: 0;
-  padding-top: var(--header-offset, 80px);
-}
-
-.external-approve-btn {
-  background: transparent;
-  color: var(--color-success);
-  border: none;
-  padding: 0;
-  border-radius: 4px;
-  cursor: pointer;
-  transition: all 0.15s ease;
-  width: 24px;
-  height: 24px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  align-self: center;
-}
-
-.external-approve-btn:hover {
-  background: transparent;
-  color: var(--color-success-hover);
-  transform: scale(1.1);
-}
-
-.external-approve-btn:active {
-  background: transparent;
-  color: color-mix(in srgb, var(--color-success) 75%, black);
-  transform: scale(1.05);
-}
-
-.external-approve-btn svg {
-  pointer-events: none;
-}
 
 .delete-btn {
   background: var(--color-danger);

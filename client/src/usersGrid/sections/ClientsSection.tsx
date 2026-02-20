@@ -10,11 +10,11 @@ import ProfileCellRenderer from "../cells/ProfileCellRenderer";
 import ProfilePanel, { type ProfileSection } from "../components/ProfilePanel";
 import useProfileDocuments from "../hooks/useProfileDocuments";
 import useProfileNotes from "../hooks/useProfileNotes";
-import { measureGrid, type GridSizes } from "../utils/gridSizing";
 import { mapViewToStatus } from "../constants";
 import { apiGet, apiPost, apiPut, apiDelete } from "../../utils/api";
 import { formatProfileDate, normalizeText, toStatusBadge } from "../utils/profileUtils";
 import type { SectionProps } from "./SectionTypes";
+import { ApproveRestoreCellRenderer, DeleteArchiveCellRenderer } from "../cells/RowActionCellRenderers";
 
 const buildClientProfileSections = (client: UserInterface | null): ProfileSection[] => {
   if (!client) {
@@ -165,8 +165,6 @@ const ClientsSection: React.FC<SectionProps> = ({
   const [clientsData, setClientsData] = useState<UserInterface[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const gridRef = useRef<AgGridReact<UserInterface>>(null);
-  const wrapperRef = useRef<HTMLDivElement>(null);
-  const [sizes, setSizes] = useState<GridSizes>({ row: 42, headerOffset: 80 });
   const [selectedProfileId, setSelectedProfileId] = useState<number | null>(null);
   const documentManager = useProfileDocuments("clients", selectedProfileId);
   const notesManager = useProfileNotes("clients", selectedProfileId);
@@ -213,8 +211,6 @@ const ClientsSection: React.FC<SectionProps> = ({
       setSelectedProfileId(null);
     }
   }, [clientsData, selectedProfileId]);
-
-  const gridContext = useMemo(() => ({ openProfile: handleOpenProfile }), [handleOpenProfile]);
 
   const profileSections = useMemo(
     () => buildClientProfileSections(selectedProfile),
@@ -289,6 +285,20 @@ const ClientsSection: React.FC<SectionProps> = ({
     [clientsData, fetchClientsData]
   );
 
+  const gridContext = useMemo(
+    () => ({
+      openProfile: handleOpenProfile,
+      rowActions: {
+        viewMode,
+        entityAccusative: "klienta",
+        onApprove: handleApproveClient,
+        onRestore: handleRestoreClient,
+        onDelete: handleDeleteClient
+      }
+    }),
+    [handleApproveClient, handleDeleteClient, handleOpenProfile, handleRestoreClient, viewMode]
+  );
+
   const onClientsCellValueChanged = useCallback(
     async (params: any) => {
       try {
@@ -326,19 +336,6 @@ const ClientsSection: React.FC<SectionProps> = ({
   }, [fetchClientsData]);
 
   useEffect(() => {
-    const timer = setTimeout(() => {
-      setSizes(measureGrid(wrapperRef.current));
-    }, 50);
-    return () => clearTimeout(timer);
-  }, [clientsData]);
-
-  useEffect(() => {
-    const onResize = () => setSizes(measureGrid(wrapperRef.current));
-    window.addEventListener("resize", onResize);
-    return () => window.removeEventListener("resize", onResize);
-  }, []);
-
-  useEffect(() => {
     if (isActive) {
       onRegisterAddHandler(handleAddClient);
       onLoadingChange(isLoading);
@@ -351,8 +348,50 @@ const ClientsSection: React.FC<SectionProps> = ({
   }, [handleAddClient, isActive, isLoading, onLoadingChange, onRegisterAddHandler]);
 
   const clientsColDefs = useMemo<ColDef<UserInterface>[]>(
-    () => [
-      {
+    () => {
+      const cols: ColDef<UserInterface>[] = [];
+
+      if (viewMode === "pending" || viewMode === "archived") {
+        cols.push({
+          headerName: "",
+          colId: "approve",
+          pinned: "left",
+          width: 36,
+          minWidth: 36,
+          maxWidth: 36,
+          suppressMovable: true,
+          lockPosition: true,
+          sortable: false,
+          filter: false,
+          resizable: false,
+          editable: false,
+          menuTabs: [],
+          cellClass: "action-cell",
+          headerClass: "action-cell",
+          cellRenderer: ApproveRestoreCellRenderer
+        });
+      }
+
+      cols.push({
+        headerName: "",
+        colId: "delete",
+        pinned: "left",
+        width: 36,
+        minWidth: 36,
+        maxWidth: 36,
+        suppressMovable: true,
+        lockPosition: true,
+        sortable: false,
+        filter: false,
+        resizable: false,
+        editable: false,
+        menuTabs: [],
+        cellClass: "action-cell",
+        headerClass: "action-cell",
+        cellRenderer: DeleteArchiveCellRenderer
+      });
+
+      cols.push({
         headerName: "",
         colId: "profile",
         pinned: "left",
@@ -369,7 +408,9 @@ const ClientsSection: React.FC<SectionProps> = ({
         cellRenderer: ProfileCellRenderer,
         editable: false,
         menuTabs: []
-      },
+      });
+
+      cols.push(
       {
         field: "id",
         headerName: "ID",
@@ -437,87 +478,17 @@ const ClientsSection: React.FC<SectionProps> = ({
         minWidth: 120,
         cellRenderer: StatusCellRenderer
       }
-    ],
-    []
+      );
+
+      return cols;
+    },
+    [viewMode]
   );
 
   return (
     <>
       <div className="grid-container">
-        {viewMode === "pending" && (
-          <div
-            className="approve-buttons-column"
-            style={{
-              ["--row-height" as any]: `${sizes.row}px`,
-              ["--header-offset" as any]: `${sizes.headerOffset}px`
-            }}
-          >
-            {clientsData.map((client) => (
-              <button
-                key={client.id}
-                onClick={() => handleApproveClient(client.id as number)}
-                className="external-approve-btn"
-                title="Schválit klienta"
-              >
-                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-                  <path d="M20 6L9 17L4 12" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
-                </svg>
-              </button>
-            ))}
-          </div>
-        )}
-        {viewMode === "archived" && (
-          <div
-            className="approve-buttons-column"
-            style={{
-              ["--row-height" as any]: `${sizes.row}px`,
-              ["--header-offset" as any]: `${sizes.headerOffset}px`
-            }}
-          >
-            {clientsData.map((client) => (
-              <button
-                key={client.id}
-                onClick={() => handleRestoreClient(client.id as number)}
-                className="external-approve-btn"
-                title="Obnovit klienta"
-              >
-                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-                  <path d="M3 12a9 9 0 0 1 9-9 9.75 9.75 0 0 1 6.74 2.74L21 8" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
-                  <path d="M21 3v5h-5" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
-                  <path d="M21 12a9 9 0 0 1-9 9 9.75 9.75 0 0 1-6.74-2.74L3 16" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
-                  <path d="M3 21v-5h5" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
-                </svg>
-              </button>
-            ))}
-          </div>
-        )}
-        <div
-          className="delete-buttons-column"
-          style={{
-            ["--row-height" as any]: `${sizes.row}px`,
-            ["--header-offset" as any]: `${sizes.headerOffset}px`
-          }}
-        >
-          {clientsData.map((client) => (
-            <button
-              key={client.id}
-              onClick={() => handleDeleteClient(client.id as number)}
-              className="external-delete-btn"
-              title={
-                viewMode === "pending"
-                  ? "Zamítnout klienta"
-                  : viewMode === "archived"
-                  ? "Trvale smazat klienta"
-                  : "Archivovat klienta"
-              }
-            >
-              <svg width="14" height="14" viewBox="0 0 12 12" fill="none" xmlns="http://www.w3.org/2000/svg">
-                <path d="M9 3L3 9M3 3L9 9" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
-              </svg>
-            </button>
-          ))}
-        </div>
-        <div ref={wrapperRef} className="grid-wrapper ag-theme-quartz" style={{ height: 500 }}>
+        <div className="grid-wrapper ag-theme-quartz" style={{ height: 500 }}>
           <AgGridReact<UserInterface>
             ref={gridRef}
             rowData={clientsData}

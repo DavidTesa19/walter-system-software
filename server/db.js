@@ -870,6 +870,802 @@ export const db = {
       [id]
     );
     return result.rows[0] || null;
+  },
+
+  // =========================================================================
+  // ENTITY-COMMISSION OPERATIONS
+  // =========================================================================
+
+  /**
+   * Generate next entity ID (P001, K001, T001)
+   */
+  async getNextEntityId(entityType) {
+    if (!USE_POSTGRES) return null;
+
+    const prefixMap = { partner: 'P', client: 'K', tiper: 'T' };
+    const prefix = prefixMap[entityType];
+    if (!prefix) return null;
+
+    const client = await pool.connect();
+    try {
+      await client.query('BEGIN');
+      
+      // Get and increment counter
+      const { rows } = await client.query(
+        `INSERT INTO entity_counters (entity_type, next_number)
+         VALUES ($1, 1)
+         ON CONFLICT (entity_type) DO UPDATE SET next_number = entity_counters.next_number + 1
+         RETURNING next_number - 1 AS current_number`,
+        [entityType]
+      );
+      
+      // If this was an insert, current_number will be 0, we want 1
+      let num = rows[0]?.current_number ?? 0;
+      if (num === 0) {
+        const { rows: updated } = await client.query(
+          `UPDATE entity_counters SET next_number = 2 WHERE entity_type = $1 RETURNING next_number - 1 AS current_number`,
+          [entityType]
+        );
+        num = updated[0]?.current_number ?? 1;
+      }
+      
+      await client.query('COMMIT');
+      return `${prefix}${String(num).padStart(3, '0')}`;
+    } catch (error) {
+      await client.query('ROLLBACK');
+      throw error;
+    } finally {
+      client.release();
+    }
+  },
+
+  /**
+   * Get next commission number for an entity
+   */
+  async getNextCommissionNumber(entityTablePrefix, entityId) {
+    if (!USE_POSTGRES) return null;
+
+    const commissionTable = `${entityTablePrefix}_commissions`;
+    const { rows } = await pool.query(
+      `SELECT COUNT(*)::INT + 1 AS next_num FROM ${commissionTable} WHERE entity_code = $1`,
+      [entityId]
+    );
+    return rows[0]?.next_num ?? 1;
+  },
+
+  // =========================================================================
+  // PARTNER ENTITY OPERATIONS
+  // =========================================================================
+
+  async getPartnerEntities() {
+    if (!USE_POSTGRES) return null;
+    const { rows } = await pool.query('SELECT * FROM partner_entities ORDER BY entity_id');
+    return rows;
+  },
+
+  async getPartnerEntityById(id) {
+    if (!USE_POSTGRES) return null;
+    const { rows } = await pool.query('SELECT * FROM partner_entities WHERE id = $1', [id]);
+    return rows[0] || null;
+  },
+
+  async getPartnerEntityByCode(entityCode) {
+    if (!USE_POSTGRES) return null;
+    const { rows } = await pool.query('SELECT * FROM partner_entities WHERE entity_id = $1', [entityCode]);
+    return rows[0] || null;
+  },
+
+  async createPartnerEntity(data) {
+    if (!USE_POSTGRES) return null;
+
+    const entityId = await this.getNextEntityId('partner');
+    const { rows } = await pool.query(
+      `INSERT INTO partner_entities (entity_id, company_name, field, location, info, category, first_name, last_name, email, phone, website)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
+       RETURNING *`,
+      [entityId, data.company_name, data.field, data.location, data.info, data.category, data.first_name, data.last_name, data.email, data.phone, data.website]
+    );
+    return rows[0];
+  },
+
+  async updatePartnerEntity(id, data) {
+    if (!USE_POSTGRES) return null;
+
+    const fields = Object.keys(data).filter(k => k !== 'id' && k !== 'entity_id' && k !== 'created_at' && k !== 'updated_at');
+    if (fields.length === 0) return this.getPartnerEntityById(id);
+
+    const values = fields.map(f => data[f]);
+    const setClause = fields.map((f, i) => `${f} = $${i + 1}`).join(', ');
+
+    const { rows } = await pool.query(
+      `UPDATE partner_entities SET ${setClause}, updated_at = CURRENT_TIMESTAMP WHERE id = $${fields.length + 1} RETURNING *`,
+      [...values, id]
+    );
+    return rows[0] || null;
+  },
+
+  // =========================================================================
+  // PARTNER COMMISSION OPERATIONS
+  // =========================================================================
+
+  async getPartnerCommissions(filters = {}) {
+    if (!USE_POSTGRES) return null;
+
+    let query = `
+      SELECT 
+        c.*,
+        e.entity_id as e_entity_id,
+        e.company_name as e_company_name,
+        e.field as e_field,
+        e.location as e_location,
+        e.info as e_info,
+        e.category as e_category,
+        e.first_name as e_first_name,
+        e.last_name as e_last_name,
+        e.email as e_email,
+        e.phone as e_phone,
+        e.website as e_website
+      FROM partner_commissions c
+      JOIN partner_entities e ON c.entity_id = e.id
+    `;
+    
+    const values = [];
+    if (filters.status) {
+      query += ' WHERE c.status = $1';
+      values.push(filters.status);
+    }
+    query += ' ORDER BY c.commission_id';
+
+    const { rows } = await pool.query(query, values);
+    return rows.map(row => ({
+      // Commission data
+      id: row.id,
+      commission_id: row.commission_id,
+      entity_id: row.entity_id,
+      entity_code: row.entity_code,
+      status: row.status,
+      position: row.position,
+      budget: row.budget,
+      state: row.state,
+      assigned_to: row.assigned_to,
+      field: row.field,
+      service_position: row.service_position,
+      location: row.location,
+      info: row.info,
+      category: row.category,
+      deadline: row.deadline,
+      priority: row.priority,
+      phone: row.phone,
+      commission_value: row.commission_value,
+      is_tipped: row.is_tipped,
+      notes: row.notes,
+      created_at: row.created_at,
+      updated_at: row.updated_at,
+      // Entity data (prefixed)
+      entity_company_name: row.e_company_name,
+      entity_field: row.e_field,
+      entity_location: row.e_location,
+      entity_info: row.e_info,
+      entity_category: row.e_category,
+      entity_first_name: row.e_first_name,
+      entity_last_name: row.e_last_name,
+      entity_email: row.e_email,
+      entity_phone: row.e_phone,
+      entity_website: row.e_website
+    }));
+  },
+
+  async getPartnerCommissionById(id) {
+    if (!USE_POSTGRES) return null;
+
+    const { rows } = await pool.query(
+      `SELECT 
+        c.*,
+        e.entity_id as e_entity_id,
+        e.company_name as e_company_name,
+        e.field as e_field,
+        e.location as e_location,
+        e.info as e_info,
+        e.category as e_category,
+        e.first_name as e_first_name,
+        e.last_name as e_last_name,
+        e.email as e_email,
+        e.phone as e_phone,
+        e.website as e_website
+      FROM partner_commissions c
+      JOIN partner_entities e ON c.entity_id = e.id
+      WHERE c.id = $1`,
+      [id]
+    );
+    
+    if (!rows[0]) return null;
+    const row = rows[0];
+    
+    return {
+      id: row.id,
+      commission_id: row.commission_id,
+      entity_id: row.entity_id,
+      entity_code: row.entity_code,
+      status: row.status,
+      position: row.position,
+      budget: row.budget,
+      state: row.state,
+      assigned_to: row.assigned_to,
+      field: row.field,
+      service_position: row.service_position,
+      location: row.location,
+      info: row.info,
+      category: row.category,
+      deadline: row.deadline,
+      priority: row.priority,
+      phone: row.phone,
+      commission_value: row.commission_value,
+      is_tipped: row.is_tipped,
+      notes: row.notes,
+      created_at: row.created_at,
+      updated_at: row.updated_at,
+      entity_company_name: row.e_company_name,
+      entity_field: row.e_field,
+      entity_location: row.e_location,
+      entity_info: row.e_info,
+      entity_category: row.e_category,
+      entity_first_name: row.e_first_name,
+      entity_last_name: row.e_last_name,
+      entity_email: row.e_email,
+      entity_phone: row.e_phone,
+      entity_website: row.e_website
+    };
+  },
+
+  async createPartnerCommission(entityInternalId, data) {
+    if (!USE_POSTGRES) return null;
+
+    // Get entity code
+    const entity = await this.getPartnerEntityById(entityInternalId);
+    if (!entity) throw new Error('Partner entity not found');
+
+    const commissionNum = await this.getNextCommissionNumber('partner', entity.entity_id);
+    const commissionId = `${entity.entity_id}-${String(commissionNum).padStart(3, '0')}`;
+
+    const { rows } = await pool.query(
+      `INSERT INTO partner_commissions 
+        (commission_id, entity_id, entity_code, status, position, budget, state, assigned_to, field, service_position, location, info, category, deadline, priority, phone, commission_value, is_tipped, notes)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19)
+       RETURNING *`,
+      [commissionId, entityInternalId, entity.entity_id, data.status || 'pending', data.position, data.budget, data.state, data.assigned_to, data.field, data.service_position, data.location, data.info, data.category, data.deadline, data.priority, data.phone, data.commission_value, data.is_tipped || false, data.notes]
+    );
+    return rows[0];
+  },
+
+  async updatePartnerCommission(id, data) {
+    if (!USE_POSTGRES) return null;
+
+    const fields = Object.keys(data).filter(k => 
+      k !== 'id' && k !== 'commission_id' && k !== 'entity_id' && k !== 'entity_code' && 
+      k !== 'created_at' && k !== 'updated_at' && !k.startsWith('entity_')
+    );
+    if (fields.length === 0) return this.getPartnerCommissionById(id);
+
+    const values = fields.map(f => data[f]);
+    const setClause = fields.map((f, i) => `${f} = $${i + 1}`).join(', ');
+
+    await pool.query(
+      `UPDATE partner_commissions SET ${setClause}, updated_at = CURRENT_TIMESTAMP WHERE id = $${fields.length + 1}`,
+      [...values, id]
+    );
+    return this.getPartnerCommissionById(id);
+  },
+
+  async deletePartnerCommission(id) {
+    if (!USE_POSTGRES) return null;
+    const { rows } = await pool.query('DELETE FROM partner_commissions WHERE id = $1 RETURNING *', [id]);
+    return rows[0] || null;
+  },
+
+  // =========================================================================
+  // CLIENT ENTITY OPERATIONS
+  // =========================================================================
+
+  async getClientEntities() {
+    if (!USE_POSTGRES) return null;
+    const { rows } = await pool.query('SELECT * FROM client_entities ORDER BY entity_id');
+    return rows;
+  },
+
+  async getClientEntityById(id) {
+    if (!USE_POSTGRES) return null;
+    const { rows } = await pool.query('SELECT * FROM client_entities WHERE id = $1', [id]);
+    return rows[0] || null;
+  },
+
+  async getClientEntityByCode(entityCode) {
+    if (!USE_POSTGRES) return null;
+    const { rows } = await pool.query('SELECT * FROM client_entities WHERE entity_id = $1', [entityCode]);
+    return rows[0] || null;
+  },
+
+  async createClientEntity(data) {
+    if (!USE_POSTGRES) return null;
+
+    const entityId = await this.getNextEntityId('client');
+    const { rows } = await pool.query(
+      `INSERT INTO client_entities (entity_id, company_name, field, service, location, info, category, budget, first_name, last_name, email, phone, website)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)
+       RETURNING *`,
+      [entityId, data.company_name, data.field, data.service, data.location, data.info, data.category, data.budget, data.first_name, data.last_name, data.email, data.phone, data.website]
+    );
+    return rows[0];
+  },
+
+  async updateClientEntity(id, data) {
+    if (!USE_POSTGRES) return null;
+
+    const fields = Object.keys(data).filter(k => k !== 'id' && k !== 'entity_id' && k !== 'created_at' && k !== 'updated_at');
+    if (fields.length === 0) return this.getClientEntityById(id);
+
+    const values = fields.map(f => data[f]);
+    const setClause = fields.map((f, i) => `${f} = $${i + 1}`).join(', ');
+
+    const { rows } = await pool.query(
+      `UPDATE client_entities SET ${setClause}, updated_at = CURRENT_TIMESTAMP WHERE id = $${fields.length + 1} RETURNING *`,
+      [...values, id]
+    );
+    return rows[0] || null;
+  },
+
+  // =========================================================================
+  // CLIENT COMMISSION OPERATIONS
+  // =========================================================================
+
+  async getClientCommissions(filters = {}) {
+    if (!USE_POSTGRES) return null;
+
+    let query = `
+      SELECT 
+        c.*,
+        e.entity_id as e_entity_id,
+        e.company_name as e_company_name,
+        e.field as e_field,
+        e.service as e_service,
+        e.location as e_location,
+        e.info as e_info,
+        e.category as e_category,
+        e.budget as e_budget,
+        e.first_name as e_first_name,
+        e.last_name as e_last_name,
+        e.email as e_email,
+        e.phone as e_phone,
+        e.website as e_website
+      FROM client_commissions c
+      JOIN client_entities e ON c.entity_id = e.id
+    `;
+    
+    const values = [];
+    if (filters.status) {
+      query += ' WHERE c.status = $1';
+      values.push(filters.status);
+    }
+    query += ' ORDER BY c.commission_id';
+
+    const { rows } = await pool.query(query, values);
+    return rows.map(row => ({
+      id: row.id,
+      commission_id: row.commission_id,
+      entity_id: row.entity_id,
+      entity_code: row.entity_code,
+      status: row.status,
+      service: row.service,
+      budget: row.budget,
+      state: row.state,
+      assigned_to: row.assigned_to,
+      field: row.field,
+      location: row.location,
+      info: row.info,
+      category: row.category,
+      deadline: row.deadline,
+      priority: row.priority,
+      phone: row.phone,
+      commission_value: row.commission_value,
+      is_tipped: row.is_tipped,
+      notes: row.notes,
+      created_at: row.created_at,
+      updated_at: row.updated_at,
+      entity_company_name: row.e_company_name,
+      entity_field: row.e_field,
+      entity_service: row.e_service,
+      entity_location: row.e_location,
+      entity_info: row.e_info,
+      entity_category: row.e_category,
+      entity_budget: row.e_budget,
+      entity_first_name: row.e_first_name,
+      entity_last_name: row.e_last_name,
+      entity_email: row.e_email,
+      entity_phone: row.e_phone,
+      entity_website: row.e_website
+    }));
+  },
+
+  async getClientCommissionById(id) {
+    if (!USE_POSTGRES) return null;
+
+    const { rows } = await pool.query(
+      `SELECT 
+        c.*,
+        e.entity_id as e_entity_id,
+        e.company_name as e_company_name,
+        e.field as e_field,
+        e.service as e_service,
+        e.location as e_location,
+        e.info as e_info,
+        e.category as e_category,
+        e.budget as e_budget,
+        e.first_name as e_first_name,
+        e.last_name as e_last_name,
+        e.email as e_email,
+        e.phone as e_phone,
+        e.website as e_website
+      FROM client_commissions c
+      JOIN client_entities e ON c.entity_id = e.id
+      WHERE c.id = $1`,
+      [id]
+    );
+    
+    if (!rows[0]) return null;
+    const row = rows[0];
+    
+    return {
+      id: row.id,
+      commission_id: row.commission_id,
+      entity_id: row.entity_id,
+      entity_code: row.entity_code,
+      status: row.status,
+      service: row.service,
+      budget: row.budget,
+      state: row.state,
+      assigned_to: row.assigned_to,
+      field: row.field,
+      location: row.location,
+      info: row.info,
+      category: row.category,
+      deadline: row.deadline,
+      priority: row.priority,
+      phone: row.phone,
+      commission_value: row.commission_value,
+      is_tipped: row.is_tipped,
+      notes: row.notes,
+      created_at: row.created_at,
+      updated_at: row.updated_at,
+      entity_company_name: row.e_company_name,
+      entity_field: row.e_field,
+      entity_service: row.e_service,
+      entity_location: row.e_location,
+      entity_info: row.e_info,
+      entity_category: row.e_category,
+      entity_budget: row.e_budget,
+      entity_first_name: row.e_first_name,
+      entity_last_name: row.e_last_name,
+      entity_email: row.e_email,
+      entity_phone: row.e_phone,
+      entity_website: row.e_website
+    };
+  },
+
+  async createClientCommission(entityInternalId, data) {
+    if (!USE_POSTGRES) return null;
+
+    const entity = await this.getClientEntityById(entityInternalId);
+    if (!entity) throw new Error('Client entity not found');
+
+    const commissionNum = await this.getNextCommissionNumber('client', entity.entity_id);
+    const commissionId = `${entity.entity_id}-${String(commissionNum).padStart(3, '0')}`;
+
+    const { rows } = await pool.query(
+      `INSERT INTO client_commissions 
+        (commission_id, entity_id, entity_code, status, service, budget, state, assigned_to, field, location, info, category, deadline, priority, phone, commission_value, is_tipped, notes)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18)
+       RETURNING *`,
+      [commissionId, entityInternalId, entity.entity_id, data.status || 'pending', data.service, data.budget, data.state, data.assigned_to, data.field, data.location, data.info, data.category, data.deadline, data.priority, data.phone, data.commission_value, data.is_tipped || false, data.notes]
+    );
+    return rows[0];
+  },
+
+  async updateClientCommission(id, data) {
+    if (!USE_POSTGRES) return null;
+
+    const fields = Object.keys(data).filter(k => 
+      k !== 'id' && k !== 'commission_id' && k !== 'entity_id' && k !== 'entity_code' && 
+      k !== 'created_at' && k !== 'updated_at' && !k.startsWith('entity_')
+    );
+    if (fields.length === 0) return this.getClientCommissionById(id);
+
+    const values = fields.map(f => data[f]);
+    const setClause = fields.map((f, i) => `${f} = $${i + 1}`).join(', ');
+
+    await pool.query(
+      `UPDATE client_commissions SET ${setClause}, updated_at = CURRENT_TIMESTAMP WHERE id = $${fields.length + 1}`,
+      [...values, id]
+    );
+    return this.getClientCommissionById(id);
+  },
+
+  async deleteClientCommission(id) {
+    if (!USE_POSTGRES) return null;
+    const { rows } = await pool.query('DELETE FROM client_commissions WHERE id = $1 RETURNING *', [id]);
+    return rows[0] || null;
+  },
+
+  // =========================================================================
+  // TIPER ENTITY OPERATIONS
+  // =========================================================================
+
+  async getTiperEntities() {
+    if (!USE_POSTGRES) return null;
+    const { rows } = await pool.query('SELECT * FROM tiper_entities ORDER BY entity_id');
+    return rows;
+  },
+
+  async getTiperEntityById(id) {
+    if (!USE_POSTGRES) return null;
+    const { rows } = await pool.query('SELECT * FROM tiper_entities WHERE id = $1', [id]);
+    return rows[0] || null;
+  },
+
+  async getTiperEntityByCode(entityCode) {
+    if (!USE_POSTGRES) return null;
+    const { rows } = await pool.query('SELECT * FROM tiper_entities WHERE entity_id = $1', [entityCode]);
+    return rows[0] || null;
+  },
+
+  async createTiperEntity(data) {
+    if (!USE_POSTGRES) return null;
+
+    const entityId = await this.getNextEntityId('tiper');
+    const { rows } = await pool.query(
+      `INSERT INTO tiper_entities (entity_id, first_name, last_name, field, location, info, category, email, phone, website)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
+       RETURNING *`,
+      [entityId, data.first_name, data.last_name, data.field, data.location, data.info, data.category, data.email, data.phone, data.website]
+    );
+    return rows[0];
+  },
+
+  async updateTiperEntity(id, data) {
+    if (!USE_POSTGRES) return null;
+
+    const fields = Object.keys(data).filter(k => k !== 'id' && k !== 'entity_id' && k !== 'created_at' && k !== 'updated_at');
+    if (fields.length === 0) return this.getTiperEntityById(id);
+
+    const values = fields.map(f => data[f]);
+    const setClause = fields.map((f, i) => `${f} = $${i + 1}`).join(', ');
+
+    const { rows } = await pool.query(
+      `UPDATE tiper_entities SET ${setClause}, updated_at = CURRENT_TIMESTAMP WHERE id = $${fields.length + 1} RETURNING *`,
+      [...values, id]
+    );
+    return rows[0] || null;
+  },
+
+  // =========================================================================
+  // TIPER COMMISSION OPERATIONS
+  // =========================================================================
+
+  async getTiperCommissions(filters = {}) {
+    if (!USE_POSTGRES) return null;
+
+    let query = `
+      SELECT 
+        c.*,
+        e.entity_id as e_entity_id,
+        e.first_name as e_first_name,
+        e.last_name as e_last_name,
+        e.field as e_field,
+        e.location as e_location,
+        e.info as e_info,
+        e.category as e_category,
+        e.email as e_email,
+        e.phone as e_phone,
+        e.website as e_website
+      FROM tiper_commissions c
+      JOIN tiper_entities e ON c.entity_id = e.id
+    `;
+    
+    const values = [];
+    if (filters.status) {
+      query += ' WHERE c.status = $1';
+      values.push(filters.status);
+    }
+    query += ' ORDER BY c.commission_id';
+
+    const { rows } = await pool.query(query, values);
+    return rows.map(row => ({
+      id: row.id,
+      commission_id: row.commission_id,
+      entity_id: row.entity_id,
+      entity_code: row.entity_code,
+      status: row.status,
+      linked_entity_type: row.linked_entity_type,
+      linked_commission_id: row.linked_commission_id,
+      commission_value: row.commission_value,
+      created_at: row.created_at,
+      updated_at: row.updated_at,
+      entity_first_name: row.e_first_name,
+      entity_last_name: row.e_last_name,
+      entity_field: row.e_field,
+      entity_location: row.e_location,
+      entity_info: row.e_info,
+      entity_category: row.e_category,
+      entity_email: row.e_email,
+      entity_phone: row.e_phone,
+      entity_website: row.e_website
+    }));
+  },
+
+  async getTiperCommissionById(id) {
+    if (!USE_POSTGRES) return null;
+
+    const { rows } = await pool.query(
+      `SELECT 
+        c.*,
+        e.entity_id as e_entity_id,
+        e.first_name as e_first_name,
+        e.last_name as e_last_name,
+        e.field as e_field,
+        e.location as e_location,
+        e.info as e_info,
+        e.category as e_category,
+        e.email as e_email,
+        e.phone as e_phone,
+        e.website as e_website
+      FROM tiper_commissions c
+      JOIN tiper_entities e ON c.entity_id = e.id
+      WHERE c.id = $1`,
+      [id]
+    );
+    
+    if (!rows[0]) return null;
+    const row = rows[0];
+    
+    return {
+      id: row.id,
+      commission_id: row.commission_id,
+      entity_id: row.entity_id,
+      entity_code: row.entity_code,
+      status: row.status,
+      linked_entity_type: row.linked_entity_type,
+      linked_commission_id: row.linked_commission_id,
+      commission_value: row.commission_value,
+      created_at: row.created_at,
+      updated_at: row.updated_at,
+      entity_first_name: row.e_first_name,
+      entity_last_name: row.e_last_name,
+      entity_field: row.e_field,
+      entity_location: row.e_location,
+      entity_info: row.e_info,
+      entity_category: row.e_category,
+      entity_email: row.e_email,
+      entity_phone: row.e_phone,
+      entity_website: row.e_website
+    };
+  },
+
+  async createTiperCommission(entityInternalId, data) {
+    if (!USE_POSTGRES) return null;
+
+    const entity = await this.getTiperEntityById(entityInternalId);
+    if (!entity) throw new Error('Tiper entity not found');
+
+    const commissionNum = await this.getNextCommissionNumber('tiper', entity.entity_id);
+    const commissionId = `${entity.entity_id}-${String(commissionNum).padStart(3, '0')}`;
+
+    const { rows } = await pool.query(
+      `INSERT INTO tiper_commissions 
+        (commission_id, entity_id, entity_code, status, linked_entity_type, linked_commission_id, commission_value)
+       VALUES ($1, $2, $3, $4, $5, $6, $7)
+       RETURNING *`,
+      [commissionId, entityInternalId, entity.entity_id, data.status || 'pending', data.linked_entity_type, data.linked_commission_id, data.commission_value]
+    );
+    return rows[0];
+  },
+
+  async updateTiperCommission(id, data) {
+    if (!USE_POSTGRES) return null;
+
+    const fields = Object.keys(data).filter(k => 
+      k !== 'id' && k !== 'commission_id' && k !== 'entity_id' && k !== 'entity_code' && 
+      k !== 'created_at' && k !== 'updated_at' && !k.startsWith('entity_')
+    );
+    if (fields.length === 0) return this.getTiperCommissionById(id);
+
+    const values = fields.map(f => data[f]);
+    const setClause = fields.map((f, i) => `${f} = $${i + 1}`).join(', ');
+
+    await pool.query(
+      `UPDATE tiper_commissions SET ${setClause}, updated_at = CURRENT_TIMESTAMP WHERE id = $${fields.length + 1}`,
+      [...values, id]
+    );
+    return this.getTiperCommissionById(id);
+  },
+
+  async deleteTiperCommission(id) {
+    if (!USE_POSTGRES) return null;
+    const { rows } = await pool.query('DELETE FROM tiper_commissions WHERE id = $1 RETURNING *', [id]);
+    return rows[0] || null;
+  },
+
+  // =========================================================================
+  // COMBINED ENTITY + COMMISSION OPERATIONS
+  // =========================================================================
+
+  /**
+   * Create a new partner with their first commission
+   */
+  async createPartnerWithCommission(entityData, commissionData) {
+    if (!USE_POSTGRES) return null;
+
+    const client = await pool.connect();
+    try {
+      await client.query('BEGIN');
+
+      // Create entity
+      const entity = await this.createPartnerEntity(entityData);
+
+      // Create first commission
+      const commission = await this.createPartnerCommission(entity.id, commissionData);
+
+      await client.query('COMMIT');
+      return { entity, commission };
+    } catch (error) {
+      await client.query('ROLLBACK');
+      throw error;
+    } finally {
+      client.release();
+    }
+  },
+
+  /**
+   * Create a new client with their first commission
+   */
+  async createClientWithCommission(entityData, commissionData) {
+    if (!USE_POSTGRES) return null;
+
+    const client = await pool.connect();
+    try {
+      await client.query('BEGIN');
+
+      const entity = await this.createClientEntity(entityData);
+      const commission = await this.createClientCommission(entity.id, commissionData);
+
+      await client.query('COMMIT');
+      return { entity, commission };
+    } catch (error) {
+      await client.query('ROLLBACK');
+      throw error;
+    } finally {
+      client.release();
+    }
+  },
+
+  /**
+   * Create a new tiper with their first commission
+   */
+  async createTiperWithCommission(entityData, commissionData) {
+    if (!USE_POSTGRES) return null;
+
+    const client = await pool.connect();
+    try {
+      await client.query('BEGIN');
+
+      const entity = await this.createTiperEntity(entityData);
+      const commission = await this.createTiperCommission(entity.id, commissionData);
+
+      await client.query('COMMIT');
+      return { entity, commission };
+    } catch (error) {
+      await client.query('ROLLBACK');
+      throw error;
+    } finally {
+      client.release();
+    }
   }
 };
 

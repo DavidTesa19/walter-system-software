@@ -5,7 +5,6 @@ import type { UserInterface } from "../user.interface";
 import FieldCellRenderer from "../cells/FieldCellRenderer";
 import ProfileCellRenderer from "../cells/ProfileCellRenderer";
 import ProfilePanel from "../components/ProfilePanel";
-import { measureGrid, type GridSizes } from "../utils/gridSizing";
 import { mapViewToStatus } from "../constants";
 import { apiGet, apiPost, apiPut, apiDelete } from "../../utils/api";
 import { formatProfileDate, normalizeText, toStatusBadge } from "../utils/profileUtils";
@@ -13,6 +12,7 @@ import type { ProfileSection } from "../types/profile";
 import type { SectionProps } from "./SectionTypes";
 import useProfileDocuments from "../hooks/useProfileDocuments";
 import useProfileNotes from "../hooks/useProfileNotes";
+import { ApproveRestoreCellRenderer, DeleteArchiveCellRenderer } from "../cells/RowActionCellRenderers";
 
 const buildTiperSections = (tiper: UserInterface | null): ProfileSection[] => {
   if (!tiper) {
@@ -166,8 +166,6 @@ const TipersSection: React.FC<SectionProps> = ({
   const [tipersData, setTipersData] = useState<UserInterface[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const gridRef = useRef<AgGridReact<UserInterface>>(null);
-  const wrapperRef = useRef<HTMLDivElement>(null);
-  const [sizes, setSizes] = useState<GridSizes>({ row: 42, headerOffset: 80 });
   const [selectedId, setSelectedId] = useState<number | null>(null);
   const documentManager = useProfileDocuments("tipers", selectedId);
   const notesManager = useProfileNotes("tipers", selectedId);
@@ -214,8 +212,6 @@ const TipersSection: React.FC<SectionProps> = ({
       setSelectedId(null);
     }
   }, [selectedId, tipersData]);
-
-  const gridContext = useMemo(() => ({ openProfile }), [openProfile]);
 
   const profileSections = useMemo(() => buildTiperSections(selectedTiper), [selectedTiper]);
   const profileBadge = useMemo(() => toStatusBadge(selectedTiper?.status), [selectedTiper]);
@@ -287,6 +283,20 @@ const TipersSection: React.FC<SectionProps> = ({
     [fetchTipersData, tipersData]
   );
 
+  const gridContext = useMemo(
+    () => ({
+      openProfile,
+      rowActions: {
+        viewMode,
+        entityAccusative: "tipaře",
+        onApprove: handleApproveTiper,
+        onRestore: handleRestoreTiper,
+        onDelete: handleDeleteTiper
+      }
+    }),
+    [handleApproveTiper, handleDeleteTiper, handleRestoreTiper, openProfile, viewMode]
+  );
+
   const onTipersCellValueChanged = useCallback(
     async (params: any) => {
       try {
@@ -324,19 +334,6 @@ const TipersSection: React.FC<SectionProps> = ({
   }, [fetchTipersData]);
 
   useEffect(() => {
-    const timer = setTimeout(() => {
-      setSizes(measureGrid(wrapperRef.current));
-    }, 50);
-    return () => clearTimeout(timer);
-  }, [tipersData]);
-
-  useEffect(() => {
-    const onResize = () => setSizes(measureGrid(wrapperRef.current));
-    window.addEventListener("resize", onResize);
-    return () => window.removeEventListener("resize", onResize);
-  }, []);
-
-  useEffect(() => {
     if (isActive) {
       onRegisterAddHandler(handleAddTiper);
       onLoadingChange(isLoading);
@@ -349,8 +346,50 @@ const TipersSection: React.FC<SectionProps> = ({
   }, [handleAddTiper, isActive, isLoading, onLoadingChange, onRegisterAddHandler]);
 
   const tipersColDefs = useMemo<ColDef<UserInterface>[]>(
-    () => [
-      {
+    () => {
+      const cols: ColDef<UserInterface>[] = [];
+
+      if (viewMode === "pending" || viewMode === "archived") {
+        cols.push({
+          headerName: "",
+          colId: "approve",
+          pinned: "left",
+          width: 36,
+          minWidth: 36,
+          maxWidth: 36,
+          suppressMovable: true,
+          lockPosition: true,
+          sortable: false,
+          filter: false,
+          resizable: false,
+          editable: false,
+          menuTabs: [],
+          cellClass: "action-cell",
+          headerClass: "action-cell",
+          cellRenderer: ApproveRestoreCellRenderer
+        });
+      }
+
+      cols.push({
+        headerName: "",
+        colId: "delete",
+        pinned: "left",
+        width: 36,
+        minWidth: 36,
+        maxWidth: 36,
+        suppressMovable: true,
+        lockPosition: true,
+        sortable: false,
+        filter: false,
+        resizable: false,
+        editable: false,
+        menuTabs: [],
+        cellClass: "action-cell",
+        headerClass: "action-cell",
+        cellRenderer: DeleteArchiveCellRenderer
+      });
+
+      cols.push({
         headerName: "",
         colId: "profile",
         pinned: "left",
@@ -367,7 +406,9 @@ const TipersSection: React.FC<SectionProps> = ({
         cellRenderer: ProfileCellRenderer,
         editable: false,
         menuTabs: []
-      },
+      });
+
+      cols.push(
       {
         field: "id",
         headerName: "ID",
@@ -424,87 +465,17 @@ const TipersSection: React.FC<SectionProps> = ({
         flex: 1,
         minWidth: 120
       }
-    ],
-    []
+      );
+
+      return cols;
+    },
+    [viewMode]
   );
 
   return (
     <>
       <div className="grid-container">
-        {viewMode === "pending" && (
-          <div
-            className="approve-buttons-column"
-            style={{
-              ["--row-height" as any]: `${sizes.row}px`,
-              ["--header-offset" as any]: `${sizes.headerOffset}px`
-            }}
-          >
-            {tipersData.map((tiper) => (
-              <button
-                key={tiper.id}
-                onClick={() => handleApproveTiper(tiper.id as number)}
-                className="external-approve-btn"
-                title="Schválit tipaře"
-              >
-                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-                  <path d="M20 6L9 17L4 12" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
-                </svg>
-              </button>
-            ))}
-          </div>
-        )}
-        {viewMode === "archived" && (
-          <div
-            className="approve-buttons-column"
-            style={{
-              ["--row-height" as any]: `${sizes.row}px`,
-              ["--header-offset" as any]: `${sizes.headerOffset}px`
-            }}
-          >
-            {tipersData.map((tiper) => (
-              <button
-                key={tiper.id}
-                onClick={() => handleRestoreTiper(tiper.id as number)}
-                className="external-approve-btn"
-                title="Obnovit tipaře"
-              >
-                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-                  <path d="M3 12a9 9 0 0 1 9-9 9.75 9.75 0 0 1 6.74 2.74L21 8" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
-                  <path d="M21 3v5h-5" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
-                  <path d="M21 12a9 9 0 0 1-9 9 9.75 9.75 0 0 1-6.74-2.74L3 16" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
-                  <path d="M3 21v-5h5" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
-                </svg>
-              </button>
-            ))}
-          </div>
-        )}
-        <div
-          className="delete-buttons-column"
-          style={{
-            ["--row-height" as any]: `${sizes.row}px`,
-            ["--header-offset" as any]: `${sizes.headerOffset}px`
-          }}
-        >
-          {tipersData.map((tiper) => (
-            <button
-              key={tiper.id}
-              onClick={() => handleDeleteTiper(tiper.id as number)}
-              className="external-delete-btn"
-              title={
-                viewMode === "pending"
-                  ? "Zamítnout tipaře"
-                  : viewMode === "archived"
-                  ? "Trvale smazat tipaře"
-                  : "Archivovat tipaře"
-              }
-            >
-              <svg width="14" height="14" viewBox="0 0 12 12" fill="none" xmlns="http://www.w3.org/2000/svg">
-                <path d="M9 3L3 9M3 3L9 9" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
-              </svg>
-            </button>
-          ))}
-        </div>
-        <div ref={wrapperRef} className="grid-wrapper ag-theme-quartz" style={{ height: 500 }}>
+        <div className="grid-wrapper ag-theme-quartz" style={{ height: 500 }}>
           <AgGridReact<UserInterface>
             ref={gridRef}
             rowData={tipersData}
