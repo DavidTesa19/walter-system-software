@@ -52,10 +52,8 @@ export const ClockTimePicker: React.FC<ClockTimePickerProps> = ({
     dist: number,
     isHours: boolean
   ): number => {
-    let degrees = angle - 90; // Rotate so 0 is at 3 o'clock (standard trig) -> we want 0 at 12 o'clock (top)
-    // Actually, atan2 returns angle relative to +X axis (3 o'clock).
+    // atan2 returns angle relative to +X axis (3 o'clock).
     // Our clock: 12 is at -90deg (top).
-    // So angle from top = atan2(y, x) + 90deg? No.
     // Let's stick to standard: 0 deg = 3 o'clock.
     // 12 o'clock = 270 deg (-90).
     
@@ -188,8 +186,7 @@ export const ClockTimePicker: React.FC<ClockTimePickerProps> = ({
     const nums = [];
     if (mode === 'h') {
       // Outer: 00, 13..23
-      const outerVals = [12, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11]; // Positions 
-      // But values are: 12->00, 1->13, 2->14 ..
+      // Positions: outer 00,13..23 / inner 12,01..11
       
       // Let's loop 0..23
       for (let i = 0; i < 24; i++) {
