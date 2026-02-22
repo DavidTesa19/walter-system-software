@@ -9,6 +9,7 @@ import * as cheerio from "cheerio";
 import multer from "multer";
 import bcrypt from "bcryptjs";
 import jwt from "jsonwebtoken";
+import crypto from "crypto";
 import * as entityCommissionJson from "./entity-commission-json.js";
 
 // Load environment variables
@@ -1681,7 +1682,6 @@ app.get("/documents/:documentId/download", authenticateToken, (req, res) => {
 });
 
 // --- Public Document Viewing (for Office Online Viewer) ---
-const crypto = require('crypto');
 const publicDocumentTokens = new Map(); // token -> { documentId, expiresAt }
 
 // Clean up expired tokens periodically
