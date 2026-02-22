@@ -99,3 +99,55 @@
 [data-theme="dark"] .doc-viewer-content {
   background-color: #121212;
 }
+
+/* docx-preview container styling */
+.docx-container {
+  padding: 0;
+}
+
+.docx-container .docx-preview-wrapper {
+  padding: 20px;
+}
+
+.docx-container .docx-wrapper {
+  background: #f5f5f5 !important;
+  padding: 20px;
+}
+
+.docx-container .docx-wrapper > section.docx {
+  background: white;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+  margin: 0 auto 20px auto;
+  padding: 40px 60px;
+}
+
+[data-theme="dark"] .docx-container {
+  background-color: #1a1a1a;
+}
+
+[data-theme="dark"] .docx-container .docx-wrapper {
+  background: #1a1a1a !important;
+}
+
+[data-theme="dark"] .docx-container .docx-wrapper > section.docx {
+  background: #252525;
+  color: #e0e0e0;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
+}
+
+/* Text file viewer */
+.doc-viewer-text {
+  width: 100%;
+  height: 100%;
+  margin: 0;
+  padding: 24px;
+  overflow: auto;
+  font-family: 'Courier New', Courier, monospace;
+  font-size: 14px;
+  line-height: 1.6;
+  white-space: pre-wrap;
+  word-wrap: break-word;
+  color: var(--text-color, #333);
+  background: var(--surface-color, #fff);
+  box-sizing: border-box;
+}

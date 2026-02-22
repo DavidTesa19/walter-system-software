@@ -1,9 +1,11 @@
 const VIEWABLE_EXTENSIONS = new Set([
-  // Documents (PDFs are native, Office files use Microsoft Viewer via public token)
-  'pdf', 'doc', 'docx', 'xls', 'xlsx', 'ppt', 'pptx', 'csv', 'txt',
-  // Images
-  'png', 'jpg', 'jpeg', 'gif', 'webp', 'svg', 'bmp', 'tiff',
-  // Media
+  // Documents (PDF = native iframe, DOCX = docx-preview client-side)
+  'pdf', 'docx',
+  // Text-based
+  'txt', 'csv', 'json', 'xml', 'md', 'log',
+  // Images (native browser rendering)
+  'png', 'jpg', 'jpeg', 'gif', 'webp', 'svg', 'bmp',
+  // Video (native browser rendering)
   'mp4', 'webm'
 ]);
 
