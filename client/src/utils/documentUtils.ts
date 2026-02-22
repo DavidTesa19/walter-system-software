@@ -1,10 +1,10 @@
 const VIEWABLE_EXTENSIONS = new Set([
-  // Documents
-  'pdf', 'doc', 'docx', 'xls', 'xlsx', 'csv', 'txt', 'json', 'xml',
+  // Documents (PDFs are native, Office files use Microsoft Viewer via public token)
+  'pdf', 'doc', 'docx', 'xls', 'xlsx', 'ppt', 'pptx', 'csv', 'txt',
   // Images
   'png', 'jpg', 'jpeg', 'gif', 'webp', 'svg', 'bmp', 'tiff',
   // Media
-  'mp4', 'webm', 'mp3', 'wav'
+  'mp4', 'webm'
 ]);
 
 export const isDocumentViewable = (filename: string): boolean => {

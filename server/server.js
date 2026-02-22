@@ -1680,6 +1680,61 @@ app.get("/documents/:documentId/download", authenticateToken, (req, res) => {
   }
 });
 
+// --- Public Document Viewing (for Office Online Viewer) ---
+const crypto = require('crypto');
+const publicDocumentTokens = new Map(); // token -> { documentId, expiresAt }
+
+// Clean up expired tokens periodically
+setInterval(() => {
+  const now = Date.now();
+  for (const [token, info] of publicDocumentTokens.entries()) {
+    if (info.expiresAt < now) {
+      publicDocumentTokens.delete(token);
+    }
+  }
+}, 60 * 60 * 1000);
+
+app.get("/documents/:documentId/public-token", authenticateToken, (req, res) => {
+  const documentId = Number(req.params.documentId);
+  if (Number.isNaN(documentId)) {
+    return res.status(400).json({ error: "Invalid document id" });
+  }
+
+  const token = crypto.randomBytes(32).toString('hex');
+  publicDocumentTokens.set(token, {
+    documentId,
+    expiresAt: Date.now() + 60 * 60 * 1000 // 1 hour
+  });
+
+  res.json({ token });
+});
+
+app.get("/documents/public/:token", (req, res) => {
+  const token = req.params.token;
+  const info = publicDocumentTokens.get(token);
+
+  if (!info || info.expiresAt < Date.now()) {
+    return res.status(403).send("Invalid or expired token");
+  }
+
+  try {
+    const store = readDb();
+    const doc = findDocumentInStore(store, info.documentId);
+    if (!doc) {
+      return res.status(404).send("Document not found");
+    }
+
+    const buffer = Buffer.from(doc.data || "", "base64");
+    res.setHeader("Content-Type", doc.mimeType || "application/octet-stream");
+    res.setHeader("Content-Length", buffer.length);
+    res.setHeader("Content-Disposition", `inline; filename="${encodeURIComponent(doc.filename)}"`);
+    return res.send(buffer);
+  } catch (error) {
+    console.error("Error serving public document:", error);
+    res.status(500).send("Failed to serve document");
+  }
+});
+
 // --- Notes Endpoints ---
 
 app.get("/:entity/:id/notes", authenticateToken, (req, res) => {
