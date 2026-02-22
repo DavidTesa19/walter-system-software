@@ -1,6 +1,8 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { ProfileBadge, ProfileDocument, ProfileSection, ProfileNote } from "../types/profile";
-import { apiDownload, apiView } from "../../utils/api";
+import { apiDownload } from "../../utils/api";
+import { isDocumentViewable } from "../../utils/documentUtils";
+import DocumentViewerModal from "../../components/DocumentViewerModal";
 import "./ProfilePanel.css";
 
 interface ProfileMetaItem {
@@ -73,6 +75,7 @@ const ProfilePanel: React.FC<ProfilePanelProps> = ({
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [newNote, setNewNote] = useState("");
   const [showArchivedDocs, setShowArchivedDocs] = useState(false);
+  const [viewingDocument, setViewingDocument] = useState<{ id: number; filename: string } | null>(null);
 
   const visibleSections = useMemo(() => {
     return sections
@@ -264,11 +267,11 @@ const ProfilePanel: React.FC<ProfilePanelProps> = ({
                               </span>
                             </div>
                             <div className="profile-document__actions">
-                              {documentDownloadBaseUrl ? (
+                              {documentDownloadBaseUrl && isDocumentViewable(doc.filename) ? (
                                 <button
                                   type="button"
                                   className="profile-document__action"
-                                  onClick={() => apiView(`/documents/${doc.id}/download`)}
+                                  onClick={() => setViewingDocument({ id: doc.id, filename: doc.filename })}
                                 >
                                   Zobrazit
                                 </button>
@@ -330,11 +333,11 @@ const ProfilePanel: React.FC<ProfilePanelProps> = ({
                                   </span>
                                 </div>
                                 <div className="profile-document__actions">
-                                  {documentDownloadBaseUrl ? (
+                                  {documentDownloadBaseUrl && isDocumentViewable(doc.filename) ? (
                                     <button
                                       type="button"
                                       className="profile-document__action"
-                                      onClick={() => apiView(`/documents/${doc.id}/download`)}
+                                      onClick={() => setViewingDocument({ id: doc.id, filename: doc.filename })}
                                     >
                                       Zobrazit
                                     </button>
@@ -439,6 +442,14 @@ const ProfilePanel: React.FC<ProfilePanelProps> = ({
           </div>
         )}
       </div>
+
+      {viewingDocument && (
+        <DocumentViewerModal
+          documentId={viewingDocument.id}
+          filename={viewingDocument.filename}
+          onClose={() => setViewingDocument(null)}
+        />
+      )}
     </div>
   );
 };

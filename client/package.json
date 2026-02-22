@@ -10,6 +10,7 @@
     "preview": "vite preview"
   },
   "dependencies": {
+    "@cyntler/react-doc-viewer": "^1.17.1",
     "@fullcalendar/daygrid": "^6.1.8",
     "@fullcalendar/interaction": "^6.1.8",
     "@fullcalendar/list": "^6.1.8",
@@ -27,7 +28,8 @@
     "react-markdown": "^10.1.0",
     "react-syntax-highlighter": "^16.1.0",
     "remark-gfm": "^4.0.1",
-    "rrule": "^2.7.1"
+    "rrule": "^2.7.1",
+    "styled-components": "^6.3.11"
   },
   "devDependencies": {
     "@eslint/js": "^9.36.0",

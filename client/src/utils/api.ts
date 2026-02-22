@@ -187,6 +187,37 @@ export const apiDownload = async (endpoint: string, filename: string): Promise<v
 };
 
 /**
+ * Fetch file as Blob with authentication
+ */
+export const apiGetBlob = async (endpoint: string): Promise<Blob> => {
+  const url = endpoint.startsWith('http') ? endpoint : `${API_BASE}${endpoint}`;
+  const token = getAuthToken();
+
+  const headers: Record<string, string> = {};
+  if (token) {
+    headers['Authorization'] = `Bearer ${token}`;
+  }
+
+  const response = await fetch(url, {
+    method: 'GET',
+    headers,
+  });
+
+  if (response.status === 401 || response.status === 403) {
+    localStorage.removeItem('walterUser');
+    localStorage.removeItem('walterSessionStart');
+    window.location.reload();
+    throw new Error('Session expired. Please log in again.');
+  }
+
+  if (!response.ok) {
+    throw new Error(`Fetch failed with status ${response.status}`);
+  }
+
+  return response.blob();
+};
+
+/**
  * View file in a new browser tab with authentication - fetches as blob and opens inline
  */
 export const apiView = async (endpoint: string): Promise<void> => {

@@ -1,6 +1,8 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { ProfileDocument, ProfileNote } from "../types/profile";
-import { apiDownload, apiView } from "../../utils/api";
+import { apiDownload } from "../../utils/api";
+import { isDocumentViewable } from "../../utils/documentUtils";
+import DocumentViewerModal from "../../components/DocumentViewerModal";
 import "./EntityCommissionProfilePanel.css";
 
 // =============================================================================
@@ -311,6 +313,7 @@ const EntityCommissionProfilePanel: React.FC<EntityCommissionProfilePanelProps> 
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [newNote, setNewNote] = useState("");
   const [showArchivedDocs, setShowArchivedDocs] = useState(false);
+  const [viewingDocument, setViewingDocument] = useState<{ id: number; filename: string } | null>(null);
 
   // Entity type labels
   const entityTypeLabels = {
@@ -518,11 +521,11 @@ const EntityCommissionProfilePanel: React.FC<EntityCommissionProfilePanelProps> 
                             </span>
                           </div>
                           <div className="ec-document-actions">
-                            {documentDownloadBaseUrl && (
+                            {documentDownloadBaseUrl && isDocumentViewable(doc.filename) && (
                               <button
                                 type="button"
                                 className="ec-doc-action"
-                                onClick={() => apiView(`/documents/${doc.id}/download`)}
+                                onClick={() => setViewingDocument({ id: doc.id, filename: doc.filename })}
                               >
                                 Zobrazit
                               </button>
@@ -584,11 +587,11 @@ const EntityCommissionProfilePanel: React.FC<EntityCommissionProfilePanelProps> 
                                 </span>
                               </div>
                               <div className="ec-document-actions">
-                                {documentDownloadBaseUrl && (
+                                {documentDownloadBaseUrl && isDocumentViewable(doc.filename) && (
                                   <button
                                     type="button"
                                     className="ec-doc-action"
-                                    onClick={() => apiView(`/documents/${doc.id}/download`)}
+                                    onClick={() => setViewingDocument({ id: doc.id, filename: doc.filename })}
                                   >
                                     Zobrazit
                                   </button>
@@ -685,6 +688,14 @@ const EntityCommissionProfilePanel: React.FC<EntityCommissionProfilePanelProps> 
           )}
         </div>
       </div>
+
+      {viewingDocument && (
+        <DocumentViewerModal
+          documentId={viewingDocument.id}
+          filename={viewingDocument.filename}
+          onClose={() => setViewingDocument(null)}
+        />
+      )}
     </div>
   );
 };
