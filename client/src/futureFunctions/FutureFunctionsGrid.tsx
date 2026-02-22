@@ -4,35 +4,31 @@ import React, { useCallback, useEffect, useMemo, useRef, useState } from "react"
 import { AgGridReact } from "ag-grid-react";
 import { AllCommunityModule, ModuleRegistry, type CellValueChangedEvent, type ColDef } from "ag-grid-community";
 import { apiGet, apiPost, apiPut, apiDelete } from "../utils/api";
-import { measureGrid, type GridSizes } from "../usersGrid/utils/gridSizing";
 import InfoPopupEditor from "./cells/InfoPopupEditor";
 import OptionSelectEditor from "./cells/OptionSelectEditor";
+import type { ICellRendererParams } from "ag-grid-community";
 
 export interface FutureFunction {
   id: number;
   name: string;
-  priority: "Low" | "Medium" | "High";
-  complexity: "Simple" | "Moderate" | "Complex";
-  phase: "Urgent" | "Medium Term" | "Before Launch" | "Post Launch";
+  priority: string;
+  complexity: string;
+  phase: string;
   info: string;
-  status: "Planned" | "In Progress" | "Completed";
+  status: string;
 }
 
 ModuleRegistry.registerModules([AllCommunityModule]);
 
-const PRIORITY_OPTIONS = ["Low", "Medium", "High"] as const;
-const COMPLEXITY_OPTIONS = ["Simple", "Moderate", "Complex"] as const;
-const PHASE_OPTIONS = ["Urgent", "Medium Term", "Before Launch", "Post Launch"] as const;
-const STATUS_OPTIONS = ["Planned", "In Progress", "Completed"] as const;
-
-// Note: we no longer render an in-row delete button. Instead an external
-// delete column is rendered to the left of the grid to match other sections.
+const PRIORITY_OPTIONS = ["Nízká", "Střední", "Vysoká"] as const;
+const COMPLEXITY_OPTIONS = ["Jednoduchá", "Středně složitá", "Složitá"] as const;
+const PHASE_OPTIONS = ["Urgentní", "Střednědobé", "Před spuštěním", "Po spuštění"] as const;
+const STATUS_OPTIONS = ["Plánováno", "Probíhá", "Dokončeno"] as const;
 
 const FutureFunctionsGrid: React.FC = () => {
   const [futureFunctions, setFutureFunctions] = useState<FutureFunction[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const wrapperRef = useRef<HTMLDivElement | null>(null);
-  const [sizes, setSizes] = useState<GridSizes>({ row: 42, headerOffset: 80 });
 
   const fetchFutureFunctions = useCallback(async () => {
     setIsLoading(true);
@@ -53,14 +49,14 @@ const FutureFunctionsGrid: React.FC = () => {
   }, [fetchFutureFunctions]);
 
   const handleAddFunction = useCallback(async () => {
-    const newFunction = {
+    const newFunction: Omit<FutureFunction, "id"> = {
       name: "Nová funkce",
       priority: PRIORITY_OPTIONS[1],
       complexity: COMPLEXITY_OPTIONS[1],
       phase: PHASE_OPTIONS[1],
       info: "",
       status: STATUS_OPTIONS[0]
-    } satisfies Omit<FutureFunction, "id">;
+    };
 
     try {
       setIsLoading(true);
@@ -114,8 +110,43 @@ const FutureFunctionsGrid: React.FC = () => {
     [fetchFutureFunctions]
   );
 
+  // Delete button cell renderer for the pinned column
+  const DeleteCellRenderer = useCallback((params: ICellRendererParams<FutureFunction>) => {
+    const id = params.data?.id;
+    if (id == null) return null;
+    return (
+      <button
+        type="button"
+        onClick={() => handleDeleteFunction(id)}
+        className="inrow-delete-btn"
+        title="Smazat funkci"
+      >
+        <svg width="14" height="14" viewBox="0 0 12 12" fill="none" xmlns="http://www.w3.org/2000/svg">
+          <path d="M9 3L3 9M3 3L9 9" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+        </svg>
+      </button>
+    );
+  }, [handleDeleteFunction]);
+
   const columnDefs = useMemo<ColDef<FutureFunction>[]>(
     () => [
+      {
+        headerName: "",
+        colId: "delete",
+        pinned: "left",
+        width: 36,
+        minWidth: 36,
+        maxWidth: 36,
+        suppressMovable: true,
+        lockPosition: true,
+        sortable: false,
+        filter: false,
+        resizable: false,
+        editable: false,
+        cellClass: "action-cell",
+        headerClass: "action-cell",
+        cellRenderer: DeleteCellRenderer
+      },
       {
         field: "id",
         headerName: "ID",
@@ -190,7 +221,7 @@ const FutureFunctionsGrid: React.FC = () => {
       },
       {
         field: "phase",
-        headerName: "Fáze",
+        headerName: "Časový plán",
         filter: true,
         flex: 1,
         minWidth: 150,
@@ -279,23 +310,9 @@ const FutureFunctionsGrid: React.FC = () => {
           }
         }
       },
-      // actions are handled by the external delete column on the left
     ],
-  []
+  [DeleteCellRenderer]
   );
-
-  useEffect(() => {
-    const timer = setTimeout(() => {
-      setSizes(measureGrid(wrapperRef.current));
-    }, 50);
-    return () => clearTimeout(timer);
-  }, [futureFunctions]);
-
-  useEffect(() => {
-    const onResize = () => setSizes(measureGrid(wrapperRef.current));
-    window.addEventListener("resize", onResize);
-    return () => window.removeEventListener("resize", onResize);
-  }, []);
 
   return (
     <div className="page-container">
@@ -308,27 +325,6 @@ const FutureFunctionsGrid: React.FC = () => {
 
       <div className="table-section">
         <div className="grid-container">
-          <div
-            className="delete-buttons-column"
-            style={{
-              ["--row-height" as any]: `${sizes.row}px`,
-              ["--header-offset" as any]: `${sizes.headerOffset}px`
-            }}
-          >
-            {futureFunctions.map((item) => (
-              <button
-                key={item.id}
-                onClick={() => handleDeleteFunction(item.id as number)}
-                className="external-delete-btn"
-                title="Smazat položku"
-              >
-                <svg width="14" height="14" viewBox="0 0 12 12" fill="none" xmlns="http://www.w3.org/2000/svg">
-                  <path d="M9 3L3 9M3 3L9 9" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
-                </svg>
-              </button>
-            ))}
-          </div>
-
           <div ref={wrapperRef} className="grid-wrapper ag-theme-quartz" style={{ height: 500 }}>
             <AgGridReact<FutureFunction>
               rowData={futureFunctions}

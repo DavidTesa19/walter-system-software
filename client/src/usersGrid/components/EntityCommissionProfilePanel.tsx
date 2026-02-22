@@ -1,6 +1,6 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { ProfileDocument, ProfileNote } from "../types/profile";
-import { apiDownload } from "../../utils/api";
+import { apiDownload, apiView } from "../../utils/api";
 import "./EntityCommissionProfilePanel.css";
 
 // =============================================================================
@@ -522,6 +522,15 @@ const EntityCommissionProfilePanel: React.FC<EntityCommissionProfilePanelProps> 
                               <button
                                 type="button"
                                 className="ec-doc-action"
+                                onClick={() => apiView(`/documents/${doc.id}/download`)}
+                              >
+                                Zobrazit
+                              </button>
+                            )}
+                            {documentDownloadBaseUrl && (
+                              <button
+                                type="button"
+                                className="ec-doc-action"
                                 onClick={() => apiDownload(`/documents/${doc.id}/download`, doc.filename)}
                               >
                                 Stáhnout
@@ -575,6 +584,15 @@ const EntityCommissionProfilePanel: React.FC<EntityCommissionProfilePanelProps> 
                                 </span>
                               </div>
                               <div className="ec-document-actions">
+                                {documentDownloadBaseUrl && (
+                                  <button
+                                    type="button"
+                                    className="ec-doc-action"
+                                    onClick={() => apiView(`/documents/${doc.id}/download`)}
+                                  >
+                                    Zobrazit
+                                  </button>
+                                )}
                                 {documentDownloadBaseUrl && (
                                   <button
                                     type="button"

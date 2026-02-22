@@ -186,4 +186,39 @@ export const apiDownload = async (endpoint: string, filename: string): Promise<v
   URL.revokeObjectURL(blobUrl);
 };
 
+/**
+ * View file in a new browser tab with authentication - fetches as blob and opens inline
+ */
+export const apiView = async (endpoint: string): Promise<void> => {
+  const url = endpoint.startsWith('http') ? endpoint : `${API_BASE}${endpoint}`;
+  const token = getAuthToken();
+
+  const headers: Record<string, string> = {};
+  if (token) {
+    headers['Authorization'] = `Bearer ${token}`;
+  }
+
+  const response = await fetch(url, {
+    method: 'GET',
+    headers,
+  });
+
+  if (response.status === 401 || response.status === 403) {
+    localStorage.removeItem('walterUser');
+    localStorage.removeItem('walterSessionStart');
+    window.location.reload();
+    throw new Error('Session expired. Please log in again.');
+  }
+
+  if (!response.ok) {
+    throw new Error(`View failed with status ${response.status}`);
+  }
+
+  const blob = await response.blob();
+  const blobUrl = URL.createObjectURL(blob);
+  window.open(blobUrl, '_blank');
+  // Revoke after a short delay to allow the new tab to load
+  setTimeout(() => URL.revokeObjectURL(blobUrl), 60000);
+};
+
 export { API_BASE };

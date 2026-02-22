@@ -1,6 +1,6 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { ProfileBadge, ProfileDocument, ProfileSection, ProfileNote } from "../types/profile";
-import { apiDownload } from "../../utils/api";
+import { apiDownload, apiView } from "../../utils/api";
 import "./ProfilePanel.css";
 
 interface ProfileMetaItem {
@@ -268,6 +268,15 @@ const ProfilePanel: React.FC<ProfilePanelProps> = ({
                                 <button
                                   type="button"
                                   className="profile-document__action"
+                                  onClick={() => apiView(`/documents/${doc.id}/download`)}
+                                >
+                                  Zobrazit
+                                </button>
+                              ) : null}
+                              {documentDownloadBaseUrl ? (
+                                <button
+                                  type="button"
+                                  className="profile-document__action"
                                   onClick={() => apiDownload(`/documents/${doc.id}/download`, doc.filename)}
                                 >
                                   Stáhnout
@@ -321,6 +330,15 @@ const ProfilePanel: React.FC<ProfilePanelProps> = ({
                                   </span>
                                 </div>
                                 <div className="profile-document__actions">
+                                  {documentDownloadBaseUrl ? (
+                                    <button
+                                      type="button"
+                                      className="profile-document__action"
+                                      onClick={() => apiView(`/documents/${doc.id}/download`)}
+                                    >
+                                      Zobrazit
+                                    </button>
+                                  ) : null}
                                   {documentDownloadBaseUrl ? (
                                     <button
                                       type="button"

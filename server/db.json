@@ -474,74 +474,74 @@
     {
       "id": 1,
       "name": "Google kalendář",
-      "priority": "Medium",
-      "complexity": "Moderate",
-      "phase": "Medium Term",
+      "priority": "Střední",
+      "complexity": "Středně složitá",
+      "phase": "Střednědobé",
       "info": "Buďto přes email a heslo, či přes propojení google účtu",
-      "status": "In Progress"
+      "status": "Probíhá"
     },
     {
       "id": 2,
       "name": "Prokliky na aplikace",
-      "priority": "High",
-      "complexity": "Simple",
-      "phase": "Medium Term",
+      "priority": "Vysoká",
+      "complexity": "Jednoduchá",
+      "phase": "Střednědobé",
       "info": "sdfasduigsv",
-      "status": "Planned"
+      "status": "Plánováno"
     },
     {
       "id": 3,
       "name": "Team Chat",
-      "priority": "Medium",
-      "complexity": "Moderate",
-      "phase": "Medium Term",
+      "priority": "Střední",
+      "complexity": "Středně složitá",
+      "phase": "Střednědobé",
       "info": "",
-      "status": "Planned"
+      "status": "Plánováno"
     },
     {
       "id": 4,
       "name": "AI Chatbot - Gemini 3.0 ",
-      "priority": "Medium",
-      "complexity": "Moderate",
-      "phase": "Medium Term",
+      "priority": "Střední",
+      "complexity": "Středně složitá",
+      "phase": "Střednědobé",
       "info": "",
-      "status": "Planned"
+      "status": "Plánováno"
     },
     {
       "id": 5,
       "name": "Users",
-      "priority": "Medium",
-      "complexity": "Moderate",
-      "phase": "Medium Term",
+      "priority": "Střední",
+      "complexity": "Středně složitá",
+      "phase": "Střednědobé",
       "info": "",
-      "status": "Planned"
+      "status": "Plánováno"
     },
     {
       "id": 6,
       "name": "Detailed Profiles",
-      "priority": "High",
-      "complexity": "Complex",
-      "phase": "Medium Term",
+      "priority": "Vysoká",
+      "complexity": "Složitá",
+      "phase": "Střednědobé",
       "info": "",
-      "status": "Planned"
+      "status": "Plánováno"
     },
     {
       "id": 7,
       "name": "ID System",
-      "priority": "Low",
-      "complexity": "Complex",
-      "phase": "Medium Term",
+      "priority": "Nízká",
+      "complexity": "Složitá",
+      "phase": "Střednědobé",
       "info": "",
-      "status": "Planned"
+      "status": "Plánováno"
     },
     {
       "id": 8,
       "name": "Poznámky v profilu",
-      "priority": "High",
-      "complexity": "Moderate",
-      "phase": "Medium Term",
+      "priority": "Vysoká",
+      "complexity": "Středně složitá",
+      "phase": "Střednědobé",
       "info": "",
-      "status": "Planned"
+      "status": "Plánováno"
     }
   ]
 }
