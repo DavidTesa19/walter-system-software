@@ -27,6 +27,7 @@
   flex-direction: column;
   box-shadow: 0 12px 40px rgba(0, 0, 0, 0.3);
   overflow: hidden;
+  font-family: 'Inter', 'Segoe UI', system-ui, -apple-system, sans-serif;
 }
 
 /* Header */
@@ -65,7 +66,7 @@
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
-  font-family: var(--font-heading, inherit);
+  font-family: inherit;
 }
 
 .ff-detail-close {
@@ -112,6 +113,7 @@
   letter-spacing: 0.08em;
   color: var(--color-text-muted, #999);
   margin: 0 0 14px 0;
+  font-family: inherit;
 }
 
 .ff-info-grid {
@@ -132,6 +134,7 @@
   text-transform: uppercase;
   letter-spacing: 0.06em;
   color: var(--color-text-muted, #999);
+  font-family: inherit;
 }
 
 .ff-info-value {
@@ -144,6 +147,7 @@
   min-height: 32px;
   display: flex;
   align-items: center;
+  font-family: inherit;
 }
 
 .ff-info-value.info-text {
@@ -204,6 +208,7 @@
   margin-bottom: -2px;
   transition: all 0.2s;
   white-space: nowrap;
+  font-family: inherit;
 }
 
 .ff-content-tab:hover {
@@ -248,7 +253,7 @@
   border: 1px solid var(--color-border, #ddd);
   border-radius: 8px;
   font-size: 0.88rem;
-  font-family: var(--font-body, inherit);
+  font-family: inherit;
   background: var(--color-surface, #fff);
   color: var(--color-text, #333);
   outline: none;
@@ -303,6 +308,7 @@
   white-space: nowrap;
   transition: background 0.2s;
   height: 40px;
+  font-family: inherit;
 }
 
 .ff-note-submit-btn:hover {
@@ -326,6 +332,7 @@
   border-radius: 8px;
   border: 1px solid var(--color-border, #eee);
   position: relative;
+  text-align: left;
 }
 
 .ff-note-meta {
@@ -352,6 +359,8 @@
   white-space: pre-wrap;
   word-break: break-word;
   line-height: 1.55;
+  text-align: left;
+  font-family: inherit;
 }
 
 .ff-note-delete {
