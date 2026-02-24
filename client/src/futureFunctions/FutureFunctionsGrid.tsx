@@ -4,7 +4,6 @@ import React, { useCallback, useEffect, useMemo, useRef, useState } from "react"
 import { AgGridReact } from "ag-grid-react";
 import { AllCommunityModule, ModuleRegistry, type CellValueChangedEvent, type ColDef, type CellClickedEvent } from "ag-grid-community";
 import { apiGet, apiPost, apiPut, apiDelete } from "../utils/api";
-import { useUndoRedo } from "../utils/undoRedo";
 import InfoPopupEditor from "./cells/InfoPopupEditor";
 import OptionSelectEditor from "./cells/OptionSelectEditor";
 import FutureFunctionDetail from "./FutureFunctionDetail";
@@ -30,16 +29,6 @@ const PHASE_OPTIONS = ["Urgentní", "Střednědobé", "Před spuštěním", "Po 
 // All statuses
 const ALL_STATUS_OPTIONS = ["Plánováno", "Probíhá", "Ke kontrole", "Dokončeno", "Neschváleno", "Odloženo", "Zrušeno"] as const;
 
-const STATUS_COLOR_MAP: Record<(typeof ALL_STATUS_OPTIONS)[number] | string, string> = {
-  "Plánováno": "#3b82f6",
-  "Probíhá": "#f59e0b",
-  "Ke kontrole": "#a855f7",
-  "Dokončeno": "#22c55e",
-  "Neschváleno": "#ef4444",
-  "Odloženo": "#6b7280",
-  "Zrušeno": "#dc2626"
-};
-
 // Statuses that appear in active table
 const ACTIVE_STATUSES = ["Plánováno", "Probíhá", "Ke kontrole", "Dokončeno", "Neschváleno"] as const;
 
@@ -52,7 +41,6 @@ const FutureFunctionsGrid: React.FC = () => {
   const [isArchiveView, setIsArchiveView] = useState(false);
   const [selectedFunction, setSelectedFunction] = useState<FutureFunction | null>(null);
   const activeWrapperRef = useRef<HTMLDivElement | null>(null);
-  const { canUndo, canRedo, isBusy, undo, redo } = useUndoRedo();
 
   const defaultColDef = useMemo<ColDef<FutureFunction>>(
     () => ({
@@ -331,7 +319,17 @@ const FutureFunctionsGrid: React.FC = () => {
     const status = params.value as string;
     if (!status) return null;
 
-    const color = STATUS_COLOR_MAP[status] ?? "#888";
+    const colorMap: Record<string, string> = {
+      "Plánováno": "#3b82f6",
+      "Probíhá": "#f59e0b",
+      "Ke kontrole": "#a855f7",
+      "Dokončeno": "#22c55e",
+      "Neschváleno": "#ef4444",
+      "Odloženo": "#6b7280",
+      "Zrušeno": "#dc2626"
+    };
+
+    const color = colorMap[status] ?? "#888";
 
     return (
       <span style={{
@@ -673,41 +671,6 @@ const FutureFunctionsGrid: React.FC = () => {
     ? Math.min(400, Math.max(150, archivedFunctions.length * 42 + 56))
     : 500;
 
-  const statusSummary = useMemo(() => {
-    const countByStatus = (rows: FutureFunction[]) => {
-      const counts: Record<string, number> = {};
-      for (const row of rows) {
-        const key = row?.status || "(bez stavu)";
-        counts[key] = (counts[key] ?? 0) + 1;
-      }
-      return counts;
-    };
-
-    const toOrderedEntries = (counts: Record<string, number>) => {
-      const known = (ALL_STATUS_OPTIONS as readonly string[])
-        .filter((status) => (counts[status] ?? 0) > 0)
-        .map((status) => ({ status, count: counts[status] ?? 0 }));
-
-      const knownSet = new Set(ALL_STATUS_OPTIONS as readonly string[]);
-      const unknown = Object.keys(counts)
-        .filter((status) => !knownSet.has(status) && (counts[status] ?? 0) > 0)
-        .sort((a, b) => a.localeCompare(b, "cs-CZ"))
-        .map((status) => ({ status, count: counts[status] ?? 0 }));
-
-      return [...known, ...unknown];
-    };
-
-    const activeCounts = countByStatus(activeFunctions);
-    const archivedCounts = countByStatus(archivedFunctions);
-
-    return {
-      activeTotal: activeFunctions.length,
-      archivedTotal: archivedFunctions.length,
-      activeEntries: toOrderedEntries(activeCounts),
-      archivedEntries: toOrderedEntries(archivedCounts)
-    };
-  }, [activeFunctions, archivedFunctions]);
-
   return (
     <div className="page-container">
       <div
@@ -739,116 +702,13 @@ const FutureFunctionsGrid: React.FC = () => {
           </button>
         </div>
         <div style={{ justifySelf: "end" }}>
-          <div className="header-actions">
-            <button
-              type="button"
-              className="undo-redo-btn"
-              onClick={undo}
-              disabled={!canUndo || isBusy || isLoading}
-              title="Undo (Ctrl+Z)"
-            >
-              Undo
-            </button>
-            <button
-              type="button"
-              className="undo-redo-btn"
-              onClick={redo}
-              disabled={!canRedo || isBusy || isLoading}
-              title="Redo (Ctrl+Y / Ctrl+Shift+Z)"
-            >
-              Redo
-            </button>
-            <button
-              className="add-user-btn"
-              onClick={() => handleAddFunction(isArchiveView ? "archive" : "active")}
-              disabled={isLoading || isBusy}
-            >
-              + Přidat funkci
-            </button>
-          </div>
-        </div>
-      </div>
-
-      <div
-        style={{
-          display: "flex",
-          flexDirection: "column",
-          gap: "8px",
-          marginBottom: "12px",
-          padding: "10px 12px",
-          borderRadius: "12px",
-          background: "var(--color-surface-alt)",
-          border: "1px solid var(--color-border)",
-          boxShadow: "var(--color-shadow-sm)",
-          textAlign: "left"
-        }}
-      >
-        <div style={{ display: "flex", flexWrap: "wrap", gap: "10px", alignItems: "center" }}>
-          <span style={{ fontFamily: "var(--font-subheading)", fontWeight: 700, color: "var(--color-text)" }}>
-            Aktivní ({statusSummary.activeTotal})
-          </span>
-          {statusSummary.activeEntries.map(({ status, count }) => (
-            <span
-              key={`active-${status}`}
-              style={{
-                display: "inline-flex",
-                alignItems: "center",
-                gap: "6px",
-                padding: "4px 10px",
-                borderRadius: "999px",
-                background: "var(--color-surface-hover)",
-                border: "1px solid var(--color-border)",
-                color: "var(--color-text)",
-                fontFamily: "var(--font-subheading)",
-                fontSize: "0.9rem"
-              }}
-            >
-              <span
-                style={{
-                  width: "8px",
-                  height: "8px",
-                  borderRadius: "50%",
-                  backgroundColor: STATUS_COLOR_MAP[status] ?? "#888",
-                  flexShrink: 0
-                }}
-              />
-              {status}: {count}
-            </span>
-          ))}
-        </div>
-
-        <div style={{ display: "flex", flexWrap: "wrap", gap: "10px", alignItems: "center" }}>
-          <span style={{ fontFamily: "var(--font-subheading)", fontWeight: 700, color: "var(--color-text)" }}>
-            Archiv ({statusSummary.archivedTotal})
-          </span>
-          {statusSummary.archivedEntries.map(({ status, count }) => (
-            <span
-              key={`archived-${status}`}
-              style={{
-                display: "inline-flex",
-                alignItems: "center",
-                gap: "6px",
-                padding: "4px 10px",
-                borderRadius: "999px",
-                background: "var(--color-surface-hover)",
-                border: "1px solid var(--color-border)",
-                color: "var(--color-text)",
-                fontFamily: "var(--font-subheading)",
-                fontSize: "0.9rem"
-              }}
-            >
-              <span
-                style={{
-                  width: "8px",
-                  height: "8px",
-                  borderRadius: "50%",
-                  backgroundColor: STATUS_COLOR_MAP[status] ?? "#888",
-                  flexShrink: 0
-                }}
-              />
-              {status}: {count}
-            </span>
-          ))}
+          <button
+            className="add-user-btn"
+            onClick={() => handleAddFunction(isArchiveView ? "archive" : "active")}
+            disabled={isLoading}
+          >
+            + Přidat funkci
+          </button>
         </div>
       </div>
 
