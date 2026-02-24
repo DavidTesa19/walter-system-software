@@ -37,9 +37,8 @@ const AUTO_ARCHIVE_STATUSES = ["Odloženo", "Zrušeno"] as const;
 const FutureFunctionsGrid: React.FC = () => {
   const [futureFunctions, setFutureFunctions] = useState<FutureFunction[]>([]);
   const [isLoading, setIsLoading] = useState(false);
-  const [showArchive, setShowArchive] = useState(true);
+  const [isArchiveView, setIsArchiveView] = useState(false);
   const activeWrapperRef = useRef<HTMLDivElement | null>(null);
-  const archiveWrapperRef = useRef<HTMLDivElement | null>(null);
 
   const fetchFutureFunctions = useCallback(async () => {
     setIsLoading(true);
@@ -585,22 +584,42 @@ const FutureFunctionsGrid: React.FC = () => {
     [fetchFutureFunctions]
   );
 
+  const currentRowData = isArchiveView ? archivedFunctions : activeFunctions;
+  const currentColumnDefs = isArchiveView ? archiveColumnDefs : activeColumnDefs;
+  const currentOnCellValueChanged = isArchiveView ? onArchiveCellValueChanged : onCellValueChanged;
+  const currentGridHeight = isArchiveView
+    ? Math.min(400, Math.max(150, archivedFunctions.length * 42 + 56))
+    : 500;
+
   return (
     <div className="page-container">
-      {/* Active Table */}
       <div className="header-section">
         <h1 className="page-title">Plán budoucích funkcí</h1>
-        <button className="add-user-btn" onClick={handleAddFunction} disabled={isLoading}>
-          + Přidat funkci
-        </button>
+        <div style={{ display: "flex", gap: "10px", alignItems: "center" }}>
+          <button
+            className="add-user-btn"
+            type="button"
+            onClick={() => setIsArchiveView((prev) => !prev)}
+            disabled={isLoading}
+          >
+            {isArchiveView
+              ? `Aktivní (${activeFunctions.length})`
+              : `Archiv (${archivedFunctions.length})`}
+          </button>
+          {!isArchiveView && (
+            <button className="add-user-btn" onClick={handleAddFunction} disabled={isLoading}>
+              + Přidat funkci
+            </button>
+          )}
+        </div>
       </div>
 
       <div className="table-section">
         <div className="grid-container">
-          <div ref={activeWrapperRef} className="grid-wrapper ag-theme-quartz" style={{ height: 500 }}>
+          <div ref={activeWrapperRef} className="grid-wrapper ag-theme-quartz" style={{ height: currentGridHeight }}>
             <AgGridReact<FutureFunction>
-              rowData={activeFunctions}
-              columnDefs={activeColumnDefs}
+              rowData={currentRowData}
+              columnDefs={currentColumnDefs}
               defaultColDef={{
                 editable: true,
                 resizable: true,
@@ -609,61 +628,13 @@ const FutureFunctionsGrid: React.FC = () => {
                 flex: 1
               }}
               suppressRowClickSelection={true}
-              onCellValueChanged={onCellValueChanged}
+              onCellValueChanged={currentOnCellValueChanged}
               loading={isLoading}
               animateRows
             />
           </div>
         </div>
       </div>
-
-      {/* Archive Table */}
-      <div className="header-section" style={{ marginTop: "32px" }}>
-        <h2
-          className="page-title"
-          style={{ cursor: "pointer", display: "flex", alignItems: "center", gap: "8px", fontSize: "1.3rem" }}
-          onClick={() => setShowArchive((prev) => !prev)}
-        >
-          <svg
-            width="16"
-            height="16"
-            viewBox="0 0 16 16"
-            fill="none"
-            xmlns="http://www.w3.org/2000/svg"
-            style={{
-              transform: showArchive ? "rotate(90deg)" : "rotate(0deg)",
-              transition: "transform 0.2s ease"
-            }}
-          >
-            <path d="M6 4L10 8L6 12" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
-          </svg>
-          Archiv ({archivedFunctions.length})
-        </h2>
-      </div>
-
-      {showArchive && (
-        <div className="table-section">
-          <div className="grid-container">
-            <div ref={archiveWrapperRef} className="grid-wrapper ag-theme-quartz" style={{ height: Math.min(400, Math.max(150, archivedFunctions.length * 42 + 56)) }}>
-              <AgGridReact<FutureFunction>
-                rowData={archivedFunctions}
-                columnDefs={archiveColumnDefs}
-                defaultColDef={{
-                  editable: false,
-                  resizable: true,
-                  sortable: true,
-                  filter: true,
-                  flex: 1
-                }}
-                suppressRowClickSelection={true}
-                onCellValueChanged={onArchiveCellValueChanged}
-                loading={isLoading}
-                animateRows
-              />
-            </div>
-          </div>
-        </div>
-      )}
 
       <div className="instructions">
         <p>

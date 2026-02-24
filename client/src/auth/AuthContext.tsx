@@ -1,7 +1,7 @@
 import React, { createContext, useContext, useState, useEffect, useCallback, useRef } from 'react';
 import type { ReactNode } from 'react';
 import { API_BASE } from '../usersGrid/constants';
-import { trackEvent, startActiveTimeTracking, stopActiveTimeTracking } from '../utils/analytics';
+import { trackEvent, startActiveTimeTracking, stopActiveTimeTracking, flushSectionTime } from '../utils/analytics';
 
 // Define available roles
 export type UserRole = 'admin' | 'manager' | 'employee' | 'viewer';
@@ -42,6 +42,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
   }, []);
 
   const logout = useCallback(() => {
+    flushSectionTime();
     stopActiveTimeTracking();
     setUser(null);
     localStorage.removeItem('walterUser');

@@ -13,7 +13,7 @@ import ChatbotView from './views/ChatbotView';
 import TeamChatView from './views/TeamChatView';
 import FullCalendarView from './views/FullCalendarView';
 import AnalyticsView from './views/AnalyticsView';
-import { trackEvent } from './utils/analytics';
+import { trackEvent, trackSectionStart } from './utils/analytics';
 import type { AppView } from './types/appView';
 import './components/Sidebar.css';
 
@@ -21,10 +21,11 @@ const AppContent: React.FC = () => {
   const { isAuthenticated } = useAuth();
   const [viewMode, setViewMode] = useState<AppView>('active');
 
-  // Track section visits
+  // Track section visits and time spent
   useEffect(() => {
     if (isAuthenticated) {
       trackEvent('section_visit', { section: viewMode });
+      trackSectionStart(viewMode);
     }
   }, [viewMode, isAuthenticated]);
 

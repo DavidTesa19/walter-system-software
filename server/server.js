@@ -3541,6 +3541,19 @@ app.get("/api/analytics/summary", authenticateToken, (req, res) => {
     userSectionVisits[e.username][e.section] = (userSectionVisits[e.username][e.section] || 0) + 1;
   });
 
+  // Section active time (total)
+  const sectionActiveTime = {};
+  events.filter(e => e.event_type === "section_time" && e.section).forEach(e => {
+    sectionActiveTime[e.section] = (sectionActiveTime[e.section] || 0) + (e.duration_seconds || 0);
+  });
+
+  // Section active time per user
+  const userSectionActiveTime = {};
+  events.filter(e => e.event_type === "section_time" && e.section && e.username).forEach(e => {
+    if (!userSectionActiveTime[e.username]) userSectionActiveTime[e.username] = {};
+    userSectionActiveTime[e.username][e.section] = (userSectionActiveTime[e.username][e.section] || 0) + (e.duration_seconds || 0);
+  });
+
   // Form link clicks
   const formClicksFromLogin = events.filter(e => e.event_type === "form_link_click" && e.source === "login").length;
   const formClicksFromApp = events.filter(e => e.event_type === "form_link_click" && e.source === "app").length;
@@ -3556,6 +3569,8 @@ app.get("/api/analytics/summary", authenticateToken, (req, res) => {
     userActiveTime,
     sectionVisits,
     userSectionVisits,
+    sectionActiveTime,
+    userSectionActiveTime,
     formClicks: {
       fromLogin: formClicksFromLogin,
       fromApp: formClicksFromApp,

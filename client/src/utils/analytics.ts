@@ -100,6 +100,35 @@ export const SECTION_LABELS: Record<string, string> = {
   analytics: 'Analytika',
 };
 
+// ---- Per-Section Time Tracking ----
+let sectionStartTime: number | null = null;
+let currentTrackedSection: string | null = null;
+
+/**
+ * Call when user navigates to a new section.
+ * Flushes elapsed time for the previous section and starts tracking the new one.
+ */
+export function trackSectionStart(section: string): void {
+  flushSectionTime();
+  currentTrackedSection = section;
+  sectionStartTime = Date.now();
+}
+
+/**
+ * Flush accumulated time for the current section.
+ * Call on logout or page unload.
+ */
+export function flushSectionTime(): void {
+  if (currentTrackedSection && sectionStartTime !== null) {
+    const elapsed = Math.round((Date.now() - sectionStartTime) / 1000);
+    if (elapsed > 0) {
+      trackEvent('section_time', { section: currentTrackedSection, duration_seconds: elapsed });
+    }
+  }
+  currentTrackedSection = null;
+  sectionStartTime = null;
+}
+
 // ---- Active Time Tracking ----
 
 let activeTimeInterval: ReturnType<typeof setInterval> | null = null;

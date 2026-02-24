@@ -13,6 +13,8 @@ interface AnalyticsSummary {
   userActiveTime: Record<string, number>;
   sectionVisits: Record<string, number>;
   userSectionVisits: Record<string, Record<string, number>>;
+  sectionActiveTime: Record<string, number>;
+  userSectionActiveTime: Record<string, Record<string, number>>;
   formClicks: {
     fromLogin: number;
     fromApp: number;
@@ -219,6 +221,7 @@ const AnalyticsView: React.FC = () => {
                   <tr>
                     <th>Sekce</th>
                     <th>Návštěvy</th>
+                    <th>Čas</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -226,6 +229,7 @@ const AnalyticsView: React.FC = () => {
                     <tr key={key}>
                       <td>{SECTION_LABELS[key] || key}</td>
                       <td className="num-cell">{summary.sectionVisits[key]}</td>
+                      <td className="num-cell">{summary.sectionActiveTime[key] ? formatDuration(summary.sectionActiveTime[key]) : '—'}</td>
                     </tr>
                   ))}
                 </tbody>
@@ -306,7 +310,7 @@ const AnalyticsView: React.FC = () => {
                   <th>Uživatel</th>
                   <th>Přihlášení</th>
                   <th>Aktivní čas</th>
-                  <th>Sekce</th>
+                  <th>Sekce (návštěvy / čas)</th>
                 </tr>
               </thead>
               <tbody>
@@ -333,7 +337,11 @@ const AnalyticsView: React.FC = () => {
                         <tr key={`${username}-${section}`} className="user-section-row">
                           <td className="indent-cell">{SECTION_LABELS[section] || section}</td>
                           <td />
-                          <td />
+                          <td className="num-cell">
+                            {(summary.userSectionActiveTime[username]?.[section])
+                              ? formatDuration(summary.userSectionActiveTime[username][section])
+                              : '—'}
+                          </td>
                           <td className="num-cell">{count}</td>
                         </tr>
                       ))}
