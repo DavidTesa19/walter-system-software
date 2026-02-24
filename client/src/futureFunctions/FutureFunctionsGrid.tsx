@@ -6,6 +6,7 @@ import { AllCommunityModule, ModuleRegistry, type CellValueChangedEvent, type Co
 import { apiGet, apiPost, apiPut, apiDelete } from "../utils/api";
 import InfoPopupEditor from "./cells/InfoPopupEditor";
 import OptionSelectEditor from "./cells/OptionSelectEditor";
+import FutureFunctionDetail from "./FutureFunctionDetail";
 import type { ICellRendererParams } from "ag-grid-community";
 
 export interface FutureFunction {
@@ -38,6 +39,7 @@ const FutureFunctionsGrid: React.FC = () => {
   const [futureFunctions, setFutureFunctions] = useState<FutureFunction[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [isArchiveView, setIsArchiveView] = useState(false);
+  const [selectedFunction, setSelectedFunction] = useState<FutureFunction | null>(null);
   const activeWrapperRef = useRef<HTMLDivElement | null>(null);
 
   const fetchFutureFunctions = useCallback(async () => {
@@ -196,6 +198,34 @@ const FutureFunctionsGrid: React.FC = () => {
     [fetchFutureFunctions]
   );
 
+  // Detail button cell renderer — opens the detail modal
+  const DetailCellRenderer = useCallback((params: ICellRendererParams<FutureFunction>) => {
+    const data = params.data;
+    if (!data) return null;
+    return (
+      <button
+        type="button"
+        onClick={() => setSelectedFunction(data)}
+        title="Otevřít detail"
+        style={{
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "center",
+          background: "none",
+          border: "none",
+          cursor: "pointer",
+          color: "var(--ag-header-foreground-color, #aaa)",
+          padding: "2px"
+        }}
+      >
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+          <circle cx="11" cy="11" r="7" stroke="currentColor" strokeWidth="2"/>
+          <path d="M16.5 16.5L21 21" stroke="currentColor" strokeWidth="2" strokeLinecap="round"/>
+        </svg>
+      </button>
+    );
+  }, []);
+
   // Delete button cell renderer for the pinned column
   const DeleteCellRenderer = useCallback((params: ICellRendererParams<FutureFunction>) => {
     const id = params.data?.id;
@@ -331,6 +361,23 @@ const FutureFunctionsGrid: React.FC = () => {
     () => [
       {
         headerName: "",
+        colId: "detail",
+        pinned: "left",
+        width: 36,
+        minWidth: 36,
+        maxWidth: 36,
+        suppressMovable: true,
+        lockPosition: true,
+        sortable: false,
+        filter: false,
+        resizable: false,
+        editable: false,
+        cellClass: "action-cell",
+        headerClass: "action-cell",
+        cellRenderer: DetailCellRenderer
+      },
+      {
+        headerName: "",
         colId: "delete",
         pinned: "left",
         width: 36,
@@ -454,12 +501,29 @@ const FutureFunctionsGrid: React.FC = () => {
         cellRenderer: ArchiveCellRenderer
       }
     ],
-    [DeleteCellRenderer, ArchiveCellRenderer, StatusCellRenderer, onCellClickedHandler]
+    [DeleteCellRenderer, ArchiveCellRenderer, DetailCellRenderer, StatusCellRenderer, onCellClickedHandler]
   );
 
   // Archive table column definitions
   const archiveColumnDefs = useMemo<ColDef<FutureFunction>[]>(
     () => [
+      {
+        headerName: "",
+        colId: "detail",
+        pinned: "left",
+        width: 36,
+        minWidth: 36,
+        maxWidth: 36,
+        suppressMovable: true,
+        lockPosition: true,
+        sortable: false,
+        filter: false,
+        resizable: false,
+        editable: false,
+        cellClass: "action-cell",
+        headerClass: "action-cell",
+        cellRenderer: DetailCellRenderer
+      },
       {
         headerName: "",
         colId: "restore",
@@ -558,7 +622,7 @@ const FutureFunctionsGrid: React.FC = () => {
         onCellClicked: onCellClickedHandler
       }
     ],
-    [DeleteCellRenderer, RestoreCellRenderer, StatusCellRenderer, onCellClickedHandler]
+    [DeleteCellRenderer, RestoreCellRenderer, DetailCellRenderer, StatusCellRenderer, onCellClickedHandler]
   );
 
   const onArchiveCellValueChanged = useCallback(
@@ -658,6 +722,14 @@ const FutureFunctionsGrid: React.FC = () => {
         </div>
       </div>
 
+      {/* Detail Modal */}
+      {selectedFunction && (
+        <FutureFunctionDetail
+          func={selectedFunction}
+          onClose={() => setSelectedFunction(null)}
+          onUpdate={fetchFutureFunctions}
+        />
+      )}
     </div>
   );
 };

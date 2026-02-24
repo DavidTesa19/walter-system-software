@@ -1,0 +1,603 @@
+/* ============================================================
+   Future Function Detail Modal
+   ============================================================ */
+
+.ff-detail-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background-color: rgba(0, 0, 0, 0.65);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 9000;
+  padding: 20px;
+  backdrop-filter: blur(4px);
+}
+
+.ff-detail-modal {
+  background-color: var(--color-surface, #fff);
+  border-radius: 12px;
+  width: 100%;
+  max-width: 1100px;
+  height: 88vh;
+  display: flex;
+  flex-direction: column;
+  box-shadow: 0 12px 40px rgba(0, 0, 0, 0.3);
+  overflow: hidden;
+}
+
+/* Header */
+.ff-detail-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 18px 28px;
+  border-bottom: 1px solid var(--color-border, #e0e0e0);
+  background: var(--color-surface, #fff);
+  flex-shrink: 0;
+}
+
+.ff-detail-header-left {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  min-width: 0;
+}
+
+.ff-detail-id {
+  font-size: 0.8rem;
+  color: var(--color-text-muted, #999);
+  background: var(--color-surface-alt, #f0f0f0);
+  padding: 2px 10px;
+  border-radius: 12px;
+  white-space: nowrap;
+  font-weight: 600;
+}
+
+.ff-detail-title {
+  margin: 0;
+  font-size: 1.25rem;
+  font-weight: 700;
+  color: var(--color-text, #333);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  font-family: var(--font-heading, inherit);
+}
+
+.ff-detail-close {
+  background: none;
+  border: none;
+  font-size: 26px;
+  line-height: 1;
+  color: var(--color-text-muted, #888);
+  cursor: pointer;
+  padding: 4px 8px;
+  border-radius: 6px;
+  transition: all 0.2s;
+  flex-shrink: 0;
+}
+
+.ff-detail-close:hover {
+  background-color: rgba(0, 0, 0, 0.06);
+  color: var(--color-text, #333);
+}
+
+/* Body - split layout */
+.ff-detail-body {
+  flex: 1;
+  display: flex;
+  gap: 0;
+  overflow: hidden;
+  min-height: 0;
+}
+
+/* Left panel = info overview */
+.ff-detail-info-panel {
+  width: 340px;
+  min-width: 300px;
+  border-right: 1px solid var(--color-border, #e0e0e0);
+  padding: 24px;
+  overflow-y: auto;
+  flex-shrink: 0;
+}
+
+.ff-info-section-title {
+  font-size: 0.75rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--color-text-muted, #999);
+  margin: 0 0 14px 0;
+}
+
+.ff-info-grid {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.ff-info-item {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.ff-info-label {
+  font-size: 0.72rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--color-text-muted, #999);
+}
+
+.ff-info-value {
+  font-size: 0.92rem;
+  color: var(--color-text, #333);
+  font-weight: 500;
+  padding: 6px 10px;
+  background: var(--color-surface-alt, #f5f5f5);
+  border-radius: 6px;
+  min-height: 32px;
+  display: flex;
+  align-items: center;
+}
+
+.ff-info-value.info-text {
+  white-space: pre-wrap;
+  word-break: break-word;
+  align-items: flex-start;
+  min-height: 60px;
+  max-height: 180px;
+  overflow-y: auto;
+  line-height: 1.5;
+  font-size: 0.85rem;
+}
+
+/* Status badge in detail */
+.ff-status-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-weight: 600;
+  font-size: 0.88rem;
+}
+
+.ff-status-dot {
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+
+/* Right panel = notes + attachments */
+.ff-detail-content-panel {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  min-width: 0;
+}
+
+/* Tab bar for Notes/Attachments */
+.ff-content-tabs {
+  display: flex;
+  gap: 0;
+  border-bottom: 2px solid var(--color-border, #e0e0e0);
+  padding: 0 24px;
+  flex-shrink: 0;
+  background: var(--color-surface, #fff);
+}
+
+.ff-content-tab {
+  padding: 12px 20px;
+  font-size: 0.85rem;
+  font-weight: 600;
+  color: var(--color-text-muted, #888);
+  background: none;
+  border: none;
+  cursor: pointer;
+  border-bottom: 2px solid transparent;
+  margin-bottom: -2px;
+  transition: all 0.2s;
+  white-space: nowrap;
+}
+
+.ff-content-tab:hover {
+  color: var(--color-text, #333);
+}
+
+.ff-content-tab.active {
+  color: var(--color-primary, #3b82f6);
+  border-bottom-color: var(--color-primary, #3b82f6);
+}
+
+.ff-content-body {
+  flex: 1;
+  overflow-y: auto;
+  padding: 20px 24px;
+}
+
+/* ============================================================
+   Notes Section
+   ============================================================ */
+
+.ff-notes-input-area {
+  display: flex;
+  gap: 10px;
+  margin-bottom: 20px;
+  align-items: flex-end;
+}
+
+.ff-notes-input-area textarea {
+  flex: 1;
+  resize: vertical;
+  min-height: 60px;
+  max-height: 160px;
+  padding: 10px 14px;
+  border: 1px solid var(--color-border, #ddd);
+  border-radius: 8px;
+  font-size: 0.88rem;
+  font-family: var(--font-body, inherit);
+  background: var(--color-surface, #fff);
+  color: var(--color-text, #333);
+  outline: none;
+  transition: border-color 0.2s;
+  line-height: 1.5;
+}
+
+.ff-notes-input-area textarea:focus {
+  border-color: var(--color-primary, #3b82f6);
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--color-primary, #3b82f6) 18%, transparent);
+}
+
+.ff-notes-input-area textarea::placeholder {
+  color: var(--color-text-muted, #aaa);
+}
+
+.ff-note-submit-btn {
+  padding: 10px 18px;
+  background: var(--color-primary, #3b82f6);
+  color: var(--color-primary-contrast, #fff);
+  border: none;
+  border-radius: 8px;
+  font-size: 0.85rem;
+  font-weight: 600;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: background 0.2s;
+  height: 40px;
+}
+
+.ff-note-submit-btn:hover {
+  filter: brightness(1.1);
+}
+
+.ff-note-submit-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.ff-notes-list {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.ff-note-card {
+  padding: 14px 16px;
+  background: var(--color-surface-alt, #f7f7f7);
+  border-radius: 8px;
+  border: 1px solid var(--color-border, #eee);
+  position: relative;
+}
+
+.ff-note-meta {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 8px;
+}
+
+.ff-note-author {
+  font-size: 0.78rem;
+  font-weight: 700;
+  color: var(--color-primary, #3b82f6);
+}
+
+.ff-note-date {
+  font-size: 0.72rem;
+  color: var(--color-text-muted, #999);
+}
+
+.ff-note-content {
+  font-size: 0.88rem;
+  color: var(--color-text, #333);
+  white-space: pre-wrap;
+  word-break: break-word;
+  line-height: 1.55;
+}
+
+.ff-note-delete {
+  position: absolute;
+  top: 10px;
+  right: 10px;
+  background: none;
+  border: none;
+  color: var(--color-text-muted, #ccc);
+  cursor: pointer;
+  padding: 2px 6px;
+  border-radius: 4px;
+  font-size: 16px;
+  line-height: 1;
+  transition: all 0.2s;
+}
+
+.ff-note-delete:hover {
+  color: #ef4444;
+  background: rgba(239, 68, 68, 0.08);
+}
+
+.ff-notes-empty {
+  text-align: center;
+  color: var(--color-text-muted, #999);
+  font-size: 0.88rem;
+  padding: 32px 0;
+}
+
+/* ============================================================
+   Attachments Section
+   ============================================================ */
+
+.ff-attachments-upload-area {
+  margin-bottom: 20px;
+}
+
+.ff-upload-zone {
+  border: 2px dashed var(--color-border, #ccc);
+  border-radius: 10px;
+  padding: 28px 20px;
+  text-align: center;
+  cursor: pointer;
+  transition: all 0.2s;
+  background: var(--color-surface, #fff);
+  position: relative;
+}
+
+.ff-upload-zone:hover,
+.ff-upload-zone.dragging {
+  border-color: var(--color-primary, #3b82f6);
+  background: color-mix(in srgb, var(--color-primary, #3b82f6) 4%, var(--color-surface, #fff));
+}
+
+.ff-upload-zone.dragging {
+  border-style: solid;
+}
+
+.ff-upload-icon {
+  font-size: 2rem;
+  margin-bottom: 6px;
+}
+
+.ff-upload-text {
+  font-size: 0.88rem;
+  color: var(--color-text-muted, #888);
+  margin: 0;
+}
+
+.ff-upload-text strong {
+  color: var(--color-primary, #3b82f6);
+  cursor: pointer;
+}
+
+.ff-upload-hint {
+  font-size: 0.75rem;
+  color: var(--color-text-muted, #aaa);
+  margin-top: 6px;
+}
+
+.ff-upload-input {
+  display: none;
+}
+
+/* Attachments grid */
+.ff-attachments-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+  gap: 14px;
+}
+
+.ff-attachment-card {
+  border: 1px solid var(--color-border, #e0e0e0);
+  border-radius: 8px;
+  overflow: hidden;
+  background: var(--color-surface-alt, #f7f7f7);
+  transition: box-shadow 0.2s;
+  position: relative;
+}
+
+.ff-attachment-card:hover {
+  box-shadow: 0 2px 12px rgba(0, 0, 0, 0.1);
+}
+
+.ff-attachment-preview {
+  width: 100%;
+  height: 140px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--color-surface, #fff);
+  cursor: pointer;
+  overflow: hidden;
+}
+
+.ff-attachment-preview img {
+  max-width: 100%;
+  max-height: 100%;
+  object-fit: contain;
+}
+
+.ff-attachment-preview video {
+  max-width: 100%;
+  max-height: 100%;
+  object-fit: contain;
+}
+
+.ff-attachment-file-icon {
+  font-size: 2.5rem;
+  color: var(--color-text-muted, #999);
+}
+
+.ff-attachment-info {
+  padding: 10px 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.ff-attachment-name {
+  font-size: 0.8rem;
+  font-weight: 600;
+  color: var(--color-text, #333);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.ff-attachment-meta {
+  font-size: 0.7rem;
+  color: var(--color-text-muted, #999);
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.ff-attachment-actions {
+  display: flex;
+  gap: 4px;
+  padding: 0 10px 10px;
+}
+
+.ff-attachment-action-btn {
+  flex: 1;
+  padding: 5px 0;
+  font-size: 0.72rem;
+  font-weight: 600;
+  border: 1px solid var(--color-border, #ddd);
+  border-radius: 5px;
+  background: var(--color-surface, #fff);
+  color: var(--color-text, #555);
+  cursor: pointer;
+  transition: all 0.15s;
+  text-align: center;
+}
+
+.ff-attachment-action-btn:hover {
+  background: var(--color-primary, #3b82f6);
+  color: var(--color-primary-contrast, #fff);
+  border-color: var(--color-primary, #3b82f6);
+}
+
+.ff-attachment-action-btn.delete:hover {
+  background: #ef4444;
+  border-color: #ef4444;
+  color: #fff;
+}
+
+.ff-attachment-delete-btn {
+  position: absolute;
+  top: 6px;
+  right: 6px;
+  width: 24px;
+  height: 24px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(0, 0, 0, 0.5);
+  border: none;
+  border-radius: 50%;
+  cursor: pointer;
+  color: #fff;
+  font-size: 14px;
+  opacity: 0;
+  transition: opacity 0.2s;
+}
+
+.ff-attachment-card:hover .ff-attachment-delete-btn {
+  opacity: 1;
+}
+
+.ff-attachment-delete-btn:hover {
+  background: #ef4444;
+}
+
+.ff-attachments-empty {
+  text-align: center;
+  color: var(--color-text-muted, #999);
+  font-size: 0.88rem;
+  padding: 32px 0;
+}
+
+/* Paste indicator */
+.ff-paste-indicator {
+  position: fixed;
+  bottom: 24px;
+  left: 50%;
+  transform: translateX(-50%);
+  background: var(--color-primary, #3b82f6);
+  color: #fff;
+  padding: 10px 24px;
+  border-radius: 10px;
+  font-size: 0.85rem;
+  font-weight: 600;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.18);
+  z-index: 9999;
+  animation: ff-toast-in 0.3s ease;
+}
+
+@keyframes ff-toast-in {
+  from {
+    opacity: 0;
+    transform: translateX(-50%) translateY(12px);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(-50%) translateY(0);
+  }
+}
+
+/* Uploading overlay for attachment cards */
+.ff-attachment-uploading {
+  position: absolute;
+  inset: 0;
+  background: rgba(255, 255, 255, 0.8);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 0.8rem;
+  font-weight: 600;
+  color: var(--color-primary, #3b82f6);
+  z-index: 2;
+}
+
+/* Responsive: stack on small screens */
+@media (max-width: 800px) {
+  .ff-detail-body {
+    flex-direction: column;
+  }
+
+  .ff-detail-info-panel {
+    width: 100%;
+    min-width: unset;
+    border-right: none;
+    border-bottom: 1px solid var(--color-border, #e0e0e0);
+    max-height: 220px;
+  }
+
+  .ff-attachments-grid {
+    grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
+  }
+}

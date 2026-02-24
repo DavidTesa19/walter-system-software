@@ -145,7 +145,17 @@ const DEFAULT_PALETTES = [
   }
 ];
 
-const DOCUMENT_ENTITY_TYPES = new Set(["clients", "partners", "tipers"]);
+const DOCUMENT_ENTITY_TYPES = new Set(["clients", "partners", "tipers", "future-functions"]);
+
+// Map URL entity names to JSON store keys / Postgres table names
+const ENTITY_STORE_KEY = {
+  "future-functions": "futureFunctions"
+};
+const ENTITY_TABLE_NAME = {
+  "future-functions": "future_functions"
+};
+const getStoreKey = (entity) => ENTITY_STORE_KEY[entity] || entity;
+const getTableName = (entity) => ENTITY_TABLE_NAME[entity] || entity;
 const MAX_DOCUMENT_SIZE_BYTES = 50 * 1024 * 1024; // 50 MB
 const upload = multer({
   storage: multer.memoryStorage(),
@@ -1826,7 +1836,7 @@ app.delete("/color-palettes/:id", authenticateToken, async (req, res) => {
   }
 });
 
-const respondUnsupportedEntity = (res) => res.status(400).json({ error: "Documents are only available for clients, partners, and tipers" });
+const respondUnsupportedEntity = (res) => res.status(400).json({ error: "Documents are only available for clients, partners, tipers, and future-functions" });
 
 const ensureParentRecord = async (entity, entityId) => {
   if (!isDocumentEntity(entity)) {
@@ -1834,12 +1844,14 @@ const ensureParentRecord = async (entity, entityId) => {
   }
 
   if (db.isPostgres()) {
-    const record = await db.getById(entity, entityId);
+    const tableName = getTableName(entity);
+    const record = await db.getById(tableName, entityId);
     return record ? { ok: true } : { ok: false, status: 404, message: "Parent record not found" };
   }
 
   const store = readDb();
-  const collection = Array.isArray(store[entity]) ? store[entity] : [];
+  const storeKey = getStoreKey(entity);
+  const collection = Array.isArray(store[storeKey]) ? store[storeKey] : [];
   const exists = collection.some((item) => Number(item.id) === entityId);
   return exists ? { ok: true, store } : { ok: false, status: 404, message: "Parent record not found" };
 };

@@ -90,7 +90,13 @@ const getInitialPalettes = (db) => {
   return cloneDefaultPalettes();
 };
 
-const DOCUMENT_ENTITY_TYPES = new Set(["clients", "partners", "tipers"]);
+const DOCUMENT_ENTITY_TYPES = new Set(["clients", "partners", "tipers", "future-functions"]);
+
+// Map URL entity names to JSON store keys (for entities with different naming conventions)
+const ENTITY_STORE_KEY = {
+  "future-functions": "futureFunctions"
+};
+const getStoreKey = (entity) => ENTITY_STORE_KEY[entity] || entity;
 const MAX_DOCUMENT_SIZE_BYTES = 50 * 1024 * 1024; // 50 MB
 const upload = multer({
   storage: multer.memoryStorage(),
@@ -1490,11 +1496,12 @@ app.post("/color-palettes/:id/activate", authenticateToken, (req, res) => {
   res.json(activated);
 });
 
-const respondUnsupportedEntity = (res) => res.status(400).json({ error: "Documents are only available for clients, partners, and tipers" });
+const respondUnsupportedEntity = (res) => res.status(400).json({ error: "Documents are only available for clients, partners, tipers, and future-functions" });
 
 const ensureParentRecord = (entity, entityId) => {
   const store = readDb();
-  const collection = Array.isArray(store[entity]) ? store[entity] : [];
+  const storeKey = getStoreKey(entity);
+  const collection = Array.isArray(store[storeKey]) ? store[storeKey] : [];
   const exists = collection.some((record) => Number(record.id) === entityId);
   return exists ? { ok: true, store } : { ok: false, status: 404, message: "Parent record not found" };
 };
