@@ -271,6 +271,7 @@ export async function initDatabase() {
       "ALTER TABLE future_functions ADD COLUMN IF NOT EXISTS phase VARCHAR(120)",
       "ALTER TABLE future_functions ADD COLUMN IF NOT EXISTS info TEXT",
       "ALTER TABLE future_functions ADD COLUMN IF NOT EXISTS status VARCHAR(50) DEFAULT 'Planned'",
+      "ALTER TABLE future_functions ADD COLUMN IF NOT EXISTS archived BOOLEAN DEFAULT FALSE",
       "ALTER TABLE users ADD COLUMN IF NOT EXISTS password_hash VARCHAR(255)",
       "ALTER TABLE users ADD COLUMN IF NOT EXISTS role VARCHAR(50) DEFAULT 'employee'",
       "ALTER TABLE documents ADD COLUMN IF NOT EXISTS archived_at TIMESTAMP DEFAULT NULL"
@@ -285,6 +286,7 @@ export async function initDatabase() {
     await client.query("UPDATE clients SET status = 'accepted' WHERE status IS NULL");
     await client.query("UPDATE tipers SET status = 'accepted' WHERE status IS NULL");
   await client.query("UPDATE future_functions SET status = 'Planned' WHERE status IS NULL");
+  await client.query("UPDATE future_functions SET archived = FALSE WHERE archived IS NULL");
 
     // Create analytics_events table
     await client.query(`

@@ -6,4 +6,5 @@ export interface FutureFunction {
   phase: string;
   info: string;
   status: string;
+  archived: boolean;
 }

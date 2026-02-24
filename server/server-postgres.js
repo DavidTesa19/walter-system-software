@@ -84,7 +84,8 @@ const FUTURE_FUNCTION_DEFAULTS = {
   complexity: "Moderate",
   phase: "Medium Term",
   info: "",
-  status: "Planned"
+  status: "Planned",
+  archived: false
 };
 
 const PALETTE_COLOR_KEYS = [
