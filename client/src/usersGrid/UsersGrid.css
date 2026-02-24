@@ -488,6 +488,9 @@
   --ag-selected-row-background-color: color-mix(in srgb, var(--color-primary) 20%, var(--color-surface));
   --ag-range-selection-border-color: var(--color-primary);
   --ag-input-focus-border-color: var(--color-primary);
+  --ag-row-height: 36px;
+  --ag-header-height: 40px;
+  --ag-font-size: 13px;
 }
 
 .ag-theme-quartz .ag-cell,

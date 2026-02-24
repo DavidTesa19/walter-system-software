@@ -24,7 +24,7 @@ interface AuthContextType {
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
-const SESSION_DURATION = 30 * 60 * 1000; // 30 minutes in milliseconds
+const SESSION_DURATION = 6 * 60 * 60 * 1000; // 6 hours in milliseconds
 
 interface AuthProviderProps {
   children: ReactNode;

@@ -357,8 +357,8 @@ const FutureFunctionsGrid: React.FC = () => {
         field: "name",
         headerName: "Název funkce",
         filter: true,
-        flex: 1.5,
-        minWidth: 180
+        flex: 2.5,
+        minWidth: 250
       },
       {
         field: "priority",
@@ -506,8 +506,8 @@ const FutureFunctionsGrid: React.FC = () => {
         headerName: "Název funkce",
         editable: false,
         filter: true,
-        flex: 1.5,
-        minWidth: 180
+        flex: 2.5,
+        minWidth: 250
       },
       {
         field: "priority",

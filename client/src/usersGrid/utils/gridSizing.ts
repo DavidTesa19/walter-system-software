@@ -3,7 +3,7 @@ export interface GridSizes {
   headerOffset: number;
 }
 
-const defaultSizes: GridSizes = { row: 42, headerOffset: 80 };
+const defaultSizes: GridSizes = { row: 36, headerOffset: 72 };
 
 export const measureGrid = (wrapper: HTMLDivElement | null): GridSizes => {
   if (!wrapper) {

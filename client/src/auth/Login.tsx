@@ -202,7 +202,7 @@ const Login: React.FC = () => {
         
         <div className="login-footer">
           <p className="security-note">
-            🔒 Zabezpečený přístup • Relace vyprší po 30 minutách nečinnosti
+            🔒 Zabezpečený přístup • Relace vyprší po 6 hodinách nečinnosti
           </p>
         </div>
       </div>
