@@ -27,10 +27,10 @@ const COMPLEXITY_OPTIONS = ["Jednoduchá", "Středně složitá", "Složitá"] a
 const PHASE_OPTIONS = ["Urgentní", "Střednědobé", "Před spuštěním", "Po spuštění"] as const;
 
 // All statuses
-const ALL_STATUS_OPTIONS = ["Plánováno", "Probíhá", "Ke kontrole", "Dokončeno", "Odloženo", "Zrušeno"] as const;
+const ALL_STATUS_OPTIONS = ["Plánováno", "Probíhá", "Ke kontrole", "Dokončeno", "Neschváleno", "Odloženo", "Zrušeno"] as const;
 
 // Statuses that appear in active table
-const ACTIVE_STATUSES = ["Plánováno", "Probíhá", "Ke kontrole", "Dokončeno"] as const;
+const ACTIVE_STATUSES = ["Plánováno", "Probíhá", "Ke kontrole", "Dokončeno", "Neschváleno"] as const;
 
 // Statuses that auto-archive
 const AUTO_ARCHIVE_STATUSES = ["Odloženo", "Zrušeno"] as const;
@@ -313,8 +313,9 @@ const FutureFunctionsGrid: React.FC = () => {
       "Probíhá": "#f59e0b",
       "Ke kontrole": "#a855f7",
       "Dokončeno": "#22c55e",
+      "Neschváleno": "#ef4444",
       "Odloženo": "#6b7280",
-      "Zrušeno": "#ef4444"
+      "Zrušeno": "#dc2626"
     };
 
     const color = colorMap[status] ?? "#888";

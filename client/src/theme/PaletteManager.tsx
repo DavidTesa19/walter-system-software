@@ -52,12 +52,12 @@ const TEMPLATE_COLORS: Record<Theme, PaletteColors> = {
 
 const TEMPLATE_TYPOGRAPHY: Record<Theme, PaletteTypography> = {
   light: {
-    heading: "'Playfair Display', 'Times New Roman', serif",
+    heading: "'Inter', 'Segoe UI', system-ui, sans-serif",
     subheading: "'Poppins', 'Segoe UI', sans-serif",
     body: "'Inter', system-ui, sans-serif"
   },
   dark: {
-    heading: "'Playfair Display', 'Times New Roman', serif",
+    heading: "'Inter', 'Segoe UI', system-ui, sans-serif",
     subheading: "'Poppins', 'Segoe UI', sans-serif",
     body: "'Inter', system-ui, sans-serif"
   }
@@ -72,9 +72,9 @@ const FONT_FIELDS: Array<{ key: keyof PaletteTypography; label: string; sample: 
 const FONT_SUGGESTIONS: string[] = [
   "'Inter', system-ui, sans-serif",
   "'Poppins', 'Segoe UI', sans-serif",
-  "'Playfair Display', 'Times New Roman', serif",
-  "'Roboto Slab', 'Times New Roman', serif",
-  "'Merriweather', 'Georgia', serif",
+  "'Manrope', 'Segoe UI', system-ui, sans-serif",
+  "'Nunito Sans', 'Segoe UI', sans-serif",
+  "'Work Sans', 'Segoe UI', sans-serif",
   "'Source Sans Pro', 'Segoe UI', sans-serif",
   "'Montserrat', 'Segoe UI', sans-serif",
   "'Raleway', 'Segoe UI', sans-serif"

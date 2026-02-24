@@ -45,8 +45,9 @@ const STATUS_COLORS: Record<string, string> = {
   Probíhá: "#f59e0b",
   "Ke kontrole": "#a855f7",
   Dokončeno: "#22c55e",
+  Neschváleno: "#ef4444",
   Odloženo: "#6b7280",
-  Zrušeno: "#ef4444",
+  Zrušeno: "#dc2626",
 };
 
 const formatDate = (iso: string) => {

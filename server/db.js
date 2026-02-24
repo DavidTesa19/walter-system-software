@@ -343,7 +343,7 @@ async function ensureDefaultPalettes(client) {
         border: 'hsl(214, 32%, 89%)'
       },
       typography: {
-        heading: "'Playfair Display', 'Times New Roman', serif",
+        heading: "'Inter', 'Segoe UI', system-ui, sans-serif",
         subheading: "'Poppins', 'Segoe UI', sans-serif",
         body: "'Inter', system-ui, sans-serif"
       },
@@ -362,7 +362,7 @@ async function ensureDefaultPalettes(client) {
         border: 'hsl(220, 23%, 28%)'
       },
       typography: {
-        heading: "'Playfair Display', 'Times New Roman', serif",
+        heading: "'Inter', 'Segoe UI', system-ui, sans-serif",
         subheading: "'Poppins', 'Segoe UI', sans-serif",
         body: "'Inter', system-ui, sans-serif"
       },
