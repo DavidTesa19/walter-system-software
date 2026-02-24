@@ -595,23 +595,27 @@ const FutureFunctionsGrid: React.FC = () => {
     <div className="page-container">
       <div className="header-section">
         <h1 className="page-title">Plán budoucích funkcí</h1>
-        <div style={{ display: "flex", gap: "10px", alignItems: "center" }}>
+        <div className="navigation-tabs">
           <button
-            className="add-user-btn"
             type="button"
-            onClick={() => setIsArchiveView((prev) => !prev)}
-            disabled={isLoading}
+            className={`nav-tab${!isArchiveView ? " active" : ""}`}
+            onClick={() => setIsArchiveView(false)}
           >
-            {isArchiveView
-              ? `Aktivní (${activeFunctions.length})`
-              : `Archiv (${archivedFunctions.length})`}
+            📋 Aktivní
           </button>
-          {!isArchiveView && (
-            <button className="add-user-btn" onClick={handleAddFunction} disabled={isLoading}>
-              + Přidat funkci
-            </button>
-          )}
+          <button
+            type="button"
+            className={`nav-tab${isArchiveView ? " active" : ""}`}
+            onClick={() => setIsArchiveView(true)}
+          >
+            📦 Archiv
+          </button>
         </div>
+        {!isArchiveView && (
+          <button className="add-user-btn" onClick={handleAddFunction} disabled={isLoading}>
+            + Přidat funkci
+          </button>
+        )}
       </div>
 
       <div className="table-section">
