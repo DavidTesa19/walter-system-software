@@ -29,6 +29,16 @@ const PHASE_OPTIONS = ["Urgentní", "Střednědobé", "Před spuštěním", "Po 
 // All statuses
 const ALL_STATUS_OPTIONS = ["Plánováno", "Probíhá", "Ke kontrole", "Dokončeno", "Neschváleno", "Odloženo", "Zrušeno"] as const;
 
+const STATUS_COLOR_MAP: Record<string, string> = {
+  "Plánováno": "#3b82f6",
+  "Probíhá": "#f59e0b",
+  "Ke kontrole": "#a855f7",
+  "Dokončeno": "#22c55e",
+  "Neschváleno": "#ef4444",
+  "Odloženo": "#6b7280",
+  "Zrušeno": "#dc2626"
+};
+
 // Statuses that appear in active table
 const ACTIVE_STATUSES = ["Plánováno", "Probíhá", "Ke kontrole", "Dokončeno", "Neschváleno"] as const;
 
@@ -319,17 +329,7 @@ const FutureFunctionsGrid: React.FC = () => {
     const status = params.value as string;
     if (!status) return null;
 
-    const colorMap: Record<string, string> = {
-      "Plánováno": "#3b82f6",
-      "Probíhá": "#f59e0b",
-      "Ke kontrole": "#a855f7",
-      "Dokončeno": "#22c55e",
-      "Neschváleno": "#ef4444",
-      "Odloženo": "#6b7280",
-      "Zrušeno": "#dc2626"
-    };
-
-    const color = colorMap[status] ?? "#888";
+    const color = STATUS_COLOR_MAP[status] ?? "#888";
 
     return (
       <span style={{
@@ -671,6 +671,30 @@ const FutureFunctionsGrid: React.FC = () => {
     ? Math.min(400, Math.max(150, archivedFunctions.length * 42 + 56))
     : 500;
 
+  // Status counts for summary strip
+  const statusSummary = useMemo(() => {
+    const countByStatus = (rows: FutureFunction[]) => {
+      const counts: Record<string, number> = {};
+      for (const row of rows) {
+        const key = row.status || "(bez stavu)";
+        counts[key] = (counts[key] ?? 0) + 1;
+      }
+      return counts;
+    };
+
+    const toEntries = (counts: Record<string, number>) =>
+      (ALL_STATUS_OPTIONS as readonly string[])
+        .filter((s) => (counts[s] ?? 0) > 0)
+        .map((s) => ({ status: s, count: counts[s]! }));
+
+    return {
+      activeTotal: activeFunctions.length,
+      archivedTotal: archivedFunctions.length,
+      activeEntries: toEntries(countByStatus(activeFunctions)),
+      archivedEntries: toEntries(countByStatus(archivedFunctions))
+    };
+  }, [activeFunctions, archivedFunctions]);
+
   return (
     <div className="page-container">
       <div
@@ -710,6 +734,53 @@ const FutureFunctionsGrid: React.FC = () => {
             + Přidat funkci
           </button>
         </div>
+      </div>
+
+      {/* Status summary */}
+      <div
+        style={{
+          display: "flex",
+          flexDirection: "column",
+          gap: "6px",
+          marginBottom: "12px",
+          padding: "10px 14px",
+          borderRadius: "12px",
+          background: "var(--color-surface-alt)",
+          border: "1px solid var(--color-border)",
+          boxShadow: "var(--color-shadow-sm)",
+          textAlign: "left"
+        }}
+      >
+        {[
+          { label: "Aktivní", total: statusSummary.activeTotal, entries: statusSummary.activeEntries },
+          { label: "Archiv", total: statusSummary.archivedTotal, entries: statusSummary.archivedEntries }
+        ].map(({ label, total, entries }) => (
+          <div key={label} style={{ display: "flex", flexWrap: "wrap", gap: "8px", alignItems: "center" }}>
+            <span style={{ fontFamily: "var(--font-subheading)", fontWeight: 700, color: "var(--color-text)", minWidth: "90px" }}>
+              {label} ({total})
+            </span>
+            {entries.map(({ status, count }) => (
+              <span
+                key={status}
+                style={{
+                  display: "inline-flex",
+                  alignItems: "center",
+                  gap: "5px",
+                  padding: "3px 10px",
+                  borderRadius: "999px",
+                  background: "var(--color-surface-hover)",
+                  border: "1px solid var(--color-border)",
+                  color: "var(--color-text)",
+                  fontFamily: "var(--font-subheading)",
+                  fontSize: "0.85rem"
+                }}
+              >
+                <span style={{ width: "8px", height: "8px", borderRadius: "50%", backgroundColor: STATUS_COLOR_MAP[status] ?? "#888", flexShrink: 0 }} />
+                {status}: {count}
+              </span>
+            ))}
+          </div>
+        ))}
       </div>
 
       <div className="table-section">
