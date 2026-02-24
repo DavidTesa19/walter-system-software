@@ -320,16 +320,6 @@ const ClientsSectionNew: React.FC<SectionProps> = ({
     }
   }), [openProfile, viewMode, handleApprove, handleRestore, handleDelete]);
 
-  const defaultColDef = useMemo(
-    () => ({
-      resizable: true,
-      sortable: true
-    }),
-    []
-  );
-
-  const getRowId = useCallback((params: any) => String(params.data.id), []);
-
   // ==========================================================================
   // CELL VALUE CHANGED
   // ==========================================================================
@@ -599,9 +589,10 @@ const ClientsSectionNew: React.FC<SectionProps> = ({
             rowData={gridData}
             columnDefs={columnDefs}
             onCellValueChanged={onCellValueChanged}
-            defaultColDef={defaultColDef}
-            getRowId={getRowId}
-            suppressScrollOnNewData={true}
+            defaultColDef={{
+              resizable: true,
+              sortable: true
+            }}
             suppressRowClickSelection={true}
             loading={isLoading}
             context={gridContext}

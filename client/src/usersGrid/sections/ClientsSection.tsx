@@ -171,16 +171,6 @@ const ClientsSection: React.FC<SectionProps> = ({
   const documentManager = useProfileDocuments("clients", selectedProfileId);
   const notesManager = useProfileNotes("clients", selectedProfileId);
 
-  const defaultColDef = useMemo(
-    () => ({
-      resizable: true,
-      sortable: true
-    }),
-    []
-  );
-
-  const getRowId = useCallback((params: any) => String(params.data.id), []);
-
   const status = useMemo(() => mapViewToStatus(viewMode), [viewMode]);
 
   const fetchClientsData = useCallback(async () => {
@@ -379,15 +369,16 @@ const ClientsSection: React.FC<SectionProps> = ({
     });
 
     if (targetNode?.rowIndex !== null && targetNode?.rowIndex !== undefined) {
-      gridRef.current.api.ensureIndexVisible(targetNode.rowIndex, "middle");
-      // flashCells can throw if the cell is not yet rendered (virtualization)
       const api = gridRef.current.api;
+      api.ensureIndexVisible(targetNode.rowIndex, "middle");
+
+      // Defer flashing until after AG Grid has rendered the row/cells.
       requestAnimationFrame(() => {
         requestAnimationFrame(() => {
           try {
             api.flashCells({ rowNodes: [targetNode], columns: ["name"] });
-          } catch (error) {
-            console.warn("Search row highlight skipped:", error);
+          } catch {
+            // Ignore highlight errors; navigation should never crash.
           }
         });
       });
@@ -541,9 +532,10 @@ const ClientsSection: React.FC<SectionProps> = ({
             rowData={clientsData}
             columnDefs={clientsColDefs}
             onCellValueChanged={onClientsCellValueChanged}
-            defaultColDef={defaultColDef}
-            getRowId={getRowId}
-            suppressScrollOnNewData={true}
+            defaultColDef={{
+              resizable: true,
+              sortable: true
+            }}
             suppressRowClickSelection={true}
             loading={isLoading}
             context={gridContext}

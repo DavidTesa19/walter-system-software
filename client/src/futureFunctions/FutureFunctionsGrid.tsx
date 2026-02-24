@@ -30,6 +30,16 @@ const PHASE_OPTIONS = ["Urgentní", "Střednědobé", "Před spuštěním", "Po 
 // All statuses
 const ALL_STATUS_OPTIONS = ["Plánováno", "Probíhá", "Ke kontrole", "Dokončeno", "Neschváleno", "Odloženo", "Zrušeno"] as const;
 
+const STATUS_COLOR_MAP: Record<(typeof ALL_STATUS_OPTIONS)[number] | string, string> = {
+  "Plánováno": "#3b82f6",
+  "Probíhá": "#f59e0b",
+  "Ke kontrole": "#a855f7",
+  "Dokončeno": "#22c55e",
+  "Neschváleno": "#ef4444",
+  "Odloženo": "#6b7280",
+  "Zrušeno": "#dc2626"
+};
+
 // Statuses that appear in active table
 const ACTIVE_STATUSES = ["Plánováno", "Probíhá", "Ke kontrole", "Dokončeno", "Neschváleno"] as const;
 
@@ -44,6 +54,13 @@ const FutureFunctionsGrid: React.FC = () => {
   const activeWrapperRef = useRef<HTMLDivElement | null>(null);
   const { canUndo, canRedo, isBusy, undo, redo, pushAction, signal } = useUndoRedo();
   const editSnapshotRef = useRef<Map<number, FutureFunction>>(new Map());
+
+  const cloneRecord = useCallback(<T,>(value: T): T => {
+    if (typeof structuredClone === "function") {
+      return structuredClone(value);
+    }
+    return JSON.parse(JSON.stringify(value)) as T;
+  }, []);
 
   const defaultColDef = useMemo<ColDef<FutureFunction>>(
     () => ({
@@ -83,13 +100,6 @@ const FutureFunctionsGrid: React.FC = () => {
     void fetchFutureFunctions();
   }, [fetchFutureFunctions, signal.resource, signal.revision]);
 
-  const cloneRecord = useCallback(<T,>(value: T): T => {
-    if (typeof structuredClone === "function") {
-      return structuredClone(value);
-    }
-    return JSON.parse(JSON.stringify(value)) as T;
-  }, []);
-
   // Split data into active and archived
   const activeFunctions = useMemo(
     () => futureFunctions.filter((f) => !f.archived),
@@ -117,14 +127,15 @@ const FutureFunctionsGrid: React.FC = () => {
       try {
         setIsLoading(true);
         const created = await apiPost<FutureFunction>(`/future-functions`, newFunction);
+        const snapshot = cloneRecord(created);
         pushAction({
           label: "Add future function",
           resource: "future-functions",
           undo: async () => {
-            await apiDelete(`/future-functions/${created.id}`);
+            await apiDelete(`/future-functions/${snapshot.id}`);
           },
           redo: async () => {
-            await apiPost(`/future-functions`, created);
+            await apiPost(`/future-functions`, snapshot);
           }
         });
         await fetchFutureFunctions();
@@ -135,7 +146,7 @@ const FutureFunctionsGrid: React.FC = () => {
         setIsLoading(false);
       }
     },
-    [fetchFutureFunctions, pushAction]
+    [cloneRecord, fetchFutureFunctions, pushAction]
   );
 
   const handleDeleteFunction = useCallback(
@@ -148,8 +159,8 @@ const FutureFunctionsGrid: React.FC = () => {
 
       try {
         setIsLoading(true);
-        await apiDelete(`/future-functions/${func.id}`);
         const snapshot = cloneRecord(func);
+        await apiDelete(`/future-functions/${func.id}`);
         pushAction({
           label: "Delete future function",
           resource: "future-functions",
@@ -176,11 +187,11 @@ const FutureFunctionsGrid: React.FC = () => {
       try {
         setIsLoading(true);
         const before = cloneRecord(func);
-        const after = { ...before, archived: true };
-        await apiPut(`/future-functions/${func.id}`, {
+        const updated = await apiPut<FutureFunction>(`/future-functions/${func.id}`, {
           ...func,
           archived: true
         });
+        const after = cloneRecord(updated);
         pushAction({
           label: "Archive future function",
           resource: "future-functions",
@@ -213,8 +224,12 @@ const FutureFunctionsGrid: React.FC = () => {
         const newStatus = (AUTO_ARCHIVE_STATUSES as readonly string[]).includes(func.status)
           ? "Plánováno"
           : func.status;
-        const after = { ...before, archived: false, status: newStatus };
-        await apiPut(`/future-functions/${func.id}`, after);
+        const updated = await apiPut<FutureFunction>(`/future-functions/${func.id}`, {
+          ...func,
+          archived: false,
+          status: newStatus
+        });
+        const after = cloneRecord(updated);
         pushAction({
           label: "Restore future function",
           resource: "future-functions",
@@ -395,17 +410,7 @@ const FutureFunctionsGrid: React.FC = () => {
     const status = params.value as string;
     if (!status) return null;
 
-    const colorMap: Record<string, string> = {
-      "Plánováno": "#3b82f6",
-      "Probíhá": "#f59e0b",
-      "Ke kontrole": "#a855f7",
-      "Dokončeno": "#22c55e",
-      "Neschváleno": "#ef4444",
-      "Odloženo": "#6b7280",
-      "Zrušeno": "#dc2626"
-    };
-
-    const color = colorMap[status] ?? "#888";
+    const color = STATUS_COLOR_MAP[status] ?? "#888";
 
     return (
       <span style={{
@@ -765,6 +770,41 @@ const FutureFunctionsGrid: React.FC = () => {
     ? Math.min(400, Math.max(150, archivedFunctions.length * 42 + 56))
     : 500;
 
+  const statusSummary = useMemo(() => {
+    const countByStatus = (rows: FutureFunction[]) => {
+      const counts: Record<string, number> = {};
+      for (const row of rows) {
+        const key = row?.status || "(bez stavu)";
+        counts[key] = (counts[key] ?? 0) + 1;
+      }
+      return counts;
+    };
+
+    const toOrderedEntries = (counts: Record<string, number>) => {
+      const known = (ALL_STATUS_OPTIONS as readonly string[])
+        .filter((status) => (counts[status] ?? 0) > 0)
+        .map((status) => ({ status, count: counts[status] ?? 0 }));
+
+      const knownSet = new Set(ALL_STATUS_OPTIONS as readonly string[]);
+      const unknown = Object.keys(counts)
+        .filter((status) => !knownSet.has(status) && (counts[status] ?? 0) > 0)
+        .sort((a, b) => a.localeCompare(b, "cs-CZ"))
+        .map((status) => ({ status, count: counts[status] ?? 0 }));
+
+      return [...known, ...unknown];
+    };
+
+    const activeCounts = countByStatus(activeFunctions);
+    const archivedCounts = countByStatus(archivedFunctions);
+
+    return {
+      activeTotal: activeFunctions.length,
+      archivedTotal: archivedFunctions.length,
+      activeEntries: toOrderedEntries(activeCounts),
+      archivedEntries: toOrderedEntries(archivedCounts)
+    };
+  }, [activeFunctions, archivedFunctions]);
+
   return (
     <div className="page-container">
       <div
@@ -801,7 +841,7 @@ const FutureFunctionsGrid: React.FC = () => {
               type="button"
               className="undo-redo-btn"
               onClick={undo}
-              disabled={!canUndo || isBusy}
+              disabled={!canUndo || isBusy || isLoading}
               title="Undo (Ctrl+Z)"
             >
               Undo
@@ -810,19 +850,102 @@ const FutureFunctionsGrid: React.FC = () => {
               type="button"
               className="undo-redo-btn"
               onClick={redo}
-              disabled={!canRedo || isBusy}
+              disabled={!canRedo || isBusy || isLoading}
               title="Redo (Ctrl+Y / Ctrl+Shift+Z)"
             >
               Redo
             </button>
-          <button
-            className="add-user-btn"
-            onClick={() => handleAddFunction(isArchiveView ? "archive" : "active")}
-            disabled={isLoading}
-          >
-            + Přidat funkci
-          </button>
+            <button
+              className="add-user-btn"
+              onClick={() => handleAddFunction(isArchiveView ? "archive" : "active")}
+              disabled={isLoading || isBusy}
+            >
+              + Přidat funkci
+            </button>
           </div>
+        </div>
+      </div>
+
+      <div
+        style={{
+          display: "flex",
+          flexDirection: "column",
+          gap: "8px",
+          marginBottom: "12px",
+          padding: "10px 12px",
+          borderRadius: "12px",
+          background: "var(--color-surface-alt)",
+          border: "1px solid var(--color-border)",
+          boxShadow: "var(--color-shadow-sm)",
+          textAlign: "left"
+        }}
+      >
+        <div style={{ display: "flex", flexWrap: "wrap", gap: "10px", alignItems: "center" }}>
+          <span style={{ fontFamily: "var(--font-subheading)", fontWeight: 700, color: "var(--color-text)" }}>
+            Aktivní ({statusSummary.activeTotal})
+          </span>
+          {statusSummary.activeEntries.map(({ status, count }) => (
+            <span
+              key={`active-${status}`}
+              style={{
+                display: "inline-flex",
+                alignItems: "center",
+                gap: "6px",
+                padding: "4px 10px",
+                borderRadius: "999px",
+                background: "var(--color-surface-hover)",
+                border: "1px solid var(--color-border)",
+                color: "var(--color-text)",
+                fontFamily: "var(--font-subheading)",
+                fontSize: "0.9rem"
+              }}
+            >
+              <span
+                style={{
+                  width: "8px",
+                  height: "8px",
+                  borderRadius: "50%",
+                  backgroundColor: STATUS_COLOR_MAP[status] ?? "#888",
+                  flexShrink: 0
+                }}
+              />
+              {status}: {count}
+            </span>
+          ))}
+        </div>
+
+        <div style={{ display: "flex", flexWrap: "wrap", gap: "10px", alignItems: "center" }}>
+          <span style={{ fontFamily: "var(--font-subheading)", fontWeight: 700, color: "var(--color-text)" }}>
+            Archiv ({statusSummary.archivedTotal})
+          </span>
+          {statusSummary.archivedEntries.map(({ status, count }) => (
+            <span
+              key={`archived-${status}`}
+              style={{
+                display: "inline-flex",
+                alignItems: "center",
+                gap: "6px",
+                padding: "4px 10px",
+                borderRadius: "999px",
+                background: "var(--color-surface-hover)",
+                border: "1px solid var(--color-border)",
+                color: "var(--color-text)",
+                fontFamily: "var(--font-subheading)",
+                fontSize: "0.9rem"
+              }}
+            >
+              <span
+                style={{
+                  width: "8px",
+                  height: "8px",
+                  borderRadius: "50%",
+                  backgroundColor: STATUS_COLOR_MAP[status] ?? "#888",
+                  flexShrink: 0
+                }}
+              />
+              {status}: {count}
+            </span>
+          ))}
         </div>
       </div>
 

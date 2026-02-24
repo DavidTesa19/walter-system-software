@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { AuthProvider, useAuth } from './auth/AuthContext';
 import { ThemeProvider } from './theme/ThemeContext';
+import { UndoRedoProvider } from './utils/undoRedo';
 import Login from './auth/Login';
 import Sidebar from './components/Sidebar';
 import Footer from './components/Footer';
@@ -19,7 +20,6 @@ import type { GlobalSearchResult, GridSearchNavigationTarget, SearchTable } from
 import type { UserInterface } from './usersGrid/user.interface';
 import type { FutureFunction } from './futureFunctions/futureFunction.interface';
 import { apiGet } from './utils/api';
-import { UndoRedoProvider } from './utils/undoRedo';
 import './components/Sidebar.css';
 
 type SearchField = keyof UserInterface;
