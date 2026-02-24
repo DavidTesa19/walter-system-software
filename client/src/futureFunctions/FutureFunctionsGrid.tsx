@@ -42,6 +42,19 @@ const FutureFunctionsGrid: React.FC = () => {
   const [selectedFunction, setSelectedFunction] = useState<FutureFunction | null>(null);
   const activeWrapperRef = useRef<HTMLDivElement | null>(null);
 
+  const defaultColDef = useMemo<ColDef<FutureFunction>>(
+    () => ({
+      editable: true,
+      resizable: true,
+      sortable: true,
+      filter: true,
+      flex: 1
+    }),
+    []
+  );
+
+  const getRowId = useCallback((params: { data: FutureFunction }) => String(params.data.id), []);
+
   const fetchFutureFunctions = useCallback(async () => {
     setIsLoading(true);
     try {
@@ -99,9 +112,8 @@ const FutureFunctionsGrid: React.FC = () => {
   );
 
   const handleDeleteFunction = useCallback(
-    async (id: number) => {
-      const target = futureFunctions.find((item) => item.id === id);
-      const name = target?.name ? `\"${target.name}\"` : "tuto funkci";
+    async (func: FutureFunction) => {
+      const name = func?.name ? `\"${func.name}\"` : "tuto funkci";
 
       if (!confirm(`Opravdu chcete smazat ${name}?`)) {
         return;
@@ -109,7 +121,7 @@ const FutureFunctionsGrid: React.FC = () => {
 
       try {
         setIsLoading(true);
-        await apiDelete(`/future-functions/${id}`);
+        await apiDelete(`/future-functions/${func.id}`);
         await fetchFutureFunctions();
       } catch (error) {
         console.error("Error deleting future function:", error);
@@ -118,15 +130,15 @@ const FutureFunctionsGrid: React.FC = () => {
         setIsLoading(false);
       }
     },
-    [fetchFutureFunctions, futureFunctions]
+    [fetchFutureFunctions]
   );
 
   const handleArchiveFunction = useCallback(
-    async (id: number) => {
+    async (func: FutureFunction) => {
       try {
         setIsLoading(true);
-        await apiPut(`/future-functions/${id}`, {
-          ...futureFunctions.find((f) => f.id === id),
+        await apiPut(`/future-functions/${func.id}`, {
+          ...func,
           archived: true
         });
         await fetchFutureFunctions();
@@ -137,22 +149,21 @@ const FutureFunctionsGrid: React.FC = () => {
         setIsLoading(false);
       }
     },
-    [fetchFutureFunctions, futureFunctions]
+    [fetchFutureFunctions]
   );
 
   const handleRestoreFunction = useCallback(
-    async (id: number) => {
-      const target = futureFunctions.find((f) => f.id === id);
-      if (!target) return;
+    async (func: FutureFunction) => {
+      if (!func) return;
 
       try {
         setIsLoading(true);
         // When restoring, if the status is an auto-archive status, reset to Plánováno
-        const newStatus = (AUTO_ARCHIVE_STATUSES as readonly string[]).includes(target.status)
+        const newStatus = (AUTO_ARCHIVE_STATUSES as readonly string[]).includes(func.status)
           ? "Plánováno"
-          : target.status;
-        await apiPut(`/future-functions/${id}`, {
-          ...target,
+          : func.status;
+        await apiPut(`/future-functions/${func.id}`, {
+          ...func,
           archived: false,
           status: newStatus
         });
@@ -164,7 +175,7 @@ const FutureFunctionsGrid: React.FC = () => {
         setIsLoading(false);
       }
     },
-    [fetchFutureFunctions, futureFunctions]
+    [fetchFutureFunctions]
   );
 
   const onCellValueChanged = useCallback(
@@ -228,12 +239,12 @@ const FutureFunctionsGrid: React.FC = () => {
 
   // Delete button cell renderer for the pinned column
   const DeleteCellRenderer = useCallback((params: ICellRendererParams<FutureFunction>) => {
-    const id = params.data?.id;
-    if (id == null) return null;
+    const data = params.data;
+    if (!data) return null;
     return (
       <button
         type="button"
-        onClick={() => handleDeleteFunction(id)}
+        onClick={() => handleDeleteFunction(data)}
         className="inrow-delete-btn"
         title="Smazat funkci"
       >
@@ -251,7 +262,7 @@ const FutureFunctionsGrid: React.FC = () => {
     return (
       <button
         type="button"
-        onClick={() => handleArchiveFunction(data.id)}
+        onClick={() => handleArchiveFunction(data)}
         className="inrow-archive-btn"
         title="Archivovat funkci"
         style={{
@@ -281,7 +292,7 @@ const FutureFunctionsGrid: React.FC = () => {
     return (
       <button
         type="button"
-        onClick={() => handleRestoreFunction(data.id)}
+        onClick={() => handleRestoreFunction(data)}
         className="inrow-restore-btn"
         title="Obnovit funkci (přesunout zpět do aktivní tabulky)"
         style={{
@@ -707,13 +718,9 @@ const FutureFunctionsGrid: React.FC = () => {
             <AgGridReact<FutureFunction>
               rowData={currentRowData}
               columnDefs={currentColumnDefs}
-              defaultColDef={{
-                editable: true,
-                resizable: true,
-                sortable: true,
-                filter: true,
-                flex: 1
-              }}
+              defaultColDef={defaultColDef}
+              getRowId={getRowId}
+              suppressScrollOnNewData={true}
               suppressRowClickSelection={true}
               onCellValueChanged={currentOnCellValueChanged}
               loading={isLoading}

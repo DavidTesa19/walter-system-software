@@ -11,6 +11,7 @@ export interface GlobalSearchResult {
   view: AppView;
   table?: SearchTable;
   recordId?: number;
+  futureFunctionId?: number;
 }
 
 export interface GridSearchNavigationTarget {

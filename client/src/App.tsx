@@ -17,6 +17,7 @@ import { trackEvent, trackSectionStart } from './utils/analytics';
 import type { AppView } from './types/appView';
 import type { GlobalSearchResult, GridSearchNavigationTarget, SearchTable } from './types/globalSearch';
 import type { UserInterface } from './usersGrid/user.interface';
+import type { FutureFunction } from './futureFunctions/futureFunction.interface';
 import { apiGet } from './utils/api';
 import './components/Sidebar.css';
 
@@ -28,6 +29,20 @@ type SearchableRecord = {
   viewMode: 'active' | 'pending' | 'archived';
   row: UserInterface;
 };
+
+type SearchableFutureFunction = {
+  row: FutureFunction;
+  archived: boolean;
+};
+
+const FUTURE_FUNCTION_FIELDS: Array<{ key: keyof FutureFunction; label: string }> = [
+  { key: 'name', label: 'Název' },
+  { key: 'info', label: 'Popis / Info' },
+  { key: 'priority', label: 'Priorita' },
+  { key: 'complexity', label: 'Složitost' },
+  { key: 'phase', label: 'Fáze' },
+  { key: 'status', label: 'Stav' }
+];
 
 const SEARCH_FIELDS: Array<{ key: SearchField; label: string }> = [
   { key: 'name', label: 'Jméno' },
@@ -97,7 +112,7 @@ const AppContent: React.FC = () => {
   const { isAuthenticated } = useAuth();
   const [viewMode, setViewMode] = useState<AppView>('active');
   const [gridSearchTarget, setGridSearchTarget] = useState<GridSearchNavigationTarget | null>(null);
-  const searchIndexCacheRef = useRef<{ records: SearchableRecord[]; fetchedAt: number } | null>(null);
+  const searchIndexCacheRef = useRef<{ records: SearchableRecord[]; futureFunctions: SearchableFutureFunction[]; fetchedAt: number } | null>(null);
 
   // Track section visits and time spent
   useEffect(() => {
@@ -111,7 +126,7 @@ const AppContent: React.FC = () => {
     setViewMode(view);
   }, []);
 
-  const buildSearchIndex = useCallback(async (): Promise<SearchableRecord[]> => {
+  const buildSearchIndex = useCallback(async (): Promise<{ records: SearchableRecord[]; futureFunctions: SearchableFutureFunction[] }> => {
     const statuses: SearchStatus[] = ['accepted', 'pending', 'archived'];
     const tables: SearchTable[] = ['clients', 'partners', 'tipers'];
     const requests = tables.flatMap((table) =>
@@ -126,8 +141,19 @@ const AppContent: React.FC = () => {
       })
     );
 
-    const settled = await Promise.allSettled(requests);
-    return settled.flatMap((result) => (result.status === 'fulfilled' ? result.value : []));
+    const [settled, ffResult] = await Promise.all([
+      Promise.allSettled(requests),
+      apiGet<FutureFunction[]>('/future-functions').catch(() => [] as FutureFunction[])
+    ]);
+
+    const records = settled.flatMap((result) => (result.status === 'fulfilled' ? result.value : []));
+    const ffRows = Array.isArray(ffResult) ? ffResult : [];
+    const futureFunctions: SearchableFutureFunction[] = ffRows.map((row) => ({
+      row,
+      archived: row.archived
+    }));
+
+    return { records, futureFunctions };
   }, []);
 
   const runGlobalSearch = useCallback(async (query: string): Promise<GlobalSearchResult[]> => {
@@ -145,11 +171,12 @@ const AppContent: React.FC = () => {
       searchIndexCacheRef.current && Date.now() - searchIndexCacheRef.current.fetchedAt < 45_000;
 
     if (!cacheIsFresh) {
-      const records = await buildSearchIndex();
-      searchIndexCacheRef.current = { records, fetchedAt: Date.now() };
+      const { records, futureFunctions } = await buildSearchIndex();
+      searchIndexCacheRef.current = { records, futureFunctions, fetchedAt: Date.now() };
     }
 
     const records = searchIndexCacheRef.current?.records ?? [];
+    const futureFunctions = searchIndexCacheRef.current?.futureFunctions ?? [];
     const results: GlobalSearchResult[] = [];
 
     (Object.entries(VIEW_LABELS) as Array<[AppView, string]>).forEach(([view, label]) => {
@@ -212,6 +239,48 @@ const AppContent: React.FC = () => {
           view: viewMode,
           table,
           recordId: row.id
+        });
+      });
+    });
+
+    // Search future functions
+    futureFunctions.forEach(({ row, archived }) => {
+      if (typeof row.id !== 'number') {
+        return;
+      }
+
+      const searchableParts = FUTURE_FUNCTION_FIELDS.map(({ key }) => {
+        const value = row[key];
+        return value == null ? '' : String(value);
+      }).filter(Boolean);
+
+      const aggregate = normalizeSearchText(searchableParts.join(' '));
+      if (!tokens.every((token) => aggregate.includes(token))) {
+        return;
+      }
+
+      FUTURE_FUNCTION_FIELDS.forEach(({ key, label }) => {
+        const fieldValue = row[key];
+        const asText = fieldValue == null ? '' : String(fieldValue);
+        if (!asText) {
+          return;
+        }
+
+        const normalizedField = normalizeSearchText(asText);
+        if (!tokens.some((token) => normalizedField.includes(token))) {
+          return;
+        }
+
+        const archiveLabel = archived ? ' (archiv)' : '';
+
+        results.push({
+          id: `ff-${row.id}-${String(key)}`,
+          title: row.name || `Funkce #${row.id}`,
+          subtitle: `Budoucí funkce • ${label}${archiveLabel}`,
+          matchText: asText,
+          locationLabel: `Budoucí funkce${archiveLabel}`,
+          view: 'future',
+          futureFunctionId: row.id
         });
       });
     });
