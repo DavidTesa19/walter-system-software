@@ -320,6 +320,16 @@ const TipersSectionNew: React.FC<SectionProps> = ({
     }
   }), [openProfile, viewMode, handleApprove, handleRestore, handleDelete]);
 
+  const defaultColDef = useMemo(
+    () => ({
+      resizable: true,
+      sortable: true
+    }),
+    []
+  );
+
+  const getRowId = useCallback((params: any) => String(params.data.id), []);
+
   // ==========================================================================
   // CELL VALUE CHANGED
   // ==========================================================================
@@ -585,10 +595,9 @@ const TipersSectionNew: React.FC<SectionProps> = ({
             rowData={gridData}
             columnDefs={columnDefs}
             onCellValueChanged={onCellValueChanged}
-            defaultColDef={{
-              resizable: true,
-              sortable: true
-            }}
+            defaultColDef={defaultColDef}
+            getRowId={getRowId}
+            suppressScrollOnNewData={true}
             suppressRowClickSelection={true}
             loading={isLoading}
             context={gridContext}

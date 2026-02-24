@@ -8,6 +8,7 @@ import ClientsSection from "./sections/ClientsSection";
 import PartnersSection from "./sections/PartnersSection";
 import TipersSection from "./sections/TipersSection";
 import type { AddHandler } from "./sections/SectionTypes";
+import { useUndoRedo } from "../utils/undoRedo";
 
 ModuleRegistry.registerModules([AllCommunityModule]);
 
@@ -28,6 +29,7 @@ const UsersGrid: React.FC<UsersGridProps> = ({ viewMode, searchTarget }) => {
   const [activeTable, setActiveTable] = useState<TableType>("clients");
   const addHandlerRef = useRef<AddHandler | null>(null);
   const [isAddDisabled, setIsAddDisabled] = useState(false);
+  const { canUndo, canRedo, isBusy, undo, redo } = useUndoRedo();
 
   useEffect(() => {
     if (!searchTarget || searchTarget.viewMode !== viewMode) {
@@ -137,9 +139,29 @@ const UsersGrid: React.FC<UsersGridProps> = ({ viewMode, searchTarget }) => {
             </button>
           ))}
         </div>
-        <button className="add-user-btn" onClick={handleAddClick} disabled={isAddDisabled}>
-          + Přidat {addLabel}
-        </button>
+        <div className="header-actions">
+          <button
+            type="button"
+            className="undo-redo-btn"
+            onClick={undo}
+            disabled={!canUndo || isBusy}
+            title="Undo (Ctrl+Z)"
+          >
+            Undo
+          </button>
+          <button
+            type="button"
+            className="undo-redo-btn"
+            onClick={redo}
+            disabled={!canRedo || isBusy}
+            title="Redo (Ctrl+Y / Ctrl+Shift+Z)"
+          >
+            Redo
+          </button>
+          <button className="add-user-btn" onClick={handleAddClick} disabled={isAddDisabled}>
+            + Přidat {addLabel}
+          </button>
+        </div>
       </div>
 
       <div className="table-section">{renderActiveSection()}</div>

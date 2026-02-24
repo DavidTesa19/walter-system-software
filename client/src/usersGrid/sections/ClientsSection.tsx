@@ -171,6 +171,16 @@ const ClientsSection: React.FC<SectionProps> = ({
   const documentManager = useProfileDocuments("clients", selectedProfileId);
   const notesManager = useProfileNotes("clients", selectedProfileId);
 
+  const defaultColDef = useMemo(
+    () => ({
+      resizable: true,
+      sortable: true
+    }),
+    []
+  );
+
+  const getRowId = useCallback((params: any) => String(params.data.id), []);
+
   const status = useMemo(() => mapViewToStatus(viewMode), [viewMode]);
 
   const fetchClientsData = useCallback(async () => {
@@ -370,7 +380,17 @@ const ClientsSection: React.FC<SectionProps> = ({
 
     if (targetNode?.rowIndex !== null && targetNode?.rowIndex !== undefined) {
       gridRef.current.api.ensureIndexVisible(targetNode.rowIndex, "middle");
-      gridRef.current.api.flashCells({ rowNodes: [targetNode] });
+      // flashCells can throw if the cell is not yet rendered (virtualization)
+      const api = gridRef.current.api;
+      requestAnimationFrame(() => {
+        requestAnimationFrame(() => {
+          try {
+            api.flashCells({ rowNodes: [targetNode], columns: ["name"] });
+          } catch (error) {
+            console.warn("Search row highlight skipped:", error);
+          }
+        });
+      });
     }
   }, [clientsData, focusRecordId, focusRequestKey, handleOpenProfile, isActive]);
 
@@ -521,10 +541,9 @@ const ClientsSection: React.FC<SectionProps> = ({
             rowData={clientsData}
             columnDefs={clientsColDefs}
             onCellValueChanged={onClientsCellValueChanged}
-            defaultColDef={{
-              resizable: true,
-              sortable: true
-            }}
+            defaultColDef={defaultColDef}
+            getRowId={getRowId}
+            suppressScrollOnNewData={true}
             suppressRowClickSelection={true}
             loading={isLoading}
             context={gridContext}

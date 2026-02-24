@@ -19,6 +19,7 @@ import type { GlobalSearchResult, GridSearchNavigationTarget, SearchTable } from
 import type { UserInterface } from './usersGrid/user.interface';
 import type { FutureFunction } from './futureFunctions/futureFunction.interface';
 import { apiGet } from './utils/api';
+import { UndoRedoProvider } from './utils/undoRedo';
 import './components/Sidebar.css';
 
 type SearchField = keyof UserInterface;
@@ -353,7 +354,9 @@ const App: React.FC = () => {
   return (
     <AuthProvider>
       <ThemeProvider>
-        <AppContent />
+        <UndoRedoProvider>
+          <AppContent />
+        </UndoRedoProvider>
       </ThemeProvider>
     </AuthProvider>
   );

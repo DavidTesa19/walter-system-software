@@ -100,6 +100,36 @@
   cursor: not-allowed;
 }
 
+.header-actions {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 0.5rem;
+}
+
+.undo-redo-btn {
+  background: var(--color-surface);
+  color: var(--color-text);
+  border: 1px solid var(--color-border);
+  padding: 0.6rem 0.9rem;
+  border-radius: 0.75rem;
+  cursor: pointer;
+  font-size: 0.9rem;
+  font-weight: 600;
+  transition: background-color 0.15s ease, border-color 0.15s ease;
+  font-family: var(--font-subheading);
+}
+
+.undo-redo-btn:hover:not(:disabled) {
+  background: var(--color-surface-hover);
+  border-color: color-mix(in srgb, var(--color-primary) 20%, var(--color-border));
+}
+
+.undo-redo-btn:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
 .grid-container {
   display: flex;
   position: relative;

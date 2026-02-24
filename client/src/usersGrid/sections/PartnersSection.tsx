@@ -172,6 +172,16 @@ const PartnersSection: React.FC<SectionProps> = ({
   const documentManager = useProfileDocuments("partners", selectedId);
   const notesManager = useProfileNotes("partners", selectedId);
 
+  const defaultColDef = useMemo(
+    () => ({
+      resizable: true,
+      sortable: true
+    }),
+    []
+  );
+
+  const getRowId = useCallback((params: any) => String(params.data.id), []);
+
   const status = useMemo(() => mapViewToStatus(viewMode), [viewMode]);
 
   const fetchPartnersData = useCallback(async () => {
@@ -368,7 +378,17 @@ const PartnersSection: React.FC<SectionProps> = ({
 
     if (targetNode?.rowIndex !== null && targetNode?.rowIndex !== undefined) {
       gridRef.current.api.ensureIndexVisible(targetNode.rowIndex, "middle");
-      gridRef.current.api.flashCells({ rowNodes: [targetNode] });
+      // flashCells can throw if the cell is not yet rendered (virtualization)
+      const api = gridRef.current.api;
+      requestAnimationFrame(() => {
+        requestAnimationFrame(() => {
+          try {
+            api.flashCells({ rowNodes: [targetNode], columns: ["name"] });
+          } catch (error) {
+            console.warn("Search row highlight skipped:", error);
+          }
+        });
+      });
     }
   }, [focusRecordId, focusRequestKey, isActive, openProfile, partnersData]);
 
@@ -516,10 +536,9 @@ const PartnersSection: React.FC<SectionProps> = ({
             rowData={partnersData}
             columnDefs={partnersColDefs}
             onCellValueChanged={onPartnersCellValueChanged}
-            defaultColDef={{
-              resizable: true,
-              sortable: true
-            }}
+            defaultColDef={defaultColDef}
+            getRowId={getRowId}
+            suppressScrollOnNewData={true}
             suppressRowClickSelection={true}
             loading={isLoading}
             context={gridContext}
