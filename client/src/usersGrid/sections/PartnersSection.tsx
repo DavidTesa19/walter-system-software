@@ -161,7 +161,9 @@ const PartnersSection: React.FC<SectionProps> = ({
   viewMode,
   isActive,
   onRegisterAddHandler,
-  onLoadingChange
+  onLoadingChange,
+  focusRecordId,
+  focusRequestKey
 }) => {
   const [partnersData, setPartnersData] = useState<UserInterface[]>([]);
   const [isLoading, setIsLoading] = useState(false);
@@ -344,6 +346,31 @@ const PartnersSection: React.FC<SectionProps> = ({
       }
     };
   }, [handleAddPartner, isActive, isLoading, onLoadingChange, onRegisterAddHandler]);
+
+  useEffect(() => {
+    if (!isActive || !focusRequestKey || focusRecordId === null || focusRecordId === undefined) {
+      return;
+    }
+
+    const targetPartner = partnersData.find((partner) => partner.id === focusRecordId);
+    if (!targetPartner || !gridRef.current?.api) {
+      return;
+    }
+
+    openProfile(targetPartner);
+
+    let targetNode: any = null;
+    gridRef.current.api.forEachNode((node) => {
+      if (node.data?.id === focusRecordId) {
+        targetNode = node;
+      }
+    });
+
+    if (targetNode?.rowIndex !== null && targetNode?.rowIndex !== undefined) {
+      gridRef.current.api.ensureIndexVisible(targetNode.rowIndex, "middle");
+      gridRef.current.api.flashCells({ rowNodes: [targetNode] });
+    }
+  }, [focusRecordId, focusRequestKey, isActive, openProfile, partnersData]);
 
   const partnersColDefs = useMemo<ColDef<UserInterface>[]>(
     () => {

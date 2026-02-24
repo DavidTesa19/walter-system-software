@@ -161,7 +161,9 @@ const TipersSection: React.FC<SectionProps> = ({
   viewMode,
   isActive,
   onRegisterAddHandler,
-  onLoadingChange
+  onLoadingChange,
+  focusRecordId,
+  focusRequestKey
 }) => {
   const [tipersData, setTipersData] = useState<UserInterface[]>([]);
   const [isLoading, setIsLoading] = useState(false);
@@ -344,6 +346,31 @@ const TipersSection: React.FC<SectionProps> = ({
       }
     };
   }, [handleAddTiper, isActive, isLoading, onLoadingChange, onRegisterAddHandler]);
+
+  useEffect(() => {
+    if (!isActive || !focusRequestKey || focusRecordId === null || focusRecordId === undefined) {
+      return;
+    }
+
+    const targetTiper = tipersData.find((tiper) => tiper.id === focusRecordId);
+    if (!targetTiper || !gridRef.current?.api) {
+      return;
+    }
+
+    openProfile(targetTiper);
+
+    let targetNode: any = null;
+    gridRef.current.api.forEachNode((node) => {
+      if (node.data?.id === focusRecordId) {
+        targetNode = node;
+      }
+    });
+
+    if (targetNode?.rowIndex !== null && targetNode?.rowIndex !== undefined) {
+      gridRef.current.api.ensureIndexVisible(targetNode.rowIndex, "middle");
+      gridRef.current.api.flashCells({ rowNodes: [targetNode] });
+    }
+  }, [focusRecordId, focusRequestKey, isActive, openProfile, tipersData]);
 
   const tipersColDefs = useMemo<ColDef<UserInterface>[]>(
     () => {

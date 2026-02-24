@@ -7,4 +7,6 @@ export interface SectionProps {
   isActive: boolean;
   onRegisterAddHandler: (handler: AddHandler) => void;
   onLoadingChange: (isLoading: boolean) => void;
+  focusRecordId?: number | null;
+  focusRequestKey?: string | null;
 }

@@ -46,6 +46,117 @@
   border-radius: 4px;
 }
 
+.sidebar-search {
+  position: relative;
+  margin-bottom: 0.75rem;
+}
+
+.sidebar-search-input-wrap {
+  display: flex;
+  align-items: center;
+  border: 1px solid var(--color-border);
+  border-radius: 0.5rem;
+  background: var(--color-surface-alt);
+  padding: 0.4rem 0.55rem;
+  gap: 0.45rem;
+}
+
+.sidebar-search-input-wrap:focus-within {
+  border-color: var(--color-primary);
+}
+
+.sidebar-search-icon {
+  color: var(--color-text-muted);
+  flex-shrink: 0;
+}
+
+.sidebar-search-input {
+  border: none;
+  outline: none;
+  background: transparent;
+  color: var(--color-text);
+  font-size: 0.85rem;
+  width: 100%;
+  font-family: var(--font-body);
+}
+
+.sidebar-search-input::placeholder {
+  color: var(--color-text-muted);
+}
+
+.sidebar-search-clear {
+  border: none;
+  background: transparent;
+  color: var(--color-text-muted);
+  cursor: pointer;
+  font-size: 1rem;
+  line-height: 1;
+  padding: 0 0.2rem;
+}
+
+.sidebar-search-results {
+  position: absolute;
+  top: calc(100% + 0.4rem);
+  left: 0;
+  right: 0;
+  max-height: 340px;
+  overflow-y: auto;
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: 0.6rem;
+  box-shadow: var(--color-shadow-sm);
+  z-index: 220;
+  padding: 0.25rem;
+}
+
+.sidebar-search-status {
+  font-size: 0.82rem;
+  color: var(--color-text-muted);
+  padding: 0.6rem 0.5rem;
+}
+
+.sidebar-search-result {
+  display: flex;
+  flex-direction: column;
+  width: 100%;
+  text-align: left;
+  border: 1px solid transparent;
+  background: transparent;
+  border-radius: 0.45rem;
+  padding: 0.5rem;
+  cursor: pointer;
+  gap: 0.15rem;
+}
+
+.sidebar-search-result:hover {
+  background: var(--color-surface-hover);
+  border-color: var(--color-border);
+}
+
+.sidebar-search-result.active {
+  background: var(--color-primary-soft);
+  border-color: var(--color-primary);
+}
+
+.sidebar-search-result-title {
+  color: var(--color-text);
+  font-weight: 600;
+  font-size: 0.84rem;
+}
+
+.sidebar-search-result-subtitle,
+.sidebar-search-result-location,
+.sidebar-search-result-match {
+  color: var(--color-text-muted);
+  font-size: 0.76rem;
+}
+
+.sidebar-search-result-match {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
 .sidebar-button, .sidebar-group-header {
   display: flex;
   align-items: center;

@@ -3,6 +3,7 @@ import "./UsersGrid.css";
 import React, { useCallback, useEffect, useRef, useState } from "react";
 import { ModuleRegistry, AllCommunityModule } from "ag-grid-community";
 import type { GridView } from "../types/appView";
+import type { GridSearchNavigationTarget } from "../types/globalSearch";
 import ClientsSection from "./sections/ClientsSection";
 import PartnersSection from "./sections/PartnersSection";
 import TipersSection from "./sections/TipersSection";
@@ -14,6 +15,7 @@ type TableType = "clients" | "partners" | "tipers";
 
 interface UsersGridProps {
   viewMode: GridView;
+  searchTarget?: GridSearchNavigationTarget | null;
 }
 
 const NAV_CONFIG: Record<TableType, { label: string; icon: string; addLabel: string }> = {
@@ -22,10 +24,17 @@ const NAV_CONFIG: Record<TableType, { label: string; icon: string; addLabel: str
   tipers: { label: "Tipaři", icon: "💡", addLabel: "Tipaře" }
 };
 
-const UsersGrid: React.FC<UsersGridProps> = ({ viewMode }) => {
+const UsersGrid: React.FC<UsersGridProps> = ({ viewMode, searchTarget }) => {
   const [activeTable, setActiveTable] = useState<TableType>("clients");
   const addHandlerRef = useRef<AddHandler | null>(null);
   const [isAddDisabled, setIsAddDisabled] = useState(false);
+
+  useEffect(() => {
+    if (!searchTarget || searchTarget.viewMode !== viewMode) {
+      return;
+    }
+    setActiveTable(searchTarget.table);
+  }, [searchTarget, viewMode]);
 
   const registerAddHandler = useCallback((handler: AddHandler) => {
     addHandlerRef.current = handler;
@@ -52,6 +61,16 @@ const UsersGrid: React.FC<UsersGridProps> = ({ viewMode }) => {
           isActive
           onRegisterAddHandler={registerAddHandler}
           onLoadingChange={handleLoadingChange}
+          focusRecordId={
+            searchTarget?.viewMode === viewMode && searchTarget.table === "clients"
+              ? searchTarget.recordId
+              : null
+          }
+          focusRequestKey={
+            searchTarget?.viewMode === viewMode && searchTarget.table === "clients"
+              ? searchTarget.requestKey
+              : null
+          }
         />
       );
     }
@@ -63,6 +82,16 @@ const UsersGrid: React.FC<UsersGridProps> = ({ viewMode }) => {
           isActive
           onRegisterAddHandler={registerAddHandler}
           onLoadingChange={handleLoadingChange}
+          focusRecordId={
+            searchTarget?.viewMode === viewMode && searchTarget.table === "partners"
+              ? searchTarget.recordId
+              : null
+          }
+          focusRequestKey={
+            searchTarget?.viewMode === viewMode && searchTarget.table === "partners"
+              ? searchTarget.requestKey
+              : null
+          }
         />
       );
     }
@@ -73,6 +102,16 @@ const UsersGrid: React.FC<UsersGridProps> = ({ viewMode }) => {
         isActive
         onRegisterAddHandler={registerAddHandler}
         onLoadingChange={handleLoadingChange}
+        focusRecordId={
+          searchTarget?.viewMode === viewMode && searchTarget.table === "tipers"
+            ? searchTarget.recordId
+            : null
+        }
+        focusRequestKey={
+          searchTarget?.viewMode === viewMode && searchTarget.table === "tipers"
+            ? searchTarget.requestKey
+            : null
+        }
       />
     );
   };

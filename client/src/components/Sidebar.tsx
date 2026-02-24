@@ -1,13 +1,16 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { useTheme } from '../theme/ThemeContext';
 import { useAuth } from '../auth/AuthContext';
 import { trackEvent } from '../utils/analytics';
 import type { AppView } from '../types/appView';
+import type { GlobalSearchResult } from '../types/globalSearch';
 import './Sidebar.css';
 
 interface SidebarProps {
   activeView: AppView;
   onViewChange: (view: AppView) => void;
+  onGlobalSearch: (query: string) => Promise<GlobalSearchResult[]>;
+  onSearchNavigate: (result: GlobalSearchResult) => void;
 }
 
 type SidebarGroupItem = {
@@ -138,9 +141,21 @@ const Icons = {
   )
 };
 
-const Sidebar: React.FC<SidebarProps> = ({ activeView, onViewChange }) => {
+const Sidebar: React.FC<SidebarProps> = ({
+  activeView,
+  onViewChange,
+  onGlobalSearch,
+  onSearchNavigate
+}) => {
   const { theme, toggleTheme } = useTheme();
   const { user, logout } = useAuth();
+  const [searchQuery, setSearchQuery] = useState('');
+  const [searchResults, setSearchResults] = useState<GlobalSearchResult[]>([]);
+  const [isSearching, setIsSearching] = useState(false);
+  const [isSearchOpen, setIsSearchOpen] = useState(false);
+  const [highlightedSearchIndex, setHighlightedSearchIndex] = useState<number>(-1);
+  const searchContainerRef = useRef<HTMLDivElement | null>(null);
+  const searchRequestIdRef = useRef(0);
   
   // State for expanded groups
   const [expandedGroups, setExpandedGroups] = useState<Record<string, boolean>>({
@@ -174,6 +189,62 @@ const Sidebar: React.FC<SidebarProps> = ({ activeView, onViewChange }) => {
         }));
     }
   }, [activeView]);
+
+  useEffect(() => {
+    const handleOutsideClick = (event: MouseEvent) => {
+      if (searchContainerRef.current && !searchContainerRef.current.contains(event.target as Node)) {
+        setIsSearchOpen(false);
+      }
+    };
+
+    document.addEventListener('mousedown', handleOutsideClick);
+    return () => document.removeEventListener('mousedown', handleOutsideClick);
+  }, []);
+
+  useEffect(() => {
+    const query = searchQuery.trim();
+    if (!query) {
+      setSearchResults([]);
+      setIsSearching(false);
+      setHighlightedSearchIndex(-1);
+      return;
+    }
+
+    setIsSearching(true);
+    const timeoutId = window.setTimeout(async () => {
+      const requestId = ++searchRequestIdRef.current;
+      try {
+        const results = await onGlobalSearch(query);
+        if (requestId === searchRequestIdRef.current) {
+          setSearchResults(results);
+          setHighlightedSearchIndex(results.length > 0 ? 0 : -1);
+          setIsSearchOpen(true);
+        }
+      } catch (error) {
+        console.error('Global search error:', error);
+        if (requestId === searchRequestIdRef.current) {
+          setSearchResults([]);
+          setHighlightedSearchIndex(-1);
+        }
+      } finally {
+        if (requestId === searchRequestIdRef.current) {
+          setIsSearching(false);
+        }
+      }
+    }, 250);
+
+    return () => {
+      window.clearTimeout(timeoutId);
+    };
+  }, [onGlobalSearch, searchQuery]);
+
+  const handleSearchResultClick = (result: GlobalSearchResult) => {
+    onSearchNavigate(result);
+    setIsSearchOpen(false);
+    setSearchQuery('');
+    setSearchResults([]);
+    setHighlightedSearchIndex(-1);
+  };
 
   const sidebarGroups: SidebarGroup[] = [
     {
@@ -221,6 +292,121 @@ const Sidebar: React.FC<SidebarProps> = ({ activeView, onViewChange }) => {
         <h2>Walter System</h2>
       </div>
       <nav className="sidebar-nav">
+        <div className="sidebar-search" ref={searchContainerRef}>
+          <div className="sidebar-search-input-wrap">
+            <svg
+              className="sidebar-search-icon"
+              width="16"
+              height="16"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="2"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+            >
+              <circle cx="11" cy="11" r="8"></circle>
+              <line x1="21" y1="21" x2="16.65" y2="16.65"></line>
+            </svg>
+            <input
+              type="text"
+              className="sidebar-search-input"
+              placeholder="Hledat v aplikaci..."
+              value={searchQuery}
+              onChange={(event) => {
+                setSearchQuery(event.target.value);
+                setIsSearchOpen(true);
+              }}
+              onFocus={() => setIsSearchOpen(true)}
+              onKeyDown={(event) => {
+                if (event.key === 'ArrowDown') {
+                  event.preventDefault();
+                  if (!isSearchOpen) {
+                    setIsSearchOpen(true);
+                  }
+                  if (searchResults.length > 0) {
+                    setHighlightedSearchIndex((prev) =>
+                      prev < 0 ? 0 : (prev + 1) % searchResults.length
+                    );
+                  }
+                  return;
+                }
+
+                if (event.key === 'ArrowUp') {
+                  event.preventDefault();
+                  if (!isSearchOpen) {
+                    setIsSearchOpen(true);
+                  }
+                  if (searchResults.length > 0) {
+                    setHighlightedSearchIndex((prev) => {
+                      if (prev < 0) {
+                        return searchResults.length - 1;
+                      }
+                      return prev === 0 ? searchResults.length - 1 : prev - 1;
+                    });
+                  }
+                  return;
+                }
+
+                if (event.key === 'Escape') {
+                  event.preventDefault();
+                  setIsSearchOpen(false);
+                  setHighlightedSearchIndex(-1);
+                  return;
+                }
+
+                if (event.key === 'Enter' && searchResults.length > 0) {
+                  event.preventDefault();
+                  const nextIndex = highlightedSearchIndex >= 0 ? highlightedSearchIndex : 0;
+                  handleSearchResultClick(searchResults[nextIndex]);
+                }
+              }}
+            />
+            {searchQuery && (
+              <button
+                type="button"
+                className="sidebar-search-clear"
+                onClick={() => {
+                  setSearchQuery('');
+                  setSearchResults([]);
+                  setIsSearchOpen(false);
+                  setHighlightedSearchIndex(-1);
+                }}
+                aria-label="Vymazat hledání"
+              >
+                ×
+              </button>
+            )}
+          </div>
+
+          {isSearchOpen && (searchQuery.trim() || isSearching) && (
+            <div className="sidebar-search-results">
+              {isSearching ? (
+                <div className="sidebar-search-status">Vyhledávání…</div>
+              ) : searchResults.length > 0 ? (
+                searchResults.map((result, index) => (
+                  <button
+                    key={result.id}
+                    type="button"
+                    className={`sidebar-search-result ${highlightedSearchIndex === index ? 'active' : ''}`}
+                    onClick={() => handleSearchResultClick(result)}
+                    onMouseEnter={() => setHighlightedSearchIndex(index)}
+                  >
+                    <span className="sidebar-search-result-title">{result.title}</span>
+                    <span className="sidebar-search-result-subtitle">{result.subtitle}</span>
+                    <span className="sidebar-search-result-location">{result.locationLabel}</span>
+                    {result.matchText && (
+                      <span className="sidebar-search-result-match">{result.matchText}</span>
+                    )}
+                  </button>
+                ))
+              ) : (
+                <div className="sidebar-search-status">Nic nenalezeno</div>
+              )}
+            </div>
+          )}
+        </div>
+
         {sidebarGroups.map(group => {
             const isSingleItem = group.items.length === 1 && group.items[0].id === group.id;
 
