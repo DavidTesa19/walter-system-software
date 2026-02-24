@@ -47,7 +47,7 @@ const InfoPopupEditor = forwardRef<InfoEditorRef, ICellEditorParams>((params, re
     // Use stopEditing(true) to cancel the edit - we already applied the value above
     // This prevents AG Grid from trying to apply the old value again
     params.api.stopEditing(true);
-  }, [params.api, params.value, params.node, params.column]);
+  }, [params.api, params.node, params.column]);
 
   const cancelEdit = useCallback(() => {
     params.api.stopEditing(true);
@@ -95,7 +95,16 @@ const InfoPopupEditor = forwardRef<InfoEditorRef, ICellEditorParams>((params, re
 
   const handleKeyDown = useCallback(
     (event: React.KeyboardEvent<HTMLTextAreaElement>) => {
-      if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === "enter") {
+      if (event.key === "Enter") {
+        // Stop AG Grid from intercepting the Enter key
+        event.stopPropagation();
+        
+        if (event.shiftKey) {
+          // Shift+Enter: allow default new line behaviour
+          return;
+        }
+        
+        // Plain Enter: save and close
         event.preventDefault();
         commitEdit();
         return;

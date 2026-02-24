@@ -263,6 +263,13 @@ const FutureFunctionsGrid: React.FC = () => {
           rows: 8,
           cols: 60
         },
+        suppressKeyboardEvent: (params) => {
+          // Suppress Enter key while editing so the editor can handle it
+          if (params.editing && params.event.key === 'Enter') {
+            return true;
+          }
+          return false;
+        },
         onCellClicked: (params) => {
           const rowIndex = params.node?.rowIndex;
           const colId = params.column?.getId();
