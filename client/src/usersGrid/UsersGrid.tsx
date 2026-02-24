@@ -141,22 +141,26 @@ const UsersGrid: React.FC<UsersGridProps> = ({ viewMode, searchTarget }) => {
         </div>
         <div className="header-actions">
           <button
-            type="button"
             className="undo-redo-btn"
             onClick={undo}
             disabled={!canUndo || isBusy}
-            title="Undo (Ctrl+Z)"
+            title="Zpět (Ctrl+Z)"
           >
-            Undo
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+              <path d="M3 10h10a5 5 0 0 1 0 10H9" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+              <path d="M7 6l-4 4 4 4" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+            </svg>
           </button>
           <button
-            type="button"
             className="undo-redo-btn"
             onClick={redo}
             disabled={!canRedo || isBusy}
-            title="Redo (Ctrl+Y / Ctrl+Shift+Z)"
+            title="Znovu (Ctrl+Y)"
           >
-            Redo
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+              <path d="M21 10H11a5 5 0 0 0 0 10h4" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+              <path d="M17 6l4 4-4 4" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+            </svg>
           </button>
           <button className="add-user-btn" onClick={handleAddClick} disabled={isAddDisabled}>
             + Přidat {addLabel}

@@ -13,6 +13,10 @@ import type { SectionProps } from "./SectionTypes";
 import useProfileDocuments from "../hooks/useProfileDocuments";
 import useProfileNotes from "../hooks/useProfileNotes";
 import { ApproveRestoreCellRenderer, DeleteArchiveCellRenderer } from "../cells/RowActionCellRenderers";
+import { useUndoRedo } from "../../utils/undoRedo";
+
+const cloneRecord = (r: any) => JSON.parse(JSON.stringify(r));
+const stripMeta = ({ created_at, updated_at, ...rest }: any) => rest;
 
 const buildTiperSections = (tiper: UserInterface | null): ProfileSection[] => {
   if (!tiper) {
@@ -171,6 +175,16 @@ const TipersSection: React.FC<SectionProps> = ({
   const [selectedId, setSelectedId] = useState<number | null>(null);
   const documentManager = useProfileDocuments("tipers", selectedId);
   const notesManager = useProfileNotes("tipers", selectedId);
+  const { pushAction, signal } = useUndoRedo();
+  const editSnapshotRef = useRef<Record<number, any>>({});
+
+  // Refetch when other views mutate the same resource
+  useEffect(() => {
+    if (signal?.resource === "tipers") {
+      fetchTipersData();
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [signal]);
 
   const status = useMemo(() => mapViewToStatus(viewMode), [viewMode]);
 
@@ -223,28 +237,52 @@ const TipersSection: React.FC<SectionProps> = ({
 
   const handleApproveTiper = useCallback(
     async (id: number) => {
+      const prev = cloneRecord(tipersData.find((t) => t.id === id));
+      if (!prev) return;
       try {
         await apiPost(`/tipers/${id}/approve`);
         fetchTipersData();
+        pushAction({
+          label: `Schválení tipaře #${id}`,
+          resource: "tipers",
+          undo: async () => {
+            await apiPut(`/tipers/${id}`, { ...stripMeta(prev) });
+          },
+          redo: async () => {
+            await apiPost(`/tipers/${id}/approve`);
+          }
+        });
       } catch (error) {
         console.error("Error approving tiper:", error);
         alert("Chyba při schvalování tipaře");
       }
     },
-    [fetchTipersData]
+    [tipersData, fetchTipersData, pushAction]
   );
 
   const handleRestoreTiper = useCallback(
     async (id: number) => {
+      const prev = cloneRecord(tipersData.find((t) => t.id === id));
+      if (!prev) return;
       try {
         await apiPost(`/tipers/${id}/restore`);
         fetchTipersData();
+        pushAction({
+          label: `Obnovení tipaře #${id}`,
+          resource: "tipers",
+          undo: async () => {
+            await apiPut(`/tipers/${id}`, { ...stripMeta(prev) });
+          },
+          redo: async () => {
+            await apiPost(`/tipers/${id}/restore`);
+          }
+        });
       } catch (error) {
         console.error("Error restoring tiper:", error);
         alert("Chyba při obnovování tipaře");
       }
     },
-    [fetchTipersData]
+    [tipersData, fetchTipersData, pushAction]
   );
 
   const handleDeleteTiper = useCallback(
@@ -273,8 +311,28 @@ const TipersSection: React.FC<SectionProps> = ({
       try {
         if (isArchived || isPending) {
           await apiDelete(`/tipers/${id}`);
+          pushAction({
+            label: `Smazání tipaře #${id}`,
+            resource: "tipers",
+            undo: async () => {
+              await apiPost(`/tipers`, { ...stripMeta(tiper) });
+            },
+            redo: async () => {
+              await apiDelete(`/tipers/${id}`);
+            }
+          });
         } else {
           await apiPost(`/tipers/${id}/archive`);
+          pushAction({
+            label: `Archivace tipaře #${id}`,
+            resource: "tipers",
+            undo: async () => {
+              await apiPost(`/tipers/${id}/restore`);
+            },
+            redo: async () => {
+              await apiPost(`/tipers/${id}/archive`);
+            }
+          });
         }
         fetchTipersData();
       } catch (error) {
@@ -282,7 +340,7 @@ const TipersSection: React.FC<SectionProps> = ({
         alert("Chyba při mazání tipaře");
       }
     },
-    [fetchTipersData, tipersData]
+    [fetchTipersData, tipersData, pushAction]
   );
 
   const gridContext = useMemo(
@@ -301,16 +359,32 @@ const TipersSection: React.FC<SectionProps> = ({
 
   const onTipersCellValueChanged = useCallback(
     async (params: any) => {
+      const id = params.data.id;
+      const snapshot = editSnapshotRef.current[id];
       try {
         const { created_at, updated_at, ...updatedTiper } = params.data;
         await apiPut(`/tipers/${updatedTiper.id}`, updatedTiper);
+        if (snapshot) {
+          const after = cloneRecord(updatedTiper);
+          pushAction({
+            label: `Úprava tipaře #${id}`,
+            resource: "tipers",
+            undo: async () => {
+              await apiPut(`/tipers/${id}`, stripMeta(snapshot));
+            },
+            redo: async () => {
+              await apiPut(`/tipers/${id}`, stripMeta(after));
+            }
+          });
+          delete editSnapshotRef.current[id];
+        }
       } catch (error) {
         console.error("Error updating tiper:", error);
         alert("Chyba při aktualizaci tipaře");
         fetchTipersData();
       }
     },
-    [fetchTipersData]
+    [fetchTipersData, pushAction]
   );
 
   const handleAddTiper = useCallback(async () => {
@@ -323,13 +397,25 @@ const TipersSection: React.FC<SectionProps> = ({
     };
 
     try {
-      await apiPost<UserInterface>(`/tipers`, newTiper);
+      const created = await apiPost<UserInterface>(`/tipers`, newTiper);
       fetchTipersData();
+      if (created?.id) {
+        pushAction({
+          label: "Přidání tipaře",
+          resource: "tipers",
+          undo: async () => {
+            await apiDelete(`/tipers/${created.id}`);
+          },
+          redo: async () => {
+            await apiPost(`/tipers`, { ...newTiper, id: created.id });
+          }
+        });
+      }
     } catch (error) {
       console.error("Error adding tiper:", error);
       alert("Chyba při přidávání tipaře");
     }
-  }, [fetchTipersData, status]);
+  }, [fetchTipersData, pushAction, status]);
 
   useEffect(() => {
     fetchTipersData();
@@ -367,19 +453,8 @@ const TipersSection: React.FC<SectionProps> = ({
     });
 
     if (targetNode?.rowIndex !== null && targetNode?.rowIndex !== undefined) {
-      const api = gridRef.current.api;
-      api.ensureIndexVisible(targetNode.rowIndex, "middle");
-
-      // Defer flashing until after AG Grid has rendered the row/cells.
-      requestAnimationFrame(() => {
-        requestAnimationFrame(() => {
-          try {
-            api.flashCells({ rowNodes: [targetNode], columns: ["name"] });
-          } catch {
-            // Ignore highlight errors; navigation should never crash.
-          }
-        });
-      });
+      gridRef.current.api.ensureIndexVisible(targetNode.rowIndex, "middle");
+      gridRef.current.api.flashCells({ rowNodes: [targetNode] });
     }
   }, [focusRecordId, focusRequestKey, isActive, openProfile, tipersData]);
 
@@ -518,6 +593,11 @@ const TipersSection: React.FC<SectionProps> = ({
             ref={gridRef}
             rowData={tipersData}
             columnDefs={tipersColDefs}
+            onCellEditingStarted={(e: any) => {
+              if (e.data?.id != null) {
+                editSnapshotRef.current[e.data.id] = cloneRecord(e.data);
+              }
+            }}
             onCellValueChanged={onTipersCellValueChanged}
             defaultColDef={{
               resizable: true,

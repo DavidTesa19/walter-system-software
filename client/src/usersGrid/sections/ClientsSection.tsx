@@ -15,6 +15,10 @@ import { apiGet, apiPost, apiPut, apiDelete } from "../../utils/api";
 import { formatProfileDate, normalizeText, toStatusBadge } from "../utils/profileUtils";
 import type { SectionProps } from "./SectionTypes";
 import { ApproveRestoreCellRenderer, DeleteArchiveCellRenderer } from "../cells/RowActionCellRenderers";
+import { useUndoRedo } from "../../utils/undoRedo";
+
+const cloneRecord = (r: any) => JSON.parse(JSON.stringify(r));
+const stripMeta = ({ created_at, updated_at, ...rest }: any) => rest;
 
 const buildClientProfileSections = (client: UserInterface | null): ProfileSection[] => {
   if (!client) {
@@ -170,6 +174,26 @@ const ClientsSection: React.FC<SectionProps> = ({
   const [selectedProfileId, setSelectedProfileId] = useState<number | null>(null);
   const documentManager = useProfileDocuments("clients", selectedProfileId);
   const notesManager = useProfileNotes("clients", selectedProfileId);
+  const { pushAction, signal } = useUndoRedo();
+  const editSnapshotRef = useRef<Record<number, any>>({});
+
+  // Refetch when other views mutate the same resource
+  useEffect(() => {
+    if (signal?.resource === "clients") {
+      fetchClientsData();
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [signal]);
+
+  const defaultColDef = useMemo(
+    () => ({
+      resizable: true,
+      sortable: true
+    }),
+    []
+  );
+
+  const getRowId = useCallback((params: any) => String(params.data.id), []);
 
   const status = useMemo(() => mapViewToStatus(viewMode), [viewMode]);
 
@@ -225,28 +249,52 @@ const ClientsSection: React.FC<SectionProps> = ({
 
   const handleApproveClient = useCallback(
     async (id: number) => {
+      const prev = cloneRecord(clientsData.find((c) => c.id === id));
+      if (!prev) return;
       try {
         await apiPost(`/clients/${id}/approve`);
         fetchClientsData();
+        pushAction({
+          label: `Schválení klienta #${id}`,
+          resource: "clients",
+          undo: async () => {
+            await apiPut(`/clients/${id}`, { ...stripMeta(prev) });
+          },
+          redo: async () => {
+            await apiPost(`/clients/${id}/approve`);
+          }
+        });
       } catch (error) {
         console.error("Error approving client:", error);
         alert("Chyba při schvalování klienta");
       }
     },
-    [fetchClientsData]
+    [clientsData, fetchClientsData, pushAction]
   );
 
   const handleRestoreClient = useCallback(
     async (id: number) => {
+      const prev = cloneRecord(clientsData.find((c) => c.id === id));
+      if (!prev) return;
       try {
         await apiPost(`/clients/${id}/restore`);
         fetchClientsData();
+        pushAction({
+          label: `Obnovení klienta #${id}`,
+          resource: "clients",
+          undo: async () => {
+            await apiPut(`/clients/${id}`, { ...stripMeta(prev) });
+          },
+          redo: async () => {
+            await apiPost(`/clients/${id}/restore`);
+          }
+        });
       } catch (error) {
         console.error("Error restoring client:", error);
         alert("Chyba při obnovování klienta");
       }
     },
-    [fetchClientsData]
+    [clientsData, fetchClientsData, pushAction]
   );
 
   const handleDeleteClient = useCallback(
@@ -275,8 +323,28 @@ const ClientsSection: React.FC<SectionProps> = ({
       try {
         if (isArchived || isPending) {
           await apiDelete(`/clients/${id}`);
+          pushAction({
+            label: `Smazání klienta #${id}`,
+            resource: "clients",
+            undo: async () => {
+              await apiPost(`/clients`, { ...stripMeta(client) });
+            },
+            redo: async () => {
+              await apiDelete(`/clients/${id}`);
+            }
+          });
         } else {
           await apiPost(`/clients/${id}/archive`);
+          pushAction({
+            label: `Archivace klienta #${id}`,
+            resource: "clients",
+            undo: async () => {
+              await apiPost(`/clients/${id}/restore`);
+            },
+            redo: async () => {
+              await apiPost(`/clients/${id}/archive`);
+            }
+          });
         }
         fetchClientsData();
       } catch (error) {
@@ -284,7 +352,7 @@ const ClientsSection: React.FC<SectionProps> = ({
         alert("Chyba při provádění akce");
       }
     },
-    [clientsData, fetchClientsData]
+    [clientsData, fetchClientsData, pushAction]
   );
 
   const gridContext = useMemo(
@@ -303,16 +371,32 @@ const ClientsSection: React.FC<SectionProps> = ({
 
   const onClientsCellValueChanged = useCallback(
     async (params: any) => {
+      const id = params.data.id;
+      const snapshot = editSnapshotRef.current[id];
       try {
         const { created_at, updated_at, ...updatedClient } = params.data;
         await apiPut(`/clients/${updatedClient.id}`, updatedClient);
+        if (snapshot) {
+          const after = cloneRecord(updatedClient);
+          pushAction({
+            label: `Úprava klienta #${id}`,
+            resource: "clients",
+            undo: async () => {
+              await apiPut(`/clients/${id}`, stripMeta(snapshot));
+            },
+            redo: async () => {
+              await apiPut(`/clients/${id}`, stripMeta(after));
+            }
+          });
+          delete editSnapshotRef.current[id];
+        }
       } catch (error) {
         console.error("Error updating client:", error);
         alert("Error updating client");
         fetchClientsData();
       }
     },
-    [fetchClientsData]
+    [fetchClientsData, pushAction]
   );
 
   const handleAddClient = useCallback(async () => {
@@ -325,13 +409,25 @@ const ClientsSection: React.FC<SectionProps> = ({
     };
 
     try {
-      await apiPost(`/clients`, newClient);
+      const created = await apiPost<UserInterface>(`/clients`, newClient);
       fetchClientsData();
+      if (created?.id) {
+        pushAction({
+          label: "Přidání klienta",
+          resource: "clients",
+          undo: async () => {
+            await apiDelete(`/clients/${created.id}`);
+          },
+          redo: async () => {
+            await apiPost(`/clients`, { ...newClient, id: created.id });
+          }
+        });
+      }
     } catch (error) {
       console.error("Error adding client:", error);
       alert("Chyba při přidávání klienta");
     }
-  }, [fetchClientsData, status]);
+  }, [fetchClientsData, pushAction, status]);
 
   useEffect(() => {
     fetchClientsData();
@@ -369,16 +465,15 @@ const ClientsSection: React.FC<SectionProps> = ({
     });
 
     if (targetNode?.rowIndex !== null && targetNode?.rowIndex !== undefined) {
+      gridRef.current.api.ensureIndexVisible(targetNode.rowIndex, "middle");
+      // flashCells can throw if the cell is not yet rendered (virtualization)
       const api = gridRef.current.api;
-      api.ensureIndexVisible(targetNode.rowIndex, "middle");
-
-      // Defer flashing until after AG Grid has rendered the row/cells.
       requestAnimationFrame(() => {
         requestAnimationFrame(() => {
           try {
             api.flashCells({ rowNodes: [targetNode], columns: ["name"] });
-          } catch {
-            // Ignore highlight errors; navigation should never crash.
+          } catch (error) {
+            console.warn("Search row highlight skipped:", error);
           }
         });
       });
@@ -531,11 +626,15 @@ const ClientsSection: React.FC<SectionProps> = ({
             ref={gridRef}
             rowData={clientsData}
             columnDefs={clientsColDefs}
-            onCellValueChanged={onClientsCellValueChanged}
-            defaultColDef={{
-              resizable: true,
-              sortable: true
+            onCellEditingStarted={(e: any) => {
+              if (e.data?.id != null) {
+                editSnapshotRef.current[e.data.id] = cloneRecord(e.data);
+              }
             }}
+            onCellValueChanged={onClientsCellValueChanged}
+            defaultColDef={defaultColDef}
+            getRowId={getRowId}
+            suppressScrollOnNewData={true}
             suppressRowClickSelection={true}
             loading={isLoading}
             context={gridContext}

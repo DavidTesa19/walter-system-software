@@ -78,6 +78,35 @@
   color: var(--color-text);
 }
 
+.header-actions {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.undo-redo-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 2.25rem;
+  height: 2.25rem;
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: 0.5rem;
+  cursor: pointer;
+  color: var(--color-text);
+  transition: background-color 0.15s ease, opacity 0.15s ease;
+}
+
+.undo-redo-btn:hover:not(:disabled) {
+  background: var(--color-border);
+}
+
+.undo-redo-btn:disabled {
+  opacity: 0.35;
+  cursor: not-allowed;
+}
+
 .add-user-btn {
   background: var(--color-accent);
   color: var(--color-accent-contrast);
@@ -97,36 +126,6 @@
 
 .add-user-btn:disabled {
   background: var(--color-text-muted);
-  cursor: not-allowed;
-}
-
-.header-actions {
-  display: flex;
-  align-items: center;
-  justify-content: flex-end;
-  gap: 0.5rem;
-}
-
-.undo-redo-btn {
-  background: var(--color-surface);
-  color: var(--color-text);
-  border: 1px solid var(--color-border);
-  padding: 0.6rem 0.9rem;
-  border-radius: 0.75rem;
-  cursor: pointer;
-  font-size: 0.9rem;
-  font-weight: 600;
-  transition: background-color 0.15s ease, border-color 0.15s ease;
-  font-family: var(--font-subheading);
-}
-
-.undo-redo-btn:hover:not(:disabled) {
-  background: var(--color-surface-hover);
-  border-color: color-mix(in srgb, var(--color-primary) 20%, var(--color-border));
-}
-
-.undo-redo-btn:disabled {
-  opacity: 0.6;
   cursor: not-allowed;
 }
 

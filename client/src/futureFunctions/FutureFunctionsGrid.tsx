@@ -52,15 +52,7 @@ const FutureFunctionsGrid: React.FC = () => {
   const [isArchiveView, setIsArchiveView] = useState(false);
   const [selectedFunction, setSelectedFunction] = useState<FutureFunction | null>(null);
   const activeWrapperRef = useRef<HTMLDivElement | null>(null);
-  const { canUndo, canRedo, isBusy, undo, redo, pushAction, signal } = useUndoRedo();
-  const editSnapshotRef = useRef<Map<number, FutureFunction>>(new Map());
-
-  const cloneRecord = useCallback(<T,>(value: T): T => {
-    if (typeof structuredClone === "function") {
-      return structuredClone(value);
-    }
-    return JSON.parse(JSON.stringify(value)) as T;
-  }, []);
+  const { canUndo, canRedo, isBusy, undo, redo } = useUndoRedo();
 
   const defaultColDef = useMemo<ColDef<FutureFunction>>(
     () => ({
@@ -93,13 +85,6 @@ const FutureFunctionsGrid: React.FC = () => {
     void fetchFutureFunctions();
   }, [fetchFutureFunctions]);
 
-  useEffect(() => {
-    if (signal.resource !== "future-functions" && signal.resource !== "all") {
-      return;
-    }
-    void fetchFutureFunctions();
-  }, [fetchFutureFunctions, signal.resource, signal.revision]);
-
   // Split data into active and archived
   const activeFunctions = useMemo(
     () => futureFunctions.filter((f) => !f.archived),
@@ -126,18 +111,7 @@ const FutureFunctionsGrid: React.FC = () => {
 
       try {
         setIsLoading(true);
-        const created = await apiPost<FutureFunction>(`/future-functions`, newFunction);
-        const snapshot = cloneRecord(created);
-        pushAction({
-          label: "Add future function",
-          resource: "future-functions",
-          undo: async () => {
-            await apiDelete(`/future-functions/${snapshot.id}`);
-          },
-          redo: async () => {
-            await apiPost(`/future-functions`, snapshot);
-          }
-        });
+        await apiPost(`/future-functions`, newFunction);
         await fetchFutureFunctions();
       } catch (error) {
         console.error("Error adding future function:", error);
@@ -146,7 +120,7 @@ const FutureFunctionsGrid: React.FC = () => {
         setIsLoading(false);
       }
     },
-    [cloneRecord, fetchFutureFunctions, pushAction]
+    [fetchFutureFunctions]
   );
 
   const handleDeleteFunction = useCallback(
@@ -159,18 +133,7 @@ const FutureFunctionsGrid: React.FC = () => {
 
       try {
         setIsLoading(true);
-        const snapshot = cloneRecord(func);
         await apiDelete(`/future-functions/${func.id}`);
-        pushAction({
-          label: "Delete future function",
-          resource: "future-functions",
-          undo: async () => {
-            await apiPost(`/future-functions`, snapshot);
-          },
-          redo: async () => {
-            await apiDelete(`/future-functions/${snapshot.id}`);
-          }
-        });
         await fetchFutureFunctions();
       } catch (error) {
         console.error("Error deleting future function:", error);
@@ -179,28 +142,16 @@ const FutureFunctionsGrid: React.FC = () => {
         setIsLoading(false);
       }
     },
-    [cloneRecord, fetchFutureFunctions, pushAction]
+    [fetchFutureFunctions]
   );
 
   const handleArchiveFunction = useCallback(
     async (func: FutureFunction) => {
       try {
         setIsLoading(true);
-        const before = cloneRecord(func);
-        const updated = await apiPut<FutureFunction>(`/future-functions/${func.id}`, {
+        await apiPut(`/future-functions/${func.id}`, {
           ...func,
           archived: true
-        });
-        const after = cloneRecord(updated);
-        pushAction({
-          label: "Archive future function",
-          resource: "future-functions",
-          undo: async () => {
-            await apiPut(`/future-functions/${before.id}`, before);
-          },
-          redo: async () => {
-            await apiPut(`/future-functions/${after.id}`, after);
-          }
         });
         await fetchFutureFunctions();
       } catch (error) {
@@ -210,7 +161,7 @@ const FutureFunctionsGrid: React.FC = () => {
         setIsLoading(false);
       }
     },
-    [cloneRecord, fetchFutureFunctions, pushAction]
+    [fetchFutureFunctions]
   );
 
   const handleRestoreFunction = useCallback(
@@ -219,26 +170,14 @@ const FutureFunctionsGrid: React.FC = () => {
 
       try {
         setIsLoading(true);
-        const before = cloneRecord(func);
         // When restoring, if the status is an auto-archive status, reset to Plánováno
         const newStatus = (AUTO_ARCHIVE_STATUSES as readonly string[]).includes(func.status)
           ? "Plánováno"
           : func.status;
-        const updated = await apiPut<FutureFunction>(`/future-functions/${func.id}`, {
+        await apiPut(`/future-functions/${func.id}`, {
           ...func,
           archived: false,
           status: newStatus
-        });
-        const after = cloneRecord(updated);
-        pushAction({
-          label: "Restore future function",
-          resource: "future-functions",
-          undo: async () => {
-            await apiPut(`/future-functions/${before.id}`, before);
-          },
-          redo: async () => {
-            await apiPut(`/future-functions/${after.id}`, after);
-          }
         });
         await fetchFutureFunctions();
       } catch (error) {
@@ -248,7 +187,7 @@ const FutureFunctionsGrid: React.FC = () => {
         setIsLoading(false);
       }
     },
-    [cloneRecord, fetchFutureFunctions, pushAction]
+    [fetchFutureFunctions]
   );
 
   const onCellValueChanged = useCallback(
@@ -256,8 +195,6 @@ const FutureFunctionsGrid: React.FC = () => {
       if (!params.data?.id) {
         return;
       }
-
-      const before = editSnapshotRef.current.get(params.data.id);
 
       const data = { ...params.data };
 
@@ -274,30 +211,14 @@ const FutureFunctionsGrid: React.FC = () => {
 
       try {
         await apiPut(`/future-functions/${data.id}`, data);
-        if (before) {
-          const beforeSnapshot = cloneRecord(before);
-          const afterSnapshot = cloneRecord(data);
-          pushAction({
-            label: "Edit future function",
-            resource: "future-functions",
-            undo: async () => {
-              await apiPut(`/future-functions/${beforeSnapshot.id}`, beforeSnapshot);
-            },
-            redo: async () => {
-              await apiPut(`/future-functions/${afterSnapshot.id}`, afterSnapshot);
-            }
-          });
-        }
-        editSnapshotRef.current.delete(params.data.id);
         await fetchFutureFunctions();
       } catch (error) {
         console.error("Error updating future function:", error);
         alert("Chyba při ukládání změn");
-        editSnapshotRef.current.delete(params.data.id);
         await fetchFutureFunctions();
       }
     },
-    [cloneRecord, fetchFutureFunctions, pushAction]
+    [fetchFutureFunctions]
   );
 
   // Detail button cell renderer — opens the detail modal
@@ -724,8 +645,6 @@ const FutureFunctionsGrid: React.FC = () => {
         return;
       }
 
-      const before = editSnapshotRef.current.get(params.data.id);
-
       const data = { ...params.data };
 
       // If status changed to an active-only status, un-archive automatically
@@ -737,30 +656,14 @@ const FutureFunctionsGrid: React.FC = () => {
 
       try {
         await apiPut(`/future-functions/${data.id}`, data);
-        if (before) {
-          const beforeSnapshot = cloneRecord(before);
-          const afterSnapshot = cloneRecord(data);
-          pushAction({
-            label: "Edit future function (archive)",
-            resource: "future-functions",
-            undo: async () => {
-              await apiPut(`/future-functions/${beforeSnapshot.id}`, beforeSnapshot);
-            },
-            redo: async () => {
-              await apiPut(`/future-functions/${afterSnapshot.id}`, afterSnapshot);
-            }
-          });
-        }
-        editSnapshotRef.current.delete(params.data.id);
         await fetchFutureFunctions();
       } catch (error) {
         console.error("Error updating future function:", error);
         alert("Chyba při ukládání změn");
-        editSnapshotRef.current.delete(params.data.id);
         await fetchFutureFunctions();
       }
     },
-    [cloneRecord, fetchFutureFunctions, pushAction]
+    [fetchFutureFunctions]
   );
 
   const currentRowData = isArchiveView ? archivedFunctions : activeFunctions;
@@ -960,13 +863,6 @@ const FutureFunctionsGrid: React.FC = () => {
               suppressScrollOnNewData={true}
               suppressRowClickSelection={true}
               onCellValueChanged={currentOnCellValueChanged}
-              onCellEditingStarted={(event) => {
-                const row = event?.data;
-                if (!row?.id) {
-                  return;
-                }
-                editSnapshotRef.current.set(row.id, cloneRecord(row));
-              }}
               loading={isLoading}
               animateRows
             />

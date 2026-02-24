@@ -482,11 +482,12 @@ export const db = {
     return result.rows[0] || null;
   },
 
-  // Create new record
+  // Create new record (supports explicit id for undo-recreation)
   async create(table, data) {
     if (!USE_POSTGRES) return null;
     
-    const fields = Object.keys(data).filter(k => k !== 'id');
+    const hasExplicitId = data.id != null;
+    const fields = Object.keys(data).filter(k => k !== 'id' || hasExplicitId);
     const values = fields.map(f => data[f]);
     const placeholders = fields.map((_, i) => `$${i + 1}`).join(', ');
     
@@ -497,6 +498,17 @@ export const db = {
     `;
     
     const result = await pool.query(query, values);
+
+    // Bump the serial sequence so future auto-IDs don't collide
+    if (hasExplicitId) {
+      try {
+        await pool.query(
+          `SELECT setval(pg_get_serial_sequence($1, 'id'), GREATEST((SELECT MAX(id) FROM ${table}), 1))`,
+          [table]
+        );
+      } catch (_) { /* ignore if table has no serial sequence */ }
+    }
+
     return result.rows[0];
   },
 

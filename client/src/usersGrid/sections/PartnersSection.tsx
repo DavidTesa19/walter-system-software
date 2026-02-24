@@ -13,6 +13,10 @@ import type { SectionProps } from "./SectionTypes";
 import useProfileDocuments from "../hooks/useProfileDocuments";
 import useProfileNotes from "../hooks/useProfileNotes";
 import { ApproveRestoreCellRenderer, DeleteArchiveCellRenderer } from "../cells/RowActionCellRenderers";
+import { useUndoRedo } from "../../utils/undoRedo";
+
+const cloneRecord = (r: any) => JSON.parse(JSON.stringify(r));
+const stripMeta = ({ created_at, updated_at, ...rest }: any) => rest;
 
 const buildPartnerSections = (partner: UserInterface | null): ProfileSection[] => {
   if (!partner) {
@@ -171,6 +175,26 @@ const PartnersSection: React.FC<SectionProps> = ({
   const [selectedId, setSelectedId] = useState<number | null>(null);
   const documentManager = useProfileDocuments("partners", selectedId);
   const notesManager = useProfileNotes("partners", selectedId);
+  const { pushAction, signal } = useUndoRedo();
+  const editSnapshotRef = useRef<Record<number, any>>({});
+
+  // Refetch when other views mutate the same resource
+  useEffect(() => {
+    if (signal?.resource === "partners") {
+      fetchPartnersData();
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [signal]);
+
+  const defaultColDef = useMemo(
+    () => ({
+      resizable: true,
+      sortable: true
+    }),
+    []
+  );
+
+  const getRowId = useCallback((params: any) => String(params.data.id), []);
 
   const status = useMemo(() => mapViewToStatus(viewMode), [viewMode]);
 
@@ -223,28 +247,52 @@ const PartnersSection: React.FC<SectionProps> = ({
 
   const handleApprovePartner = useCallback(
     async (id: number) => {
+      const prev = cloneRecord(partnersData.find((p) => p.id === id));
+      if (!prev) return;
       try {
         await apiPost(`/partners/${id}/approve`);
         fetchPartnersData();
+        pushAction({
+          label: `Schválení partnera #${id}`,
+          resource: "partners",
+          undo: async () => {
+            await apiPut(`/partners/${id}`, { ...stripMeta(prev) });
+          },
+          redo: async () => {
+            await apiPost(`/partners/${id}/approve`);
+          }
+        });
       } catch (error) {
         console.error("Error approving partner:", error);
         alert("Chyba při schvalování partnera");
       }
     },
-    [fetchPartnersData]
+    [partnersData, fetchPartnersData, pushAction]
   );
 
   const handleRestorePartner = useCallback(
     async (id: number) => {
+      const prev = cloneRecord(partnersData.find((p) => p.id === id));
+      if (!prev) return;
       try {
         await apiPost(`/partners/${id}/restore`);
         fetchPartnersData();
+        pushAction({
+          label: `Obnovení partnera #${id}`,
+          resource: "partners",
+          undo: async () => {
+            await apiPut(`/partners/${id}`, { ...stripMeta(prev) });
+          },
+          redo: async () => {
+            await apiPost(`/partners/${id}/restore`);
+          }
+        });
       } catch (error) {
         console.error("Error restoring partner:", error);
         alert("Chyba při obnovování partnera");
       }
     },
-    [fetchPartnersData]
+    [partnersData, fetchPartnersData, pushAction]
   );
 
   const handleDeletePartner = useCallback(
@@ -273,8 +321,28 @@ const PartnersSection: React.FC<SectionProps> = ({
       try {
         if (isArchived || isPending) {
           await apiDelete(`/partners/${id}`);
+          pushAction({
+            label: `Smazání partnera #${id}`,
+            resource: "partners",
+            undo: async () => {
+              await apiPost(`/partners`, { ...stripMeta(partner) });
+            },
+            redo: async () => {
+              await apiDelete(`/partners/${id}`);
+            }
+          });
         } else {
           await apiPost(`/partners/${id}/archive`);
+          pushAction({
+            label: `Archivace partnera #${id}`,
+            resource: "partners",
+            undo: async () => {
+              await apiPost(`/partners/${id}/restore`);
+            },
+            redo: async () => {
+              await apiPost(`/partners/${id}/archive`);
+            }
+          });
         }
         fetchPartnersData();
       } catch (error) {
@@ -282,7 +350,7 @@ const PartnersSection: React.FC<SectionProps> = ({
         alert("Chyba při provádění akce");
       }
     },
-    [fetchPartnersData, partnersData]
+    [fetchPartnersData, partnersData, pushAction]
   );
 
   const gridContext = useMemo(
@@ -301,16 +369,32 @@ const PartnersSection: React.FC<SectionProps> = ({
 
   const onPartnersCellValueChanged = useCallback(
     async (params: any) => {
+      const id = params.data.id;
+      const snapshot = editSnapshotRef.current[id];
       try {
         const { created_at, updated_at, ...updatedPartner } = params.data;
         await apiPut(`/partners/${updatedPartner.id}`, updatedPartner);
+        if (snapshot) {
+          const after = cloneRecord(updatedPartner);
+          pushAction({
+            label: `Úprava partnera #${id}`,
+            resource: "partners",
+            undo: async () => {
+              await apiPut(`/partners/${id}`, stripMeta(snapshot));
+            },
+            redo: async () => {
+              await apiPut(`/partners/${id}`, stripMeta(after));
+            }
+          });
+          delete editSnapshotRef.current[id];
+        }
       } catch (error) {
         console.error("Error updating partner:", error);
         alert("Error updating partner");
         fetchPartnersData();
       }
     },
-    [fetchPartnersData]
+    [fetchPartnersData, pushAction]
   );
 
   const handleAddPartner = useCallback(async () => {
@@ -323,13 +407,25 @@ const PartnersSection: React.FC<SectionProps> = ({
     };
 
     try {
-      await apiPost(`/partners`, newPartner);
+      const created = await apiPost<UserInterface>(`/partners`, newPartner);
       fetchPartnersData();
+      if (created?.id) {
+        pushAction({
+          label: "Přidání partnera",
+          resource: "partners",
+          undo: async () => {
+            await apiDelete(`/partners/${created.id}`);
+          },
+          redo: async () => {
+            await apiPost(`/partners`, { ...newPartner, id: created.id });
+          }
+        });
+      }
     } catch (error) {
       console.error("Error adding partner:", error);
       alert("Chyba při přidávání partnera");
     }
-  }, [fetchPartnersData, status]);
+  }, [fetchPartnersData, pushAction, status]);
 
   useEffect(() => {
     fetchPartnersData();
@@ -367,16 +463,15 @@ const PartnersSection: React.FC<SectionProps> = ({
     });
 
     if (targetNode?.rowIndex !== null && targetNode?.rowIndex !== undefined) {
+      gridRef.current.api.ensureIndexVisible(targetNode.rowIndex, "middle");
+      // flashCells can throw if the cell is not yet rendered (virtualization)
       const api = gridRef.current.api;
-      api.ensureIndexVisible(targetNode.rowIndex, "middle");
-
-      // Defer flashing until after AG Grid has rendered the row/cells.
       requestAnimationFrame(() => {
         requestAnimationFrame(() => {
           try {
             api.flashCells({ rowNodes: [targetNode], columns: ["name"] });
-          } catch {
-            // Ignore highlight errors; navigation should never crash.
+          } catch (error) {
+            console.warn("Search row highlight skipped:", error);
           }
         });
       });
@@ -526,11 +621,15 @@ const PartnersSection: React.FC<SectionProps> = ({
             ref={gridRef}
             rowData={partnersData}
             columnDefs={partnersColDefs}
-            onCellValueChanged={onPartnersCellValueChanged}
-            defaultColDef={{
-              resizable: true,
-              sortable: true
+            onCellEditingStarted={(e: any) => {
+              if (e.data?.id != null) {
+                editSnapshotRef.current[e.data.id] = cloneRecord(e.data);
+              }
             }}
+            onCellValueChanged={onPartnersCellValueChanged}
+            defaultColDef={defaultColDef}
+            getRowId={getRowId}
+            suppressScrollOnNewData={true}
             suppressRowClickSelection={true}
             loading={isLoading}
             context={gridContext}
