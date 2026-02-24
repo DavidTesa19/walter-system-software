@@ -9,10 +9,8 @@ const VIEWABLE_EXTENSIONS = new Set([
   'py', 'sql', 'sh', 'bat', 'ps1', 'env',
   // Video (native HTML5)
   'mp4', 'webm', 'ogg', 'mov',
-  // Documents – DOCX rendered client-side via docx-preview
-  'docx',
-  // Office formats – opened via Google Docs Viewer online
-  'doc', 'xlsx', 'xls', 'pptx', 'ppt',
+  // Office formats – rendered via Microsoft Office Online / Google Docs Viewer
+  'docx', 'doc', 'xlsx', 'xls', 'pptx', 'ppt',
 ]);
 
 export const isDocumentViewable = (filename: string): boolean => {

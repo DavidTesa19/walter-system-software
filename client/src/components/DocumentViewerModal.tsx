@@ -173,7 +173,7 @@ const DocumentViewerModal: React.FC<DocumentViewerModalProps> = ({ documentId, f
             src={officeViewerUrl}
             title={filename}
             className="dv-office-frame"
-            sandbox="allow-scripts allow-same-origin allow-popups allow-forms"
+            allowFullScreen
           />
         ) : (
           <div className="dv-fallback-wrap">
