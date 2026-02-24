@@ -4,6 +4,7 @@ import React, { useCallback, useEffect, useMemo, useRef, useState } from "react"
 import { AgGridReact } from "ag-grid-react";
 import { AllCommunityModule, ModuleRegistry, type CellValueChangedEvent, type ColDef, type CellClickedEvent } from "ag-grid-community";
 import { apiGet, apiPost, apiPut, apiDelete } from "../utils/api";
+import { useUndoRedo } from "../utils/undoRedo";
 import InfoPopupEditor from "./cells/InfoPopupEditor";
 import OptionSelectEditor from "./cells/OptionSelectEditor";
 import FutureFunctionDetail from "./FutureFunctionDetail";
@@ -21,6 +22,8 @@ export interface FutureFunction {
 }
 
 ModuleRegistry.registerModules([AllCommunityModule]);
+
+const cloneRecord = (r: any) => JSON.parse(JSON.stringify(r));
 
 const PRIORITY_OPTIONS = ["Nízká", "Střední", "Vysoká"] as const;
 const COMPLEXITY_OPTIONS = ["Jednoduchá", "Středně složitá", "Složitá"] as const;
@@ -51,6 +54,16 @@ const FutureFunctionsGrid: React.FC = () => {
   const [isArchiveView, setIsArchiveView] = useState(false);
   const [selectedFunction, setSelectedFunction] = useState<FutureFunction | null>(null);
   const activeWrapperRef = useRef<HTMLDivElement | null>(null);
+  const { pushAction, signal, canUndo, canRedo, isBusy, undo, redo } = useUndoRedo();
+  const editSnapshotRef = useRef<Record<number, any>>({});
+
+  // Refetch when other views mutate the same resource
+  useEffect(() => {
+    if (signal?.resource === "future-functions") {
+      void fetchFutureFunctions();
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [signal]);
 
   const defaultColDef = useMemo<ColDef<FutureFunction>>(
     () => ({
@@ -109,8 +122,16 @@ const FutureFunctionsGrid: React.FC = () => {
 
       try {
         setIsLoading(true);
-        await apiPost(`/future-functions`, newFunction);
+        const created = await apiPost<FutureFunction>(`/future-functions`, newFunction);
         await fetchFutureFunctions();
+        if (created?.id) {
+          pushAction({
+            label: "Přidání funkce",
+            resource: "future-functions",
+            undo: async () => { await apiDelete(`/future-functions/${created.id}`); },
+            redo: async () => { await apiPost(`/future-functions`, { ...newFunction, id: created.id }); }
+          });
+        }
       } catch (error) {
         console.error("Error adding future function:", error);
         alert("Nepodařilo se přidat funkci");
@@ -118,7 +139,7 @@ const FutureFunctionsGrid: React.FC = () => {
         setIsLoading(false);
       }
     },
-    [fetchFutureFunctions]
+    [fetchFutureFunctions, pushAction]
   );
 
   const handleDeleteFunction = useCallback(
@@ -129,10 +150,17 @@ const FutureFunctionsGrid: React.FC = () => {
         return;
       }
 
+      const snapshot = cloneRecord(func);
       try {
         setIsLoading(true);
         await apiDelete(`/future-functions/${func.id}`);
         await fetchFutureFunctions();
+        pushAction({
+          label: `Smazání funkce #${func.id}`,
+          resource: "future-functions",
+          undo: async () => { await apiPost(`/future-functions`, snapshot); },
+          redo: async () => { await apiDelete(`/future-functions/${func.id}`); }
+        });
       } catch (error) {
         console.error("Error deleting future function:", error);
         alert("Nepodařilo se smazat funkci");
@@ -140,18 +168,22 @@ const FutureFunctionsGrid: React.FC = () => {
         setIsLoading(false);
       }
     },
-    [fetchFutureFunctions]
+    [fetchFutureFunctions, pushAction]
   );
 
   const handleArchiveFunction = useCallback(
     async (func: FutureFunction) => {
+      const snapshot = cloneRecord(func);
       try {
         setIsLoading(true);
-        await apiPut(`/future-functions/${func.id}`, {
-          ...func,
-          archived: true
-        });
+        await apiPut(`/future-functions/${func.id}`, { ...func, archived: true });
         await fetchFutureFunctions();
+        pushAction({
+          label: `Archivace funkce #${func.id}`,
+          resource: "future-functions",
+          undo: async () => { await apiPut(`/future-functions/${func.id}`, snapshot); },
+          redo: async () => { await apiPut(`/future-functions/${func.id}`, { ...func, archived: true }); }
+        });
       } catch (error) {
         console.error("Error archiving future function:", error);
         alert("Chyba při archivaci funkce");
@@ -159,25 +191,27 @@ const FutureFunctionsGrid: React.FC = () => {
         setIsLoading(false);
       }
     },
-    [fetchFutureFunctions]
+    [fetchFutureFunctions, pushAction]
   );
 
   const handleRestoreFunction = useCallback(
     async (func: FutureFunction) => {
       if (!func) return;
+      const snapshot = cloneRecord(func);
 
       try {
         setIsLoading(true);
-        // When restoring, if the status is an auto-archive status, reset to Plánováno
         const newStatus = (AUTO_ARCHIVE_STATUSES as readonly string[]).includes(func.status)
           ? "Plánováno"
           : func.status;
-        await apiPut(`/future-functions/${func.id}`, {
-          ...func,
-          archived: false,
-          status: newStatus
-        });
+        await apiPut(`/future-functions/${func.id}`, { ...func, archived: false, status: newStatus });
         await fetchFutureFunctions();
+        pushAction({
+          label: `Obnovení funkce #${func.id}`,
+          resource: "future-functions",
+          undo: async () => { await apiPut(`/future-functions/${func.id}`, snapshot); },
+          redo: async () => { await apiPut(`/future-functions/${func.id}`, { ...func, archived: false, status: newStatus }); }
+        });
       } catch (error) {
         console.error("Error restoring future function:", error);
         alert("Chyba při obnovení funkce");
@@ -185,7 +219,7 @@ const FutureFunctionsGrid: React.FC = () => {
         setIsLoading(false);
       }
     },
-    [fetchFutureFunctions]
+    [fetchFutureFunctions, pushAction]
   );
 
   const onCellValueChanged = useCallback(
@@ -210,13 +244,24 @@ const FutureFunctionsGrid: React.FC = () => {
       try {
         await apiPut(`/future-functions/${data.id}`, data);
         await fetchFutureFunctions();
+        const snap = editSnapshotRef.current[data.id];
+        if (snap) {
+          const after = cloneRecord(data);
+          pushAction({
+            label: `Úprava funkce #${data.id}`,
+            resource: "future-functions",
+            undo: async () => { await apiPut(`/future-functions/${data.id}`, snap); },
+            redo: async () => { await apiPut(`/future-functions/${data.id}`, after); }
+          });
+          delete editSnapshotRef.current[data.id];
+        }
       } catch (error) {
         console.error("Error updating future function:", error);
         alert("Chyba při ukládání změn");
         await fetchFutureFunctions();
       }
     },
-    [fetchFutureFunctions]
+    [fetchFutureFunctions, pushAction]
   );
 
   // Detail button cell renderer — opens the detail modal
@@ -655,13 +700,24 @@ const FutureFunctionsGrid: React.FC = () => {
       try {
         await apiPut(`/future-functions/${data.id}`, data);
         await fetchFutureFunctions();
+        const snap = editSnapshotRef.current[data.id];
+        if (snap) {
+          const after = cloneRecord(data);
+          pushAction({
+            label: `Úprava archivované funkce #${data.id}`,
+            resource: "future-functions",
+            undo: async () => { await apiPut(`/future-functions/${data.id}`, snap); },
+            redo: async () => { await apiPut(`/future-functions/${data.id}`, after); }
+          });
+          delete editSnapshotRef.current[data.id];
+        }
       } catch (error) {
         console.error("Error updating future function:", error);
         alert("Chyba při ukládání změn");
         await fetchFutureFunctions();
       }
     },
-    [fetchFutureFunctions]
+    [fetchFutureFunctions, pushAction]
   );
 
   const currentRowData = isArchiveView ? archivedFunctions : activeFunctions;
@@ -725,7 +781,29 @@ const FutureFunctionsGrid: React.FC = () => {
             📦 Archiv
           </button>
         </div>
-        <div style={{ justifySelf: "end" }}>
+        <div className="header-actions" style={{ justifySelf: "end" }}>
+          <button
+            className="undo-redo-btn"
+            onClick={undo}
+            disabled={!canUndo || isBusy}
+            title="Zpět (Ctrl+Z)"
+          >
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+              <path d="M3 10h10a5 5 0 0 1 0 10H9" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+              <path d="M7 6l-4 4 4 4" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+            </svg>
+          </button>
+          <button
+            className="undo-redo-btn"
+            onClick={redo}
+            disabled={!canRedo || isBusy}
+            title="Znovu (Ctrl+Y)"
+          >
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+              <path d="M21 10H11a5 5 0 0 0 0 10h4" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+              <path d="M17 6l4 4-4 4" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+            </svg>
+          </button>
           <button
             className="add-user-btn"
             onClick={() => handleAddFunction(isArchiveView ? "archive" : "active")}
@@ -793,6 +871,11 @@ const FutureFunctionsGrid: React.FC = () => {
               getRowId={getRowId}
               suppressScrollOnNewData={true}
               suppressRowClickSelection={true}
+              onCellEditingStarted={(e: any) => {
+                if (e.data?.id != null) {
+                  editSnapshotRef.current[e.data.id] = cloneRecord(e.data);
+                }
+              }}
               onCellValueChanged={currentOnCellValueChanged}
               loading={isLoading}
               animateRows
