@@ -1,5 +1,4 @@
-import React, { useEffect, useState, useRef, useCallback } from 'react';
-import { renderAsync } from 'docx-preview';
+import React, { useEffect, useState, useCallback } from 'react';
 import { apiGetBlob, apiGet, apiDownload, API_BASE } from '../utils/api';
 import './DocumentViewerModal.css';
 
@@ -9,7 +8,7 @@ interface DocumentViewerModalProps {
   onClose: () => void;
 }
 
-type ViewerType = 'pdf' | 'image' | 'docx' | 'text' | 'video' | 'office' | 'unsupported';
+type ViewerType = 'pdf' | 'image' | 'text' | 'video' | 'office' | 'unsupported';
 
 const getExt = (filename: string): string =>
   filename.split('.').pop()?.toLowerCase() || '';
@@ -18,26 +17,26 @@ const getViewerType = (filename: string): ViewerType => {
   const ext = getExt(filename);
   if (ext === 'pdf') return 'pdf';
   if (['png', 'jpg', 'jpeg', 'gif', 'webp', 'svg', 'bmp', 'ico', 'tiff', 'tif'].includes(ext)) return 'image';
-  if (ext === 'docx') return 'docx';
   if ([
     'txt', 'csv', 'json', 'xml', 'md', 'log', 'yml', 'yaml',
     'ini', 'cfg', 'html', 'css', 'js', 'ts', 'jsx', 'tsx',
     'py', 'sql', 'sh', 'bat', 'ps1', 'env',
   ].includes(ext)) return 'text';
   if (['mp4', 'webm', 'ogg', 'mov'].includes(ext)) return 'video';
-  if (['xlsx', 'xls', 'pptx', 'ppt', 'doc'].includes(ext)) return 'office';
+  // All Office formats — rendered via Google Docs Viewer / Microsoft Office Online
+  if (['docx', 'doc', 'xlsx', 'xls', 'pptx', 'ppt'].includes(ext)) return 'office';
   return 'unsupported';
 };
 
 const fileIcon = (vt: ViewerType, ext: string): string => {
   if (vt === 'pdf') return '📄';
   if (vt === 'image') return '🖼️';
-  if (vt === 'docx') return '📝';
   if (vt === 'text') return '📋';
   if (vt === 'video') return '🎬';
   if (vt === 'office') {
     if (['xlsx', 'xls'].includes(ext)) return '📊';
     if (['pptx', 'ppt'].includes(ext)) return '📊';
+    if (['docx', 'doc'].includes(ext)) return '📝';
     return '📝';
   }
   return '📁';
@@ -50,49 +49,45 @@ const fileIcon = (vt: ViewerType, ext: string): string => {
 const DocumentViewerModal: React.FC<DocumentViewerModalProps> = ({ documentId, filename, onClose }) => {
   const [blobUrl, setBlobUrl] = useState<string | null>(null);
   const [textContent, setTextContent] = useState<string | null>(null);
+  const [officeViewerUrl, setOfficeViewerUrl] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [openingOnline, setOpeningOnline] = useState(false);
-  const docxRef = useRef<HTMLDivElement>(null);
 
   const viewerType = getViewerType(filename);
   const ext = getExt(filename);
 
   /* ---- fetch & render ---- */
   const fetchAndRender = useCallback(async () => {
-    // Office / unsupported — nothing to fetch for in-modal rendering
-    if (viewerType === 'office' || viewerType === 'unsupported') {
-      setLoading(false);
-      return;
-    }
-
     try {
       setLoading(true);
-      const blob = await apiGetBlob(`/documents/${documentId}/download`);
 
-      if (viewerType === 'docx') {
-        if (docxRef.current) {
-          docxRef.current.innerHTML = '';
-          await renderAsync(blob, docxRef.current, undefined, {
-            className: 'docx-preview-wrapper',
-            inWrapper: true,
-            ignoreWidth: false,
-            ignoreHeight: false,
-            ignoreFonts: false,
-            breakPages: true,
-            ignoreLastRenderedPageBreak: true,
-            experimental: false,
-            trimXmlDeclaration: true,
-            renderHeaders: true,
-            renderFooters: true,
-            renderFootnotes: true,
-            renderEndnotes: true,
-          });
+      if (viewerType === 'office') {
+        // Get a temporary public token, then build a Google Docs Viewer / MS Office Online URL
+        const { token } = await apiGet<{ token: string }>(`/documents/${documentId}/public-token`);
+        const publicUrl = `${API_BASE}/documents/public/${token}`;
+
+        // Try Microsoft Office Online first (best for docx/xlsx/pptx),
+        // fall back to Google Docs Viewer for .doc/.xls/.ppt
+        const msFormats = ['docx', 'xlsx', 'pptx'];
+        if (msFormats.includes(ext)) {
+          setOfficeViewerUrl(
+            `https://view.officeapps.live.com/op/embed.aspx?src=${encodeURIComponent(publicUrl)}`
+          );
+        } else {
+          setOfficeViewerUrl(
+            `https://docs.google.com/gview?url=${encodeURIComponent(publicUrl)}&embedded=true`
+          );
         }
-      } else if (viewerType === 'text') {
-        setTextContent(await blob.text());
+      } else if (viewerType === 'unsupported') {
+        // nothing to fetch
       } else {
-        setBlobUrl(URL.createObjectURL(blob));
+        const blob = await apiGetBlob(`/documents/${documentId}/download`);
+
+        if (viewerType === 'text') {
+          setTextContent(await blob.text());
+        } else {
+          setBlobUrl(URL.createObjectURL(blob));
+        }
       }
     } catch (err) {
       console.error('Document viewer – load failed:', err);
@@ -100,7 +95,7 @@ const DocumentViewerModal: React.FC<DocumentViewerModalProps> = ({ documentId, f
     } finally {
       setLoading(false);
     }
-  }, [documentId, viewerType]);
+  }, [documentId, viewerType, ext]);
 
   useEffect(() => {
     fetchAndRender();
@@ -118,6 +113,14 @@ const DocumentViewerModal: React.FC<DocumentViewerModalProps> = ({ documentId, f
   const handleDownload = () => apiDownload(`/documents/${documentId}/download`, filename);
 
   const handleOpenNewTab = async () => {
+    if (officeViewerUrl) {
+      // Open the embedded viewer URL but non-embedded
+      const newTabUrl = officeViewerUrl
+        .replace('embed.aspx', 'view.aspx')
+        .replace('&embedded=true', '');
+      window.open(newTabUrl, '_blank');
+      return;
+    }
     if (blobUrl) { window.open(blobUrl, '_blank'); return; }
     try {
       const blob = await apiGetBlob(`/documents/${documentId}/download`);
@@ -125,20 +128,6 @@ const DocumentViewerModal: React.FC<DocumentViewerModalProps> = ({ documentId, f
       window.open(url, '_blank');
       setTimeout(() => URL.revokeObjectURL(url), 60_000);
     } catch { setError('Nepodařilo se otevřít dokument.'); }
-  };
-
-  const handleOpenOnline = async () => {
-    try {
-      setOpeningOnline(true);
-      const { token } = await apiGet<{ token: string }>(`/documents/${documentId}/public-token`);
-      const publicUrl = `${API_BASE}/documents/public/${token}`;
-      const viewer = `https://docs.google.com/viewer?url=${encodeURIComponent(publicUrl)}&embedded=false`;
-      window.open(viewer, '_blank');
-    } catch {
-      setError('Online zobrazení není dostupné. Zkuste soubor stáhnout.');
-    } finally {
-      setOpeningOnline(false);
-    }
   };
 
   /* ---- content renderer ---- */
@@ -178,21 +167,22 @@ const DocumentViewerModal: React.FC<DocumentViewerModalProps> = ({ documentId, f
           </div>
         ) : null;
 
-      case 'docx':
-        return null; // rendered via ref
-
       case 'office':
-        return (
+        return officeViewerUrl ? (
+          <iframe
+            src={officeViewerUrl}
+            title={filename}
+            className="dv-office-frame"
+            sandbox="allow-scripts allow-same-origin allow-popups allow-forms"
+          />
+        ) : (
           <div className="dv-fallback-wrap">
             <div className="dv-fallback-card">
               <span className="dv-fallback-icon">{fileIcon(viewerType, ext)}</span>
               <h3 className="dv-fallback-name">{filename}</h3>
-              <p className="dv-fallback-hint">Tento typ souboru nelze zobrazit přímo v aplikaci.</p>
+              <p className="dv-fallback-hint">Online zobrazení není dostupné.</p>
               <div className="dv-fallback-actions">
-                <button className="dv-btn dv-btn--primary" onClick={handleOpenOnline} disabled={openingOnline}>
-                  {openingOnline ? 'Otevírám…' : 'Otevřít online (Google Docs)'}
-                </button>
-                <button className="dv-btn dv-btn--secondary" onClick={handleDownload}>
+                <button className="dv-btn dv-btn--primary" onClick={handleDownload}>
                   Stáhnout soubor
                 </button>
               </div>
@@ -234,7 +224,7 @@ const DocumentViewerModal: React.FC<DocumentViewerModalProps> = ({ documentId, f
           </div>
 
           <div className="dv-header-right">
-            {viewerType !== 'office' && viewerType !== 'unsupported' && (
+            {viewerType !== 'unsupported' && (
               <button className="dv-hdr-btn" onClick={handleOpenNewTab} title="Otevřít v novém panelu">
                 <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
                   <path d="M6 2H3a1 1 0 00-1 1v10a1 1 0 001 1h10a1 1 0 001-1v-3" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"/>
@@ -259,21 +249,7 @@ const DocumentViewerModal: React.FC<DocumentViewerModalProps> = ({ documentId, f
 
         {/* Content */}
         <div className="dv-content">
-          {viewerType === 'docx' ? (
-            <>
-              {loading && (
-                <div className="dv-loading"><div className="dv-spinner" /><span>Načítám dokument…</span></div>
-              )}
-              {error && <div className="dv-error">{error}</div>}
-              <div
-                ref={docxRef}
-                className="dv-docx-container"
-                style={{ display: loading || error ? 'none' : 'block' }}
-              />
-            </>
-          ) : (
-            renderContent()
-          )}
+          {renderContent()}
         </div>
       </div>
     </div>

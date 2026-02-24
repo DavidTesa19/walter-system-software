@@ -216,25 +216,12 @@
   tab-size: 4;
 }
 
-/* ===== DOCX ===== */
-.dv-docx-container {
+/* ===== OFFICE (Google Docs / MS Office Online iframe) ===== */
+.dv-office-frame {
   width: 100%;
   height: 100%;
-  overflow: auto;
-  background: #e5e7eb;
-}
-
-.dv-docx-container .docx-wrapper {
-  background: #e5e7eb !important;
-  padding: 28px !important;
-}
-
-.dv-docx-container .docx-wrapper > section.docx {
-  background: white !important;
-  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.1),
-              0 0 0 1px rgba(0, 0, 0, 0.04) !important;
-  margin: 0 auto 24px auto !important;
-  border-radius: 2px;
+  border: none;
+  background: #fff;
 }
 
 /* ===== OFFICE / UNSUPPORTED FALLBACK ===== */
@@ -363,20 +350,6 @@
 [data-theme="dark"] .dv-text {
   background: var(--surface-color, #1a1a1a);
   color: var(--text-color, #e5e7eb);
-}
-
-[data-theme="dark"] .dv-docx-container {
-  background: #1a1a1a;
-}
-
-[data-theme="dark"] .dv-docx-container .docx-wrapper {
-  background: #1a1a1a !important;
-}
-
-[data-theme="dark"] .dv-docx-container .docx-wrapper > section.docx {
-  background: #252525 !important;
-  color: #e0e0e0;
-  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.3) !important;
 }
 
 [data-theme="dark"] .dv-fallback-card {
