@@ -69,28 +69,32 @@ const FutureFunctionsGrid: React.FC = () => {
     [futureFunctions]
   );
 
-  const handleAddFunction = useCallback(async () => {
-    const newFunction: Omit<FutureFunction, "id"> = {
-      name: "Nová funkce",
-      priority: PRIORITY_OPTIONS[1],
-      complexity: COMPLEXITY_OPTIONS[1],
-      phase: PHASE_OPTIONS[1],
-      info: "",
-      status: "Plánováno",
-      archived: false
-    };
+  const handleAddFunction = useCallback(
+    async (mode: "active" | "archive") => {
+      const isArchive = mode === "archive";
+      const newFunction: Omit<FutureFunction, "id"> = {
+        name: "Nová funkce",
+        priority: PRIORITY_OPTIONS[1],
+        complexity: COMPLEXITY_OPTIONS[1],
+        phase: PHASE_OPTIONS[1],
+        info: "",
+        status: isArchive ? "Odloženo" : "Plánováno",
+        archived: isArchive
+      };
 
-    try {
-      setIsLoading(true);
-      await apiPost(`/future-functions`, newFunction);
-      await fetchFutureFunctions();
-    } catch (error) {
-      console.error("Error adding future function:", error);
-      alert("Nepodařilo se přidat funkci");
-    } finally {
-      setIsLoading(false);
-    }
-  }, [fetchFutureFunctions]);
+      try {
+        setIsLoading(true);
+        await apiPost(`/future-functions`, newFunction);
+        await fetchFutureFunctions();
+      } catch (error) {
+        console.error("Error adding future function:", error);
+        alert("Nepodařilo se přidat funkci");
+      } finally {
+        setIsLoading(false);
+      }
+    },
+    [fetchFutureFunctions]
+  );
 
   const handleDeleteFunction = useCallback(
     async (id: number) => {
@@ -593,9 +597,19 @@ const FutureFunctionsGrid: React.FC = () => {
 
   return (
     <div className="page-container">
-      <div className="header-section">
-        <h1 className="page-title">Plán budoucích funkcí</h1>
-        <div className="navigation-tabs">
+      <div
+        className="header-section"
+        style={{
+          display: "grid",
+          gridTemplateColumns: "1fr auto 1fr",
+          alignItems: "center",
+          gap: "12px"
+        }}
+      >
+        <h1 className="page-title" style={{ justifySelf: "start" }}>
+          Plán budoucích funkcí
+        </h1>
+        <div className="navigation-tabs" style={{ justifySelf: "center" }}>
           <button
             type="button"
             className={`nav-tab${!isArchiveView ? " active" : ""}`}
@@ -611,11 +625,15 @@ const FutureFunctionsGrid: React.FC = () => {
             📦 Archiv
           </button>
         </div>
-        {!isArchiveView && (
-          <button className="add-user-btn" onClick={handleAddFunction} disabled={isLoading}>
+        <div style={{ justifySelf: "end" }}>
+          <button
+            className="add-user-btn"
+            onClick={() => handleAddFunction(isArchiveView ? "archive" : "active")}
+            disabled={isLoading}
+          >
             + Přidat funkci
           </button>
-        )}
+        </div>
       </div>
 
       <div className="table-section">
@@ -640,20 +658,6 @@ const FutureFunctionsGrid: React.FC = () => {
         </div>
       </div>
 
-      <div className="instructions">
-        <p>
-          <strong>Instrukce pro plán funkcí:</strong>
-        </p>
-        <ul>
-          <li>Použijte tlačítko „Přidat funkci" pro založení nového záznamu</li>
-          <li>Kliknutím na buňku lze upravit hodnotu, rozbalovací pole nabízí připravené možnosti</li>
-          <li>Sloupec "Info" otevře po kliknutí editor s tlačítky pro potvrzení (✓) a zrušení (×) změn</li>
-          <li>Tlačítko s křížkem vlevo odstraní danou položku z plánu</li>
-          <li>Změna stavu na <strong>Odloženo</strong> nebo <strong>Zrušeno</strong> automaticky přesune funkci do archivu</li>
-          <li>U dokončených funkcí lze kliknout na ikonu archivace vpravo pro ruční archivaci</li>
-          <li>V archivu lze funkci obnovit kliknutím na ikonu obnovení nebo změnou stavu na aktivní</li>
-        </ul>
-      </div>
     </div>
   );
 };
