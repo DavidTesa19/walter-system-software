@@ -124,7 +124,8 @@ const stripDocumentData = (doc) => {
     mimeType: doc.mimeType,
     sizeBytes: Number(doc.sizeBytes ?? 0),
     createdAt: doc.createdAt,
-    archivedAt: doc.archivedAt ?? null
+    archivedAt: doc.archivedAt ?? null,
+    noteId: doc.noteId ?? null
   };
 };
 
@@ -1564,7 +1565,8 @@ app.post("/:entity/:id/documents", authenticateToken, upload.single("file"), (re
       mimeType: req.file.mimetype || "application/octet-stream",
       sizeBytes: req.file.size,
       createdAt: new Date().toISOString(),
-      data: req.file.buffer.toString("base64")
+      data: req.file.buffer.toString("base64"),
+      noteId: req.body.noteId ? Number(req.body.noteId) : null
     };
 
     ensureDocumentsCollection(store);
@@ -1762,7 +1764,16 @@ app.get("/:entity/:id/notes", authenticateToken, (req, res) => {
       .filter((n) => n.entityType === entity && n.entityId === entityId)
       .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
 
-    return res.json(notes);
+    // Attach documents linked to each note
+    const docs = store.documents || [];
+    const notesWithAttachments = notes.map((note) => {
+      const noteAttachments = docs
+        .filter((d) => d.noteId === note.id)
+        .map((d) => stripDocumentData(d));
+      return { ...note, attachments: noteAttachments };
+    });
+
+    return res.json(notesWithAttachments);
   } catch (error) {
     console.error("Error fetching notes:", error);
     res.status(500).json({ error: "Failed to fetch notes" });
@@ -1792,7 +1803,8 @@ app.post("/:entity/:id/notes", authenticateToken, (req, res) => {
       entityId: entityId,
       content: content.trim(),
       author: req.user?.username || "Admin",
-      createdAt: new Date().toISOString()
+      createdAt: new Date().toISOString(),
+      attachments: []
     };
 
     if (!store.notes) {

@@ -15,6 +15,7 @@ interface Note {
   content: string;
   author: string;
   createdAt: string;
+  attachments?: Attachment[];
 }
 
 interface Attachment {
@@ -26,6 +27,7 @@ interface Attachment {
   sizeBytes: number;
   createdAt: string;
   archivedAt: string | null;
+  noteId?: number | null;
 }
 
 interface FutureFunctionDetailProps {
@@ -84,6 +86,8 @@ const FutureFunctionDetail: React.FC<FutureFunctionDetailProps> = ({
   const [notes, setNotes] = useState<Note[]>([]);
   const [noteText, setNoteText] = useState("");
   const [notesLoading, setNotesLoading] = useState(false);
+  const [pendingNoteFiles, setPendingNoteFiles] = useState<File[]>([]);
+  const [noteSending, setNoteSending] = useState(false);
 
   // Attachments state
   const [attachments, setAttachments] = useState<Attachment[]>([]);
@@ -102,6 +106,7 @@ const FutureFunctionDetail: React.FC<FutureFunctionDetailProps> = ({
   const [thumbnails, setThumbnails] = useState<Record<number, string>>({});
 
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const noteFileInputRef = useRef<HTMLInputElement>(null);
   const dragCounterRef = useRef(0);
 
   /* ---- Data fetching ---- */
@@ -132,6 +137,9 @@ const FutureFunctionDetail: React.FC<FutureFunctionDetailProps> = ({
     }
   }, [func.id]);
 
+  // General attachments = those NOT linked to a note
+  const generalAttachments = attachments.filter((a) => !a.noteId);
+
   useEffect(() => {
     void fetchNotes();
     void fetchAttachments();
@@ -140,8 +148,14 @@ const FutureFunctionDetail: React.FC<FutureFunctionDetailProps> = ({
   /* ---- Load thumbnails for image/video attachments ---- */
 
   useEffect(() => {
+    // Collect all attachment IDs from both general attachments and note attachments
+    const allAttachments = [
+      ...attachments,
+      ...notes.flatMap((n) => n.attachments || []),
+    ];
+
     const newThumbs: number[] = [];
-    for (const att of attachments) {
+    for (const att of allAttachments) {
       if (
         (isImage(att.mimeType) || isVideo(att.mimeType)) &&
         !thumbnails[att.id]
@@ -175,7 +189,7 @@ const FutureFunctionDetail: React.FC<FutureFunctionDetailProps> = ({
       cancelled = true;
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [attachments]);
+  }, [attachments, notes]);
 
   // Cleanup blob URLs on unmount
   useEffect(() => {
@@ -188,18 +202,35 @@ const FutureFunctionDetail: React.FC<FutureFunctionDetailProps> = ({
   /* ---- Notes CRUD ---- */
 
   const handleAddNote = useCallback(async () => {
-    if (!noteText.trim()) return;
+    if (!noteText.trim() && pendingNoteFiles.length === 0) return;
+    setNoteSending(true);
     try {
-      await apiPost(`/${ENTITY}/${func.id}/notes`, {
-        content: noteText.trim(),
+      // 1. Create the note (content can be empty if only files)
+      const created = await apiPost<Note>(`/${ENTITY}/${func.id}/notes`, {
+        content: (noteText.trim() || (pendingNoteFiles.length > 0 ? "📎 Příloha" : "")),
       });
+
+      // 2. Upload pending files linked to this note
+      if (pendingNoteFiles.length > 0 && created?.id) {
+        for (const file of pendingNoteFiles) {
+          const formData = new FormData();
+          formData.append("file", file);
+          formData.append("noteId", String(created.id));
+          await apiUpload(`/${ENTITY}/${func.id}/documents`, formData);
+        }
+      }
+
       setNoteText("");
+      setPendingNoteFiles([]);
       await fetchNotes();
+      await fetchAttachments();
     } catch (err) {
       console.error("Error adding note:", err);
       alert("Nepodařilo se přidat poznámku");
+    } finally {
+      setNoteSending(false);
     }
-  }, [noteText, func.id, fetchNotes]);
+  }, [noteText, pendingNoteFiles, func.id, fetchNotes, fetchAttachments]);
 
   const handleDeleteNote = useCallback(
     async (noteId: number) => {
@@ -214,6 +245,22 @@ const FutureFunctionDetail: React.FC<FutureFunctionDetailProps> = ({
     },
     [fetchNotes]
   );
+
+  /* ---- Note file staging ---- */
+
+  const handleNoteFileSelect = useCallback(
+    (e: React.ChangeEvent<HTMLInputElement>) => {
+      if (e.target.files?.length) {
+        setPendingNoteFiles((prev) => [...prev, ...Array.from(e.target.files!)]);
+        e.target.value = "";
+      }
+    },
+    []
+  );
+
+  const removePendingFile = useCallback((index: number) => {
+    setPendingNoteFiles((prev) => prev.filter((_, i) => i !== index));
+  }, []);
 
   /* ---- File upload ---- */
 
@@ -282,10 +329,17 @@ const FutureFunctionDetail: React.FC<FutureFunctionDetailProps> = ({
       setDragging(false);
 
       if (e.dataTransfer.files?.length) {
-        void uploadFiles(Array.from(e.dataTransfer.files));
+        if (activeTab === "notes") {
+          setPendingNoteFiles((prev) => [
+            ...prev,
+            ...Array.from(e.dataTransfer.files),
+          ]);
+        } else {
+          void uploadFiles(Array.from(e.dataTransfer.files));
+        }
       }
     },
-    [uploadFiles]
+    [uploadFiles, activeTab]
   );
 
   /* ---- Clipboard paste ---- */
@@ -312,16 +366,23 @@ const FutureFunctionDetail: React.FC<FutureFunctionDetailProps> = ({
 
       if (files.length > 0) {
         e.preventDefault();
-        // Show a toast
-        setPasteToast(true);
-        setTimeout(() => setPasteToast(false), 2000);
-        void uploadFiles(files);
+        if (activeTab === "notes") {
+          // Stage files for the current note message
+          setPendingNoteFiles((prev) => [...prev, ...files]);
+          setPasteToast(true);
+          setTimeout(() => setPasteToast(false), 2000);
+        } else {
+          // Upload directly to general attachments
+          setPasteToast(true);
+          setTimeout(() => setPasteToast(false), 2000);
+          void uploadFiles(files);
+        }
       }
     };
 
     window.addEventListener("paste", handlePaste);
     return () => window.removeEventListener("paste", handlePaste);
-  }, [uploadFiles]);
+  }, [uploadFiles, activeTab]);
 
   /* ---- Delete attachment ---- */
 
@@ -477,7 +538,7 @@ const FutureFunctionDetail: React.FC<FutureFunctionDetailProps> = ({
                   onClick={() => setActiveTab("attachments")}
                 >
                   📎 Přílohy
-                  {attachments.length > 0 && ` (${attachments.length})`}
+                  {generalAttachments.length > 0 && ` (${generalAttachments.length})`}
                 </button>
               </div>
 
@@ -485,26 +546,83 @@ const FutureFunctionDetail: React.FC<FutureFunctionDetailProps> = ({
                 {/* ======== Notes Tab ======== */}
                 {activeTab === "notes" && (
                   <>
-                    <div className="ff-notes-input-area">
-                      <textarea
-                        placeholder="Napište poznámku nebo aktualizaci..."
-                        value={noteText}
-                        onChange={(e) => setNoteText(e.target.value)}
-                        onKeyDown={(e) => {
-                          if (e.key === "Enter" && !e.shiftKey) {
-                            e.preventDefault();
-                            void handleAddNote();
-                          }
-                        }}
-                      />
-                      <button
-                        type="button"
-                        className="ff-note-submit-btn"
-                        onClick={() => void handleAddNote()}
-                        disabled={!noteText.trim()}
-                      >
-                        Přidat
-                      </button>
+                    <div
+                      className="ff-notes-input-area"
+                      onDragEnter={handleDragEnter}
+                      onDragLeave={handleDragLeave}
+                      onDragOver={handleDragOver}
+                      onDrop={handleDrop}
+                    >
+                      <div className="ff-notes-input-row">
+                        <textarea
+                          placeholder="Napište poznámku nebo aktualizaci..."
+                          value={noteText}
+                          onChange={(e) => setNoteText(e.target.value)}
+                          onKeyDown={(e) => {
+                            if (e.key === "Enter" && !e.shiftKey) {
+                              e.preventDefault();
+                              void handleAddNote();
+                            }
+                          }}
+                        />
+                        <div className="ff-notes-input-actions">
+                          <button
+                            type="button"
+                            className="ff-note-attach-btn"
+                            onClick={() => noteFileInputRef.current?.click()}
+                            title="Přiložit soubor"
+                          >
+                            📎
+                          </button>
+                          <button
+                            type="button"
+                            className="ff-note-submit-btn"
+                            onClick={() => void handleAddNote()}
+                            disabled={
+                              (!noteText.trim() && pendingNoteFiles.length === 0) ||
+                              noteSending
+                            }
+                          >
+                            {noteSending ? "Odesílám..." : "Přidat"}
+                          </button>
+                        </div>
+                        <input
+                          ref={noteFileInputRef}
+                          type="file"
+                          className="ff-upload-input"
+                          multiple
+                          onChange={handleNoteFileSelect}
+                        />
+                      </div>
+
+                      {/* Staged files preview */}
+                      {pendingNoteFiles.length > 0 && (
+                        <div className="ff-pending-files">
+                          {pendingNoteFiles.map((file, idx) => (
+                            <div key={idx} className="ff-pending-file-chip">
+                              <span className="ff-pending-file-icon">
+                                {getFileIcon(file.type, file.name)}
+                              </span>
+                              <span className="ff-pending-file-name">
+                                {file.name}
+                              </span>
+                              <button
+                                type="button"
+                                className="ff-pending-file-remove"
+                                onClick={() => removePendingFile(idx)}
+                              >
+                                ×
+                              </button>
+                            </div>
+                          ))}
+                        </div>
+                      )}
+
+                      {dragging && (
+                        <div className="ff-notes-drop-overlay">
+                          📂 Přetáhněte soubory sem
+                        </div>
+                      )}
                     </div>
 
                     {notesLoading ? (
@@ -526,6 +644,62 @@ const FutureFunctionDetail: React.FC<FutureFunctionDetailProps> = ({
                               </span>
                             </div>
                             <p className="ff-note-content">{note.content}</p>
+
+                            {/* Inline note attachments */}
+                            {note.attachments && note.attachments.length > 0 && (
+                              <div className="ff-note-attachments">
+                                {note.attachments.map((att) => (
+                                  <div
+                                    key={att.id}
+                                    className="ff-note-attachment-item"
+                                  >
+                                    {isImage(att.mimeType) &&
+                                    thumbnails[att.id] ? (
+                                      <img
+                                        src={thumbnails[att.id]}
+                                        alt={att.filename}
+                                        className="ff-note-attachment-img"
+                                        onClick={() =>
+                                          setViewingDoc({
+                                            id: att.id,
+                                            filename: att.filename,
+                                          })
+                                        }
+                                      />
+                                    ) : isVideo(att.mimeType) &&
+                                      thumbnails[att.id] ? (
+                                      <video
+                                        src={thumbnails[att.id]}
+                                        className="ff-note-attachment-video"
+                                        controls
+                                        muted
+                                      />
+                                    ) : (
+                                      <div
+                                        className="ff-note-attachment-file"
+                                        onClick={() =>
+                                          setViewingDoc({
+                                            id: att.id,
+                                            filename: att.filename,
+                                          })
+                                        }
+                                      >
+                                        <span className="ff-note-attachment-file-icon">
+                                          {getFileIcon(att.mimeType, att.filename)}
+                                        </span>
+                                        <span className="ff-note-attachment-file-name">
+                                          {att.filename}
+                                        </span>
+                                        <span className="ff-note-attachment-file-size">
+                                          {formatSize(att.sizeBytes)}
+                                        </span>
+                                      </div>
+                                    )}
+                                  </div>
+                                ))}
+                              </div>
+                            )}
+
                             <button
                               type="button"
                               className="ff-note-delete"
@@ -581,14 +755,14 @@ const FutureFunctionDetail: React.FC<FutureFunctionDetailProps> = ({
 
                     {attachmentsLoading ? (
                       <p className="ff-attachments-empty">Načítám...</p>
-                    ) : attachments.length === 0 ? (
+                    ) : generalAttachments.length === 0 ? (
                       <p className="ff-attachments-empty">
                         Zatím žádné přílohy. Přidejte soubory výše nebo
                         vložte ze schránky (Ctrl+V).
                       </p>
                     ) : (
                       <div className="ff-attachments-grid">
-                        {attachments.map((att) => (
+                        {generalAttachments.map((att) => (
                           <div key={att.id} className="ff-attachment-card">
                             <button
                               type="button"
@@ -675,7 +849,9 @@ const FutureFunctionDetail: React.FC<FutureFunctionDetailProps> = ({
       {/* Paste toast */}
       {pasteToast && (
         <div className="ff-paste-indicator">
-          📋 Soubor vložen ze schránky — nahrávám...
+          📋 {activeTab === "notes"
+            ? "Soubor přidán k poznámce"
+            : "Soubor vložen ze schránky — nahrávám..."}
         </div>
       )}
 

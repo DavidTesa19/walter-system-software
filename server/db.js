@@ -274,7 +274,8 @@ export async function initDatabase() {
       "ALTER TABLE future_functions ADD COLUMN IF NOT EXISTS archived BOOLEAN DEFAULT FALSE",
       "ALTER TABLE users ADD COLUMN IF NOT EXISTS password_hash VARCHAR(255)",
       "ALTER TABLE users ADD COLUMN IF NOT EXISTS role VARCHAR(50) DEFAULT 'employee'",
-      "ALTER TABLE documents ADD COLUMN IF NOT EXISTS archived_at TIMESTAMP DEFAULT NULL"
+      "ALTER TABLE documents ADD COLUMN IF NOT EXISTS archived_at TIMESTAMP DEFAULT NULL",
+      "ALTER TABLE documents ADD COLUMN IF NOT EXISTS note_id INTEGER DEFAULT NULL"
     ];
 
     for (const sql of columnMigrations) {
@@ -432,7 +433,8 @@ function toDocumentResponse(row, { includeData = false } = {}) {
     mimeType: row.mime_type,
     sizeBytes: typeof row.size_bytes === 'number' ? row.size_bytes : Number(row.size_bytes),
     createdAt: row.created_at,
-    archivedAt: row.archived_at ?? null
+    archivedAt: row.archived_at ?? null,
+    noteId: row.note_id ?? null
   };
 
   if (includeData) {
@@ -791,14 +793,14 @@ export const db = {
     return toDocumentResponse(result.rows[0], { includeData });
   },
 
-  async createDocument(entityType, entityId, { filename, mimeType, sizeBytes, buffer }) {
+  async createDocument(entityType, entityId, { filename, mimeType, sizeBytes, buffer, noteId }) {
     if (!USE_POSTGRES) return null;
 
     const result = await pool.query(
-      `INSERT INTO documents (entity_type, entity_id, filename, mime_type, size_bytes, data)
-       VALUES ($1, $2, $3, $4, $5, $6)
-       RETURNING id, entity_type, entity_id, filename, mime_type, size_bytes, created_at`,
-      [entityType, entityId, filename, mimeType, sizeBytes, buffer]
+      `INSERT INTO documents (entity_type, entity_id, filename, mime_type, size_bytes, data, note_id)
+       VALUES ($1, $2, $3, $4, $5, $6, $7)
+       RETURNING id, entity_type, entity_id, filename, mime_type, size_bytes, created_at, note_id`,
+      [entityType, entityId, filename, mimeType, sizeBytes, buffer, noteId || null]
     );
 
     return toDocumentResponse(result.rows[0]);
@@ -848,7 +850,7 @@ export const db = {
   async getNotes(entityType, entityId) {
     if (!USE_POSTGRES) return null;
 
-    const result = await pool.query(
+    const notesResult = await pool.query(
       `SELECT id, entity_type, entity_id, content, author, created_at
          FROM notes
         WHERE entity_type = $1 AND entity_id = $2
@@ -856,13 +858,41 @@ export const db = {
       [entityType, entityId]
     );
 
-    return result.rows.map(row => ({
+    // Fetch all documents linked to these notes in one query
+    const noteIds = notesResult.rows.map(r => r.id);
+    let docsByNoteId = {};
+    if (noteIds.length > 0) {
+      const docsResult = await pool.query(
+        `SELECT id, entity_type, entity_id, filename, mime_type, size_bytes, created_at, archived_at, note_id
+           FROM documents
+          WHERE note_id = ANY($1::int[])`,
+        [noteIds]
+      );
+      for (const doc of docsResult.rows) {
+        const nid = doc.note_id;
+        if (!docsByNoteId[nid]) docsByNoteId[nid] = [];
+        docsByNoteId[nid].push({
+          id: doc.id,
+          entityType: doc.entity_type,
+          entityId: doc.entity_id,
+          filename: doc.filename,
+          mimeType: doc.mime_type,
+          sizeBytes: Number(doc.size_bytes || 0),
+          createdAt: doc.created_at,
+          archivedAt: doc.archived_at ?? null,
+          noteId: doc.note_id
+        });
+      }
+    }
+
+    return notesResult.rows.map(row => ({
       id: row.id,
       entityType: row.entity_type,
       entityId: row.entity_id,
       content: row.content,
       author: row.author,
-      createdAt: row.created_at
+      createdAt: row.created_at,
+      attachments: docsByNoteId[row.id] || []
     }));
   },
 
@@ -883,7 +913,8 @@ export const db = {
       entityId: row.entity_id,
       content: row.content,
       author: row.author,
-      createdAt: row.created_at
+      createdAt: row.created_at,
+      attachments: []
     };
   },
 

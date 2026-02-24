@@ -184,7 +184,8 @@ const stripDocumentData = (doc) => {
     mimeType: doc.mimeType ?? doc.mime_type,
     sizeBytes: Number(doc.sizeBytes ?? doc.size_bytes ?? 0),
     createdAt: doc.createdAt ?? doc.created_at,
-    archivedAt: doc.archivedAt ?? doc.archived_at ?? null
+    archivedAt: doc.archivedAt ?? doc.archived_at ?? null,
+    noteId: doc.noteId ?? doc.note_id ?? null
   };
 };
 
@@ -1917,11 +1918,13 @@ app.post("/:entity/:id/documents", authenticateToken, upload.single("file"), asy
     const sizeBytes = req.file.size;
 
     if (db.isPostgres()) {
+      const noteId = req.body.noteId ? Number(req.body.noteId) : null;
       const created = await db.createDocument(entity, entityId, {
         filename,
         mimeType,
         sizeBytes,
-        buffer: req.file.buffer
+        buffer: req.file.buffer,
+        noteId
       });
       return res.status(201).json(created);
     }
@@ -1934,7 +1937,8 @@ app.post("/:entity/:id/documents", authenticateToken, upload.single("file"), asy
       mimeType,
       sizeBytes,
       createdAt: new Date().toISOString(),
-      data: req.file.buffer.toString("base64")
+      data: req.file.buffer.toString("base64"),
+      noteId: req.body.noteId ? Number(req.body.noteId) : null
     };
     ensureDocumentsCollection(store);
     store.documents.push(entry);
@@ -2179,7 +2183,16 @@ app.get("/:entity/:id/notes", authenticateToken, async (req, res) => {
       .filter((n) => n.entityType === entity && n.entityId === entityId)
       .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
 
-    return res.json(notes);
+    // Attach documents linked to each note
+    const docs = store.documents || [];
+    const notesWithAttachments = notes.map((note) => {
+      const noteAttachments = docs
+        .filter((d) => d.noteId === note.id)
+        .map((d) => stripDocumentData(d));
+      return { ...note, attachments: noteAttachments };
+    });
+
+    return res.json(notesWithAttachments);
   } catch (error) {
     console.error("Error fetching notes:", error);
     res.status(500).json({ error: "Failed to fetch notes" });
@@ -2216,7 +2229,8 @@ app.post("/:entity/:id/notes", authenticateToken, async (req, res) => {
       entityId: entityId,
       content: content.trim(),
       author,
-      createdAt: new Date().toISOString()
+      createdAt: new Date().toISOString(),
+      attachments: []
     };
 
     if (!store.notes) {
