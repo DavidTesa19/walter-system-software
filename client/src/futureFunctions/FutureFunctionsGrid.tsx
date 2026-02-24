@@ -361,23 +361,6 @@ const FutureFunctionsGrid: React.FC = () => {
     () => [
       {
         headerName: "",
-        colId: "detail",
-        pinned: "left",
-        width: 36,
-        minWidth: 36,
-        maxWidth: 36,
-        suppressMovable: true,
-        lockPosition: true,
-        sortable: false,
-        filter: false,
-        resizable: false,
-        editable: false,
-        cellClass: "action-cell",
-        headerClass: "action-cell",
-        cellRenderer: DetailCellRenderer
-      },
-      {
-        headerName: "",
         colId: "delete",
         pinned: "left",
         width: 36,
@@ -394,6 +377,23 @@ const FutureFunctionsGrid: React.FC = () => {
         cellRenderer: DeleteCellRenderer
       },
       {
+        headerName: "",
+        colId: "detail",
+        pinned: "left",
+        width: 36,
+        minWidth: 36,
+        maxWidth: 36,
+        suppressMovable: true,
+        lockPosition: true,
+        sortable: false,
+        filter: false,
+        resizable: false,
+        editable: false,
+        cellClass: "action-cell",
+        headerClass: "action-cell",
+        cellRenderer: DetailCellRenderer
+      },
+      {
         field: "id",
         headerName: "ID",
         editable: false,
@@ -408,6 +408,29 @@ const FutureFunctionsGrid: React.FC = () => {
         minWidth: 250
       },
       {
+        field: "info",
+        headerName: "Info",
+        filter: true,
+        flex: 2,
+        minWidth: 220,
+        tooltipField: "info",
+        cellClass: "info-cell-truncate",
+        cellEditor: InfoPopupEditor,
+        cellEditorPopup: true,
+        cellEditorParams: {
+          maxLength: 1000,
+          rows: 8,
+          cols: 60
+        },
+        suppressKeyboardEvent: (params) => {
+          if (params.editing && params.event.key === 'Enter') {
+            return true;
+          }
+          return false;
+        },
+        onCellClicked: onCellClickedHandler
+      },
+      {
         field: "priority",
         headerName: "Priorita",
         filter: true,
@@ -417,6 +440,20 @@ const FutureFunctionsGrid: React.FC = () => {
         cellEditorPopup: true,
         cellEditorParams: {
           values: [...PRIORITY_OPTIONS]
+        },
+        onCellClicked: onCellClickedHandler
+      },
+      {
+        field: "status",
+        headerName: "Stav",
+        filter: true,
+        flex: 1,
+        minWidth: 160,
+        cellRenderer: StatusCellRenderer,
+        cellEditor: OptionSelectEditor,
+        cellEditorPopup: true,
+        cellEditorParams: {
+          values: [...ALL_STATUS_OPTIONS]
         },
         onCellClicked: onCellClickedHandler
       },
@@ -447,43 +484,6 @@ const FutureFunctionsGrid: React.FC = () => {
         onCellClicked: onCellClickedHandler
       },
       {
-        field: "info",
-        headerName: "Info",
-        filter: true,
-        flex: 2,
-        minWidth: 220,
-        tooltipField: "info",
-        cellClass: "info-cell-truncate",
-        cellEditor: InfoPopupEditor,
-        cellEditorPopup: true,
-        cellEditorParams: {
-          maxLength: 1000,
-          rows: 8,
-          cols: 60
-        },
-        suppressKeyboardEvent: (params) => {
-          if (params.editing && params.event.key === 'Enter') {
-            return true;
-          }
-          return false;
-        },
-        onCellClicked: onCellClickedHandler
-      },
-      {
-        field: "status",
-        headerName: "Stav",
-        filter: true,
-        flex: 1,
-        minWidth: 160,
-        cellRenderer: StatusCellRenderer,
-        cellEditor: OptionSelectEditor,
-        cellEditorPopup: true,
-        cellEditorParams: {
-          values: [...ALL_STATUS_OPTIONS]
-        },
-        onCellClicked: onCellClickedHandler
-      },
-      {
         headerName: "",
         colId: "archive",
         pinned: "right",
@@ -507,6 +507,23 @@ const FutureFunctionsGrid: React.FC = () => {
   // Archive table column definitions
   const archiveColumnDefs = useMemo<ColDef<FutureFunction>[]>(
     () => [
+      {
+        headerName: "",
+        colId: "delete",
+        pinned: "left",
+        width: 36,
+        minWidth: 36,
+        maxWidth: 36,
+        suppressMovable: true,
+        lockPosition: true,
+        sortable: false,
+        filter: false,
+        resizable: false,
+        editable: false,
+        cellClass: "action-cell",
+        headerClass: "action-cell",
+        cellRenderer: DeleteCellRenderer
+      },
       {
         headerName: "",
         colId: "detail",
@@ -542,23 +559,6 @@ const FutureFunctionsGrid: React.FC = () => {
         cellRenderer: RestoreCellRenderer
       },
       {
-        headerName: "",
-        colId: "delete",
-        pinned: "left",
-        width: 36,
-        minWidth: 36,
-        maxWidth: 36,
-        suppressMovable: true,
-        lockPosition: true,
-        sortable: false,
-        filter: false,
-        resizable: false,
-        editable: false,
-        cellClass: "action-cell",
-        headerClass: "action-cell",
-        cellRenderer: DeleteCellRenderer
-      },
-      {
         field: "id",
         headerName: "ID",
         editable: false,
@@ -574,12 +574,36 @@ const FutureFunctionsGrid: React.FC = () => {
         minWidth: 250
       },
       {
+        field: "info",
+        headerName: "Info",
+        editable: false,
+        filter: true,
+        flex: 2,
+        minWidth: 220,
+        tooltipField: "info",
+        cellClass: "info-cell-truncate"
+      },
+      {
         field: "priority",
         headerName: "Priorita",
         editable: false,
         filter: true,
         flex: 1,
         minWidth: 140
+      },
+      {
+        field: "status",
+        headerName: "Stav",
+        filter: true,
+        flex: 1,
+        minWidth: 160,
+        cellRenderer: StatusCellRenderer,
+        cellEditor: OptionSelectEditor,
+        cellEditorPopup: true,
+        cellEditorParams: {
+          values: [...ALL_STATUS_OPTIONS]
+        },
+        onCellClicked: onCellClickedHandler
       },
       {
         field: "complexity",
@@ -596,30 +620,6 @@ const FutureFunctionsGrid: React.FC = () => {
         filter: true,
         flex: 1,
         minWidth: 150
-      },
-      {
-        field: "info",
-        headerName: "Info",
-        editable: false,
-        filter: true,
-        flex: 2,
-        minWidth: 220,
-        tooltipField: "info",
-        cellClass: "info-cell-truncate"
-      },
-      {
-        field: "status",
-        headerName: "Stav",
-        filter: true,
-        flex: 1,
-        minWidth: 160,
-        cellRenderer: StatusCellRenderer,
-        cellEditor: OptionSelectEditor,
-        cellEditorPopup: true,
-        cellEditorParams: {
-          values: [...ALL_STATUS_OPTIONS]
-        },
-        onCellClicked: onCellClickedHandler
       }
     ],
     [DeleteCellRenderer, RestoreCellRenderer, DetailCellRenderer, StatusCellRenderer, onCellClickedHandler]
