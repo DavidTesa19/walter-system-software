@@ -37,7 +37,7 @@ const STATUS_COLOR_MAP: Record<string, string> = {
   "Probíhá": "#f59e0b",
   "Ke kontrole": "#a855f7",
   "Dokončeno": "#22c55e",
-  "Schváleno": "#0d9488",
+  "Schváleno": "#a3e635",
   "Neschváleno": "#ef4444",
   "Odloženo": "#6b7280",
   "Zrušeno": "#dc2626"
@@ -48,6 +48,26 @@ const ACTIVE_STATUSES = ["Plánováno", "Probíhá", "Ke kontrole", "Dokončeno"
 
 // Statuses that auto-archive
 const AUTO_ARCHIVE_STATUSES = ["Odloženo", "Zrušeno"] as const;
+
+// Sort order for the status column (lower = higher priority, shown first when ascending)
+const ACTIVE_STATUS_ORDER: Record<string, number> = {
+  "Schváleno": 0,
+  "Neschváleno": 1,
+  "Dokončeno": 2,
+  "Ke kontrole": 3,
+  "Probíhá": 4,
+  "Plánováno": 5
+};
+
+const ARCHIVE_STATUS_ORDER: Record<string, number> = {
+  "Schváleno": 0,
+  "Dokončeno": 1,
+  "Odloženo": 2,
+  "Zrušeno": 3
+};
+
+const SUMMARY_ACTIVE_ORDER = ["Schváleno", "Neschváleno", "Dokončeno", "Ke kontrole", "Probíhá", "Plánováno"];
+const SUMMARY_ARCHIVE_ORDER = ["Schváleno", "Dokončeno", "Odloženo", "Zrušeno"];
 
 const FutureFunctionsGrid: React.FC = () => {
   const [futureFunctions, setFutureFunctions] = useState<FutureFunction[]>([]);
@@ -513,6 +533,7 @@ const FutureFunctionsGrid: React.FC = () => {
         cellEditorParams: {
           values: [...ALL_STATUS_OPTIONS]
         },
+        comparator: (a: string, b: string) => (ACTIVE_STATUS_ORDER[a] ?? 99) - (ACTIVE_STATUS_ORDER[b] ?? 99),
         onCellClicked: onCellClickedHandler
       },
       {
@@ -661,6 +682,7 @@ const FutureFunctionsGrid: React.FC = () => {
         cellEditorParams: {
           values: [...ALL_STATUS_OPTIONS]
         },
+        comparator: (a: string, b: string) => (ARCHIVE_STATUS_ORDER[a] ?? 99) - (ARCHIVE_STATUS_ORDER[b] ?? 99),
         onCellClicked: onCellClickedHandler
       },
       {
@@ -739,16 +761,16 @@ const FutureFunctionsGrid: React.FC = () => {
       return counts;
     };
 
-    const toEntries = (counts: Record<string, number>) =>
-      (ALL_STATUS_OPTIONS as readonly string[])
+    const toEntries = (counts: Record<string, number>, order: string[]) =>
+      order
         .filter((s) => (counts[s] ?? 0) > 0)
         .map((s) => ({ status: s, count: counts[s]! }));
 
     return {
       activeTotal: activeFunctions.length,
       archivedTotal: archivedFunctions.length,
-      activeEntries: toEntries(countByStatus(activeFunctions)),
-      archivedEntries: toEntries(countByStatus(archivedFunctions))
+      activeEntries: toEntries(countByStatus(activeFunctions), SUMMARY_ACTIVE_ORDER),
+      archivedEntries: toEntries(countByStatus(archivedFunctions), SUMMARY_ARCHIVE_ORDER)
     };
   }, [activeFunctions, archivedFunctions]);
 
