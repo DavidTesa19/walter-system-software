@@ -334,11 +334,14 @@
   overflow: auto;
   display: flex;
   flex-direction: column;
+  /* Footer is position:fixed; keep content scrollable above it */
+  padding-bottom: 96px;
 }
 
 .main-content--fullscreen {
   overflow: hidden;
   padding: 0;
+  padding-bottom: 0;
 }
 
 @media (max-width: 960px) {
