@@ -30,20 +30,21 @@ const COMPLEXITY_OPTIONS = ["Jednoduchá", "Středně složitá", "Složitá"] a
 const PHASE_OPTIONS = ["Urgentní", "Střednědobé", "Před spuštěním", "Po spuštění"] as const;
 
 // All statuses
-const ALL_STATUS_OPTIONS = ["Plánováno", "Probíhá", "Ke kontrole", "Dokončeno", "Neschváleno", "Odloženo", "Zrušeno"] as const;
+const ALL_STATUS_OPTIONS = ["Plánováno", "Probíhá", "Ke kontrole", "Dokončeno", "Schváleno", "Neschváleno", "Odloženo", "Zrušeno"] as const;
 
 const STATUS_COLOR_MAP: Record<string, string> = {
   "Plánováno": "#3b82f6",
   "Probíhá": "#f59e0b",
   "Ke kontrole": "#a855f7",
   "Dokončeno": "#22c55e",
+  "Schváleno": "#0d9488",
   "Neschváleno": "#ef4444",
   "Odloženo": "#6b7280",
   "Zrušeno": "#dc2626"
 };
 
 // Statuses that appear in active table
-const ACTIVE_STATUSES = ["Plánováno", "Probíhá", "Ke kontrole", "Dokončeno", "Neschváleno"] as const;
+const ACTIVE_STATUSES = ["Plánováno", "Probíhá", "Ke kontrole", "Dokončeno", "Schváleno", "Neschváleno"] as const;
 
 // Statuses that auto-archive
 const AUTO_ARCHIVE_STATUSES = ["Odloženo", "Zrušeno"] as const;
@@ -235,8 +236,8 @@ const FutureFunctionsGrid: React.FC = () => {
         if ((AUTO_ARCHIVE_STATUSES as readonly string[]).includes(data.status)) {
           data.archived = true;
         }
-        // Auto-restore when status changes to an active status (except Dokončeno which stays where it is)
-        if ((ACTIVE_STATUSES as readonly string[]).includes(data.status) && data.status !== "Dokončeno") {
+        // Auto-restore when status changes to an active status (except Dokončeno/Schváleno which stay where they are)
+        if ((ACTIVE_STATUSES as readonly string[]).includes(data.status) && data.status !== "Dokončeno" && data.status !== "Schváleno") {
           data.archived = false;
         }
       }
@@ -313,7 +314,7 @@ const FutureFunctionsGrid: React.FC = () => {
   // Archive button cell renderer — only shown for Dokončeno items in active table
   const ArchiveCellRenderer = useCallback((params: ICellRendererParams<FutureFunction>) => {
     const data = params.data;
-    if (!data || data.status !== "Dokončeno" || data.archived) return null;
+    if (!data || (data.status !== "Dokončeno" && data.status !== "Schváleno") || data.archived) return null;
     return (
       <button
         type="button"
@@ -692,7 +693,7 @@ const FutureFunctionsGrid: React.FC = () => {
 
       // If status changed to an active-only status, un-archive automatically
       if (params.column.getColId() === "status") {
-        if ((ACTIVE_STATUSES as readonly string[]).includes(data.status) && data.status !== "Dokončeno") {
+        if ((ACTIVE_STATUSES as readonly string[]).includes(data.status) && data.status !== "Dokončeno" && data.status !== "Schváleno") {
           data.archived = false;
         }
       }
