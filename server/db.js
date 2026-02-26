@@ -302,6 +302,7 @@ export async function initDatabase() {
       "ALTER TABLE future_functions ADD COLUMN IF NOT EXISTS info TEXT",
       "ALTER TABLE future_functions ADD COLUMN IF NOT EXISTS status VARCHAR(50) DEFAULT 'Planned'",
       "ALTER TABLE future_functions ADD COLUMN IF NOT EXISTS archived BOOLEAN DEFAULT FALSE",
+      "ALTER TABLE future_functions ADD COLUMN IF NOT EXISTS completedAt VARCHAR(50) DEFAULT NULL",
       "ALTER TABLE users ADD COLUMN IF NOT EXISTS password_hash VARCHAR(255)",
       "ALTER TABLE users ADD COLUMN IF NOT EXISTS role VARCHAR(50) DEFAULT 'employee'",
       "ALTER TABLE documents ADD COLUMN IF NOT EXISTS archived_at TIMESTAMP DEFAULT NULL",
