@@ -38,8 +38,8 @@
   --fc-event-text-color: var(--color-primary-contrast);
   --fc-event-selected-overlay-color: transparent;
   --fc-highlight-color: var(--color-primary-soft);
-  /* Subtle weekend / non-business shading (FullCalendar uses this for businessHours gaps) */
-  --fc-non-business-color: var(--color-surface-muted);
+  /* We disable FullCalendar's non-business shading so weekdays look consistent all day */
+  --fc-non-business-color: transparent;
   --fc-bg-event-color: var(--color-primary);
   --fc-bg-event-opacity: 0.1;
   --fc-list-event-hover-bg-color: var(--color-surface-hover);
@@ -48,11 +48,54 @@
   font-size: 14px;
 }
 
+/* Ensure the non-business overlay never hides grid lines */
+.fc-wrapper .fc .fc-non-business {
+  background: transparent !important;
+}
+
+/* Weekend tint (separate from non-business hours) */
+.fc-wrapper .fc {
+  /* Fallback is subtle even without color-mix support */
+  --fc-weekend-bg: var(--color-surface-alt);
+}
+
 @supports (background: color-mix(in srgb, white, black)) {
   .fc-wrapper .fc {
-    /* Blend towards the normal surface so weekends are noticeable but not loud */
-    --fc-non-business-color: color-mix(in srgb, var(--color-surface) 92%, var(--color-surface-muted));
+    /* Slightly different than weekday surface, but very subtle */
+    --fc-weekend-bg: color-mix(in srgb, var(--color-surface) 92%, var(--color-surface-alt));
   }
+}
+
+/* Column headers for weekend */
+.fc-wrapper .fc .fc-col-header-cell.fc-day-sat,
+.fc-wrapper .fc .fc-col-header-cell.fc-day-sun {
+  background: var(--fc-weekend-bg);
+}
+
+/* Month / dayGrid cells */
+.fc-wrapper .fc .fc-daygrid-day.fc-day-sat,
+.fc-wrapper .fc .fc-daygrid-day.fc-day-sun {
+  background: var(--fc-weekend-bg);
+}
+
+/* Week/day time grid columns */
+.fc-wrapper .fc td.fc-timegrid-col.fc-day-sat,
+.fc-wrapper .fc td.fc-timegrid-col.fc-day-sun {
+  background: var(--fc-weekend-bg);
+}
+
+/* Prevent any internal timegrid background layers from masking slot lines */
+.fc-wrapper .fc .fc-timegrid-col-bg,
+.fc-wrapper .fc .fc-timegrid-bg-harness {
+  background: transparent !important;
+}
+
+/* Keep timegrid slot lines consistently visible */
+.fc-wrapper .fc .fc-timegrid-slot,
+.fc-wrapper .fc .fc-timegrid-slot-lane,
+.fc-wrapper .fc .fc-timegrid-axis,
+.fc-wrapper .fc .fc-timegrid-divider {
+  border-color: var(--color-border) !important;
 }
 
 /* Toolbar */
