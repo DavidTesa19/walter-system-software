@@ -1,8 +1,8 @@
 /* =========================================================
-   FullCalendar – scoped light theme reset
-   Overrides app dark-mode CSS variables so the calendar
-   always looks crisp regardless of the active palette.
-   ========================================================= */
+  FullCalendar – theme-aware styling
+  Uses the app's CSS variables (set by ThemeContext)
+  so the calendar follows light/dark mode automatically.
+  ========================================================= */
 
 .fc-wrapper {
   flex: 1;
@@ -15,36 +15,35 @@
   box-sizing: border-box;
   overflow: hidden;
   min-height: 0;
-  background: #f8fafc;
+  background: var(--color-background);
   border-radius: 12px;
 }
 
-/* Force all FC variables to light values */
 .fc-wrapper .fc {
-  --fc-border-color: #e2e8f0;
-  --fc-page-bg-color: #ffffff;
-  --fc-neutral-bg-color: #f1f5f9;
-  --fc-neutral-text-color: #64748b;
-  --fc-today-bg-color: #eff6ff;
-  --fc-now-indicator-color: #ef4444;
-  --fc-button-bg-color: #3b82f6;
-  --fc-button-border-color: #3b82f6;
-  --fc-button-text-color: #ffffff;
-  --fc-button-hover-bg-color: #2563eb;
-  --fc-button-hover-border-color: #2563eb;
-  --fc-button-active-bg-color: #1d4ed8;
-  --fc-button-active-border-color: #1d4ed8;
-  --fc-event-bg-color: #3b82f6;
+  --fc-border-color: var(--color-border);
+  --fc-page-bg-color: var(--color-surface);
+  --fc-neutral-bg-color: var(--color-surface-muted);
+  --fc-neutral-text-color: var(--color-text-muted);
+  --fc-today-bg-color: var(--color-primary-soft);
+  --fc-now-indicator-color: var(--color-danger);
+  --fc-button-bg-color: var(--color-primary);
+  --fc-button-border-color: var(--color-primary);
+  --fc-button-text-color: var(--color-primary-contrast);
+  --fc-button-hover-bg-color: var(--color-primary-hover);
+  --fc-button-hover-border-color: var(--color-primary-hover);
+  --fc-button-active-bg-color: var(--color-primary-active);
+  --fc-button-active-border-color: var(--color-primary-active);
+  --fc-event-bg-color: var(--color-primary);
   --fc-event-border-color: transparent;
-  --fc-event-text-color: #ffffff;
-  --fc-event-selected-overlay-color: rgba(0, 0, 0, 0.15);
-  --fc-highlight-color: rgba(59, 130, 246, 0.12);
-  --fc-non-business-color: rgba(241, 245, 249, 0.6);
-  --fc-bg-event-color: #3b82f6;
+  --fc-event-text-color: var(--color-primary-contrast);
+  --fc-event-selected-overlay-color: transparent;
+  --fc-highlight-color: var(--color-primary-soft);
+  --fc-non-business-color: var(--color-surface-muted);
+  --fc-bg-event-color: var(--color-primary);
   --fc-bg-event-opacity: 0.1;
-  --fc-list-event-hover-bg-color: #f1f5f9;
-  color: #1e293b;
-  font-family: 'Inter', system-ui, -apple-system, sans-serif;
+  --fc-list-event-hover-bg-color: var(--color-surface-hover);
+  color: var(--color-text);
+  font-family: var(--font-body);
   font-size: 14px;
 }
 
@@ -52,7 +51,7 @@
 .fc-wrapper .fc .fc-toolbar-title {
   font-size: 20px;
   font-weight: 700;
-  color: #0f172a;
+  color: var(--color-text);
 }
 
 .fc-wrapper .fc .fc-button {
@@ -66,7 +65,7 @@
 
 .fc-wrapper .fc .fc-button:focus {
   outline: none;
-  box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.3) !important;
+  box-shadow: var(--focus-ring) !important;
 }
 
 .fc-wrapper .fc .fc-button-group .fc-button {
@@ -77,13 +76,13 @@
 
 /* Column headers (Mon, Tue…) */
 .fc-wrapper .fc .fc-col-header-cell {
-  background: #f1f5f9;
-  border-color: #e2e8f0;
+  background: var(--color-surface-muted);
+  border-color: var(--color-border);
   padding: 6px 0;
 }
 
 .fc-wrapper .fc .fc-col-header-cell-cushion {
-  color: #475569;
+  color: var(--color-text-muted);
   font-size: 12px;
   font-weight: 600;
   letter-spacing: 0.05em;
@@ -93,7 +92,7 @@
 
 /* Day numbers */
 .fc-wrapper .fc .fc-daygrid-day-number {
-  color: #1e293b;
+  color: var(--color-text);
   font-size: 13px;
   font-weight: 500;
   text-decoration: none;
@@ -101,8 +100,8 @@
 }
 
 .fc-wrapper .fc .fc-daygrid-day.fc-day-today .fc-daygrid-day-number {
-  background: #3b82f6;
-  color: #ffffff;
+  background: var(--color-primary);
+  color: var(--color-primary-contrast);
   border-radius: 50%;
   width: 26px;
   height: 26px;
@@ -113,7 +112,7 @@
 
 /* Cells */
 .fc-wrapper .fc .fc-daygrid-day {
-  background: #ffffff;
+  background: var(--color-surface);
 }
 
 .fc-wrapper .fc .fc-day-other .fc-daygrid-day-top {
@@ -121,7 +120,7 @@
 }
 
 .fc-wrapper .fc .fc-day-other {
-  background: #f8fafc;
+  background: var(--color-background);
 }
 
 /* Events */
@@ -131,7 +130,7 @@
   padding: 2px 5px;
   cursor: pointer;
   border: none;
-  box-shadow: 0 1px 3px rgba(0,0,0,0.12);
+  box-shadow: var(--color-shadow-sm);
 }
 
 .fc-wrapper .fc .fc-event:hover {
@@ -140,76 +139,76 @@
 
 /* Time grid */
 .fc-wrapper .fc .fc-timegrid-slot {
-  border-color: #f1f5f9;
+  border-color: var(--color-border);
   height: 36px;
 }
 
 .fc-wrapper .fc .fc-timegrid-slot-label {
-  color: #94a3b8;
+  color: var(--color-text-muted);
   font-size: 11px;
   font-weight: 500;
 }
 
 .fc-wrapper .fc .fc-timegrid-axis {
-  border-color: #e2e8f0;
+  border-color: var(--color-border);
 }
 
 .fc-wrapper .fc .fc-timegrid-now-indicator-line {
-  border-color: #ef4444;
+  border-color: var(--color-danger);
   border-width: 2px;
 }
 
 .fc-wrapper .fc .fc-timegrid-now-indicator-arrow {
-  border-color: #ef4444;
+  border-color: var(--color-danger);
 }
 
 /* Week numbers */
 .fc-wrapper .fc .fc-daygrid-week-number {
-  color: #94a3b8;
+  color: var(--color-text-muted);
   font-size: 11px;
   background: transparent;
 }
 
 /* List view */
 .fc-wrapper .fc .fc-list {
-  border-color: #e2e8f0;
+  border-color: var(--color-border);
   border-radius: 8px;
 }
 
 .fc-wrapper .fc .fc-list-day-cushion {
-  background: #f1f5f9;
-  color: #475569;
+  background: var(--color-surface-muted);
+  color: var(--color-text);
   font-weight: 600;
   font-size: 13px;
 }
 
 .fc-wrapper .fc .fc-list-event-title a {
-  color: #1e293b;
+  color: var(--color-text);
   text-decoration: none;
 }
 
 .fc-wrapper .fc .fc-list-empty {
-  background: #f8fafc;
-  color: #94a3b8;
+  background: var(--color-background);
+  color: var(--color-text-muted);
 }
 
 /* Scrollbar */
 .fc-wrapper .fc-scroller::-webkit-scrollbar { width: 6px; }
 .fc-wrapper .fc-scroller::-webkit-scrollbar-track { background: transparent; }
-.fc-wrapper .fc-scroller::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 3px; }
+.fc-wrapper .fc-scroller::-webkit-scrollbar-thumb { background: var(--scrollbar-thumb); border-radius: 3px; }
 
 /* More popover */
 .fc-wrapper .fc .fc-more-popover {
-  border: 1px solid #e2e8f0;
+  border: 1px solid var(--color-border);
   border-radius: 10px;
-  box-shadow: 0 10px 30px rgba(0,0,0,0.12);
-  background: #ffffff;
+  box-shadow: var(--color-shadow-md);
+  background: var(--color-surface);
 }
 
 .fc-wrapper .fc .fc-more-popover .fc-popover-header {
-  background: #f1f5f9;
+  background: var(--color-surface-muted);
   border-radius: 10px 10px 0 0;
-  color: #1e293b;
+  color: var(--color-text);
   font-weight: 600;
   padding: 8px 12px;
 }
@@ -221,7 +220,7 @@
   left: 0;
   right: 0;
   height: 3px;
-  background: linear-gradient(90deg, transparent, #3b82f6, transparent);
+  background: linear-gradient(90deg, transparent, var(--color-primary), transparent);
   background-size: 200% 100%;
   animation: fc-slide 1.4s ease-in-out infinite;
   z-index: 10;

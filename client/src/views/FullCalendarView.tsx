@@ -234,7 +234,7 @@ const EventModal: React.FC<EventModalProps> = ({ isOpen, onClose, onSave, onDele
         ref={popoverRef}
         style={{ ...popoverStyle, ...posStyle }}
       >
-        <h3 style={{ margin: '0 0 16px', fontSize: 18, fontWeight: 700, color: '#0f172a', fontFamily: MODAL_FONT }}>
+        <h3 style={{ margin: '0 0 16px', fontSize: 18, fontWeight: 700, color: 'var(--color-text)', fontFamily: MODAL_FONT }}>
           {mode === 'create' ? 'Nová událost' : 'Upravit událost'}
         </h3>
         <form onSubmit={handleSubmit}>
@@ -252,7 +252,7 @@ const EventModal: React.FC<EventModalProps> = ({ isOpen, onClose, onSave, onDele
           {startDate && (
             <>
               <label style={labelStyle}>Datum</label>
-              <div style={{ ...inputStyle, background: '#f1f5f9', color: '#6b7280', cursor: 'default' }}>
+              <div style={{ ...inputStyle, background: 'var(--color-surface-muted)', color: 'var(--color-text-muted)', cursor: 'default' }}>
                 {formatDisplayDate(startDate)}
               </div>
             </>
@@ -304,10 +304,10 @@ const EventModal: React.FC<EventModalProps> = ({ isOpen, onClose, onSave, onDele
                   width: 28,
                   height: 28,
                   borderRadius: '50%',
-                  border: color === c.value ? '3px solid #1e293b' : '2px solid transparent',
+                  border: color === c.value ? '3px solid var(--color-text)' : '2px solid transparent',
                   backgroundColor: c.value,
                   cursor: 'pointer',
-                  outline: color === c.value ? '2px solid white' : 'none',
+                  outline: color === c.value ? '2px solid var(--color-surface)' : 'none',
                 }}
               />
             ))}
@@ -590,10 +590,35 @@ const FullCalendarView: React.FC = () => {
       );
     }
 
+    const needsDot = view.type.startsWith('dayGrid') || view.type.startsWith('multiMonth');
+    const dotColor = event.backgroundColor || event.borderColor || 'var(--color-primary)';
+
     return (
-      <div style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', fontSize: 12 }}>
-        {timeText && <span style={{ marginRight: 4, fontWeight: 600 }}>{timeText}</span>}
-        <span>{event.title}</span>
+      <div
+        style={{
+          display: 'flex',
+          alignItems: 'center',
+          gap: 6,
+          overflow: 'hidden',
+          textOverflow: 'ellipsis',
+          whiteSpace: 'nowrap',
+          fontSize: 12,
+        }}
+      >
+        {needsDot && (
+          <span
+            aria-hidden="true"
+            style={{
+              width: 8,
+              height: 8,
+              borderRadius: 999,
+              background: dotColor,
+              flex: '0 0 auto',
+            }}
+          />
+        )}
+        {timeText && <span style={{ marginRight: 4, fontWeight: 600, flex: '0 0 auto' }}>{timeText}</span>}
+        <span style={{ overflow: 'hidden', textOverflow: 'ellipsis' }}>{event.title}</span>
       </div>
     );
   };
@@ -693,16 +718,16 @@ const backdropStyle: React.CSSProperties = {
 
 const popoverStyle: React.CSSProperties = {
   position: 'fixed',
-  background: '#ffffff',
+  background: 'var(--color-surface)',
   borderRadius: 12,
   padding: 24,
   width: 380,
   maxWidth: '95vw',
   maxHeight: '85vh',
   overflow: 'auto',
-  boxShadow: '0 12px 40px rgba(0,0,0,0.2), 0 0 0 1px rgba(0,0,0,0.05)',
+  boxShadow: 'var(--color-shadow-lg)',
   fontFamily: MODAL_FONT,
-  color: '#1e293b',
+  color: 'var(--color-text)',
   zIndex: 10000,
   pointerEvents: 'all',
 };
@@ -713,7 +738,7 @@ const labelStyle: React.CSSProperties = {
   fontWeight: 600,
   marginBottom: 4,
   marginTop: 12,
-  color: '#374151',
+  color: 'var(--color-text-muted)',
   fontFamily: MODAL_FONT,
 };
 
@@ -721,22 +746,22 @@ const inputStyle: React.CSSProperties = {
   display: 'block',
   width: '100%',
   padding: '8px 12px',
-  border: '1px solid #d1d5db',
+  border: '1px solid var(--color-border)',
   borderRadius: 8,
   fontSize: 14,
   outline: 'none',
   boxSizing: 'border-box',
   marginBottom: 4,
-  background: '#f8fafc',
-  color: '#1e293b',
+  background: 'var(--color-surface-alt)',
+  color: 'var(--color-text)',
   fontFamily: MODAL_FONT,
-  WebkitTextFillColor: '#1e293b',
+  WebkitTextFillColor: 'var(--color-text)',
 };
 
 const saveBtnStyle: React.CSSProperties = {
   padding: '8px 20px',
-  background: '#3b82f6',
-  color: '#ffffff',
+  background: 'var(--color-primary)',
+  color: 'var(--color-primary-contrast)',
   border: 'none',
   borderRadius: 8,
   cursor: 'pointer',
@@ -747,9 +772,9 @@ const saveBtnStyle: React.CSSProperties = {
 
 const cancelBtnStyle: React.CSSProperties = {
   padding: '8px 20px',
-  background: '#f1f5f9',
-  color: '#374151',
-  border: '1px solid #e2e8f0',
+  background: 'var(--color-surface-muted)',
+  color: 'var(--color-text)',
+  border: '1px solid var(--color-border)',
   borderRadius: 8,
   cursor: 'pointer',
   fontWeight: 600,
@@ -759,9 +784,9 @@ const cancelBtnStyle: React.CSSProperties = {
 
 const deleteBtnStyle: React.CSSProperties = {
   padding: '8px 20px',
-  background: '#fee2e2',
-  color: '#dc2626',
-  border: '1px solid #fecaca',
+  background: 'var(--color-danger)',
+  color: 'var(--color-danger-contrast)',
+  border: 'none',
   borderRadius: 8,
   cursor: 'pointer',
   fontWeight: 600,
