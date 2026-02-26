@@ -19,6 +19,7 @@ export interface FutureFunction {
   info: string;
   status: string;
   archived: boolean;
+  completedAt?: string | null;
 }
 
 ModuleRegistry.registerModules([AllCommunityModule]);
@@ -49,6 +50,9 @@ const ACTIVE_STATUSES = ["Plánováno", "Aktuální", "Probíhá", "Ke kontrole"
 
 // Statuses that auto-archive
 const AUTO_ARCHIVE_STATUSES = ["Odloženo", "Zrušeno"] as const;
+
+// Statuses that mark a function as completed
+const COMPLETION_STATUSES = ["Dokončeno", "Schváleno"] as const;
 
 // Sort order for the status column (lower = higher priority, shown first when ascending)
 const ACTIVE_STATUS_ORDER: Record<string, number> = {
@@ -261,6 +265,10 @@ const FutureFunctionsGrid: React.FC = () => {
         // Auto-restore when status changes to an active status (except Dokončeno/Schváleno which stay where they are)
         if ((ACTIVE_STATUSES as readonly string[]).includes(data.status) && data.status !== "Dokončeno" && data.status !== "Schváleno") {
           data.archived = false;
+        }
+        // Set completedAt when status becomes a completion status
+        if ((COMPLETION_STATUSES as readonly string[]).includes(data.status)) {
+          data.completedAt = new Date().toISOString().split("T")[0];
         }
       }
 
@@ -539,6 +547,15 @@ const FutureFunctionsGrid: React.FC = () => {
         onCellClicked: onCellClickedHandler
       },
       {
+        field: "completedAt",
+        headerName: "Datum dokončení",
+        editable: false,
+        filter: true,
+        flex: 1,
+        minWidth: 150,
+        valueFormatter: (params: { value: string | null | undefined }) => params.value ?? ""
+      },
+      {
         field: "complexity",
         headerName: "Komplexita",
         filter: true,
@@ -688,6 +705,15 @@ const FutureFunctionsGrid: React.FC = () => {
         onCellClicked: onCellClickedHandler
       },
       {
+        field: "completedAt",
+        headerName: "Datum dokončení",
+        editable: false,
+        filter: true,
+        flex: 1,
+        minWidth: 150,
+        valueFormatter: (params: { value: string | null | undefined }) => params.value ?? ""
+      },
+      {
         field: "complexity",
         headerName: "Komplexita",
         editable: false,
@@ -719,6 +745,10 @@ const FutureFunctionsGrid: React.FC = () => {
       if (params.column.getColId() === "status") {
         if ((ACTIVE_STATUSES as readonly string[]).includes(data.status) && data.status !== "Dokončeno" && data.status !== "Schváleno") {
           data.archived = false;
+        }
+        // Set completedAt when status becomes a completion status
+        if ((COMPLETION_STATUSES as readonly string[]).includes(data.status)) {
+          data.completedAt = new Date().toISOString().split("T")[0];
         }
       }
 

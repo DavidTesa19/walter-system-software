@@ -954,7 +954,8 @@ const FUTURE_FUNCTION_DEFAULTS = {
   phase: "Medium Term",
   info: "",
   status: "Planned",
-  archived: false
+  archived: false,
+  completedAt: null
 };
 
 // Ensure data directory exists

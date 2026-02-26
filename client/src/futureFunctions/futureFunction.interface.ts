@@ -7,4 +7,5 @@ export interface FutureFunction {
   info: string;
   status: string;
   archived: boolean;
+  completedAt?: string | null;
 }
