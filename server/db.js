@@ -251,6 +251,30 @@ export async function initDatabase() {
       )
     `);
 
+    // Create calendar events table
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS calendar_events (
+        id SERIAL PRIMARY KEY,
+        user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+        title VARCHAR(255) NOT NULL DEFAULT 'Untitled',
+        start TEXT,
+        "end" TEXT,
+        all_day BOOLEAN DEFAULT FALSE,
+        color VARCHAR(50),
+        description TEXT DEFAULT '',
+        rrule JSONB,
+        duration VARCHAR(50),
+        extended_props JSONB DEFAULT '{}'::jsonb,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+      )
+    `);
+
+    await client.query(`
+      CREATE INDEX IF NOT EXISTS idx_calendar_events_user
+        ON calendar_events (user_id, id)
+    `);
+
     // Keep legacy databases in sync with new columns
     const columnMigrations = [
       "ALTER TABLE partners ADD COLUMN IF NOT EXISTS field VARCHAR(255)",

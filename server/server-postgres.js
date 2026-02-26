@@ -3463,6 +3463,162 @@ app.get("/api/analytics/events", authenticateToken, async (req, res) => {
   }
 });
 
+const mapCalendarEventRow = (row) => ({
+  id: row.id,
+  userId: row.user_id,
+  title: row.title,
+  start: row.start,
+  end: row.end,
+  allDay: row.all_day,
+  color: row.color,
+  description: row.description || "",
+  rrule: row.rrule || null,
+  duration: row.duration || null,
+  extendedProps: row.extended_props || {},
+  created_at: row.created_at,
+  updated_at: row.updated_at
+});
+
+// Calendar events (PostgreSQL)
+app.get("/api/calendar-events", authenticateToken, async (req, res) => {
+  try {
+    const result = await db.query(
+      `SELECT * FROM calendar_events WHERE user_id = $1 ORDER BY id`,
+      [req.user.id]
+    );
+
+    let events = result.rows.map(mapCalendarEventRow);
+    const { start, end } = req.query;
+    if (start && end) {
+      events = events.filter((ev) => {
+        const evStart = ev.start || null;
+        const evEnd = ev.end || evStart;
+        return !!evStart && !!evEnd && evEnd >= start && evStart <= end;
+      });
+    }
+
+    res.json(events);
+  } catch (error) {
+    console.error("Error fetching calendar events:", error);
+    res.status(500).json({ error: "Failed to fetch calendar events" });
+  }
+});
+
+app.post("/api/calendar-events", authenticateToken, async (req, res) => {
+  try {
+    const body = typeof req.body === "object" && req.body !== null ? req.body : {};
+    const result = await db.query(
+      `INSERT INTO calendar_events (
+        user_id, title, start, "end", all_day, color, description, rrule, duration, extended_props
+      ) VALUES (
+        $1, $2, $3, $4, $5, $6, $7, $8, $9, $10
+      ) RETURNING *`,
+      [
+        req.user.id,
+        body.title || "Untitled",
+        body.start || null,
+        body.end || null,
+        body.allDay ?? false,
+        body.color || null,
+        body.description || "",
+        body.rrule || null,
+        body.duration || null,
+        body.extendedProps || {}
+      ]
+    );
+
+    res.status(201).json(mapCalendarEventRow(result.rows[0]));
+  } catch (error) {
+    console.error("Error creating calendar event:", error);
+    res.status(500).json({ error: "Failed to create calendar event" });
+  }
+});
+
+app.put("/api/calendar-events/:id", authenticateToken, async (req, res) => {
+  try {
+    const id = Number(req.params.id);
+    const existing = await db.query(
+      `SELECT * FROM calendar_events WHERE id = $1`,
+      [id]
+    );
+
+    if (existing.rows.length === 0) {
+      return res.status(404).json({ error: "Not found" });
+    }
+
+    const current = existing.rows[0];
+    if (current.user_id !== req.user.id) {
+      return res.status(403).json({ error: "Forbidden" });
+    }
+
+    const body = typeof req.body === "object" && req.body !== null ? req.body : {};
+    const merged = {
+      title: body.title ?? current.title,
+      start: body.start ?? current.start,
+      end: body.end ?? current.end,
+      allDay: body.allDay ?? current.all_day,
+      color: body.color ?? current.color,
+      description: body.description ?? current.description,
+      rrule: body.rrule ?? current.rrule,
+      duration: body.duration ?? current.duration,
+      extendedProps: body.extendedProps ?? current.extended_props
+    };
+
+    const updated = await db.query(
+      `UPDATE calendar_events
+       SET title = $1,
+           start = $2,
+           "end" = $3,
+           all_day = $4,
+           color = $5,
+           description = $6,
+           rrule = $7,
+           duration = $8,
+           extended_props = $9,
+           updated_at = CURRENT_TIMESTAMP
+       WHERE id = $10 AND user_id = $11
+       RETURNING *`,
+      [
+        merged.title,
+        merged.start,
+        merged.end,
+        merged.allDay,
+        merged.color,
+        merged.description,
+        merged.rrule,
+        merged.duration,
+        merged.extendedProps,
+        id,
+        req.user.id
+      ]
+    );
+
+    res.json(mapCalendarEventRow(updated.rows[0]));
+  } catch (error) {
+    console.error("Error updating calendar event:", error);
+    res.status(500).json({ error: "Failed to update calendar event" });
+  }
+});
+
+app.delete("/api/calendar-events/:id", authenticateToken, async (req, res) => {
+  try {
+    const id = Number(req.params.id);
+    const result = await db.query(
+      `DELETE FROM calendar_events WHERE id = $1 AND user_id = $2 RETURNING id`,
+      [id, req.user.id]
+    );
+
+    if (result.rows.length === 0) {
+      return res.status(404).json({ error: "Not found" });
+    }
+
+    return res.status(204).send();
+  } catch (error) {
+    console.error("Error deleting calendar event:", error);
+    res.status(500).json({ error: "Failed to delete calendar event" });
+  }
+});
+
 app.use((err, _req, res, _next) => {
   if (err instanceof multer.MulterError) {
     if (err.code === 'LIMIT_FILE_SIZE') {
