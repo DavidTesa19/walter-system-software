@@ -507,6 +507,13 @@ const FutureFunctionDetail: React.FC<FutureFunctionDetailProps> = ({
                 </div>
 
                 <div className="ff-info-item">
+                  <span className="ff-info-label">Datum dokončení</span>
+                  <div className="ff-info-value">
+                    {func.completedAt || "—"}
+                  </div>
+                </div>
+
+                <div className="ff-info-item">
                   <span className="ff-info-label">Archivováno</span>
                   <div className="ff-info-value">
                     {func.archived ? "Ano" : "Ne"}
