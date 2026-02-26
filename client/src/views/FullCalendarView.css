@@ -38,6 +38,7 @@
   --fc-event-text-color: var(--color-primary-contrast);
   --fc-event-selected-overlay-color: transparent;
   --fc-highlight-color: var(--color-primary-soft);
+  /* Subtle weekend / non-business shading (FullCalendar uses this for businessHours gaps) */
   --fc-non-business-color: var(--color-surface-muted);
   --fc-bg-event-color: var(--color-primary);
   --fc-bg-event-opacity: 0.1;
@@ -45,6 +46,13 @@
   color: var(--color-text);
   font-family: var(--font-body);
   font-size: 14px;
+}
+
+@supports (background: color-mix(in srgb, white, black)) {
+  .fc-wrapper .fc {
+    /* Blend towards the normal surface so weekends are noticeable but not loud */
+    --fc-non-business-color: color-mix(in srgb, var(--color-surface) 92%, var(--color-surface-muted));
+  }
 }
 
 /* Toolbar */

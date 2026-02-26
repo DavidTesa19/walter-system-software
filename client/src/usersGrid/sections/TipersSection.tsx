@@ -359,6 +359,8 @@ const TipersSection: React.FC<SectionProps> = ({
 
   const onTipersCellValueChanged = useCallback(
     async (params: any) => {
+      // Guard: never allow status field to be changed via cell editing
+      if (params.column?.colId === "status") return;
       const id = params.data.id;
       const snapshot = editSnapshotRef.current[id];
       try {

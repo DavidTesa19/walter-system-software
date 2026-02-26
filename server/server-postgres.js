@@ -88,6 +88,9 @@ const FUTURE_FUNCTION_DEFAULTS = {
   archived: false
 };
 
+// Valid record statuses for partners, clients, tipers
+const VALID_RECORD_STATUSES = ["accepted", "pending", "archived"];
+
 const PALETTE_COLOR_KEYS = [
   "primary",
   "accent",
@@ -2640,6 +2643,11 @@ function createCrudRoutes(tableName) {
     try {
       const id = Number(req.params.id);
       const data = req.body || {};
+      
+      // Validate status if provided
+      if (data.status && !VALID_RECORD_STATUSES.includes(data.status)) {
+        return res.status(400).json({ error: `Invalid status '${data.status}'. Must be one of: ${VALID_RECORD_STATUSES.join(', ')}` });
+      }
       
       if (db.isPostgres()) {
         const updated = await db.update(tableName, id, data);

@@ -15,6 +15,9 @@ import * as entityCommissionJson from "./entity-commission-json.js";
 // Load environment variables
 dotenv.config();
 
+// Valid record statuses for partners, clients, tipers
+const VALID_RECORD_STATUSES = ["accepted", "pending", "archived"];
+
 const PALETTE_COLOR_KEYS = [
   "primary",
   "accent",
@@ -1252,10 +1255,13 @@ app.post("/partners", authenticateToken, (req, res) => {
 
 app.put("/partners/:id", authenticateToken, (req, res) => {
   const id = Number(req.params.id);
+  if (req.body.status && !VALID_RECORD_STATUSES.includes(req.body.status)) {
+    return res.status(400).json({ error: `Invalid status '${req.body.status}'. Must be one of: ${VALID_RECORD_STATUSES.join(', ')}` });
+  }
   const db = readDb();
   const idx = db.partners.findIndex((p) => p.id === id);
   if (idx === -1) return res.status(404).json({ error: "Not found" });
-  const updated = { ...req.body, id };
+  const updated = { ...db.partners[idx], ...req.body, id };
   db.partners[idx] = updated;
   if (!writeDb(db)) return res.status(500).json({ error: "Failed to persist" });
   res.json(updated);
@@ -1950,10 +1956,13 @@ app.post("/clients", authenticateToken, (req, res) => {
 
 app.put("/clients/:id", authenticateToken, (req, res) => {
   const id = Number(req.params.id);
+  if (req.body.status && !VALID_RECORD_STATUSES.includes(req.body.status)) {
+    return res.status(400).json({ error: `Invalid status '${req.body.status}'. Must be one of: ${VALID_RECORD_STATUSES.join(', ')}` });
+  }
   const db = readDb();
   const idx = db.clients.findIndex((c) => c.id === id);
   if (idx === -1) return res.status(404).json({ error: "Not found" });
-  const updated = { ...req.body, id };
+  const updated = { ...db.clients[idx], ...req.body, id };
   db.clients[idx] = updated;
   if (!writeDb(db)) return res.status(500).json({ error: "Failed to persist" });
   res.json(updated);
@@ -2037,10 +2046,13 @@ app.post("/tipers", authenticateToken, (req, res) => {
 
 app.put("/tipers/:id", authenticateToken, (req, res) => {
   const id = Number(req.params.id);
+  if (req.body.status && !VALID_RECORD_STATUSES.includes(req.body.status)) {
+    return res.status(400).json({ error: `Invalid status '${req.body.status}'. Must be one of: ${VALID_RECORD_STATUSES.join(', ')}` });
+  }
   const db = readDb();
   const idx = db.tipers.findIndex((t) => t.id === id);
   if (idx === -1) return res.status(404).json({ error: "Not found" });
-  const updated = { ...req.body, id };
+  const updated = { ...db.tipers[idx], ...req.body, id };
   db.tipers[idx] = updated;
   if (!writeDb(db)) return res.status(500).json({ error: "Failed to persist" });
   res.json(updated);

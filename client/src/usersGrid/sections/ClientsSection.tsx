@@ -4,7 +4,7 @@ import type { ColDef } from "ag-grid-community";
 import type { UserInterface } from "../user.interface";
 import DateCellRenderer from "../cells/DateCellRenderer";
 import DatePickerEditor from "../cells/DatePickerEditor";
-import StatusCellRenderer from "../cells/StatusCellRenderer";
+import RecordStatusCellRenderer from "../cells/RecordStatusCellRenderer";
 import FieldCellRenderer from "../cells/FieldCellRenderer";
 import ProfileCellRenderer from "../cells/ProfileCellRenderer";
 import ProfilePanel, { type ProfileSection } from "../components/ProfilePanel";
@@ -371,6 +371,8 @@ const ClientsSection: React.FC<SectionProps> = ({
 
   const onClientsCellValueChanged = useCallback(
     async (params: any) => {
+      // Guard: never allow status field to be changed via cell editing
+      if (params.column?.colId === "status") return;
       const id = params.data.id;
       const snapshot = editSnapshotRef.current[id];
       try {
@@ -609,7 +611,7 @@ const ClientsSection: React.FC<SectionProps> = ({
         filter: true,
         flex: 1,
         minWidth: 120,
-        cellRenderer: StatusCellRenderer
+        cellRenderer: RecordStatusCellRenderer
       }
       );
 
