@@ -523,8 +523,7 @@ const FutureFunctionsGrid: React.FC = () => {
         headerName: "Stav",
         filter: true,
         flex: 1,
-        minWidth: 190,
-        width: 210,
+        minWidth: 160,
         cellRenderer: StatusCellRenderer,
         cellEditor: OptionSelectEditor,
         cellEditorPopup: true,
@@ -538,12 +537,9 @@ const FutureFunctionsGrid: React.FC = () => {
         field: "completedAt",
         headerName: "Datum dokončení",
         editable: false,
-        pinned: "right",
-        lockPinned: true,
         filter: true,
         width: 145,
         minWidth: 135,
-        maxWidth: 165,
         valueFormatter: (params: { value: string | null | undefined }) => params.value ?? ""
       },
       {
@@ -705,12 +701,9 @@ const FutureFunctionsGrid: React.FC = () => {
         field: "completedAt",
         headerName: "Datum dokončení",
         editable: false,
-        pinned: "right",
-        lockPinned: true,
         filter: true,
         width: 145,
         minWidth: 135,
-        maxWidth: 165,
         valueFormatter: (params: { value: string | null | undefined }) => params.value ?? ""
       },
       {
