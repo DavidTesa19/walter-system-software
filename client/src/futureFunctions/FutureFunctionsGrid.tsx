@@ -34,7 +34,7 @@ const ALL_STATUS_OPTIONS = ["Plánováno", "Aktuální", "Probíhá", "Ke kontro
 
 const STATUS_COLOR_MAP: Record<string, string> = {
   "Plánováno": "#3b82f6",
-  "Aktuální": "#fb923c",
+  "Aktuální": "#22d3ee",
   "Probíhá": "#f59e0b",
   "Ke kontrole": "#a855f7",
   "Dokončeno": "#22c55e",
