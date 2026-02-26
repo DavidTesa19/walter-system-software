@@ -1,12 +1,12 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import FullCalendar from '@fullcalendar/react';
-import csLocale from '@fullcalendar/core/locales/cs';
 import dayGridPlugin from '@fullcalendar/daygrid';
 import timeGridPlugin from '@fullcalendar/timegrid';
 import listPlugin from '@fullcalendar/list';
 import interactionPlugin from '@fullcalendar/interaction';
 import multiMonthPlugin from '@fullcalendar/multimonth';
 import rrulePlugin from '@fullcalendar/rrule';
+import csLocale from '@fullcalendar/core/locales/cs';
 import type { EventInput, EventClickArg, DateSelectArg, EventDropArg, EventContentArg } from '@fullcalendar/core';
 import type { EventResizeDoneArg } from '@fullcalendar/interaction';
 import { apiGet, apiPost, apiPut, apiDelete } from '../utils/api';
@@ -101,7 +101,6 @@ const EventModal: React.FC<EventModalProps> = ({ isOpen, onClose, onSave, onDele
   const [startTime, setStartTime] = useState('');
   const [endDate, setEndDate] = useState('');
   const [endTime, setEndTime] = useState('');
-  const [allDay, setAllDay] = useState(initial?.allDay ?? false);
   const [color, setColor] = useState(initial?.color ?? EVENT_COLORS[0].value);
   const [description, setDescription] = useState(initial?.description ?? '');
   
@@ -116,7 +115,7 @@ const EventModal: React.FC<EventModalProps> = ({ isOpen, onClose, onSave, onDele
   // Build current preview data from form state
   const buildPreview = useCallback((overrides: Partial<{
     title: string; startDate: string; startTime: string;
-    endDate: string; endTime: string; allDay: boolean;
+    endDate: string; endTime: string;
     color: string; description: string;
   }> = {}): PreviewData => {
     const t = overrides.title ?? title;
@@ -124,22 +123,14 @@ const EventModal: React.FC<EventModalProps> = ({ isOpen, onClose, onSave, onDele
     const st = overrides.startTime ?? startTime;
     const ed = overrides.endDate ?? endDate;
     const et = overrides.endTime ?? endTime;
-    const ad = overrides.allDay ?? allDay;
     const c = overrides.color ?? color;
     const desc = overrides.description ?? description;
 
-    let start: string | null = null;
-    let end: string | null = null;
-    if (ad) {
-      start = sd || null;
-      end = ed ? addDays(ed, 1) : (sd ? addDays(sd, 1) : null);
-    } else {
-      start = sd && st ? `${sd}T${st}` : sd || null;
-      end = ed && et ? `${ed}T${et}` : null;
-    }
+    const start: string | null = sd && st ? `${sd}T${st}` : sd || null;
+    const end: string | null = ed && et ? `${ed}T${et}` : null;
 
-    return { title: t || '(New event)', start, end, allDay: ad, color: c, description: desc };
-  }, [title, startDate, startTime, endDate, endTime, allDay, color, description]);
+    return { title: t || '(Nová událost)', start, end, allDay: false, color: c, description: desc };
+  }, [title, startDate, startTime, endDate, endTime, color, description]);
 
   // Fire preview update on any field change
   const emitPreview = useCallback((overrides: Parameters<typeof buildPreview>[0] = {}) => {
@@ -148,11 +139,8 @@ const EventModal: React.FC<EventModalProps> = ({ isOpen, onClose, onSave, onDele
 
   // Wrapped setters that also emit preview
   const updateTitle = (v: string) => { setTitle(v); emitPreview({ title: v }); };
-  const updateStartDate = (v: string) => { setStartDate(v); emitPreview({ startDate: v }); };
   const updateStartTime = (v: string) => { setStartTime(v); emitPreview({ startTime: v }); };
-  const updateEndDate = (v: string) => { setEndDate(v); emitPreview({ endDate: v }); };
   const updateEndTime = (v: string) => { setEndTime(v); emitPreview({ endTime: v }); };
-  const updateAllDay = (v: boolean) => { setAllDay(v); emitPreview({ allDay: v }); };
   const updateColor = (v: string) => { setColor(v); emitPreview({ color: v }); };
   const updateDescription = (v: string) => { setDescription(v); emitPreview({ description: v }); };
 
@@ -178,24 +166,29 @@ const EventModal: React.FC<EventModalProps> = ({ isOpen, onClose, onSave, onDele
     setTitle(initial?.title ?? '');
     setDescription(initial?.description ?? '');
     setColor(initial?.color ?? EVENT_COLORS[0].value);
-    setAllDay(initial?.allDay ?? false);
 
     if (initial?.start) {
-      const s = new Date(initial.start);
-      setStartDate(formatDateLocal(s));
-      setStartTime(formatTimeLocal(s));
+      // Date-only strings ("2026-02-26") must NOT go through new Date() to avoid timezone shift
+      const isDateOnly = typeof initial.start === 'string' && !initial.start.includes('T');
+      if (isDateOnly) {
+        setStartDate(initial.start as string);
+        setStartTime('09:00');
+      } else {
+        const s = new Date(initial.start);
+        setStartDate(formatDateLocal(s));
+        setStartTime(formatTimeLocal(s));
+      }
     } else {
       setStartDate('');
       setStartTime('');
     }
 
     if (initial?.end) {
-      if (initial?.allDay) {
-        // FullCalendar stores exclusive end dates – subtract 1 day for display
-        const d = new Date(initial.end);
-        d.setDate(d.getDate() - 1);
-        setEndDate(formatDateLocal(d));
-        setEndTime('');
+      const isDateOnly = typeof initial.end === 'string' && !initial.end.includes('T');
+      if (isDateOnly) {
+        // For month view, FullCalendar end is exclusive next day – use start date instead
+        setEndDate(typeof initial.start === 'string' && !initial.start.includes('T') ? initial.start as string : initial.end as string);
+        setEndTime('10:00');
       } else {
         const e = new Date(initial.end);
         setEndDate(formatDateLocal(e));
@@ -225,19 +218,12 @@ const EventModal: React.FC<EventModalProps> = ({ isOpen, onClose, onSave, onDele
     e.preventDefault();
     const payload: Partial<CalendarEvent> = {
       title: title.trim() || 'Bez názvu',
-      allDay,
+      allDay: false,
       color,
       description,
+      start: startDate && startTime ? `${startDate}T${startTime}` : startDate || null,
+      end: endDate && endTime ? `${endDate}T${endTime}` : null,
     };
-
-    if (allDay) {
-      payload.start = startDate || null;
-      // For all-day events FullCalendar uses exclusive end
-      payload.end = endDate ? addDays(endDate, 1) : (startDate ? addDays(startDate, 1) : null);
-    } else {
-      payload.start = startDate && startTime ? `${startDate}T${startTime}` : startDate || null;
-      payload.end = endDate && endTime ? `${endDate}T${endTime}` : null;
-    }
 
     onSave(payload);
   };
@@ -262,53 +248,39 @@ const EventModal: React.FC<EventModalProps> = ({ isOpen, onClose, onSave, onDele
             placeholder="Název události"
           />
 
-          {/* All day toggle */}
-          <label style={{ ...labelStyle, display: 'flex', alignItems: 'center', gap: 8, cursor: 'pointer' }}>
-            <input type="checkbox" checked={allDay} onChange={(e) => updateAllDay(e.target.checked)} />
-            Celý den
-          </label>
+          {/* Date (read-only display) */}
+          {startDate && (
+            <>
+              <label style={labelStyle}>Datum</label>
+              <div style={{ ...inputStyle, background: '#f1f5f9', color: '#6b7280', cursor: 'default' }}>
+                {formatDisplayDate(startDate)}
+              </div>
+            </>
+          )}
 
-          {/* Start */}
+          {/* Start time */}
           <label style={labelStyle}>Začátek</label>
-          {allDay ? (
-            <input style={{ ...inputStyle, flex: 1 }} type="date" value={startDate} onChange={(e) => updateStartDate(e.target.value)} />
-          ) : (
-            <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
-              {startDate && (
-                <span style={{ fontSize: 13, color: '#6b7280', minWidth: 90 }}>{formatDisplayDate(startDate)}</span>
-              )}
-              <div
-                style={{ ...inputStyle, flex: 1, cursor: 'pointer', display: 'flex', alignItems: 'center' }}
-                onClick={() => {
-                  setTimePickerTarget('start');
-                  setShowTimePicker(true);
-                }}
-              >
-                {startTime || '--:--'}
-              </div>
-            </div>
-          )}
+          <div
+            style={{ ...inputStyle, cursor: 'pointer', display: 'flex', alignItems: 'center' }}
+            onClick={() => {
+              setTimePickerTarget('start');
+              setShowTimePicker(true);
+            }}
+          >
+            {startTime || '--:--'}
+          </div>
 
-          {/* End */}
+          {/* End time */}
           <label style={labelStyle}>Konec</label>
-          {allDay ? (
-            <input style={{ ...inputStyle, flex: 1 }} type="date" value={endDate} onChange={(e) => updateEndDate(e.target.value)} />
-          ) : (
-            <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
-              {endDate && (
-                <span style={{ fontSize: 13, color: '#6b7280', minWidth: 90 }}>{formatDisplayDate(endDate)}</span>
-              )}
-              <div
-                style={{ ...inputStyle, flex: 1, cursor: 'pointer', display: 'flex', alignItems: 'center' }}
-                onClick={() => {
-                  setTimePickerTarget('end');
-                  setShowTimePicker(true);
-                }}
-              >
-                {endTime || '--:--'}
-              </div>
-            </div>
-          )}
+          <div
+            style={{ ...inputStyle, cursor: 'pointer', display: 'flex', alignItems: 'center' }}
+            onClick={() => {
+              setTimePickerTarget('end');
+              setShowTimePicker(true);
+            }}
+          >
+            {endTime || '--:--'}
+          </div>
 
           {/* Description */}
           <label style={labelStyle}>Popis</label>
@@ -386,17 +358,10 @@ const formatDateLocal = (d: Date) => `${d.getFullYear()}-${pad(d.getMonth() + 1)
 
 const formatTimeLocal = (d: Date) => `${pad(d.getHours())}:${pad(d.getMinutes())}`;
 
-const addDays = (dateStr: string, days: number) => {
-  const d = new Date(dateStr);
-  d.setDate(d.getDate() + days);
-  return formatDateLocal(d);
-};
-
-/** Format a YYYY-MM-DD string as DD.MM.YYYY for display */
+/** Format \"2026-02-26\" → \"26.02.2026\" for display */
 const formatDisplayDate = (dateStr: string) => {
-  if (!dateStr) return '';
-  const [year, month, day] = dateStr.split('-');
-  return `${day}.${month}.${year}`;
+  const [y, m, d] = dateStr.split('-');
+  return `${d}.${m}.${y}`;
 };
 
 // ---------------------------------------------------------------------------
@@ -496,13 +461,13 @@ const FullCalendarView: React.FC = () => {
     setModalInitial({
       start: selectInfo.startStr,
       end: selectInfo.endStr,
-      allDay: selectInfo.allDay,
+      allDay: false,
     });
     setAnchorPos({ ...mousePos.current });
     setModalOpen(true);
 
     // Add a persistent preview event block
-    addPreviewEvent(selectInfo.startStr, selectInfo.endStr, selectInfo.allDay);
+    addPreviewEvent(selectInfo.startStr, selectInfo.endStr, false);
   }, [addPreviewEvent]);
 
   /** Click existing event → edit */
@@ -569,8 +534,8 @@ const FullCalendarView: React.FC = () => {
     } catch (err) {
       console.error('Failed to save event', err);
     }
-    await fetchEvents();
     closeModal();
+    fetchEvents();
   }, [modalMode, editingEventId, fetchEvents, closeModal]);
 
   const handleModalDelete = useCallback(async () => {
