@@ -43,6 +43,7 @@ export async function initDatabase() {
         info TEXT,
         commission VARCHAR(255),
         status VARCHAR(50) DEFAULT 'pending',
+        stage VARCHAR(50) DEFAULT 'Not Started',
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
         updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
       )
@@ -60,6 +61,7 @@ export async function initDatabase() {
         field VARCHAR(255),
         date DATE,
         status VARCHAR(50) DEFAULT 'pending',
+        stage VARCHAR(50) DEFAULT 'Not Started',
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
         updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
       )
@@ -77,6 +79,7 @@ export async function initDatabase() {
         info TEXT,
         commission VARCHAR(255),
         status VARCHAR(50) DEFAULT 'pending',
+        stage VARCHAR(50) DEFAULT 'Not Started',
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
         updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
       )
@@ -281,14 +284,17 @@ export async function initDatabase() {
       "ALTER TABLE partners ADD COLUMN IF NOT EXISTS info TEXT",
       "ALTER TABLE partners ADD COLUMN IF NOT EXISTS commission VARCHAR(255)",
       "ALTER TABLE partners ADD COLUMN IF NOT EXISTS status VARCHAR(50) DEFAULT 'pending'",
+      "ALTER TABLE partners ADD COLUMN IF NOT EXISTS stage VARCHAR(50) DEFAULT 'Not Started'",
       "ALTER TABLE clients ADD COLUMN IF NOT EXISTS info TEXT",
       "ALTER TABLE clients ADD COLUMN IF NOT EXISTS field VARCHAR(255)",
       "ALTER TABLE clients ADD COLUMN IF NOT EXISTS date DATE",
       "ALTER TABLE clients ADD COLUMN IF NOT EXISTS status VARCHAR(50) DEFAULT 'pending'",
+      "ALTER TABLE clients ADD COLUMN IF NOT EXISTS stage VARCHAR(50) DEFAULT 'Not Started'",
       "ALTER TABLE tipers ADD COLUMN IF NOT EXISTS field VARCHAR(255)",
       "ALTER TABLE tipers ADD COLUMN IF NOT EXISTS info TEXT",
       "ALTER TABLE tipers ADD COLUMN IF NOT EXISTS commission VARCHAR(255)",
       "ALTER TABLE tipers ADD COLUMN IF NOT EXISTS status VARCHAR(50) DEFAULT 'pending'",
+      "ALTER TABLE tipers ADD COLUMN IF NOT EXISTS stage VARCHAR(50) DEFAULT 'Not Started'",
       "ALTER TABLE color_palettes ADD COLUMN IF NOT EXISTS typography JSONB NOT NULL DEFAULT '{}'::jsonb",
       "ALTER TABLE future_functions ADD COLUMN IF NOT EXISTS priority VARCHAR(50)",
       "ALTER TABLE future_functions ADD COLUMN IF NOT EXISTS complexity VARCHAR(50)",
@@ -310,6 +316,9 @@ export async function initDatabase() {
     await client.query("UPDATE partners SET status = 'accepted' WHERE status IS NULL");
     await client.query("UPDATE clients SET status = 'accepted' WHERE status IS NULL");
     await client.query("UPDATE tipers SET status = 'accepted' WHERE status IS NULL");
+    await client.query("UPDATE partners SET stage = 'Not Started' WHERE stage IS NULL");
+    await client.query("UPDATE clients SET stage = 'Not Started' WHERE stage IS NULL");
+    await client.query("UPDATE tipers SET stage = 'Not Started' WHERE stage IS NULL");
   await client.query("UPDATE future_functions SET status = 'Planned' WHERE status IS NULL");
   await client.query("UPDATE future_functions SET archived = FALSE WHERE archived IS NULL");
 
