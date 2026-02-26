@@ -302,7 +302,6 @@ export async function initDatabase() {
       "ALTER TABLE future_functions ADD COLUMN IF NOT EXISTS info TEXT",
       "ALTER TABLE future_functions ADD COLUMN IF NOT EXISTS status VARCHAR(50) DEFAULT 'Planned'",
       "ALTER TABLE future_functions ADD COLUMN IF NOT EXISTS archived BOOLEAN DEFAULT FALSE",
-      "ALTER TABLE future_functions ADD COLUMN IF NOT EXISTS completedAt VARCHAR(50) DEFAULT NULL",
       "ALTER TABLE users ADD COLUMN IF NOT EXISTS password_hash VARCHAR(255)",
       "ALTER TABLE users ADD COLUMN IF NOT EXISTS role VARCHAR(50) DEFAULT 'employee'",
       "ALTER TABLE documents ADD COLUMN IF NOT EXISTS archived_at TIMESTAMP DEFAULT NULL",
@@ -322,6 +321,16 @@ export async function initDatabase() {
     await client.query("UPDATE tipers SET stage = 'Not Started' WHERE stage IS NULL");
   await client.query("UPDATE future_functions SET status = 'Planned' WHERE status IS NULL");
   await client.query("UPDATE future_functions SET archived = FALSE WHERE archived IS NULL");
+
+  // completedAt column — handle rename from lowercase (if old migration ran) + create if fresh
+  await client.query(`
+    DO $$ BEGIN
+      IF EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'future_functions' AND column_name = 'completedat') THEN
+        ALTER TABLE future_functions RENAME COLUMN completedat TO "completedAt";
+      END IF;
+    END $$
+  `);
+  await client.query(`ALTER TABLE future_functions ADD COLUMN IF NOT EXISTS "completedAt" VARCHAR(50) DEFAULT NULL`);
 
     // Create analytics_events table
     await client.query(`
@@ -521,12 +530,12 @@ export const db = {
     if (!USE_POSTGRES) return null;
     
     const hasExplicitId = data.id != null;
-    const fields = Object.keys(data).filter(k => k !== 'id' || hasExplicitId);
+    const fields = Object.keys(data).filter(k => (k !== 'id' || hasExplicitId) && k !== 'created_at' && k !== 'updated_at');
     const values = fields.map(f => data[f]);
     const placeholders = fields.map((_, i) => `$${i + 1}`).join(', ');
     
     const query = `
-      INSERT INTO ${table} (${fields.join(', ')}, updated_at)
+      INSERT INTO ${table} (${fields.map(f => `"${f}"`).join(', ')}, updated_at)
       VALUES (${placeholders}, CURRENT_TIMESTAMP)
       RETURNING *
     `;
@@ -553,7 +562,7 @@ export const db = {
     // Filter out id and PostgreSQL metadata fields
     const fields = Object.keys(data).filter(k => k !== 'id' && k !== 'created_at' && k !== 'updated_at');
     const values = fields.map(f => data[f]);
-    const setClause = fields.map((f, i) => `${f} = $${i + 1}`).join(', ');
+    const setClause = fields.map((f, i) => `"${f}" = $${i + 1}`).join(', ');
     
     const query = `
       UPDATE ${table}
