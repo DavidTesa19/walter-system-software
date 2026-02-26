@@ -519,24 +519,12 @@ const FutureFunctionsGrid: React.FC = () => {
         onCellClicked: onCellClickedHandler
       },
       {
-        field: "priority",
-        headerName: "Priorita",
-        filter: true,
-        flex: 1,
-        minWidth: 140,
-        cellEditor: OptionSelectEditor,
-        cellEditorPopup: true,
-        cellEditorParams: {
-          values: [...PRIORITY_OPTIONS]
-        },
-        onCellClicked: onCellClickedHandler
-      },
-      {
         field: "status",
         headerName: "Stav",
         filter: true,
         flex: 1,
-        minWidth: 160,
+        minWidth: 190,
+        width: 210,
         cellRenderer: StatusCellRenderer,
         cellEditor: OptionSelectEditor,
         cellEditorPopup: true,
@@ -553,9 +541,23 @@ const FutureFunctionsGrid: React.FC = () => {
         pinned: "right",
         lockPinned: true,
         filter: true,
-        flex: 1,
-        minWidth: 150,
+        width: 145,
+        minWidth: 135,
+        maxWidth: 165,
         valueFormatter: (params: { value: string | null | undefined }) => params.value ?? ""
+      },
+      {
+        field: "priority",
+        headerName: "Priorita",
+        filter: true,
+        flex: 1,
+        minWidth: 140,
+        cellEditor: OptionSelectEditor,
+        cellEditorPopup: true,
+        cellEditorParams: {
+          values: [...PRIORITY_OPTIONS]
+        },
+        onCellClicked: onCellClickedHandler
       },
       {
         field: "complexity",
@@ -684,19 +686,12 @@ const FutureFunctionsGrid: React.FC = () => {
         cellClass: "info-cell-truncate"
       },
       {
-        field: "priority",
-        headerName: "Priorita",
-        editable: false,
-        filter: true,
-        flex: 1,
-        minWidth: 140
-      },
-      {
         field: "status",
         headerName: "Stav",
         filter: true,
         flex: 1,
-        minWidth: 160,
+        minWidth: 190,
+        width: 210,
         cellRenderer: StatusCellRenderer,
         cellEditor: OptionSelectEditor,
         cellEditorPopup: true,
@@ -713,9 +708,18 @@ const FutureFunctionsGrid: React.FC = () => {
         pinned: "right",
         lockPinned: true,
         filter: true,
-        flex: 1,
-        minWidth: 150,
+        width: 145,
+        minWidth: 135,
+        maxWidth: 165,
         valueFormatter: (params: { value: string | null | undefined }) => params.value ?? ""
+      },
+      {
+        field: "priority",
+        headerName: "Priorita",
+        editable: false,
+        filter: true,
+        flex: 1,
+        minWidth: 140
       },
       {
         field: "complexity",
