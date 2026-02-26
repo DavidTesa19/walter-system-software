@@ -30,10 +30,11 @@ const COMPLEXITY_OPTIONS = ["Jednoduchá", "Středně složitá", "Složitá"] a
 const PHASE_OPTIONS = ["Urgentní", "Střednědobé", "Před spuštěním", "Po spuštění"] as const;
 
 // All statuses
-const ALL_STATUS_OPTIONS = ["Plánováno", "Probíhá", "Ke kontrole", "Dokončeno", "Schváleno", "Neschváleno", "Odloženo", "Zrušeno"] as const;
+const ALL_STATUS_OPTIONS = ["Plánováno", "Aktuální", "Probíhá", "Ke kontrole", "Dokončeno", "Schváleno", "Neschváleno", "Odloženo", "Zrušeno"] as const;
 
 const STATUS_COLOR_MAP: Record<string, string> = {
   "Plánováno": "#3b82f6",
+  "Aktuální": "#fb923c",
   "Probíhá": "#f59e0b",
   "Ke kontrole": "#a855f7",
   "Dokončeno": "#22c55e",
@@ -44,7 +45,7 @@ const STATUS_COLOR_MAP: Record<string, string> = {
 };
 
 // Statuses that appear in active table
-const ACTIVE_STATUSES = ["Plánováno", "Probíhá", "Ke kontrole", "Dokončeno", "Schváleno", "Neschváleno"] as const;
+const ACTIVE_STATUSES = ["Plánováno", "Aktuální", "Probíhá", "Ke kontrole", "Dokončeno", "Schváleno", "Neschváleno"] as const;
 
 // Statuses that auto-archive
 const AUTO_ARCHIVE_STATUSES = ["Odloženo", "Zrušeno"] as const;
@@ -56,7 +57,8 @@ const ACTIVE_STATUS_ORDER: Record<string, number> = {
   "Dokončeno": 2,
   "Ke kontrole": 3,
   "Probíhá": 4,
-  "Plánováno": 5
+  "Aktuální": 5,
+  "Plánováno": 6
 };
 
 const ARCHIVE_STATUS_ORDER: Record<string, number> = {
@@ -66,7 +68,7 @@ const ARCHIVE_STATUS_ORDER: Record<string, number> = {
   "Zrušeno": 3
 };
 
-const SUMMARY_ACTIVE_ORDER = ["Schváleno", "Neschváleno", "Dokončeno", "Ke kontrole", "Probíhá", "Plánováno"];
+const SUMMARY_ACTIVE_ORDER = ["Schváleno", "Neschváleno", "Dokončeno", "Ke kontrole", "Probíhá", "Aktuální", "Plánováno"];
 const SUMMARY_ARCHIVE_ORDER = ["Schváleno", "Dokončeno", "Odloženo", "Zrušeno"];
 
 const FutureFunctionsGrid: React.FC = () => {
