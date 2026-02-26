@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import FullCalendar from '@fullcalendar/react';
+import csLocale from '@fullcalendar/core/locales/cs';
 import dayGridPlugin from '@fullcalendar/daygrid';
 import timeGridPlugin from '@fullcalendar/timegrid';
 import listPlugin from '@fullcalendar/list';
@@ -189,9 +190,17 @@ const EventModal: React.FC<EventModalProps> = ({ isOpen, onClose, onSave, onDele
     }
 
     if (initial?.end) {
-      const e = new Date(initial.end);
-      setEndDate(formatDateLocal(e));
-      setEndTime(formatTimeLocal(e));
+      if (initial?.allDay) {
+        // FullCalendar stores exclusive end dates – subtract 1 day for display
+        const d = new Date(initial.end);
+        d.setDate(d.getDate() - 1);
+        setEndDate(formatDateLocal(d));
+        setEndTime('');
+      } else {
+        const e = new Date(initial.end);
+        setEndDate(formatDateLocal(e));
+        setEndTime(formatTimeLocal(e));
+      }
     } else {
       setEndDate('');
       setEndTime('');
@@ -215,7 +224,7 @@ const EventModal: React.FC<EventModalProps> = ({ isOpen, onClose, onSave, onDele
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     const payload: Partial<CalendarEvent> = {
-      title: title.trim() || 'Untitled',
+      title: title.trim() || 'Bez názvu',
       allDay,
       color,
       description,
@@ -240,32 +249,36 @@ const EventModal: React.FC<EventModalProps> = ({ isOpen, onClose, onSave, onDele
         style={{ ...popoverStyle, ...posStyle }}
       >
         <h3 style={{ margin: '0 0 16px', fontSize: 18, fontWeight: 700, color: '#0f172a', fontFamily: MODAL_FONT }}>
-          {mode === 'create' ? 'New Event' : 'Edit Event'}
+          {mode === 'create' ? 'Nová událost' : 'Upravit událost'}
         </h3>
         <form onSubmit={handleSubmit}>
           {/* Title */}
-          <label style={labelStyle}>Title</label>
+          <label style={labelStyle}>Název</label>
           <input
             ref={titleRef}
             style={inputStyle}
             value={title}
             onChange={(e) => updateTitle(e.target.value)}
-            placeholder="Event title"
+            placeholder="Název události"
           />
 
           {/* All day toggle */}
           <label style={{ ...labelStyle, display: 'flex', alignItems: 'center', gap: 8, cursor: 'pointer' }}>
             <input type="checkbox" checked={allDay} onChange={(e) => updateAllDay(e.target.checked)} />
-            All day
+            Celý den
           </label>
 
           {/* Start */}
-          <label style={labelStyle}>Start</label>
-          <div style={{ display: 'flex', gap: 8 }}>
+          <label style={labelStyle}>Začátek</label>
+          {allDay ? (
             <input style={{ ...inputStyle, flex: 1 }} type="date" value={startDate} onChange={(e) => updateStartDate(e.target.value)} />
-            {!allDay && (
+          ) : (
+            <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+              {startDate && (
+                <span style={{ fontSize: 13, color: '#6b7280', minWidth: 90 }}>{formatDisplayDate(startDate)}</span>
+              )}
               <div
-                style={{ ...inputStyle, width: 130, cursor: 'pointer', display: 'flex', alignItems: 'center' }}
+                style={{ ...inputStyle, flex: 1, cursor: 'pointer', display: 'flex', alignItems: 'center' }}
                 onClick={() => {
                   setTimePickerTarget('start');
                   setShowTimePicker(true);
@@ -273,16 +286,20 @@ const EventModal: React.FC<EventModalProps> = ({ isOpen, onClose, onSave, onDele
               >
                 {startTime || '--:--'}
               </div>
-            )}
-          </div>
+            </div>
+          )}
 
           {/* End */}
-          <label style={labelStyle}>End</label>
-          <div style={{ display: 'flex', gap: 8 }}>
+          <label style={labelStyle}>Konec</label>
+          {allDay ? (
             <input style={{ ...inputStyle, flex: 1 }} type="date" value={endDate} onChange={(e) => updateEndDate(e.target.value)} />
-            {!allDay && (
+          ) : (
+            <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+              {endDate && (
+                <span style={{ fontSize: 13, color: '#6b7280', minWidth: 90 }}>{formatDisplayDate(endDate)}</span>
+              )}
               <div
-                style={{ ...inputStyle, width: 130, cursor: 'pointer', display: 'flex', alignItems: 'center' }}
+                style={{ ...inputStyle, flex: 1, cursor: 'pointer', display: 'flex', alignItems: 'center' }}
                 onClick={() => {
                   setTimePickerTarget('end');
                   setShowTimePicker(true);
@@ -290,20 +307,20 @@ const EventModal: React.FC<EventModalProps> = ({ isOpen, onClose, onSave, onDele
               >
                 {endTime || '--:--'}
               </div>
-            )}
-          </div>
+            </div>
+          )}
 
           {/* Description */}
-          <label style={labelStyle}>Description</label>
+          <label style={labelStyle}>Popis</label>
           <textarea
             style={{ ...inputStyle, resize: 'vertical', minHeight: 60 }}
             value={description}
             onChange={(e) => updateDescription(e.target.value)}
-            placeholder="Optional description"
+            placeholder="Volitelný popis"
           />
 
           {/* Color */}
-          <label style={labelStyle}>Color</label>
+          <label style={labelStyle}>Barva</label>
           <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginBottom: 16 }}>
             {EVENT_COLORS.map((c) => (
               <button
@@ -328,14 +345,14 @@ const EventModal: React.FC<EventModalProps> = ({ isOpen, onClose, onSave, onDele
           <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end' }}>
             {mode === 'edit' && onDelete && (
               <button type="button" style={deleteBtnStyle} onClick={onDelete}>
-                Delete
+                Smazat
               </button>
             )}
             <button type="button" style={cancelBtnStyle} onClick={onClose}>
-              Cancel
+              Zrušit
             </button>
             <button type="submit" style={saveBtnStyle}>
-              {mode === 'create' ? 'Create' : 'Save'}
+              {mode === 'create' ? 'Vytvořit' : 'Uložit'}
             </button>
           </div>
         </form>
@@ -375,6 +392,13 @@ const addDays = (dateStr: string, days: number) => {
   return formatDateLocal(d);
 };
 
+/** Format a YYYY-MM-DD string as DD.MM.YYYY for display */
+const formatDisplayDate = (dateStr: string) => {
+  if (!dateStr) return '';
+  const [year, month, day] = dateStr.split('-');
+  return `${day}.${month}.${year}`;
+};
+
 // ---------------------------------------------------------------------------
 // Main Calendar Component
 // ---------------------------------------------------------------------------
@@ -407,7 +431,7 @@ const FullCalendarView: React.FC = () => {
       ...prev.filter((e) => e.id !== PREVIEW_EVENT_ID),
       {
         id: PREVIEW_EVENT_ID,
-        title: '(New event)',
+        title: '(Nová událost)',
         start,
         end,
         allDay,
@@ -545,8 +569,8 @@ const FullCalendarView: React.FC = () => {
     } catch (err) {
       console.error('Failed to save event', err);
     }
+    await fetchEvents();
     closeModal();
-    fetchEvents();
   }, [modalMode, editingEventId, fetchEvents, closeModal]);
 
   const handleModalDelete = useCallback(async () => {
@@ -624,13 +648,14 @@ const FullCalendarView: React.FC = () => {
           center: 'title',
           right: 'dayGridMonth,timeGridWeek,timeGridDay,listWeek,multiMonthYear',
         }}
+        locale={csLocale}
         buttonText={{
-          today: 'Today',
-          month: 'Month',
-          week: 'Week',
-          day: 'Day',
-          list: 'List',
-          year: 'Year',
+          today: 'Dnes',
+          month: 'Měsíc',
+          week: 'Týden',
+          day: 'Den',
+          list: 'Seznam',
+          year: 'Rok',
         }}
         events={events}
         editable={true}
