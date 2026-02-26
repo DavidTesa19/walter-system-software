@@ -27,6 +27,7 @@ const StatusCellRenderer: React.FC<any> = (params) => {
       left: ${cellRect.left}px;
       min-width: ${cellRect.width}px;
       z-index: 10000;
+      font-family: var(--font-body, 'Inter', system-ui, sans-serif);
       background: ${isDark ? "#1e2333" : "#ffffff"};
       border: 1px solid ${isDark ? "#2d3550" : "#e2e8f0"};
       border-radius: 8px;
@@ -51,6 +52,7 @@ const StatusCellRenderer: React.FC<any> = (params) => {
         gap: 8px;
         padding: 8px 14px;
         cursor: pointer;
+        font-family: inherit;
         font-weight: 500;
         font-size: 13px;
         color: ${isDark ? "#e2e8f0" : "#1e293b"};
