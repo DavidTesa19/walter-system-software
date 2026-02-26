@@ -8,6 +8,7 @@ export interface UserInterface {
   info?: string;
   date?: string;
   status?: string;
+  stage?: string;
   field?: string;
   email?: string;
   website?: string;

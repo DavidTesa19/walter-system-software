@@ -4,7 +4,7 @@ import type { ColDef } from "ag-grid-community";
 import type { UserInterface } from "../user.interface";
 import DateCellRenderer from "../cells/DateCellRenderer";
 import DatePickerEditor from "../cells/DatePickerEditor";
-import RecordStatusCellRenderer from "../cells/RecordStatusCellRenderer";
+import StatusCellRenderer from "../cells/StatusCellRenderer";
 import FieldCellRenderer from "../cells/FieldCellRenderer";
 import ProfileCellRenderer from "../cells/ProfileCellRenderer";
 import ProfilePanel, { type ProfileSection } from "../components/ProfilePanel";
@@ -605,13 +605,13 @@ const ClientsSection: React.FC<SectionProps> = ({
         cellEditor: DatePickerEditor
       },
       {
-        field: "status",
+        field: "stage",
         headerName: "Stav",
         editable: false,
         filter: true,
         flex: 1,
         minWidth: 120,
-        cellRenderer: RecordStatusCellRenderer
+        cellRenderer: StatusCellRenderer
       }
       );
 
