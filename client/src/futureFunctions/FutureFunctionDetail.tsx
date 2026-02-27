@@ -34,6 +34,7 @@ interface FutureFunctionDetailProps {
   func: FutureFunction;
   onClose: () => void;
   onUpdate?: () => void;
+  readOnly?: boolean;
 }
 
 /* ------------------------------------------------------------------ */
@@ -80,6 +81,7 @@ const FutureFunctionDetail: React.FC<FutureFunctionDetailProps> = ({
   func,
   onClose,
   onUpdate,
+  readOnly,
 }) => {
   const [activeTab, setActiveTab] = useState<"notes" | "attachments">("notes");
 
@@ -554,6 +556,7 @@ const FutureFunctionDetail: React.FC<FutureFunctionDetailProps> = ({
                 {/* ======== Notes Tab ======== */}
                 {activeTab === "notes" && (
                   <>
+                    {!readOnly && (
                     <div
                       className="ff-notes-input-area"
                       onDragEnter={handleDragEnter}
@@ -632,6 +635,7 @@ const FutureFunctionDetail: React.FC<FutureFunctionDetailProps> = ({
                         </div>
                       )}
                     </div>
+                    )}
 
                     {notesLoading ? (
                       <p className="ff-notes-empty">Načítám...</p>
@@ -708,6 +712,7 @@ const FutureFunctionDetail: React.FC<FutureFunctionDetailProps> = ({
                               </div>
                             )}
 
+                            {!readOnly && (
                             <button
                               type="button"
                               className="ff-note-delete"
@@ -716,6 +721,7 @@ const FutureFunctionDetail: React.FC<FutureFunctionDetailProps> = ({
                             >
                               ×
                             </button>
+                            )}
                           </div>
                         ))}
                       </div>
@@ -726,6 +732,7 @@ const FutureFunctionDetail: React.FC<FutureFunctionDetailProps> = ({
                 {/* ======== Attachments Tab ======== */}
                 {activeTab === "attachments" && (
                   <>
+                    {!readOnly && (
                     <div
                       className="ff-attachments-upload-area"
                       onDragEnter={handleDragEnter}
@@ -760,6 +767,7 @@ const FutureFunctionDetail: React.FC<FutureFunctionDetailProps> = ({
                         onChange={handleFileSelect}
                       />
                     </div>
+                    )}
 
                     {attachmentsLoading ? (
                       <p className="ff-attachments-empty">Načítám...</p>
@@ -772,6 +780,7 @@ const FutureFunctionDetail: React.FC<FutureFunctionDetailProps> = ({
                       <div className="ff-attachments-grid">
                         {generalAttachments.map((att) => (
                           <div key={att.id} className="ff-attachment-card">
+                            {!readOnly && (
                             <button
                               type="button"
                               className="ff-attachment-delete-btn"
@@ -782,6 +791,7 @@ const FutureFunctionDetail: React.FC<FutureFunctionDetailProps> = ({
                             >
                               ×
                             </button>
+                            )}
 
                             <div
                               className="ff-attachment-preview"

@@ -4,6 +4,7 @@ import React, { useCallback, useEffect, useMemo, useRef, useState } from "react"
 import { AgGridReact } from "ag-grid-react";
 import { AllCommunityModule, ModuleRegistry, type CellValueChangedEvent, type ColDef, type CellClickedEvent } from "ag-grid-community";
 import { apiGet, apiPost, apiPut, apiDelete } from "../utils/api";
+import { useAuth } from "../auth/AuthContext";
 import { useUndoRedo } from "../utils/undoRedo";
 import InfoPopupEditor from "./cells/InfoPopupEditor";
 import OptionSelectEditor from "./cells/OptionSelectEditor";
@@ -82,6 +83,8 @@ const FutureFunctionsGrid: React.FC = () => {
   const [selectedFunction, setSelectedFunction] = useState<FutureFunction | null>(null);
   const activeWrapperRef = useRef<HTMLDivElement | null>(null);
   const { pushAction, signal, canUndo, canRedo, isBusy, undo, redo } = useUndoRedo();
+  const { user } = useAuth();
+  const isReadOnly = user?.role === 'salesman' || user?.role === 'viewer';
   const editSnapshotRef = useRef<Record<number, any>>({});
 
   // Refetch when other views mutate the same resource
@@ -94,13 +97,13 @@ const FutureFunctionsGrid: React.FC = () => {
 
   const defaultColDef = useMemo<ColDef<FutureFunction>>(
     () => ({
-      editable: true,
+      editable: !isReadOnly,
       resizable: true,
       sortable: true,
       filter: true,
       flex: 1
     }),
-    []
+    [isReadOnly]
   );
 
   const getRowId = useCallback((params: { data: FutureFunction }) => String(params.data.id), []);
@@ -444,9 +447,8 @@ const FutureFunctionsGrid: React.FC = () => {
     }
   }, []);
 
-  // Active table column definitions
   const activeColumnDefs = useMemo<ColDef<FutureFunction>[]>(
-    () => [
+    () => ([
       {
         headerName: "",
         colId: "delete",
@@ -598,13 +600,12 @@ const FutureFunctionsGrid: React.FC = () => {
         headerClass: "action-cell",
         cellRenderer: ArchiveCellRenderer
       }
-    ],
-    [DeleteCellRenderer, ArchiveCellRenderer, DetailCellRenderer, StatusCellRenderer, onCellClickedHandler]
+    ] as ColDef<FutureFunction>[]).filter(col => !isReadOnly || (col.colId !== 'delete' && col.colId !== 'archive')),
+    [DeleteCellRenderer, ArchiveCellRenderer, DetailCellRenderer, StatusCellRenderer, onCellClickedHandler, isReadOnly]
   );
 
-  // Archive table column definitions
   const archiveColumnDefs = useMemo<ColDef<FutureFunction>[]>(
-    () => [
+    () => ([
       {
         headerName: "",
         colId: "delete",
@@ -743,8 +744,8 @@ const FutureFunctionsGrid: React.FC = () => {
         flex: 1,
         minWidth: 150
       }
-    ],
-    [DeleteCellRenderer, RestoreCellRenderer, DetailCellRenderer, StatusCellRenderer, onCellClickedHandler]
+    ] as ColDef<FutureFunction>[]).filter(col => !isReadOnly || (col.colId !== 'delete' && col.colId !== 'restore')),
+    [DeleteCellRenderer, RestoreCellRenderer, DetailCellRenderer, StatusCellRenderer, onCellClickedHandler, isReadOnly]
   );
 
   const onArchiveCellValueChanged = useCallback(
@@ -871,13 +872,15 @@ const FutureFunctionsGrid: React.FC = () => {
               <path d="M17 6l4 4-4 4" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
             </svg>
           </button>
-          <button
-            className="add-user-btn"
-            onClick={() => handleAddFunction(isArchiveView ? "archive" : "active")}
-            disabled={isLoading}
-          >
-            + Přidat funkci
-          </button>
+          {!isReadOnly && (
+            <button
+              className="add-user-btn"
+              onClick={() => handleAddFunction(isArchiveView ? "archive" : "active")}
+              disabled={isLoading}
+            >
+              + Přidat funkci
+            </button>
+          )}
         </div>
       </div>
 
@@ -957,6 +960,7 @@ const FutureFunctionsGrid: React.FC = () => {
           func={selectedFunction}
           onClose={() => setSelectedFunction(null)}
           onUpdate={fetchFutureFunctions}
+          readOnly={isReadOnly}
         />
       )}
     </div>

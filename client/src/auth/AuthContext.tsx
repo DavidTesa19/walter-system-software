@@ -4,7 +4,7 @@ import { API_BASE } from '../usersGrid/constants';
 import { trackEvent, startActiveTimeTracking, stopActiveTimeTracking, flushSectionTime } from '../utils/analytics';
 
 // Define available roles
-export type UserRole = 'admin' | 'manager' | 'employee' | 'viewer';
+export type UserRole = 'admin' | 'manager' | 'employee' | 'salesman' | 'viewer';
 
 export interface User {
   id: number;
