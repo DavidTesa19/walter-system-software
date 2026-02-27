@@ -674,12 +674,25 @@ const FutureFunctionsGrid: React.FC = () => {
       {
         field: "info",
         headerName: "Info",
-        editable: false,
         filter: true,
         flex: 2,
         minWidth: 220,
         tooltipField: "info",
-        cellClass: "info-cell-truncate"
+        cellClass: "info-cell-truncate",
+        cellEditor: InfoPopupEditor,
+        cellEditorPopup: true,
+        cellEditorParams: {
+          maxLength: 1000,
+          rows: 8,
+          cols: 60
+        },
+        suppressKeyboardEvent: (params) => {
+          if (params.editing && params.event.key === 'Enter') {
+            return true;
+          }
+          return false;
+        },
+        onCellClicked: onCellClickedHandler
       },
       {
         field: "status",
@@ -779,9 +792,7 @@ const FutureFunctionsGrid: React.FC = () => {
   const currentRowData = isArchiveView ? archivedFunctions : activeFunctions;
   const currentColumnDefs = isArchiveView ? archiveColumnDefs : activeColumnDefs;
   const currentOnCellValueChanged = isArchiveView ? onArchiveCellValueChanged : onCellValueChanged;
-  const currentGridHeight = isArchiveView
-    ? Math.min(400, Math.max(150, archivedFunctions.length * 42 + 56))
-    : 500;
+  const currentGridHeight = "75vh";
 
   // Status counts for summary strip
   const statusSummary = useMemo(() => {

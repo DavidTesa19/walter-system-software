@@ -169,20 +169,6 @@ const UsersGrid: React.FC<UsersGridProps> = ({ viewMode, searchTarget }) => {
       </div>
 
       <div className="table-section">{renderActiveSection()}</div>
-
-      <div className="instructions">
-        <p>
-          <strong>Instrukce:</strong>
-        </p>
-        <ul>
-          <li>Použijte záložky výše pro přepínání mezi tabulkami Klientů, Partnerů a Tipařů</li>
-          <li>Klikněte na jakoukoliv buňku pro úpravu (kromě ID)</li>
-          <li>Stiskněte Enter nebo klikněte mimo pro uložení změn</li>
-          <li>Klikněte na ikonu koše pro smazání položky</li>
-          <li>Klikněte na ikonu profilu pro otevření detailního profilu záznamu</li>
-          <li>Klikněte "Přidat Klienta/Partnera/Tipaře" pro vytvoření nového záznamu</li>
-        </ul>
-      </div>
     </div>
   );
 };

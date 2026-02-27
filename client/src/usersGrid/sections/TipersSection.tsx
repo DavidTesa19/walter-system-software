@@ -590,7 +590,7 @@ const TipersSection: React.FC<SectionProps> = ({
   return (
     <>
       <div className="grid-container">
-        <div className="grid-wrapper ag-theme-quartz" style={{ height: 500 }}>
+        <div className="grid-wrapper ag-theme-quartz" style={{ height: "75vh" }}>
           <AgGridReact<UserInterface>
             ref={gridRef}
             rowData={tipersData}
