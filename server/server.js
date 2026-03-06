@@ -973,15 +973,21 @@ if (!fs.existsSync(DATA_FILE)) {
       console.log("Seeded data from:", SEED_FILE);
     } else {
       const defaultData = {
-        users: [],
-        partners: [],
-        clients: [],
-        tipers: [],
-        employees: [],
-        futureFunctions: [],
-        documents: [],
-        color_palettes: cloneDefaultPalettes()
-      };
+          users: [],
+          partners: [],
+          clients: [],
+          tipers: [],
+          employees: [],
+          futureFunctions: [],
+          documents: [],
+          partner_entities: [],
+          partner_commissions: [],
+          client_entities: [],
+          client_commissions: [],
+          tiper_entities: [],
+          tiper_commissions: [],
+          color_palettes: cloneDefaultPalettes()
+        };
       fs.writeFileSync(DATA_FILE, JSON.stringify(defaultData, null, 2));
       console.log("Created empty data file");
     }
@@ -3597,7 +3603,7 @@ app.get("/api/analytics/summary", authenticateToken, (req, res) => {
     if (!userActivityLogs[e.username]) userActivityLogs[e.username] = [];
     userActivityLogs[e.username].push({
       event_type: e.event_type,
-      created_at: e.created_at
+      created_at: e.created_at || e.timestamp || e.createdAt || null
     });
   });
 

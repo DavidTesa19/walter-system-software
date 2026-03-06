@@ -14,6 +14,7 @@ import ChatbotView from './views/ChatbotView';
 import TeamChatView from './views/TeamChatView';
 import FullCalendarView from './views/FullCalendarView';
 import AnalyticsView from './views/AnalyticsView';
+import EntitiesSystemView from './views/EntitiesSystemView';
 import { trackEvent, trackSectionStart } from './utils/analytics';
 import type { AppView } from './types/appView';
 import type { GlobalSearchResult, GridSearchNavigationTarget, SearchTable } from './types/globalSearch';
@@ -339,7 +340,9 @@ const AppContent: React.FC = () => {
             case 'calendar':
               return <FullCalendarView />;
             case 'analytics':
-              return <AnalyticsView />;
+                return <AnalyticsView />;
+              case 'entities_system':
+                return <EntitiesSystemView />;
             default:
               return null;
           }
