@@ -354,14 +354,13 @@ const AnalyticsView: React.FC = () => {
                             <tr className="user-logs-row">
                               <td colSpan={4} className="user-logs-cell" style={{ padding: '0 0 16px 32px' }}>
                                 <div className="user-logs-container" style={{ margin: '12px 16px 0 0', border: '1px solid var(--border-color)', borderRadius: '6px', overflow: 'hidden' }}>
-                                  <h4 style={{ margin: '0', padding: '10px 16px', background: 'var(--bg-secondary)', borderBottom: '1px solid var(--border-color)', fontSize: '0.85rem', fontWeight: 600, color: 'var(--text-secondary)' }}>Log aktivity</h4>
+                                  <h4 style={{ margin: '0', padding: '10px 16px', background: 'var(--bg-secondary)', borderBottom: '1px solid var(--border-color)', fontSize: '0.85rem', fontWeight: 600, color: 'var(--text-secondary)' }}>Log přihlášení</h4>
                                   <div style={{ maxHeight: '200px', overflowY: 'auto' }}>
                                     <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.85rem' }}>
                                       <thead>
                                         <tr style={{ borderBottom: '1px solid var(--border-color)', textAlign: 'left', backgroundColor: 'var(--bg-primary)' }}>
                                           <th style={{ padding: '8px 16px', fontWeight: 500 }}>Čas</th>
                                           <th style={{ padding: '8px 16px', fontWeight: 500 }}>Akce</th>
-                                          <th style={{ padding: '8px 16px', fontWeight: 500 }}>Detaily</th>
                                         </tr>
                                       </thead>
                                       <tbody>
@@ -369,18 +368,11 @@ const AnalyticsView: React.FC = () => {
                                           .sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime())
                                           .map((log, idx) => (
                                             <tr key={idx} style={{ borderBottom: '1px solid var(--bg-secondary)' }}>
-                                              <td style={{ padding: '6px 16px', color: 'var(--text-secondary)', whiteSpace: 'nowrap' }}>
+                                              <td style={{ padding: '6px 16px', color: 'var(--text-secondary)', whiteSpace: 'nowrap', width: '200px' }}>
                                                 {new Date(log.created_at).toLocaleString('cs-CZ', { dateStyle: 'short', timeStyle: 'medium' })}
                                               </td>
                                               <td style={{ padding: '6px 16px' }}>
-                                                {log.event_type === 'login_success' ? (
-                                                  <span style={{ color: 'var(--status-accepted-text)', backgroundColor: 'var(--status-accepted-bg)', padding: '2px 8px', borderRadius: '12px', fontSize: '0.75rem', fontWeight: 500 }}>Přihlášení</span>
-                                                ) : (
-                                                  <span style={{ color: 'var(--status-pending-text)', backgroundColor: 'var(--status-pending-bg)', padding: '2px 8px', borderRadius: '12px', fontSize: '0.75rem', fontWeight: 500 }}>Návštěva sekce</span>
-                                                )}
-                                              </td>
-                                              <td style={{ padding: '6px 16px', color: 'var(--text-primary)' }}>
-                                                {log.event_type === 'section_visit' ? (SECTION_LABELS[log.section || ''] || log.section || 'Neznámá sekce') : '—'}
+                                                <span style={{ color: 'var(--status-accepted-text)', backgroundColor: 'var(--status-accepted-bg)', padding: '2px 8px', borderRadius: '12px', fontSize: '0.75rem', fontWeight: 500 }}>Přihlášení do aplikace</span>
                                               </td>
                                             </tr>
                                         ))}

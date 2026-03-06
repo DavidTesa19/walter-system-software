@@ -3591,13 +3591,12 @@ app.get("/api/analytics/summary", authenticateToken, (req, res) => {
   const formClicksFromApp = events.filter(e => e.event_type === "form_link_click" && e.source === "app").length;
   const formClicksTotal = formClicksFromLogin + formClicksFromApp;
 
-  // Add chronological activity logs
+  // Add chronological activity logs (Logins only)
   const userActivityLogs = {};
-  events.filter(e => (e.event_type === "login_success" || e.event_type === "section_visit") && e.username).forEach(e => {
+  events.filter(e => e.event_type === "login_success" && e.username).forEach(e => {
     if (!userActivityLogs[e.username]) userActivityLogs[e.username] = [];
     userActivityLogs[e.username].push({
       event_type: e.event_type,
-      section: e.section,
       created_at: e.created_at
     });
   });
