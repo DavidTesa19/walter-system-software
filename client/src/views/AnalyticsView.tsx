@@ -365,17 +365,24 @@ const AnalyticsView: React.FC = () => {
                                       </thead>
                                       <tbody>
                                         {[...summary.userActivityLogs[username]]
-                                          .sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime())
-                                          .map((log, idx) => (
-                                            <tr key={idx} style={{ borderBottom: '1px solid var(--bg-secondary)' }}>
-                                              <td style={{ padding: '6px 16px', color: 'var(--text-secondary)', whiteSpace: 'nowrap', width: '200px' }}>
-                                                {new Date(log.created_at).toLocaleString('cs-CZ', { dateStyle: 'short', timeStyle: 'medium' })}
-                                              </td>
-                                              <td style={{ padding: '6px 16px' }}>
-                                                <span style={{ color: 'var(--status-accepted-text)', backgroundColor: 'var(--status-accepted-bg)', padding: '2px 8px', borderRadius: '12px', fontSize: '0.75rem', fontWeight: 500 }}>Přihlášení do aplikace</span>
-                                              </td>
-                                            </tr>
-                                        ))}
+                                          .sort((a, b) => {
+                                            const timeA = a.created_at ? new Date(a.created_at).getTime() : 0;
+                                            const timeB = b.created_at ? new Date(b.created_at).getTime() : 0;
+                                            return (isNaN(timeB) ? 0 : timeB) - (isNaN(timeA) ? 0 : timeA);
+                                          })
+                                          .map((log, idx) => {
+                                            const isValidDate = log.created_at && !isNaN(new Date(log.created_at).getTime());
+                                            return (
+                                              <tr key={idx} style={{ borderBottom: '1px solid var(--bg-secondary)' }}>
+                                                <td style={{ padding: '6px 16px', color: 'var(--text-secondary)', whiteSpace: 'nowrap', width: '200px' }}>
+                                                  {isValidDate ? new Date(log.created_at).toLocaleString('cs-CZ', { dateStyle: 'short', timeStyle: 'medium' }) : 'Neznámý čas'}
+                                                </td>
+                                                <td style={{ padding: '6px 16px' }}>
+                                                  <span style={{ color: 'var(--status-accepted-text)', backgroundColor: 'var(--status-accepted-bg)', padding: '2px 8px', borderRadius: '12px', fontSize: '0.75rem', fontWeight: 500 }}>Přihlášení do aplikace</span>
+                                                </td>
+                                              </tr>
+                                            );
+                                          })}
                                       </tbody>
                                     </table>
                                   </div>
