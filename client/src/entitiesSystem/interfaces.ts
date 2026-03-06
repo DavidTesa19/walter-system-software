@@ -41,5 +41,3 @@ export interface CommissionInterface {
   updated_at?: string;
 }
 
-
-// Forces git update
