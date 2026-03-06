@@ -3422,10 +3422,21 @@ app.get("/api/analytics/summary", authenticateToken, async (req, res) => {
     const formClicksFromApp = events.filter(e => e.event_type === "form_link_click" && e.source === "app").length;
     const formClicksTotal = formClicksFromLogin + formClicksFromApp;
 
+    const userActivityLogs = {};
+    events.filter(e => (e.event_type === "login_success" || e.event_type === "section_visit") && e.username).forEach(e => {
+      if (!userActivityLogs[e.username]) userActivityLogs[e.username] = [];
+      userActivityLogs[e.username].push({
+        event_type: e.event_type,
+        section: e.section,
+        created_at: e.created_at
+      });
+    });
+
     res.json({
       loginPageViews, successfulLogins, failedLogins, totalLoginAttempts,
       userSignIns, totalActiveSeconds, userActiveTime,
       sectionVisits, userSectionVisits, sectionActiveTime, userSectionActiveTime,
+      userActivityLogs,
       formClicks: { fromLogin: formClicksFromLogin, fromApp: formClicksFromApp, total: formClicksTotal }
     });
   } catch (error) {
