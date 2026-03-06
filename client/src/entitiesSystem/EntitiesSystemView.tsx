@@ -24,8 +24,12 @@ const EntitiesSystemView: React.FC = () => {
   const fetchData = async () => {
     setLoading(true);
     try {
-      // Endpoint typically like GET /api/partners-entities or GET /api/partners-commissions
-      const response = await fetch(`${API_BASE}/api/${entityType}-${mode}`);
+      // Endpoint typically like GET /api/partner-entities or GET /api/partner-commissions
+      const response = await fetch(`${API_BASE}/api/${entityType.slice(0, -1)}-${mode}`, {
+        headers: {
+          'Authorization': `Bearer ${localStorage.getItem('walter_auth_token')}`
+        }
+      });
       if (response.ok) {
         const data = await response.json();
         setRowData(data);
