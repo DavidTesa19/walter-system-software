@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from "react";
 import { AgGridReact } from "ag-grid-react";
-import { ModuleRegistry, AllCommunityModule, ColDef } from "ag-grid-community";
+import { ModuleRegistry, AllCommunityModule } from "ag-grid-community";
+import type { ColDef } from "ag-grid-community";
 import "ag-grid-community/styles/ag-theme-quartz.css";
 import "./EntitiesSystemView.css";
 

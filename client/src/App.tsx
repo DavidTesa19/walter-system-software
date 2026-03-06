@@ -73,7 +73,8 @@ const VIEW_LABELS: Record<AppView, string> = {
   chatbot: 'AI Asistent',
   calendar: 'Kalendář',
   teamchat: 'Týmový chat',
-  analytics: 'Analytika'
+  analytics: 'Analytika',
+  entities_system: 'Subjekty & Komise'
 };
 
 const TABLE_LABELS: Record<SearchTable, string> = {
