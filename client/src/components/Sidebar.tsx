@@ -176,7 +176,7 @@ const Sidebar: React.FC<SidebarProps> = ({
   useEffect(() => {
     const groups = [
       { id: 'tables', views: ['active', 'pending', 'archived'] },
-      { id: 'new_system', views: ['entities_system'] },
+      { id: 'new_system', views: ['entities_active', 'entities_pending', 'entities_archived'] },
       { id: 'calendar', views: ['calendar'] },
       { id: 'teamchat', views: ['teamchat'] },
       { id: 'other', views: ['future', 'chatbot', 'palettes', 'analytics'] }
@@ -253,7 +253,9 @@ const Sidebar: React.FC<SidebarProps> = ({
         label: 'Nový Systém',
         icon: <Icons.Tables />,
         items: [
-          { id: 'entities_system', label: 'Subjekty & Komise', icon: <Icons.Tables /> }
+          { id: 'entities_active', label: 'Aktuální subjekty', icon: <Icons.Active /> },
+          { id: 'entities_pending', label: 'Ke schválení', icon: <Icons.Pending /> },
+          { id: 'entities_archived', label: 'Archiv', icon: <Icons.Archived /> }
         ]
       },
       {

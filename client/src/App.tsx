@@ -74,7 +74,9 @@ const VIEW_LABELS: Record<AppView, string> = {
   calendar: 'Kalendář',
   teamchat: 'Týmový chat',
   analytics: 'Analytika',
-  entities_system: 'Subjekty & Komise'
+  entities_active: 'Aktuální subjekty',
+  entities_pending: 'Subjekty ke schválení',
+  entities_archived: 'Archiv subjektů'
 };
 
 const TABLE_LABELS: Record<SearchTable, string> = {
@@ -342,8 +344,12 @@ const AppContent: React.FC = () => {
               return <FullCalendarView />;
             case 'analytics':
                 return <AnalyticsView />;
-              case 'entities_system':
-                return <EntitiesSystemView />;
+            case 'entities_active':
+              return <EntitiesSystemView viewMode="active" />;
+            case 'entities_pending':
+              return <EntitiesSystemView viewMode="pending" />;
+            case 'entities_archived':
+              return <EntitiesSystemView viewMode="archived" />;
             default:
               return null;
           }

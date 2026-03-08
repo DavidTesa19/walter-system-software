@@ -25,9 +25,12 @@ const VIEW_MODE_CONFIG: Record<GridView, { label: string }> = {
   archived: { label: "Archiv" }
 };
 
-const EntitiesSystemView: React.FC = () => {
+interface EntitiesSystemViewProps {
+  viewMode: GridView;
+}
+
+const EntitiesSystemView: React.FC<EntitiesSystemViewProps> = ({ viewMode }) => {
   const [activeTable, setActiveTable] = useState<TableType>("partners");
-  const [viewMode, setViewMode] = useState<GridView>("active");
   const addHandlerRef = useRef<AddHandler | null>(null);
   const [isAddDisabled, setIsAddDisabled] = useState(false);
   const { canUndo, canRedo, isBusy, undo, redo } = useUndoRedo();
@@ -87,7 +90,7 @@ const EntitiesSystemView: React.FC = () => {
   return (
     <div className="page-container">
       <div className="header-section">
-        <h1 className="page-title">Subjekty & Komise</h1>
+        <h1 className="page-title">Subjekty & Komise - {VIEW_MODE_CONFIG[viewMode].label}</h1>
         <div className="navigation-tabs">
           {(
             Object.entries(NAV_CONFIG) as Array<
@@ -100,19 +103,6 @@ const EntitiesSystemView: React.FC = () => {
               className={`nav-tab ${activeTable === key ? "active" : ""}`}
             >
               {icon} {label}
-            </button>
-          ))}
-        </div>
-        <div className="navigation-tabs">
-          {(
-            Object.entries(VIEW_MODE_CONFIG) as Array<[GridView, { label: string }]>
-          ).map(([key, { label }]) => (
-            <button
-              key={key}
-              onClick={() => setViewMode(key)}
-              className={`nav-tab ${viewMode === key ? "active" : ""}`}
-            >
-              {label}
             </button>
           ))}
         </div>
