@@ -357,6 +357,15 @@ export async function initDatabase() {
         ON analytics_events (user_id, created_at)
     `);
 
+    // Counter table for sequential entity IDs (P001, K001, T001)
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS entity_counters (
+        entity_type VARCHAR(50) PRIMARY KEY,
+        next_number INTEGER NOT NULL DEFAULT 1,
+        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+      )
+    `);
+
     
 
     // Create partner_entities and partner_commissions
@@ -413,9 +422,11 @@ export async function initDatabase() {
         entity_id VARCHAR(50) UNIQUE NOT NULL,
         company_name VARCHAR(255),
         field VARCHAR(255),
+        service VARCHAR(255),
         location VARCHAR(255),
         info TEXT,
         category VARCHAR(100),
+        budget VARCHAR(100),
         first_name VARCHAR(255),
         last_name VARCHAR(255),
         email VARCHAR(255),
@@ -425,6 +436,10 @@ export async function initDatabase() {
         updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
       )
     `);
+
+    // Backfill columns for existing deployments created before this schema expansion.
+    await client.query(`ALTER TABLE client_entities ADD COLUMN IF NOT EXISTS service VARCHAR(255)`);
+    await client.query(`ALTER TABLE client_entities ADD COLUMN IF NOT EXISTS budget VARCHAR(100)`);
 
     await client.query(`
       CREATE TABLE IF NOT EXISTS client_commissions (
