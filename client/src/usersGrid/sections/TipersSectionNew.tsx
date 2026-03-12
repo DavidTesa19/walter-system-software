@@ -161,8 +161,8 @@ const TipersSectionNew: React.FC<SectionProps> = ({
     setIsLoading(true);
     try {
       const [entitiesData, commissionsData] = await Promise.all([
-        apiGet<TiperEntity[]>('/tiper-entities'),
-        apiGet<TiperCommission[]>(`/tiper-commissions?status=${status}`)
+        apiGet<TiperEntity[]>('/api/tiper-entities'),
+        apiGet<TiperCommission[]>(`/api/tiper-commissions?status=${status}`)
       ]);
 
       const entitiesList = Array.isArray(entitiesData) ? entitiesData : [];
@@ -233,7 +233,7 @@ const TipersSectionNew: React.FC<SectionProps> = ({
 
   const handleUpdateEntity = useCallback(async (entityId: number, updates: Record<string, unknown>) => {
     try {
-      await apiPut(`/tiper-entities/${entityId}`, updates);
+      await apiPut(`/api/tiper-entities/${entityId}`, updates);
       fetchData();
     } catch (error) {
       console.error("Error updating tiper entity:", error);
@@ -243,7 +243,7 @@ const TipersSectionNew: React.FC<SectionProps> = ({
 
   const handleUpdateCommission = useCallback(async (commissionId: number, updates: Record<string, unknown>) => {
     try {
-      await apiPut(`/tiper-commissions/${commissionId}`, updates);
+      await apiPut(`/api/tiper-commissions/${commissionId}`, updates);
       fetchData();
     } catch (error) {
       console.error("Error updating tiper commission:", error);
@@ -257,7 +257,7 @@ const TipersSectionNew: React.FC<SectionProps> = ({
 
   const handleApprove = useCallback(async (id: number) => {
     try {
-      await apiPost(`/tiper-commissions/${id}/approve`);
+      await apiPost(`/api/tiper-commissions/${id}/approve`);
       fetchData();
     } catch (error) {
       console.error("Error approving commission:", error);
@@ -267,7 +267,7 @@ const TipersSectionNew: React.FC<SectionProps> = ({
 
   const handleRestore = useCallback(async (id: number) => {
     try {
-      await apiPost(`/tiper-commissions/${id}/restore`);
+      await apiPost(`/api/tiper-commissions/${id}/restore`);
       fetchData();
     } catch (error) {
       console.error("Error restoring commission:", error);
@@ -294,9 +294,9 @@ const TipersSectionNew: React.FC<SectionProps> = ({
 
     try {
       if (isArchived || isPending) {
-        await apiDelete(`/tiper-commissions/${id}`);
+        await apiDelete(`/api/tiper-commissions/${id}`);
       } else {
-        await apiPost(`/tiper-commissions/${id}/archive`);
+        await apiPost(`/api/tiper-commissions/${id}/archive`);
       }
       fetchData();
     } catch (error) {
@@ -333,9 +333,9 @@ const TipersSectionNew: React.FC<SectionProps> = ({
       const entityFields = ['name', 'company', 'field', 'location', 'mobile', 'email'];
       
       if (entityFields.includes(field) && row.entity) {
-        await apiPut(`/tiper-entities/${row.entity.id}`, { [field]: newValue });
+        await apiPut(`/api/tiper-entities/${row.entity.id}`, { [field]: newValue });
       } else {
-        await apiPut(`/tiper-commissions/${row.id}`, { [field]: newValue });
+        await apiPut(`/api/tiper-commissions/${row.id}`, { [field]: newValue });
       }
       
       fetchData();
@@ -352,7 +352,7 @@ const TipersSectionNew: React.FC<SectionProps> = ({
 
   const handleAdd = useCallback(async () => {
     try {
-      const response = await apiPost<{ entity: TiperEntity; commission: TiperCommission }>('/tiper-entities/with-commission', {
+      const response = await apiPost<{ entity: TiperEntity; commission: TiperCommission }>('/api/tiper-entities/with-commission', {
         entity: {
           name: "Nový Tipař",
           company: "",

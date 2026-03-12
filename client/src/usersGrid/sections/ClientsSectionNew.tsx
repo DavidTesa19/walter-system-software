@@ -161,8 +161,8 @@ const ClientsSectionNew: React.FC<SectionProps> = ({
     setIsLoading(true);
     try {
       const [entitiesData, commissionsData] = await Promise.all([
-        apiGet<ClientEntity[]>('/client-entities'),
-        apiGet<ClientCommission[]>(`/client-commissions?status=${status}`)
+        apiGet<ClientEntity[]>('/api/client-entities'),
+        apiGet<ClientCommission[]>(`/api/client-commissions?status=${status}`)
       ]);
 
       const entitiesList = Array.isArray(entitiesData) ? entitiesData : [];
@@ -233,7 +233,7 @@ const ClientsSectionNew: React.FC<SectionProps> = ({
 
   const handleUpdateEntity = useCallback(async (entityId: number, updates: Record<string, unknown>) => {
     try {
-      await apiPut(`/client-entities/${entityId}`, updates);
+      await apiPut(`/api/client-entities/${entityId}`, updates);
       fetchData();
     } catch (error) {
       console.error("Error updating client entity:", error);
@@ -243,7 +243,7 @@ const ClientsSectionNew: React.FC<SectionProps> = ({
 
   const handleUpdateCommission = useCallback(async (commissionId: number, updates: Record<string, unknown>) => {
     try {
-      await apiPut(`/client-commissions/${commissionId}`, updates);
+      await apiPut(`/api/client-commissions/${commissionId}`, updates);
       fetchData();
     } catch (error) {
       console.error("Error updating client commission:", error);
@@ -257,7 +257,7 @@ const ClientsSectionNew: React.FC<SectionProps> = ({
 
   const handleApprove = useCallback(async (id: number) => {
     try {
-      await apiPost(`/client-commissions/${id}/approve`);
+      await apiPost(`/api/client-commissions/${id}/approve`);
       fetchData();
     } catch (error) {
       console.error("Error approving commission:", error);
@@ -267,7 +267,7 @@ const ClientsSectionNew: React.FC<SectionProps> = ({
 
   const handleRestore = useCallback(async (id: number) => {
     try {
-      await apiPost(`/client-commissions/${id}/restore`);
+      await apiPost(`/api/client-commissions/${id}/restore`);
       fetchData();
     } catch (error) {
       console.error("Error restoring commission:", error);
@@ -294,9 +294,9 @@ const ClientsSectionNew: React.FC<SectionProps> = ({
 
     try {
       if (isArchived || isPending) {
-        await apiDelete(`/client-commissions/${id}`);
+        await apiDelete(`/api/client-commissions/${id}`);
       } else {
-        await apiPost(`/client-commissions/${id}/archive`);
+        await apiPost(`/api/client-commissions/${id}/archive`);
       }
       fetchData();
     } catch (error) {
@@ -333,9 +333,9 @@ const ClientsSectionNew: React.FC<SectionProps> = ({
       const entityFields = ['name', 'company', 'field', 'location', 'mobile', 'email'];
       
       if (entityFields.includes(field) && row.entity) {
-        await apiPut(`/client-entities/${row.entity.id}`, { [field]: newValue });
+        await apiPut(`/api/client-entities/${row.entity.id}`, { [field]: newValue });
       } else {
-        await apiPut(`/client-commissions/${row.id}`, { [field]: newValue });
+        await apiPut(`/api/client-commissions/${row.id}`, { [field]: newValue });
       }
       
       fetchData();
@@ -352,7 +352,7 @@ const ClientsSectionNew: React.FC<SectionProps> = ({
 
   const handleAdd = useCallback(async () => {
     try {
-      const response = await apiPost<{ entity: ClientEntity; commission: ClientCommission }>('/client-entities/with-commission', {
+      const response = await apiPost<{ entity: ClientEntity; commission: ClientCommission }>('/api/client-entities/with-commission', {
         entity: {
           name: "Nový Klient",
           company: "Nová Společnost",
