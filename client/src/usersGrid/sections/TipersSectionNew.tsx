@@ -16,8 +16,95 @@ import useProfileNotes from "../hooks/useProfileNotes";
 import { ApproveRestoreCellRenderer, DeleteArchiveCellRenderer } from "../cells/RowActionCellRenderers";
 import { fieldOptions } from "../fieldOptions";
 
-// Field options as simple string array for AG Grid select
-const FIELD_OPTIONS_ARRAY = fieldOptions.map(opt => opt.value);
+type TiperEntityApi = {
+  id: number;
+  entity_id: string;
+  company_name?: string | null;
+  field?: string | null;
+  location?: string | null;
+  info?: string | null;
+  first_name?: string | null;
+  last_name?: string | null;
+  email?: string | null;
+  phone?: string | null;
+  website?: string | null;
+  created_at?: string;
+  updated_at?: string;
+};
+
+type TiperCommissionApi = {
+  id: number;
+  commission_id: string;
+  entity_id: number;
+  status: "pending" | "accepted" | "archived";
+  position?: string | null;
+  budget?: string | null;
+  state?: string | null;
+  assigned_to?: string | null;
+  field?: string | null;
+  service_position?: string | null;
+  location?: string | null;
+  category?: string | null;
+  deadline?: string | null;
+  priority?: string | null;
+  phone?: string | null;
+  commission_value?: string | null;
+  notes?: string | null;
+  created_at?: string;
+  updated_at?: string;
+};
+
+const FIELD_OPTIONS_ARRAY = fieldOptions.map((opt) => opt.value);
+const joinName = (...parts: Array<string | null | undefined>) => parts.filter((part): part is string => Boolean(part && part.trim())).join(" ").trim();
+
+const normalizeTiperEntity = (entity: TiperEntityApi): TiperEntity => ({
+  id: entity.id,
+  entity_id: entity.entity_id,
+  name: joinName(entity.first_name, entity.last_name) || entity.company_name || entity.entity_id,
+  company: entity.company_name ?? null,
+  field: entity.field ?? null,
+  location: entity.location ?? null,
+  address: null,
+  mobile: entity.phone ?? null,
+  email: entity.email ?? null,
+  website: entity.website ?? null,
+  info: entity.info ?? null,
+  created_at: entity.created_at,
+  updated_at: entity.updated_at
+});
+
+const normalizeTiperCommission = (commission: TiperCommissionApi): TiperCommission => ({
+  id: commission.id,
+  commission_id: commission.commission_id,
+  tiper_entity_id: Number(commission.entity_id),
+  status: commission.status,
+  assigned_to: commission.assigned_to ?? null,
+  priority: commission.priority ?? null,
+  notes: commission.notes ?? null,
+  deadline: commission.deadline ?? null,
+  state: commission.state ?? null,
+  commission_value: commission.commission_value ?? null,
+  position: commission.position ?? null,
+  budget: commission.budget ?? null,
+  service_position: commission.service_position ?? null,
+  field: commission.field ?? null,
+  location: commission.location ?? null,
+  category: commission.category ?? null,
+  phone: commission.phone ?? null,
+  created_at: commission.created_at,
+  updated_at: commission.updated_at
+});
+
+const mapTiperEntityUpdates = (updates: Record<string, unknown>) => {
+  const mapped: Record<string, unknown> = {};
+  for (const [key, value] of Object.entries(updates)) {
+    if (key === "name") mapped.first_name = value;
+    else if (key === "company") mapped.company_name = value;
+    else if (key === "mobile") mapped.phone = value;
+    else if (["field", "location", "email", "website", "info"].includes(key)) mapped[key] = value;
+  }
+  return mapped;
+};
 
 // =============================================================================
 // BUILD ENTITY DATA FOR PROFILE PANEL
@@ -31,7 +118,7 @@ const buildEntityData = (entity: TiperEntity | null): EntityData | null => {
       title: "Základní údaje",
       color: "purple",
       fields: [
-        { key: "name", label: "Jméno / Přezdívka", value: entity.name, type: "text" },
+        { key: "name", label: "Jméno", value: entity.name, type: "text" },
         { key: "company", label: "Organizace", value: entity.company, type: "text" },
         { key: "field", label: "Oblast působení", value: entity.field, type: "select", options: FIELD_OPTIONS_ARRAY },
       ]
@@ -46,17 +133,10 @@ const buildEntityData = (entity: TiperEntity | null): EntityData | null => {
       ]
     },
     {
-      title: "Adresa",
-      color: "orange",
-      fields: [
-        { key: "location", label: "Lokalita", value: entity.location, type: "text" },
-        { key: "address", label: "Úplná adresa", value: entity.address, type: "textarea" },
-      ]
-    },
-    {
       title: "Informace o tipařovi",
       color: "gray",
       fields: [
+        { key: "location", label: "Lokalita", value: entity.location, type: "text" },
         { key: "info", label: "Popis / Poznámky", value: entity.info, type: "textarea", isMultiline: true },
       ]
     }
@@ -81,8 +161,8 @@ const buildCommissionData = (commission: TiperCommission | null): CommissionData
       title: "Základní údaje tipu",
       color: "purple",
       fields: [
-        { key: "tip_description", label: "Popis tipu", value: commission.tip_description, type: "textarea" },
-        { key: "referred_contact", label: "Doporučený kontakt", value: commission.referred_contact, type: "text" },
+        { key: "position", label: "Tip / Zakázka", value: commission.position, type: "textarea" },
+        { key: "service_position", label: "Typ", value: commission.service_position, type: "text" },
         { key: "assigned_to", label: "Odpovědná osoba", value: commission.assigned_to, type: "text" },
       ]
     },
@@ -90,27 +170,17 @@ const buildCommissionData = (commission: TiperCommission | null): CommissionData
       title: "Finanční údaje",
       color: "green",
       fields: [
-        { key: "tip_value", label: "Hodnota tipu", value: commission.tip_value, type: "text" },
-        { key: "reward_amount", label: "Odměna tipařovi", value: commission.reward_amount, type: "text" },
-        { key: "reward_status", label: "Stav odměny", value: commission.reward_status, type: "select", options: ["Nevyplaceno", "Čeká na schválení", "Schváleno", "Vyplaceno"] },
+        { key: "budget", label: "Hodnota", value: commission.budget, type: "text" },
+        { key: "commission_value", label: "Provize", value: commission.commission_value, type: "text" },
+        { key: "priority", label: "Priorita", value: commission.priority, type: "select", options: ["Nízká", "Střední", "Vysoká", "Urgentní"] },
       ]
     },
     {
       title: "Časové údaje",
       color: "orange",
       fields: [
-        { key: "tip_date", label: "Datum tipu", value: commission.tip_date, type: "date" },
-        { key: "conversion_date", label: "Datum konverze", value: commission.conversion_date, type: "date" },
-        { key: "last_contact", label: "Poslední kontakt", value: commission.last_contact, type: "date" },
-      ]
-    },
-    {
-      title: "Stav a poznámky",
-      color: "gray",
-      fields: [
-        { key: "tip_result", label: "Výsledek tipu", value: commission.tip_result, type: "select", options: ["V jednání", "Úspěšný", "Neúspěšný", "Čeká na vyhodnocení"] },
-        { key: "priority", label: "Priorita", value: commission.priority, type: "select", options: ["Nízká", "Střední", "Vysoká", "Urgentní"] },
-        { key: "next_step", label: "Další krok", value: commission.next_step, type: "textarea" },
+        { key: "state", label: "Stav", value: commission.state, type: "text" },
+        { key: "deadline", label: "Termín", value: commission.deadline, type: "date" },
         { key: "notes", label: "Poznámky", value: commission.notes, type: "textarea", isMultiline: true },
       ]
     }
@@ -161,12 +231,12 @@ const TipersSectionNew: React.FC<SectionProps> = ({
     setIsLoading(true);
     try {
       const [entitiesData, commissionsData] = await Promise.all([
-        apiGet<TiperEntity[]>('/api/tiper-entities'),
-        apiGet<TiperCommission[]>(`/api/tiper-commissions?status=${status}`)
+        apiGet<TiperEntityApi[]>('/api/tiper-entities'),
+        apiGet<TiperCommissionApi[]>(`/api/tiper-commissions?status=${status}`)
       ]);
 
-      const entitiesList = Array.isArray(entitiesData) ? entitiesData : [];
-      const commissionsList = Array.isArray(commissionsData) ? commissionsData : [];
+      const entitiesList = (Array.isArray(entitiesData) ? entitiesData : []).map(normalizeTiperEntity);
+      const commissionsList = (Array.isArray(commissionsData) ? commissionsData : []).map(normalizeTiperCommission);
 
       setEntities(entitiesList);
       setCommissions(commissionsList);
@@ -176,12 +246,12 @@ const TipersSectionNew: React.FC<SectionProps> = ({
         const entity = entitiesList.find(e => e.id === commission.tiper_entity_id);
         return {
           ...commission,
-          entity_id: entity?.entity_id || '',
+          entity_id: entity?.entity_id || commission.commission_id.split('-')[0] || '',
           name: entity?.name || '',
           company: entity?.company || '',
-          field: entity?.field || '',
-          location: entity?.location || '',
-          mobile: entity?.mobile || '',
+          field: entity?.field || commission.field || '',
+          location: entity?.location || commission.location || '',
+          mobile: entity?.mobile || commission.phone || '',
           email: entity?.email || '',
           entity: entity || null
         };
@@ -233,7 +303,9 @@ const TipersSectionNew: React.FC<SectionProps> = ({
 
   const handleUpdateEntity = useCallback(async (entityId: number, updates: Record<string, unknown>) => {
     try {
-      await apiPut(`/api/tiper-entities/${entityId}`, updates);
+      const mappedUpdates = mapTiperEntityUpdates(updates);
+      if (Object.keys(mappedUpdates).length === 0) return;
+      await apiPut(`/api/tiper-entities/${entityId}`, mappedUpdates);
       fetchData();
     } catch (error) {
       console.error("Error updating tiper entity:", error);
@@ -283,11 +355,11 @@ const TipersSectionNew: React.FC<SectionProps> = ({
 
     let confirmMessage = "";
     if (isArchived) {
-      confirmMessage = `Opravdu chcete TRVALE SMAZAT tento tip z databáze?\n\nPopis: ${commission?.tip_description || "N/A"}\nTipař: ${row?.name || "N/A"}\n\nTato akce je NEzvratná!`;
+      confirmMessage = `Opravdu chcete TRVALE SMAZAT tento tip z databáze?\n\nTip: ${commission?.position || "N/A"}\nTipař: ${row?.name || row?.company || "N/A"}\n\nTato akce je NEzvratná!`;
     } else if (isPending) {
-      confirmMessage = `Opravdu chcete zamítnout tento tip?\n\nPopis: ${commission?.tip_description || "N/A"}\nTipař: ${row?.name || "N/A"}`;
+      confirmMessage = `Opravdu chcete zamítnout tento tip?\n\nTip: ${commission?.position || "N/A"}\nTipař: ${row?.name || row?.company || "N/A"}`;
     } else {
-      confirmMessage = `Opravdu chcete přesunout tento tip do archivu?\n\nPopis: ${commission?.tip_description || "N/A"}\nTipař: ${row?.name || "N/A"}`;
+      confirmMessage = `Opravdu chcete přesunout tento tip do archivu?\n\nTip: ${commission?.position || "N/A"}\nTipař: ${row?.name || row?.company || "N/A"}`;
     }
 
     if (!confirm(confirmMessage)) return;
@@ -354,18 +426,19 @@ const TipersSectionNew: React.FC<SectionProps> = ({
     try {
       const response = await apiPost<{ entity: TiperEntity; commission: TiperCommission }>('/api/tiper-entities/with-commission', {
         entity: {
-          name: "Nový Tipař",
-          company: "",
+          first_name: "Nový",
+          last_name: "Tipař",
+          company_name: "",
           location: "",
-          mobile: "",
+          phone: "",
           email: "",
           field: ""
         },
         commission: {
-          tip_description: "Nový Tip",
+          position: "Nový tip",
           status: status,
-          tip_value: "",
-          reward_amount: ""
+          budget: "",
+          commission_value: ""
         }
       });
       
@@ -482,7 +555,9 @@ const TipersSectionNew: React.FC<SectionProps> = ({
       colId: "display_id",
       valueGetter: (params) => {
         const row = params.data as TiperGridRow;
-        return `${row.entity_id}-${row.commission_id.split('-')[1] || row.commission_id}`;
+        const entityCode = row.entity_id || row.commission_id.split('-')[0] || '';
+        const commissionPart = row.commission_id.split('-')[1] || row.commission_id;
+        return `${entityCode}-${commissionPart}`;
       },
       flex: 0.7,
       minWidth: 90,
@@ -493,7 +568,7 @@ const TipersSectionNew: React.FC<SectionProps> = ({
     cols.push(
       {
         field: "name",
-        headerName: "Jméno / Přezdívka",
+        headerName: "Jméno",
         filter: true,
         editable: true,
         flex: 1.5,
@@ -532,15 +607,15 @@ const TipersSectionNew: React.FC<SectionProps> = ({
     // Commission info columns
     cols.push(
       {
-        field: "tip_description",
-        headerName: "Popis tipu",
+        field: "position",
+        headerName: "Tip / Zakázka",
         filter: true,
         editable: true,
         flex: 2,
         minWidth: 180
       },
       {
-        field: "tip_value",
+        field: "budget",
         headerName: "Hodnota",
         filter: true,
         editable: true,
@@ -548,23 +623,23 @@ const TipersSectionNew: React.FC<SectionProps> = ({
         minWidth: 80
       },
       {
-        field: "reward_amount",
-        headerName: "Odměna",
+        field: "commission_value",
+        headerName: "Provize",
         filter: true,
         editable: true,
         flex: 0.8,
         minWidth: 80
       },
       {
-        field: "tip_result",
-        headerName: "Výsledek",
+        field: "priority",
+        headerName: "Priorita",
         filter: true,
         editable: true,
         flex: 1,
         minWidth: 100,
         cellEditor: 'agSelectCellEditor',
         cellEditorParams: {
-          values: ["V jednání", "Úspěšný", "Neúspěšný", "Čeká na vyhodnocení"]
+          values: ["Nízká", "Střední", "Vysoká", "Urgentní"]
         }
       }
     );
@@ -579,7 +654,7 @@ const TipersSectionNew: React.FC<SectionProps> = ({
   return (
     <>
       <div className="grid-container">
-        <div className="grid-wrapper ag-theme-quartz" style={{ height: 500 }}>
+        <div className="grid-wrapper ag-theme-quartz" style={{ height: "75vh" }}>
           <AgGridReact<TiperGridRow>
             ref={gridRef}
             rowData={gridData}

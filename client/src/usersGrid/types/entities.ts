@@ -70,13 +70,13 @@ export interface BaseCommission {
   status: 'pending' | 'accepted' | 'archived';
   created_at?: string;
   updated_at?: string;
-  
-  // Common fields
+
   assigned_to: string | null;
   priority: string | null;
-  next_step: string | null;
   notes: string | null;
-  last_contact: string | null;
+  deadline: string | null;
+  state: string | null;
+  commission_value: string | null;
 }
 
 /**
@@ -84,19 +84,14 @@ export interface BaseCommission {
  */
 export interface PartnerCommission extends BaseCommission {
   partner_entity_id: number;
-  
-  // Project info
-  project_name: string | null;
-  commission_type: string | null;
-  
-  // Financial
-  commission_value: string | null;
-  commission_rate: string | null;
-  payment_terms: string | null;
-  
-  // Dates
-  start_date: string | null;
-  end_date: string | null;
+
+  position: string | null;
+  budget: string | null;
+  service_position: string | null;
+  field: string | null;
+  location: string | null;
+  category: string | null;
+  phone: string | null;
 }
 
 /**
@@ -104,22 +99,14 @@ export interface PartnerCommission extends BaseCommission {
  */
 export interface ClientCommission extends BaseCommission {
   client_entity_id: number;
-  
-  // Project info
-  project_name: string | null;
-  service_type: string | null;
-  
-  // Financial
-  contract_value: string | null;
-  payment_status: string | null;
-  payment_terms: string | null;
-  
-  // Dates
-  start_date: string | null;
-  end_date: string | null;
-  
-  // Client specific
-  satisfaction: string | null;
+
+  position: string | null;
+  budget: string | null;
+  service_position: string | null;
+  field: string | null;
+  location: string | null;
+  category: string | null;
+  phone: string | null;
 }
 
 /**
@@ -127,22 +114,14 @@ export interface ClientCommission extends BaseCommission {
  */
 export interface TiperCommission extends BaseCommission {
   tiper_entity_id: number;
-  
-  // Tip info
-  tip_description: string | null;
-  referred_contact: string | null;
-  
-  // Financial
-  tip_value: string | null;
-  reward_amount: string | null;
-  reward_status: string | null;
-  
-  // Dates
-  tip_date: string | null;
-  conversion_date: string | null;
-  
-  // Result
-  tip_result: string | null;
+
+  position: string | null;
+  budget: string | null;
+  service_position: string | null;
+  field: string | null;
+  location: string | null;
+  category: string | null;
+  phone: string | null;
 }
 
 // ============================================================================

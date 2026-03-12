@@ -3001,11 +3001,22 @@ const createEntityCommissionRoutes = (entityTypes) => {
     app.post(commissionsPath, authenticateToken, async (req, res) => {
       try {
         const createCommission = db[`create${Type}Commission`].bind(db);
-        const newCommission = await createCommission(req.body);
-        res.status(201).json(newCommission);
+
+        if (req.body?.entity_data) {
+          const createWithCommission = db[`create${Type}WithCommission`].bind(db);
+          const result = await createWithCommission(req.body.entity_data, req.body.commission_data || {});
+          return res.status(201).json(result.commission);
+        }
+
+        if (req.body?.entity_id) {
+          const newCommission = await createCommission(req.body.entity_id, req.body);
+          return res.status(201).json(newCommission);
+        }
+
+        return res.status(400).json({ error: "Either entity_data or entity_id is required" });
       } catch (error) {
         console.error(`Error creating ${type} commission:`, error);
-        res.status(500).json({ error: `Failed to create ${type} commission` });
+        res.status(500).json({ error: error.message || `Failed to create ${type} commission` });
       }
     });
 
@@ -3022,6 +3033,19 @@ const createEntityCommissionRoutes = (entityTypes) => {
       }
     });
 
+    app.patch(`${commissionsPath}/:id`, authenticateToken, async (req, res) => {
+      try {
+        const id = Number(req.params.id);
+        const updateCommission = db[`update${Type}Commission`].bind(db);
+        const updated = await updateCommission(id, req.body);
+        if (!updated) return res.status(404).json({ error: "Not found" });
+        res.json(updated);
+      } catch (error) {
+        console.error(`Error patching ${type} commission:`, error);
+        res.status(500).json({ error: `Failed to update ${type} commission` });
+      }
+    });
+
     app.delete(`${commissionsPath}/:id`, authenticateToken, async (req, res) => {
       try {
         const id = Number(req.params.id);
@@ -3032,6 +3056,45 @@ const createEntityCommissionRoutes = (entityTypes) => {
       } catch (error) {
         console.error(`Error deleting ${type} commission:`, error);
         res.status(500).json({ error: `Failed to delete ${type} commission` });
+      }
+    });
+
+    app.post(`${commissionsPath}/:id/approve`, authenticateToken, async (req, res) => {
+      try {
+        const id = Number(req.params.id);
+        const updateCommission = db[`update${Type}Commission`].bind(db);
+        const updated = await updateCommission(id, { status: "accepted" });
+        if (!updated) return res.status(404).json({ error: "Not found" });
+        res.json(updated);
+      } catch (error) {
+        console.error(`Error approving ${type} commission:`, error);
+        res.status(500).json({ error: `Failed to approve ${type} commission` });
+      }
+    });
+
+    app.post(`${commissionsPath}/:id/archive`, authenticateToken, async (req, res) => {
+      try {
+        const id = Number(req.params.id);
+        const updateCommission = db[`update${Type}Commission`].bind(db);
+        const updated = await updateCommission(id, { status: "archived" });
+        if (!updated) return res.status(404).json({ error: "Not found" });
+        res.json(updated);
+      } catch (error) {
+        console.error(`Error archiving ${type} commission:`, error);
+        res.status(500).json({ error: `Failed to archive ${type} commission` });
+      }
+    });
+
+    app.post(`${commissionsPath}/:id/restore`, authenticateToken, async (req, res) => {
+      try {
+        const id = Number(req.params.id);
+        const updateCommission = db[`update${Type}Commission`].bind(db);
+        const updated = await updateCommission(id, { status: "accepted" });
+        if (!updated) return res.status(404).json({ error: "Not found" });
+        res.json(updated);
+      } catch (error) {
+        console.error(`Error restoring ${type} commission:`, error);
+        res.status(500).json({ error: `Failed to restore ${type} commission` });
       }
     });
   }

@@ -1557,11 +1557,12 @@ export const db = {
       entity_id: row.entity_id,
       entity_code: row.entity_code,
       status: row.status,
-      service: row.service,
+      position: row.position,
       budget: row.budget,
       state: row.state,
       assigned_to: row.assigned_to,
       field: row.field,
+      service_position: row.service_position,
       location: row.location,
       info: row.info,
       category: row.category,
@@ -1622,11 +1623,12 @@ export const db = {
       entity_id: row.entity_id,
       entity_code: row.entity_code,
       status: row.status,
-      service: row.service,
+      position: row.position,
       budget: row.budget,
       state: row.state,
       assigned_to: row.assigned_to,
       field: row.field,
+      service_position: row.service_position,
       location: row.location,
       info: row.info,
       category: row.category,
@@ -1664,10 +1666,10 @@ export const db = {
 
     const { rows } = await pool.query(
       `INSERT INTO client_commissions 
-        (commission_id, entity_id, entity_code, status, service, budget, state, assigned_to, field, location, info, category, deadline, priority, phone, commission_value, is_tipped, notes)
+        (commission_id, entity_id, entity_code, status, position, budget, state, assigned_to, field, service_position, location, info, category, deadline, priority, phone, commission_value, is_tipped, notes)
        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18)
        RETURNING *`,
-      [commissionId, entityInternalId, entity.entity_id, data.status || 'pending', data.service, data.budget, data.state, data.assigned_to, data.field, data.location, data.info, data.category, data.deadline, data.priority, data.phone, data.commission_value, data.is_tipped || false, data.notes]
+      [commissionId, entityInternalId, entity.entity_id, data.status || 'pending', data.position, data.budget, data.state, data.assigned_to, data.field, data.service_position, data.location, data.info, data.category, data.deadline, data.priority, data.phone, data.commission_value, data.is_tipped || false, data.notes]
     );
     return rows[0];
   },
@@ -1724,10 +1726,10 @@ export const db = {
 
     const entityId = await this.getNextEntityId('tiper');
     const { rows } = await pool.query(
-      `INSERT INTO tiper_entities (entity_id, first_name, last_name, field, location, info, category, email, phone, website)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
+      `INSERT INTO tiper_entities (entity_id, company_name, first_name, last_name, field, location, info, category, email, phone, website)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
        RETURNING *`,
-      [entityId, data.first_name, data.last_name, data.field, data.location, data.info, data.category, data.email, data.phone, data.website]
+      [entityId, data.company_name, data.first_name, data.last_name, data.field, data.location, data.info, data.category, data.email, data.phone, data.website]
     );
     return rows[0];
   },
@@ -1759,6 +1761,7 @@ export const db = {
       SELECT 
         c.*,
         e.entity_id as e_entity_id,
+        e.company_name as e_company_name,
         e.first_name as e_first_name,
         e.last_name as e_last_name,
         e.field as e_field,
@@ -1786,11 +1789,24 @@ export const db = {
       entity_id: row.entity_id,
       entity_code: row.entity_code,
       status: row.status,
-      linked_entity_type: row.linked_entity_type,
-      linked_commission_id: row.linked_commission_id,
+      position: row.position,
+      budget: row.budget,
+      state: row.state,
+      assigned_to: row.assigned_to,
+      field: row.field,
+      service_position: row.service_position,
+      location: row.location,
+      info: row.info,
+      category: row.category,
+      deadline: row.deadline,
+      priority: row.priority,
+      phone: row.phone,
       commission_value: row.commission_value,
+      is_tipped: row.is_tipped,
+      notes: row.notes,
       created_at: row.created_at,
       updated_at: row.updated_at,
+      entity_company_name: row.e_company_name,
       entity_first_name: row.e_first_name,
       entity_last_name: row.e_last_name,
       entity_field: row.e_field,
@@ -1810,6 +1826,7 @@ export const db = {
       `SELECT 
         c.*,
         e.entity_id as e_entity_id,
+        e.company_name as e_company_name,
         e.first_name as e_first_name,
         e.last_name as e_last_name,
         e.field as e_field,
@@ -1834,11 +1851,24 @@ export const db = {
       entity_id: row.entity_id,
       entity_code: row.entity_code,
       status: row.status,
-      linked_entity_type: row.linked_entity_type,
-      linked_commission_id: row.linked_commission_id,
+      position: row.position,
+      budget: row.budget,
+      state: row.state,
+      assigned_to: row.assigned_to,
+      field: row.field,
+      service_position: row.service_position,
+      location: row.location,
+      info: row.info,
+      category: row.category,
+      deadline: row.deadline,
+      priority: row.priority,
+      phone: row.phone,
       commission_value: row.commission_value,
+      is_tipped: row.is_tipped,
+      notes: row.notes,
       created_at: row.created_at,
       updated_at: row.updated_at,
+      entity_company_name: row.e_company_name,
       entity_first_name: row.e_first_name,
       entity_last_name: row.e_last_name,
       entity_field: row.e_field,
@@ -1862,10 +1892,10 @@ export const db = {
 
     const { rows } = await pool.query(
       `INSERT INTO tiper_commissions 
-        (commission_id, entity_id, entity_code, status, linked_entity_type, linked_commission_id, commission_value)
-       VALUES ($1, $2, $3, $4, $5, $6, $7)
+        (commission_id, entity_id, entity_code, status, position, budget, state, assigned_to, field, service_position, location, info, category, deadline, priority, phone, commission_value, is_tipped, notes)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19)
        RETURNING *`,
-      [commissionId, entityInternalId, entity.entity_id, data.status || 'pending', data.linked_entity_type, data.linked_commission_id, data.commission_value]
+      [commissionId, entityInternalId, entity.entity_id, data.status || 'pending', data.position, data.budget, data.state, data.assigned_to, data.field, data.service_position, data.location, data.info, data.category, data.deadline, data.priority, data.phone, data.commission_value, data.is_tipped || false, data.notes]
     );
     return rows[0];
   },

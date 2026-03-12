@@ -16,8 +16,97 @@ import useProfileNotes from "../hooks/useProfileNotes";
 import { ApproveRestoreCellRenderer, DeleteArchiveCellRenderer } from "../cells/RowActionCellRenderers";
 import { fieldOptions } from "../fieldOptions";
 
-// Field options as simple string array for AG Grid select
-const FIELD_OPTIONS_ARRAY = fieldOptions.map(opt => opt.value);
+type ClientEntityApi = {
+  id: number;
+  entity_id: string;
+  company_name?: string | null;
+  field?: string | null;
+  service?: string | null;
+  budget?: string | null;
+  location?: string | null;
+  info?: string | null;
+  first_name?: string | null;
+  last_name?: string | null;
+  email?: string | null;
+  phone?: string | null;
+  website?: string | null;
+  created_at?: string;
+  updated_at?: string;
+};
+
+type ClientCommissionApi = {
+  id: number;
+  commission_id: string;
+  entity_id: number;
+  status: "pending" | "accepted" | "archived";
+  position?: string | null;
+  budget?: string | null;
+  state?: string | null;
+  assigned_to?: string | null;
+  field?: string | null;
+  service_position?: string | null;
+  location?: string | null;
+  category?: string | null;
+  deadline?: string | null;
+  priority?: string | null;
+  phone?: string | null;
+  commission_value?: string | null;
+  notes?: string | null;
+  created_at?: string;
+  updated_at?: string;
+};
+
+const FIELD_OPTIONS_ARRAY = fieldOptions.map((opt) => opt.value);
+const joinName = (...parts: Array<string | null | undefined>) => parts.filter((part): part is string => Boolean(part && part.trim())).join(" ").trim();
+
+const normalizeClientEntity = (entity: ClientEntityApi): ClientEntity => ({
+  id: entity.id,
+  entity_id: entity.entity_id,
+  name: joinName(entity.first_name, entity.last_name) || entity.company_name || entity.entity_id,
+  company: entity.company_name ?? null,
+  field: entity.field ?? null,
+  location: entity.location ?? null,
+  address: null,
+  mobile: entity.phone ?? null,
+  email: entity.email ?? null,
+  website: entity.website ?? null,
+  info: entity.info ?? null,
+  created_at: entity.created_at,
+  updated_at: entity.updated_at
+});
+
+const normalizeClientCommission = (commission: ClientCommissionApi): ClientCommission => ({
+  id: commission.id,
+  commission_id: commission.commission_id,
+  client_entity_id: Number(commission.entity_id),
+  status: commission.status,
+  assigned_to: commission.assigned_to ?? null,
+  priority: commission.priority ?? null,
+  notes: commission.notes ?? null,
+  deadline: commission.deadline ?? null,
+  state: commission.state ?? null,
+  commission_value: commission.commission_value ?? null,
+  position: commission.position ?? null,
+  budget: commission.budget ?? null,
+  service_position: commission.service_position ?? null,
+  field: commission.field ?? null,
+  location: commission.location ?? null,
+  category: commission.category ?? null,
+  phone: commission.phone ?? null,
+  created_at: commission.created_at,
+  updated_at: commission.updated_at
+});
+
+const mapClientEntityUpdates = (updates: Record<string, unknown>) => {
+  const mapped: Record<string, unknown> = {};
+  for (const [key, value] of Object.entries(updates)) {
+    if (key === "name") mapped.first_name = value;
+    else if (key === "company") mapped.company_name = value;
+    else if (key === "mobile") mapped.phone = value;
+    else if (["field", "location", "email", "website", "info"].includes(key)) mapped[key] = value;
+  }
+  return mapped;
+};
 
 // =============================================================================
 // BUILD ENTITY DATA FOR PROFILE PANEL
@@ -46,17 +135,10 @@ const buildEntityData = (entity: ClientEntity | null): EntityData | null => {
       ]
     },
     {
-      title: "Adresa",
-      color: "orange",
-      fields: [
-        { key: "location", label: "Lokalita", value: entity.location, type: "text" },
-        { key: "address", label: "Úplná adresa", value: entity.address, type: "textarea" },
-      ]
-    },
-    {
       title: "Informace o klientovi",
       color: "gray",
       fields: [
+        { key: "location", label: "Lokalita", value: entity.location, type: "text" },
         { key: "info", label: "Popis / Poznámky", value: entity.info, type: "textarea", isMultiline: true },
       ]
     }
@@ -81,8 +163,8 @@ const buildCommissionData = (commission: ClientCommission | null): CommissionDat
       title: "Základní údaje zakázky",
       color: "purple",
       fields: [
-        { key: "project_name", label: "Název projektu", value: commission.project_name, type: "text" },
-        { key: "service_type", label: "Typ služby", value: commission.service_type, type: "select", options: ["Konzultace", "Realizace", "Údržba", "Jednorázová služba"] },
+        { key: "position", label: "Zakázka", value: commission.position, type: "text" },
+        { key: "service_position", label: "Typ služby", value: commission.service_position, type: "text" },
         { key: "assigned_to", label: "Odpovědná osoba", value: commission.assigned_to, type: "text" },
       ]
     },
@@ -90,27 +172,17 @@ const buildCommissionData = (commission: ClientCommission | null): CommissionDat
       title: "Finanční údaje",
       color: "green",
       fields: [
-        { key: "contract_value", label: "Hodnota smlouvy", value: commission.contract_value, type: "text" },
-        { key: "payment_status", label: "Stav platby", value: commission.payment_status, type: "select", options: ["Nezaplaceno", "Částečně zaplaceno", "Zaplaceno", "Po splatnosti"] },
-        { key: "payment_terms", label: "Platební podmínky", value: commission.payment_terms, type: "text" },
+        { key: "budget", label: "Rozpočet", value: commission.budget, type: "text" },
+        { key: "commission_value", label: "Provize", value: commission.commission_value, type: "text" },
+        { key: "priority", label: "Priorita", value: commission.priority, type: "select", options: ["Nízká", "Střední", "Vysoká", "Urgentní"] },
       ]
     },
     {
       title: "Časové údaje",
       color: "orange",
       fields: [
-        { key: "start_date", label: "Datum zahájení", value: commission.start_date, type: "date" },
-        { key: "end_date", label: "Datum ukončení", value: commission.end_date, type: "date" },
-        { key: "last_contact", label: "Poslední kontakt", value: commission.last_contact, type: "date" },
-      ]
-    },
-    {
-      title: "Stav a poznámky",
-      color: "gray",
-      fields: [
-        { key: "priority", label: "Priorita", value: commission.priority, type: "select", options: ["Nízká", "Střední", "Vysoká", "Urgentní"] },
-        { key: "satisfaction", label: "Spokojenost", value: commission.satisfaction, type: "select", options: ["Nevyplněno", "Spokojený", "Neutrální", "Nespokojený"] },
-        { key: "next_step", label: "Další krok", value: commission.next_step, type: "textarea" },
+        { key: "state", label: "Stav", value: commission.state, type: "text" },
+        { key: "deadline", label: "Termín", value: commission.deadline, type: "date" },
         { key: "notes", label: "Poznámky", value: commission.notes, type: "textarea", isMultiline: true },
       ]
     }
@@ -161,12 +233,12 @@ const ClientsSectionNew: React.FC<SectionProps> = ({
     setIsLoading(true);
     try {
       const [entitiesData, commissionsData] = await Promise.all([
-        apiGet<ClientEntity[]>('/api/client-entities'),
-        apiGet<ClientCommission[]>(`/api/client-commissions?status=${status}`)
+        apiGet<ClientEntityApi[]>('/api/client-entities'),
+        apiGet<ClientCommissionApi[]>(`/api/client-commissions?status=${status}`)
       ]);
 
-      const entitiesList = Array.isArray(entitiesData) ? entitiesData : [];
-      const commissionsList = Array.isArray(commissionsData) ? commissionsData : [];
+      const entitiesList = (Array.isArray(entitiesData) ? entitiesData : []).map(normalizeClientEntity);
+      const commissionsList = (Array.isArray(commissionsData) ? commissionsData : []).map(normalizeClientCommission);
 
       setEntities(entitiesList);
       setCommissions(commissionsList);
@@ -176,12 +248,12 @@ const ClientsSectionNew: React.FC<SectionProps> = ({
         const entity = entitiesList.find(e => e.id === commission.client_entity_id);
         return {
           ...commission,
-          entity_id: entity?.entity_id || '',
+          entity_id: entity?.entity_id || commission.commission_id.split('-')[0] || '',
           name: entity?.name || '',
           company: entity?.company || '',
-          field: entity?.field || '',
-          location: entity?.location || '',
-          mobile: entity?.mobile || '',
+          field: entity?.field || commission.field || '',
+          location: entity?.location || commission.location || '',
+          mobile: entity?.mobile || commission.phone || '',
           email: entity?.email || '',
           entity: entity || null
         };
@@ -233,7 +305,9 @@ const ClientsSectionNew: React.FC<SectionProps> = ({
 
   const handleUpdateEntity = useCallback(async (entityId: number, updates: Record<string, unknown>) => {
     try {
-      await apiPut(`/api/client-entities/${entityId}`, updates);
+      const mappedUpdates = mapClientEntityUpdates(updates);
+      if (Object.keys(mappedUpdates).length === 0) return;
+      await apiPut(`/api/client-entities/${entityId}`, mappedUpdates);
       fetchData();
     } catch (error) {
       console.error("Error updating client entity:", error);
@@ -283,11 +357,11 @@ const ClientsSectionNew: React.FC<SectionProps> = ({
 
     let confirmMessage = "";
     if (isArchived) {
-      confirmMessage = `Opravdu chcete TRVALE SMAZAT tuto zakázku z databáze?\n\nProjekt: ${commission?.project_name || "N/A"}\nKlient: ${row?.name || "N/A"}\n\nTato akce je NEzvratná!`;
+      confirmMessage = `Opravdu chcete TRVALE SMAZAT tuto zakázku z databáze?\n\nZakázka: ${commission?.position || "N/A"}\nKlient: ${row?.name || row?.company || "N/A"}\n\nTato akce je NEzvratná!`;
     } else if (isPending) {
-      confirmMessage = `Opravdu chcete zamítnout tuto zakázku?\n\nProjekt: ${commission?.project_name || "N/A"}\nKlient: ${row?.name || "N/A"}`;
+      confirmMessage = `Opravdu chcete zamítnout tuto zakázku?\n\nZakázka: ${commission?.position || "N/A"}\nKlient: ${row?.name || row?.company || "N/A"}`;
     } else {
-      confirmMessage = `Opravdu chcete přesunout tuto zakázku do archivu?\n\nProjekt: ${commission?.project_name || "N/A"}\nKlient: ${row?.name || "N/A"}`;
+      confirmMessage = `Opravdu chcete přesunout tuto zakázku do archivu?\n\nZakázka: ${commission?.position || "N/A"}\nKlient: ${row?.name || row?.company || "N/A"}`;
     }
 
     if (!confirm(confirmMessage)) return;
@@ -354,18 +428,18 @@ const ClientsSectionNew: React.FC<SectionProps> = ({
     try {
       const response = await apiPost<{ entity: ClientEntity; commission: ClientCommission }>('/api/client-entities/with-commission', {
         entity: {
-          name: "Nový Klient",
-          company: "Nová Společnost",
+          first_name: "Nový Klient",
+          company_name: "Nová Společnost",
           location: "",
-          mobile: "",
+          phone: "",
           email: "",
           field: ""
         },
         commission: {
-          project_name: "Nový Projekt",
+          position: "Nová zakázka",
           status: status,
-          contract_value: "",
-          service_type: ""
+          budget: "",
+          service_position: ""
         }
       });
       
@@ -482,7 +556,9 @@ const ClientsSectionNew: React.FC<SectionProps> = ({
       colId: "display_id",
       valueGetter: (params) => {
         const row = params.data as ClientGridRow;
-        return `${row.entity_id}-${row.commission_id.split('-')[1] || row.commission_id}`;
+        const entityCode = row.entity_id || row.commission_id.split('-')[0] || '';
+        const commissionPart = row.commission_id.split('-')[1] || row.commission_id;
+        return `${entityCode}-${commissionPart}`;
       },
       flex: 0.7,
       minWidth: 90,
@@ -532,32 +608,29 @@ const ClientsSectionNew: React.FC<SectionProps> = ({
     // Commission info columns
     cols.push(
       {
-        field: "project_name",
-        headerName: "Projekt",
+        field: "position",
+        headerName: "Zakázka",
         filter: true,
         editable: true,
         flex: 1.5,
         minWidth: 140
       },
       {
-        field: "contract_value",
-        headerName: "Hodnota",
+        field: "budget",
+        headerName: "Rozpočet",
         filter: true,
         editable: true,
         flex: 1,
         minWidth: 100
       },
       {
-        field: "service_type",
+        field: "service_position",
         headerName: "Typ služby",
         filter: true,
         editable: true,
         flex: 1,
         minWidth: 100,
-        cellEditor: 'agSelectCellEditor',
-        cellEditorParams: {
-          values: ["Konzultace", "Realizace", "Údržba", "Jednorázová služba"]
-        }
+        cellEditor: 'agTextCellEditor'
       },
       {
         field: "priority",
@@ -583,7 +656,7 @@ const ClientsSectionNew: React.FC<SectionProps> = ({
   return (
     <>
       <div className="grid-container">
-        <div className="grid-wrapper ag-theme-quartz" style={{ height: 500 }}>
+        <div className="grid-wrapper ag-theme-quartz" style={{ height: "75vh" }}>
           <AgGridReact<ClientGridRow>
             ref={gridRef}
             rowData={gridData}
