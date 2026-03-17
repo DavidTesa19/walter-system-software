@@ -11,11 +11,11 @@ import { useUndoRedo } from "../utils/undoRedo";
 
 ModuleRegistry.registerModules([AllCommunityModule]);
 
-type TableType = "partners" | "clients" | "tipers";
+type TableType = "clients" | "partners" | "tipers";
 
 const NAV_CONFIG: Record<TableType, { label: string; icon: string; addLabel: string }> = {
-  partners: { label: "Partneři", icon: "🏢", addLabel: "Partnera" },
   clients: { label: "Klienti", icon: "👥", addLabel: "Klienta" },
+  partners: { label: "Partneři", icon: "🏢", addLabel: "Partnera" },
   tipers: { label: "Tipaři", icon: "💡", addLabel: "Tipaře" }
 };
 
@@ -30,7 +30,7 @@ interface EntitiesSystemViewProps {
 }
 
 const EntitiesSystemView: React.FC<EntitiesSystemViewProps> = ({ viewMode }) => {
-  const [activeTable, setActiveTable] = useState<TableType>("partners");
+  const [activeTable, setActiveTable] = useState<TableType>("clients");
   const addHandlerRef = useRef<AddHandler | null>(null);
   const [isAddDisabled, setIsAddDisabled] = useState(false);
   const { canUndo, canRedo, isBusy, undo, redo } = useUndoRedo();
@@ -53,9 +53,9 @@ const EntitiesSystemView: React.FC<EntitiesSystemViewProps> = ({ viewMode }) => 
   }, []);
 
   const renderActiveSection = () => {
-    if (activeTable === "partners") {
+    if (activeTable === "clients") {
       return (
-        <PartnersSectionNew
+        <ClientsSectionNew
           viewMode={viewMode}
           isActive
           onRegisterAddHandler={registerAddHandler}
@@ -64,9 +64,9 @@ const EntitiesSystemView: React.FC<EntitiesSystemViewProps> = ({ viewMode }) => 
       );
     }
 
-    if (activeTable === "clients") {
+    if (activeTable === "partners") {
       return (
-        <ClientsSectionNew
+        <PartnersSectionNew
           viewMode={viewMode}
           isActive
           onRegisterAddHandler={registerAddHandler}
