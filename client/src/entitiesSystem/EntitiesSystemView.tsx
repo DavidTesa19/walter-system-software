@@ -30,7 +30,7 @@ interface EntitiesSystemViewProps {
 }
 
 const EntitiesSystemView: React.FC<EntitiesSystemViewProps> = ({ viewMode }) => {
-  const [activeTable, setActiveTable] = useState<TableType>("clients");
+  const [activeTable, setActiveTable] = useState<TableType>("partners");
   const addHandlerRef = useRef<AddHandler | null>(null);
   const [isAddDisabled, setIsAddDisabled] = useState(false);
   const { canUndo, canRedo, isBusy, undo, redo } = useUndoRedo();
