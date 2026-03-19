@@ -1,5 +1,8 @@
 export interface UserInterface {
   id: number;
+  commission_id?: string;
+  entity_internal_id?: number;
+  entity_code?: string;
   name: string;
   company: string;
   location: string;

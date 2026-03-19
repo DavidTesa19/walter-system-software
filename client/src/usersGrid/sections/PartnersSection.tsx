@@ -16,7 +16,115 @@ import { ApproveRestoreCellRenderer, DeleteArchiveCellRenderer } from "../cells/
 import { useUndoRedo } from "../../utils/undoRedo";
 
 const cloneRecord = (r: any) => JSON.parse(JSON.stringify(r));
-const stripMeta = ({ created_at, updated_at, ...rest }: any) => rest;
+
+type PartnerCommissionApi = {
+  id: number;
+  commission_id: string;
+  entity_id: number;
+  entity_code?: string | null;
+  status?: string | null;
+  position?: string | null;
+  budget?: string | null;
+  state?: string | null;
+  assigned_to?: string | null;
+  field?: string | null;
+  service_position?: string | null;
+  location?: string | null;
+  info?: string | null;
+  category?: string | null;
+  deadline?: string | null;
+  priority?: string | null;
+  phone?: string | null;
+  commission_value?: string | null;
+  notes?: string | null;
+  entity_company_name?: string | null;
+  entity_field?: string | null;
+  entity_location?: string | null;
+  entity_info?: string | null;
+  entity_first_name?: string | null;
+  entity_last_name?: string | null;
+  entity_email?: string | null;
+  entity_phone?: string | null;
+  entity_website?: string | null;
+  created_at?: string;
+  updated_at?: string;
+};
+
+const PARTNER_ENTITY_FIELDS = new Set(["name", "company", "location", "mobile", "info", "email", "website", "field"]);
+
+const joinName = (...parts: Array<string | null | undefined>) =>
+  parts.filter((part): part is string => Boolean(part && part.trim())).join(" ").trim();
+
+const emptyToNull = (value?: string | null) => {
+  const trimmed = value?.trim();
+  return trimmed ? trimmed : null;
+};
+
+const getDisplayId = (partner: UserInterface | null | undefined) => {
+  if (!partner) {
+    return null;
+  }
+  if (partner.commission_id) {
+    return partner.commission_id;
+  }
+  if (partner.id === undefined || partner.id === null) {
+    return null;
+  }
+  return String(partner.id);
+};
+
+const normalizePartnerCommissionRow = (commission: PartnerCommissionApi): UserInterface => ({
+  id: commission.id,
+  commission_id: commission.commission_id,
+  entity_internal_id: commission.entity_id,
+  entity_code: commission.entity_code ?? undefined,
+  name:
+    joinName(commission.entity_first_name, commission.entity_last_name) ||
+    commission.entity_company_name ||
+    commission.entity_code ||
+    commission.commission_id,
+  company: commission.entity_company_name ?? "",
+  location: commission.entity_location ?? commission.location ?? "",
+  mobile: commission.entity_phone ?? commission.phone ?? "",
+  commission: commission.commission_value ?? "",
+  info: commission.entity_info ?? commission.info ?? "",
+  date: commission.deadline ?? commission.created_at,
+  status: commission.status ?? undefined,
+  stage: commission.state ?? undefined,
+  field: commission.entity_field ?? commission.field ?? "",
+  email: commission.entity_email ?? "",
+  website: commission.entity_website ?? "",
+  notes: commission.notes ?? undefined,
+  assigned_to: commission.assigned_to ?? undefined,
+  priority: commission.priority ?? undefined,
+  next_step: commission.position ?? commission.service_position ?? undefined
+});
+
+const mapPartnerEntityPayload = (partner: Partial<UserInterface>) => ({
+  first_name: emptyToNull(partner.name),
+  company_name: emptyToNull(partner.company),
+  field: emptyToNull(partner.field),
+  location: emptyToNull(partner.location),
+  info: emptyToNull(partner.info),
+  phone: emptyToNull(partner.mobile),
+  email: emptyToNull(partner.email),
+  website: emptyToNull(partner.website)
+});
+
+const mapPartnerCommissionPayload = (partner: Partial<UserInterface>) => ({
+  status: emptyToNull(partner.status) ?? "pending",
+  position: emptyToNull(partner.next_step),
+  deadline: emptyToNull(partner.date),
+  state: emptyToNull(partner.stage),
+  assigned_to: emptyToNull(partner.assigned_to),
+  priority: emptyToNull(partner.priority),
+  commission_value: emptyToNull(partner.commission),
+  notes: emptyToNull(partner.notes),
+  phone: emptyToNull(partner.mobile),
+  location: emptyToNull(partner.location),
+  field: emptyToNull(partner.field),
+  info: emptyToNull(partner.info)
+});
 
 const buildPartnerSections = (partner: UserInterface | null): ProfileSection[] => {
   if (!partner) {
@@ -27,8 +135,9 @@ const buildPartnerSections = (partner: UserInterface | null): ProfileSection[] =
 
   // Identifikace a stav
   const idFields = [] as any[];
-  if (partner.id !== undefined && partner.id !== null) {
-    idFields.push({ label: "ID", value: String(partner.id) });
+  const displayId = getDisplayId(partner);
+  if (displayId) {
+    idFields.push({ label: "ID", value: displayId });
   }
   const status = normalizeText(partner.status);
   if (status) {
@@ -141,11 +250,12 @@ const buildPartnerSections = (partner: UserInterface | null): ProfileSection[] =
 };
 
 const buildPartnerMeta = (partner: UserInterface | null): Array<{ label: string; value: string }> | undefined => {
-  if (!partner || partner.id === undefined || partner.id === null) {
+  const displayId = getDisplayId(partner);
+  if (!partner || !displayId) {
     return undefined;
   }
 
-  const meta: Array<{ label: string; value: string }> = [{ label: "ID", value: String(partner.id) }];
+  const meta: Array<{ label: string; value: string }> = [{ label: "ID", value: displayId }];
   const status = normalizeText(partner.status);
   if (status) {
     meta.push({ label: "Status", value: status });
@@ -201,8 +311,8 @@ const PartnersSection: React.FC<SectionProps> = ({
   const fetchPartnersData = useCallback(async () => {
     setIsLoading(true);
     try {
-      const data = await apiGet<UserInterface[]>(`/partners?status=${status}`);
-      setPartnersData(Array.isArray(data) ? data : []);
+      const data = await apiGet<PartnerCommissionApi[]>(`/api/partner-commissions?status=${status}`);
+      setPartnersData(Array.isArray(data) ? data.map(normalizePartnerCommissionRow) : []);
     } catch (error) {
       console.error("Error fetching partners:", error);
       setPartnersData([]);
@@ -250,16 +360,16 @@ const PartnersSection: React.FC<SectionProps> = ({
       const prev = cloneRecord(partnersData.find((p) => p.id === id));
       if (!prev) return;
       try {
-        await apiPost(`/partners/${id}/approve`);
+        await apiPost(`/api/partner-commissions/${id}/approve`);
         fetchPartnersData();
         pushAction({
-          label: `Schválení partnera #${id}`,
+          label: `Schválení zakázky #${id}`,
           resource: "partners",
           undo: async () => {
-            await apiPut(`/partners/${id}`, { ...stripMeta(prev) });
+            await apiPut(`/api/partner-commissions/${id}`, { status: prev.status ?? "pending" });
           },
           redo: async () => {
-            await apiPost(`/partners/${id}/approve`);
+            await apiPost(`/api/partner-commissions/${id}/approve`);
           }
         });
       } catch (error) {
@@ -275,16 +385,16 @@ const PartnersSection: React.FC<SectionProps> = ({
       const prev = cloneRecord(partnersData.find((p) => p.id === id));
       if (!prev) return;
       try {
-        await apiPost(`/partners/${id}/restore`);
+        await apiPost(`/api/partner-commissions/${id}/restore`);
         fetchPartnersData();
         pushAction({
-          label: `Obnovení partnera #${id}`,
+          label: `Obnovení zakázky #${id}`,
           resource: "partners",
           undo: async () => {
-            await apiPut(`/partners/${id}`, { ...stripMeta(prev) });
+            await apiPut(`/api/partner-commissions/${id}`, { status: prev.status ?? "archived" });
           },
           redo: async () => {
-            await apiPost(`/partners/${id}/restore`);
+            await apiPost(`/api/partner-commissions/${id}/restore`);
           }
         });
       } catch (error) {
@@ -320,27 +430,33 @@ const PartnersSection: React.FC<SectionProps> = ({
 
       try {
         if (isArchived || isPending) {
-          await apiDelete(`/partners/${id}`);
+          await apiDelete(`/api/partner-commissions/${id}`);
+          let restoredId: number | null = null;
           pushAction({
-            label: `Smazání partnera #${id}`,
+            label: `Smazání zakázky #${id}`,
             resource: "partners",
             undo: async () => {
-              await apiPost(`/partners`, { ...stripMeta(partner) });
+              if (!partner?.entity_internal_id) return;
+              const restored = await apiPost<{ id: number }>(`/api/partner-commissions`, {
+                entity_id: partner.entity_internal_id,
+                ...mapPartnerCommissionPayload(partner)
+              });
+              restoredId = restored?.id ?? null;
             },
             redo: async () => {
-              await apiDelete(`/partners/${id}`);
+              await apiDelete(`/api/partner-commissions/${restoredId ?? id}`);
             }
           });
         } else {
-          await apiPost(`/partners/${id}/archive`);
+          await apiPost(`/api/partner-commissions/${id}/archive`);
           pushAction({
-            label: `Archivace partnera #${id}`,
+            label: `Archivace zakázky #${id}`,
             resource: "partners",
             undo: async () => {
-              await apiPost(`/partners/${id}/restore`);
+              await apiPost(`/api/partner-commissions/${id}/restore`);
             },
             redo: async () => {
-              await apiPost(`/partners/${id}/archive`);
+              await apiPost(`/api/partner-commissions/${id}/archive`);
             }
           });
         }
@@ -358,7 +474,7 @@ const PartnersSection: React.FC<SectionProps> = ({
       openProfile,
       rowActions: {
         viewMode,
-        entityAccusative: "partnera",
+        entityAccusative: "zakázku",
         onApprove: handleApprovePartner,
         onRestore: handleRestorePartner,
         onDelete: handleDeletePartner
@@ -372,20 +488,42 @@ const PartnersSection: React.FC<SectionProps> = ({
       // Guard: never allow status field to be changed via cell editing
       if (params.column?.colId === "status") return;
       const id = params.data.id;
+      const field = params.colDef.field as string | undefined;
+      if (!field) return;
       const snapshot = editSnapshotRef.current[id];
       try {
-        const { created_at, updated_at, ...updatedPartner } = params.data;
-        await apiPut(`/partners/${updatedPartner.id}`, updatedPartner);
+        const updatedPartner = { ...(params.data as UserInterface) };
+        const isEntityField = PARTNER_ENTITY_FIELDS.has(field);
+
+        if (isEntityField) {
+          if (!updatedPartner.entity_internal_id) {
+            throw new Error("Missing linked entity id for partner row");
+          }
+          await apiPut(`/api/partner-entities/${updatedPartner.entity_internal_id}`, mapPartnerEntityPayload(updatedPartner));
+        } else {
+          await apiPut(`/api/partner-commissions/${updatedPartner.id}`, mapPartnerCommissionPayload(updatedPartner));
+        }
+
         if (snapshot) {
           const after = cloneRecord(updatedPartner);
           pushAction({
-            label: `Úprava partnera #${id}`,
+            label: `Úprava zakázky #${id}`,
             resource: "partners",
             undo: async () => {
-              await apiPut(`/partners/${id}`, stripMeta(snapshot));
+              if (isEntityField) {
+                if (!snapshot.entity_internal_id) return;
+                await apiPut(`/api/partner-entities/${snapshot.entity_internal_id}`, mapPartnerEntityPayload(snapshot));
+                return;
+              }
+              await apiPut(`/api/partner-commissions/${id}`, mapPartnerCommissionPayload(snapshot));
             },
             redo: async () => {
-              await apiPut(`/partners/${id}`, stripMeta(after));
+              if (isEntityField) {
+                if (!after.entity_internal_id) return;
+                await apiPut(`/api/partner-entities/${after.entity_internal_id}`, mapPartnerEntityPayload(after));
+                return;
+              }
+              await apiPut(`/api/partner-commissions/${id}`, mapPartnerCommissionPayload(after));
             }
           });
           delete editSnapshotRef.current[id];
@@ -409,17 +547,26 @@ const PartnersSection: React.FC<SectionProps> = ({
     };
 
     try {
-      const created = await apiPost<UserInterface>(`/partners`, newPartner);
+      let createdId: number | null = null;
+      const created = await apiPost<PartnerCommissionApi>(`/api/partner-commissions`, {
+        entity_data: mapPartnerEntityPayload(newPartner),
+        commission_data: mapPartnerCommissionPayload(newPartner)
+      });
+      createdId = created?.id ?? null;
       fetchPartnersData();
-      if (created?.id) {
+      if (createdId !== null) {
         pushAction({
-          label: "Přidání partnera",
+          label: "Přidání zakázky",
           resource: "partners",
           undo: async () => {
-            await apiDelete(`/partners/${created.id}`);
+            await apiDelete(`/api/partner-commissions/${createdId}`);
           },
           redo: async () => {
-            await apiPost(`/partners`, { ...newPartner, id: created.id });
+            const recreated = await apiPost<PartnerCommissionApi>(`/api/partner-commissions`, {
+              entity_data: mapPartnerEntityPayload(newPartner),
+              commission_data: mapPartnerCommissionPayload(newPartner)
+            });
+            createdId = recreated?.id ?? null;
           }
         });
       }
@@ -545,11 +692,12 @@ const PartnersSection: React.FC<SectionProps> = ({
 
       cols.push(
       {
-        field: "id",
+        colId: "display-id",
         headerName: "ID",
         flex: 0.5,
         minWidth: 70,
-        editable: false
+        editable: false,
+        valueGetter: (params) => params.data?.commission_id ?? params.data?.id
       },
       {
         field: "field",

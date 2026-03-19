@@ -18,7 +18,117 @@ import { ApproveRestoreCellRenderer, DeleteArchiveCellRenderer } from "../cells/
 import { useUndoRedo } from "../../utils/undoRedo";
 
 const cloneRecord = (r: any) => JSON.parse(JSON.stringify(r));
-const stripMeta = ({ created_at, updated_at, ...rest }: any) => rest;
+
+type ClientCommissionApi = {
+  id: number;
+  commission_id: string;
+  entity_id: number;
+  entity_code?: string | null;
+  status?: string | null;
+  position?: string | null;
+  budget?: string | null;
+  state?: string | null;
+  assigned_to?: string | null;
+  field?: string | null;
+  service_position?: string | null;
+  location?: string | null;
+  info?: string | null;
+  category?: string | null;
+  deadline?: string | null;
+  priority?: string | null;
+  phone?: string | null;
+  commission_value?: string | null;
+  notes?: string | null;
+  entity_company_name?: string | null;
+  entity_field?: string | null;
+  entity_service?: string | null;
+  entity_location?: string | null;
+  entity_info?: string | null;
+  entity_budget?: string | null;
+  entity_first_name?: string | null;
+  entity_last_name?: string | null;
+  entity_email?: string | null;
+  entity_phone?: string | null;
+  entity_website?: string | null;
+  created_at?: string;
+  updated_at?: string;
+};
+
+const CLIENT_ENTITY_FIELDS = new Set(["name", "company", "location", "mobile", "field", "email", "website"]);
+
+const joinName = (...parts: Array<string | null | undefined>) =>
+  parts.filter((part): part is string => Boolean(part && part.trim())).join(" ").trim();
+
+const emptyToNull = (value?: string | null) => {
+  const trimmed = value?.trim();
+  return trimmed ? trimmed : null;
+};
+
+const getDisplayId = (client: UserInterface | null | undefined) => {
+  if (!client) {
+    return null;
+  }
+  if (client.commission_id) {
+    return client.commission_id;
+  }
+  if (client.id === undefined || client.id === null) {
+    return null;
+  }
+  return String(client.id);
+};
+
+const normalizeClientCommissionRow = (commission: ClientCommissionApi): UserInterface => ({
+  id: commission.id,
+  commission_id: commission.commission_id,
+  entity_internal_id: commission.entity_id,
+  entity_code: commission.entity_code ?? undefined,
+  name:
+    joinName(commission.entity_first_name, commission.entity_last_name) ||
+    commission.entity_company_name ||
+    commission.entity_code ||
+    commission.commission_id,
+  company: commission.entity_company_name ?? "",
+  location: commission.entity_location ?? commission.location ?? "",
+  mobile: commission.entity_phone ?? commission.phone ?? "",
+  commission: commission.commission_value ?? commission.budget ?? "",
+  info: commission.position ?? commission.notes ?? commission.entity_info ?? commission.info ?? "",
+  date: commission.deadline ?? commission.created_at,
+  status: commission.status ?? undefined,
+  stage: commission.state ?? commission.status ?? undefined,
+  field: commission.entity_field ?? commission.field ?? "",
+  email: commission.entity_email ?? "",
+  website: commission.entity_website ?? "",
+  notes: commission.notes ?? undefined,
+  assigned_to: commission.assigned_to ?? undefined,
+  priority: commission.priority ?? undefined,
+  next_step: commission.service_position ?? undefined
+});
+
+const mapClientEntityPayload = (client: Partial<UserInterface>) => ({
+  first_name: emptyToNull(client.name),
+  company_name: emptyToNull(client.company),
+  field: emptyToNull(client.field),
+  location: emptyToNull(client.location),
+  phone: emptyToNull(client.mobile),
+  email: emptyToNull(client.email),
+  website: emptyToNull(client.website)
+});
+
+const mapClientCommissionPayload = (client: Partial<UserInterface>) => ({
+  status: emptyToNull(client.status) ?? "pending",
+  position: emptyToNull(client.info),
+  service_position: emptyToNull(client.next_step),
+  deadline: emptyToNull(client.date),
+  state: emptyToNull(client.stage),
+  assigned_to: emptyToNull(client.assigned_to),
+  priority: emptyToNull(client.priority),
+  commission_value: emptyToNull(client.commission),
+  budget: emptyToNull(client.commission),
+  notes: emptyToNull(client.notes),
+  phone: emptyToNull(client.mobile),
+  location: emptyToNull(client.location),
+  field: emptyToNull(client.field)
+});
 
 const buildClientProfileSections = (client: UserInterface | null): ProfileSection[] => {
   if (!client) {
@@ -29,8 +139,9 @@ const buildClientProfileSections = (client: UserInterface | null): ProfileSectio
 
   // Identifikace a stav
   const idFields = [] as any[];
-  if (client.id !== undefined && client.id !== null) {
-    idFields.push({ label: "ID", value: String(client.id) });
+  const displayId = getDisplayId(client);
+  if (displayId) {
+    idFields.push({ label: "ID", value: displayId });
   }
   const status = normalizeText(client.status);
   if (status) {
@@ -144,11 +255,12 @@ const buildClientProfileSections = (client: UserInterface | null): ProfileSectio
 };
 
 const buildClientMeta = (client: UserInterface | null): Array<{ label: string; value: string }> | undefined => {
-  if (!client || client.id === undefined || client.id === null) {
+  const displayId = getDisplayId(client);
+  if (!client || !displayId) {
     return undefined;
   }
 
-  const meta: Array<{ label: string; value: string }> = [{ label: "ID", value: String(client.id) }];
+  const meta: Array<{ label: string; value: string }> = [{ label: "ID", value: displayId }];
   const priority = normalizeText(client.priority);
   if (priority) {
     meta.push({ label: "Priorita", value: priority });
@@ -200,8 +312,8 @@ const ClientsSection: React.FC<SectionProps> = ({
   const fetchClientsData = useCallback(async () => {
     setIsLoading(true);
     try {
-      const data = await apiGet<UserInterface[]>(`/clients?status=${status}`);
-      setClientsData(Array.isArray(data) ? data : []);
+      const data = await apiGet<ClientCommissionApi[]>(`/api/client-commissions?status=${status}`);
+      setClientsData(Array.isArray(data) ? data.map(normalizeClientCommissionRow) : []);
     } catch (error) {
       console.error("Error fetching clients:", error);
       setClientsData([]);
@@ -252,16 +364,16 @@ const ClientsSection: React.FC<SectionProps> = ({
       const prev = cloneRecord(clientsData.find((c) => c.id === id));
       if (!prev) return;
       try {
-        await apiPost(`/clients/${id}/approve`);
+        await apiPost(`/api/client-commissions/${id}/approve`);
         fetchClientsData();
         pushAction({
-          label: `Schválení klienta #${id}`,
+          label: `Schválení zakázky #${id}`,
           resource: "clients",
           undo: async () => {
-            await apiPut(`/clients/${id}`, { ...stripMeta(prev) });
+            await apiPut(`/api/client-commissions/${id}`, { status: prev.status ?? "pending" });
           },
           redo: async () => {
-            await apiPost(`/clients/${id}/approve`);
+            await apiPost(`/api/client-commissions/${id}/approve`);
           }
         });
       } catch (error) {
@@ -277,16 +389,16 @@ const ClientsSection: React.FC<SectionProps> = ({
       const prev = cloneRecord(clientsData.find((c) => c.id === id));
       if (!prev) return;
       try {
-        await apiPost(`/clients/${id}/restore`);
+        await apiPost(`/api/client-commissions/${id}/restore`);
         fetchClientsData();
         pushAction({
-          label: `Obnovení klienta #${id}`,
+          label: `Obnovení zakázky #${id}`,
           resource: "clients",
           undo: async () => {
-            await apiPut(`/clients/${id}`, { ...stripMeta(prev) });
+            await apiPut(`/api/client-commissions/${id}`, { status: prev.status ?? "archived" });
           },
           redo: async () => {
-            await apiPost(`/clients/${id}/restore`);
+            await apiPost(`/api/client-commissions/${id}/restore`);
           }
         });
       } catch (error) {
@@ -322,27 +434,33 @@ const ClientsSection: React.FC<SectionProps> = ({
 
       try {
         if (isArchived || isPending) {
-          await apiDelete(`/clients/${id}`);
+          await apiDelete(`/api/client-commissions/${id}`);
+          let restoredId: number | null = null;
           pushAction({
-            label: `Smazání klienta #${id}`,
+            label: `Smazání zakázky #${id}`,
             resource: "clients",
             undo: async () => {
-              await apiPost(`/clients`, { ...stripMeta(client) });
+              if (!client?.entity_internal_id) return;
+              const restored = await apiPost<{ id: number }>(`/api/client-commissions`, {
+                entity_id: client.entity_internal_id,
+                ...mapClientCommissionPayload(client)
+              });
+              restoredId = restored?.id ?? null;
             },
             redo: async () => {
-              await apiDelete(`/clients/${id}`);
+              await apiDelete(`/api/client-commissions/${restoredId ?? id}`);
             }
           });
         } else {
-          await apiPost(`/clients/${id}/archive`);
+          await apiPost(`/api/client-commissions/${id}/archive`);
           pushAction({
-            label: `Archivace klienta #${id}`,
+            label: `Archivace zakázky #${id}`,
             resource: "clients",
             undo: async () => {
-              await apiPost(`/clients/${id}/restore`);
+              await apiPost(`/api/client-commissions/${id}/restore`);
             },
             redo: async () => {
-              await apiPost(`/clients/${id}/archive`);
+              await apiPost(`/api/client-commissions/${id}/archive`);
             }
           });
         }
@@ -360,7 +478,7 @@ const ClientsSection: React.FC<SectionProps> = ({
       openProfile: handleOpenProfile,
       rowActions: {
         viewMode,
-        entityAccusative: "klienta",
+        entityAccusative: "zakázku",
         onApprove: handleApproveClient,
         onRestore: handleRestoreClient,
         onDelete: handleDeleteClient
@@ -374,20 +492,42 @@ const ClientsSection: React.FC<SectionProps> = ({
       // Guard: never allow status field to be changed via cell editing
       if (params.column?.colId === "status") return;
       const id = params.data.id;
+      const field = params.colDef.field as string | undefined;
+      if (!field) return;
       const snapshot = editSnapshotRef.current[id];
       try {
-        const { created_at, updated_at, ...updatedClient } = params.data;
-        await apiPut(`/clients/${updatedClient.id}`, updatedClient);
+        const updatedClient = { ...(params.data as UserInterface) };
+        const isEntityField = CLIENT_ENTITY_FIELDS.has(field);
+
+        if (isEntityField) {
+          if (!updatedClient.entity_internal_id) {
+            throw new Error("Missing linked entity id for client row");
+          }
+          await apiPut(`/api/client-entities/${updatedClient.entity_internal_id}`, mapClientEntityPayload(updatedClient));
+        } else {
+          await apiPut(`/api/client-commissions/${updatedClient.id}`, mapClientCommissionPayload(updatedClient));
+        }
+
         if (snapshot) {
           const after = cloneRecord(updatedClient);
           pushAction({
-            label: `Úprava klienta #${id}`,
+            label: `Úprava zakázky #${id}`,
             resource: "clients",
             undo: async () => {
-              await apiPut(`/clients/${id}`, stripMeta(snapshot));
+              if (isEntityField) {
+                if (!snapshot.entity_internal_id) return;
+                await apiPut(`/api/client-entities/${snapshot.entity_internal_id}`, mapClientEntityPayload(snapshot));
+                return;
+              }
+              await apiPut(`/api/client-commissions/${id}`, mapClientCommissionPayload(snapshot));
             },
             redo: async () => {
-              await apiPut(`/clients/${id}`, stripMeta(after));
+              if (isEntityField) {
+                if (!after.entity_internal_id) return;
+                await apiPut(`/api/client-entities/${after.entity_internal_id}`, mapClientEntityPayload(after));
+                return;
+              }
+              await apiPut(`/api/client-commissions/${id}`, mapClientCommissionPayload(after));
             }
           });
           delete editSnapshotRef.current[id];
@@ -411,17 +551,26 @@ const ClientsSection: React.FC<SectionProps> = ({
     };
 
     try {
-      const created = await apiPost<UserInterface>(`/clients`, newClient);
+      let createdId: number | null = null;
+      const created = await apiPost<ClientCommissionApi>(`/api/client-commissions`, {
+        entity_data: mapClientEntityPayload(newClient),
+        commission_data: mapClientCommissionPayload(newClient)
+      });
+      createdId = created?.id ?? null;
       fetchClientsData();
-      if (created?.id) {
+      if (createdId !== null) {
         pushAction({
-          label: "Přidání klienta",
+          label: "Přidání zakázky",
           resource: "clients",
           undo: async () => {
-            await apiDelete(`/clients/${created.id}`);
+            await apiDelete(`/api/client-commissions/${createdId}`);
           },
           redo: async () => {
-            await apiPost(`/clients`, { ...newClient, id: created.id });
+            const recreated = await apiPost<ClientCommissionApi>(`/api/client-commissions`, {
+              entity_data: mapClientEntityPayload(newClient),
+              commission_data: mapClientCommissionPayload(newClient)
+            });
+            createdId = recreated?.id ?? null;
           }
         });
       }
@@ -547,11 +696,12 @@ const ClientsSection: React.FC<SectionProps> = ({
 
       cols.push(
       {
-        field: "id",
+        colId: "display-id",
         headerName: "ID",
         flex: 0.5,
         minWidth: 70,
-        editable: false
+        editable: false,
+        valueGetter: (params) => params.data?.commission_id ?? params.data?.id
       },
       {
         field: "name",
