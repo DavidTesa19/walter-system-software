@@ -293,6 +293,7 @@ const TipersSectionNew: React.FC<SectionProps> = ({
   const [isLoading, setIsLoading] = useState(false);
   const [createModalOpen, setCreateModalOpen] = useState(false);
   const [isCreating, setIsCreating] = useState(false);
+  const [includeCommission, setIncludeCommission] = useState(false);
   const [createDraft, setCreateDraft] = useState<TiperCreateDraft>(createDefaultTiperDraft);
   
   // Selected entity/commission for profile panel
@@ -434,12 +435,14 @@ const TipersSectionNew: React.FC<SectionProps> = ({
 
   const openCreateModal = useCallback((draft?: TiperCreateDraft) => {
     setCreateDraft(draft ?? createDefaultTiperDraft());
+    setIncludeCommission(Boolean(draft));
     setCreateModalOpen(true);
   }, []);
 
   const closeCreateModal = useCallback(() => {
     if (isCreating) return;
     setCreateModalOpen(false);
+    setIncludeCommission(false);
     setCreateDraft(createDefaultTiperDraft());
   }, [isCreating]);
 
@@ -531,7 +534,7 @@ const TipersSectionNew: React.FC<SectionProps> = ({
     }
   }, [commissions, gridData, fetchData]);
 
-  const handleCreate = useCallback(async () => {
+  const handleCreateWithCommission = useCallback(async () => {
     setIsCreating(true);
     try {
       const response = await apiPost<{ entity: TiperEntity; commission: TiperCommission }>("/api/tiper-entities/with-commission", {
@@ -604,6 +607,14 @@ const TipersSectionNew: React.FC<SectionProps> = ({
       setIsCreating(false);
     }
   }, [createDraft, fetchData]);
+
+  const handleCreate = useCallback(async () => {
+    if (includeCommission) {
+      await handleCreateWithCommission();
+      return;
+    }
+    await handleCreateEntityOnly();
+  }, [handleCreateEntityOnly, handleCreateWithCommission, includeCommission]);
 
   const handleDuplicateEntityCommission = useCallback(() => {
     if (!selectedEntity || !selectedCommission) return;
@@ -997,12 +1008,13 @@ const TipersSectionNew: React.FC<SectionProps> = ({
         entityValues={createDraft.entity}
         commissionValues={createDraft.commission}
         isSubmitting={isCreating}
-        submitLabel="Vytvořit tipaře"
-        secondarySubmitLabel="Vytvořit jen tipaře"
+        submitLabel={includeCommission ? "Vytvořit tipaře a tip" : "Vytvořit tipaře"}
+        includeCommission={includeCommission}
+        includeCommissionLabel="Přidat rovnou i tip / zakázku"
         onClose={closeCreateModal}
         onEntityChange={handleDraftEntityChange}
         onCommissionChange={handleDraftCommissionChange}
-        onSecondarySubmit={handleCreateEntityOnly}
+        onIncludeCommissionChange={setIncludeCommission}
         onSubmit={handleCreate}
       />
     </>

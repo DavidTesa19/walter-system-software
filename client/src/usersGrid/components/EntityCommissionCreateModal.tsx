@@ -15,11 +15,12 @@ interface EntityCommissionCreateModalProps {
   commissionValues: FieldValues;
   isSubmitting?: boolean;
   submitLabel?: string;
-  secondarySubmitLabel?: string;
+  includeCommission: boolean;
+  includeCommissionLabel?: string;
   onClose: () => void;
   onEntityChange: (key: string, value: string) => void;
   onCommissionChange: (key: string, value: string) => void;
-  onSecondarySubmit?: () => void | Promise<void>;
+  onIncludeCommissionChange: (checked: boolean) => void;
   onSubmit: () => void | Promise<void>;
 }
 
@@ -27,14 +28,16 @@ interface DraftFieldProps {
   field: FieldGroup["fields"][number];
   value: string;
   onChange: (key: string, value: string) => void;
+  disabled?: boolean;
 }
 
-const DraftField: React.FC<DraftFieldProps> = ({ field, value, onChange }) => {
+const DraftField: React.FC<DraftFieldProps> = ({ field, value, onChange, disabled = false }) => {
   if (field.type === "textarea") {
     return (
       <textarea
         className="editable-input textarea"
         value={value}
+        disabled={disabled}
         onChange={(event) => onChange(field.key, event.target.value)}
         placeholder={field.placeholder || field.label}
         rows={4}
@@ -47,6 +50,7 @@ const DraftField: React.FC<DraftFieldProps> = ({ field, value, onChange }) => {
       <select
         className="editable-input select"
         value={value}
+        disabled={disabled}
         onChange={(event) => onChange(field.key, event.target.value)}
       >
         <option value="">- Vyberte -</option>
@@ -65,6 +69,7 @@ const DraftField: React.FC<DraftFieldProps> = ({ field, value, onChange }) => {
         type="date"
         className="editable-input date"
         value={value}
+        disabled={disabled}
         onChange={(event) => onChange(field.key, event.target.value)}
       />
     );
@@ -75,6 +80,7 @@ const DraftField: React.FC<DraftFieldProps> = ({ field, value, onChange }) => {
       type="text"
       className="editable-input"
       value={value}
+      disabled={disabled}
       onChange={(event) => onChange(field.key, event.target.value)}
       placeholder={field.placeholder || field.label}
     />
@@ -85,9 +91,10 @@ interface DraftFieldGroupProps {
   group: FieldGroup;
   values: FieldValues;
   onChange: (key: string, value: string) => void;
+  disabled?: boolean;
 }
 
-const DraftFieldGroup: React.FC<DraftFieldGroupProps> = ({ group, values, onChange }) => {
+const DraftFieldGroup: React.FC<DraftFieldGroupProps> = ({ group, values, onChange, disabled = false }) => {
   const colorClass = group.color ? `group-${group.color}` : "";
 
   return (
@@ -98,7 +105,7 @@ const DraftFieldGroup: React.FC<DraftFieldGroupProps> = ({ group, values, onChan
           <div key={field.key} className={`field-row ${field.isMultiline ? "multiline" : ""}`}>
             <label className="field-label">{field.label}</label>
             <div className="editable-field editing ec-create-field">
-              <DraftField field={field} value={values[field.key] || ""} onChange={onChange} />
+              <DraftField field={field} value={values[field.key] || ""} onChange={onChange} disabled={disabled} />
             </div>
           </div>
         ))}
@@ -118,11 +125,12 @@ const EntityCommissionCreateModal: React.FC<EntityCommissionCreateModalProps> = 
   commissionValues,
   isSubmitting = false,
   submitLabel = "Vytvořit",
-  secondarySubmitLabel,
+  includeCommission,
+  includeCommissionLabel = "Vytvořit rovnou i zakázku",
   onClose,
   onEntityChange,
   onCommissionChange,
-  onSecondarySubmit,
+  onIncludeCommissionChange,
   onSubmit
 }) => {
   const panelRef = useRef<HTMLDivElement>(null);
@@ -187,11 +195,27 @@ const EntityCommissionCreateModal: React.FC<EntityCommissionCreateModalProps> = 
 
               <div className="ec-profile-column commission-column">
                 <div className="ec-column-header">
-                  <h3 className="ec-column-title">{commissionTitle}</h3>
+                  <div className="ec-create-commission-header">
+                    <h3 className="ec-column-title">{commissionTitle}</h3>
+                    <label className="ec-create-checkbox">
+                      <input
+                        type="checkbox"
+                        checked={includeCommission}
+                        onChange={(event) => onIncludeCommissionChange(event.target.checked)}
+                      />
+                      <span>{includeCommissionLabel}</span>
+                    </label>
+                  </div>
                 </div>
-                <div className="ec-column-content">
+                <div className={`ec-column-content ${includeCommission ? "" : "ec-column-content-disabled"}`}>
                   {commissionGroups.map((group, index) => (
-                    <DraftFieldGroup key={`commission-group-${index}`} group={group} values={commissionValues} onChange={onCommissionChange} />
+                    <DraftFieldGroup
+                      key={`commission-group-${index}`}
+                      group={group}
+                      values={commissionValues}
+                      onChange={onCommissionChange}
+                      disabled={!includeCommission}
+                    />
                   ))}
                 </div>
               </div>
@@ -201,11 +225,6 @@ const EntityCommissionCreateModal: React.FC<EntityCommissionCreateModalProps> = 
               <button type="button" className="ec-create-action secondary" onClick={onClose} disabled={isSubmitting}>
                 Zrušit
               </button>
-              {onSecondarySubmit ? (
-                <button type="button" className="ec-create-action tertiary" onClick={onSecondarySubmit} disabled={isSubmitting}>
-                  {secondarySubmitLabel || "Vytvořit bez zakázky"}
-                </button>
-              ) : null}
               <button type="button" className="ec-create-action primary" onClick={onSubmit} disabled={isSubmitting}>
                 {isSubmitting ? "Ukládám..." : submitLabel}
               </button>

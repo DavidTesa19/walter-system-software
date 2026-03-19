@@ -295,6 +295,7 @@ const ClientsSectionNew: React.FC<SectionProps> = ({
   const [isLoading, setIsLoading] = useState(false);
   const [createModalOpen, setCreateModalOpen] = useState(false);
   const [isCreating, setIsCreating] = useState(false);
+  const [includeCommission, setIncludeCommission] = useState(false);
   const [createDraft, setCreateDraft] = useState<ClientCreateDraft>(createDefaultClientDraft);
   
   // Selected entity/commission for profile panel
@@ -436,12 +437,14 @@ const ClientsSectionNew: React.FC<SectionProps> = ({
 
   const openCreateModal = useCallback((draft?: ClientCreateDraft) => {
     setCreateDraft(draft ?? createDefaultClientDraft());
+    setIncludeCommission(Boolean(draft));
     setCreateModalOpen(true);
   }, []);
 
   const closeCreateModal = useCallback(() => {
     if (isCreating) return;
     setCreateModalOpen(false);
+    setIncludeCommission(false);
     setCreateDraft(createDefaultClientDraft());
   }, [isCreating]);
 
@@ -533,7 +536,7 @@ const ClientsSectionNew: React.FC<SectionProps> = ({
     }
   }, [commissions, gridData, fetchData]);
 
-  const handleCreate = useCallback(async () => {
+  const handleCreateWithCommission = useCallback(async () => {
     setIsCreating(true);
     try {
       const response = await apiPost<{ entity: ClientEntity; commission: ClientCommission }>("/api/client-entities/with-commission", {
@@ -606,6 +609,14 @@ const ClientsSectionNew: React.FC<SectionProps> = ({
       setIsCreating(false);
     }
   }, [createDraft, fetchData]);
+
+  const handleCreate = useCallback(async () => {
+    if (includeCommission) {
+      await handleCreateWithCommission();
+      return;
+    }
+    await handleCreateEntityOnly();
+  }, [handleCreateEntityOnly, handleCreateWithCommission, includeCommission]);
 
   const handleDuplicateEntityCommission = useCallback(() => {
     if (!selectedEntity || !selectedCommission) return;
@@ -1000,12 +1011,13 @@ const ClientsSectionNew: React.FC<SectionProps> = ({
         entityValues={createDraft.entity}
         commissionValues={createDraft.commission}
         isSubmitting={isCreating}
-        submitLabel="Vytvořit klienta"
-        secondarySubmitLabel="Vytvořit jen klienta"
+        submitLabel={includeCommission ? "Vytvořit klienta a zakázku" : "Vytvořit klienta"}
+        includeCommission={includeCommission}
+        includeCommissionLabel="Přidat rovnou i zakázku"
         onClose={closeCreateModal}
         onEntityChange={handleDraftEntityChange}
         onCommissionChange={handleDraftCommissionChange}
-        onSecondarySubmit={handleCreateEntityOnly}
+        onIncludeCommissionChange={setIncludeCommission}
         onSubmit={handleCreate}
       />
     </>

@@ -270,6 +270,7 @@ const PartnersSectionNew: React.FC<SectionProps> = ({ viewMode, isActive, onRegi
   const [isLoading, setIsLoading] = useState(false);
   const [createModalOpen, setCreateModalOpen] = useState(false);
   const [isCreating, setIsCreating] = useState(false);
+  const [includeCommission, setIncludeCommission] = useState(false);
   const [createDraft, setCreateDraft] = useState<PartnerCreateDraft>(createDefaultPartnerDraft);
   const [selectedEntityId, setSelectedEntityId] = useState<number | null>(null);
   const [selectedCommissionId, setSelectedCommissionId] = useState<number | null>(null);
@@ -386,12 +387,14 @@ const PartnersSectionNew: React.FC<SectionProps> = ({ viewMode, isActive, onRegi
 
   const openCreateModal = useCallback((draft?: PartnerCreateDraft) => {
     setCreateDraft(draft ?? createDefaultPartnerDraft());
+    setIncludeCommission(Boolean(draft));
     setCreateModalOpen(true);
   }, []);
 
   const closeCreateModal = useCallback(() => {
     if (isCreating) return;
     setCreateModalOpen(false);
+    setIncludeCommission(false);
     setCreateDraft(createDefaultPartnerDraft());
   }, [isCreating]);
 
@@ -460,7 +463,7 @@ const PartnersSectionNew: React.FC<SectionProps> = ({ viewMode, isActive, onRegi
     }
   }, [commissions, fetchData, gridData]);
 
-  const handleCreate = useCallback(async () => {
+  const handleCreateWithCommission = useCallback(async () => {
     setIsCreating(true);
     try {
       const response = await apiPost<{ entity: { id: number }; commission: { id: number } }>("/api/partner-entities/with-commission", {
@@ -533,6 +536,14 @@ const PartnersSectionNew: React.FC<SectionProps> = ({ viewMode, isActive, onRegi
       setIsCreating(false);
     }
   }, [createDraft, fetchData]);
+
+  const handleCreate = useCallback(async () => {
+    if (includeCommission) {
+      await handleCreateWithCommission();
+      return;
+    }
+    await handleCreateEntityOnly();
+  }, [handleCreateEntityOnly, handleCreateWithCommission, includeCommission]);
 
   const handleDuplicateEntityCommission = useCallback(() => {
     if (!selectedEntity || !selectedCommission) return;
@@ -762,12 +773,13 @@ const PartnersSectionNew: React.FC<SectionProps> = ({ viewMode, isActive, onRegi
         entityValues={createDraft.entity}
         commissionValues={createDraft.commission}
         isSubmitting={isCreating}
-        submitLabel="Vytvořit partnera"
-        secondarySubmitLabel="Vytvořit jen partnera"
+        submitLabel={includeCommission ? "Vytvořit partnera a zakázku" : "Vytvořit partnera"}
+        includeCommission={includeCommission}
+        includeCommissionLabel="Přidat rovnou i zakázku"
         onClose={closeCreateModal}
         onEntityChange={handleDraftEntityChange}
         onCommissionChange={handleDraftCommissionChange}
-        onSecondarySubmit={handleCreateEntityOnly}
+        onIncludeCommissionChange={setIncludeCommission}
         onSubmit={handleCreate}
       />
     </>
