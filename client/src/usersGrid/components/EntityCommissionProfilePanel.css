@@ -389,7 +389,8 @@
   border: 1px solid rgba(59, 130, 246, 0.45);
   border-radius: 8px;
   background: linear-gradient(180deg, rgba(255, 255, 255, 0.98), rgba(248, 250, 252, 0.94));
-  color: var(--color-text, #1f2937);
+  color: #0f172a;
+  caret-color: #0f172a;
   font-family: inherit;
   outline: none;
   box-shadow:
@@ -407,7 +408,21 @@
 }
 
 .editable-input::placeholder {
-  color: #94a3b8;
+  color: #64748b;
+}
+
+.editable-input option {
+  color: #0f172a;
+  background: #ffffff;
+}
+
+.editable-input:-webkit-autofill,
+.editable-input:-webkit-autofill:hover,
+.editable-input:-webkit-autofill:focus,
+.editable-input:-webkit-autofill:active {
+  -webkit-text-fill-color: #0f172a;
+  box-shadow: 0 0 0 1000px #ffffff inset;
+  transition: background-color 9999s ease-out 0s;
 }
 
 .editable-input.textarea {
