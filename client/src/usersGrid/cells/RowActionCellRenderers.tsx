@@ -91,7 +91,9 @@ export const DeleteArchiveCellRenderer: React.FC<ICellRendererParams<any, any, G
   }
 
   const title =
-    ctx.viewMode === "pending"
+    params.data?.subjectRow
+      ? `Smazat ${ctx.entityAccusative}`
+      : ctx.viewMode === "pending"
       ? `Zamítnout ${ctx.entityAccusative}`
       : ctx.viewMode === "archived"
         ? `Trvale smazat ${ctx.entityAccusative}`

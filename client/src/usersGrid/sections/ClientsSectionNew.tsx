@@ -318,18 +318,65 @@ const ClientsSectionNew: React.FC<SectionProps> = ({
   const fetchData = useCallback(async () => {
     setIsLoading(true);
     try {
-      const [entitiesData, commissionsData, allCommissionsData] = await Promise.all([
+      const [entitiesData, commissionsData] = await Promise.all([
         apiGet<ClientEntityApi[]>('/api/client-entities'),
-        apiGet<ClientCommissionApi[]>(`/api/client-commissions?status=${status}`),
-        status === 'accepted' ? apiGet<ClientCommissionApi[]>('/api/client-commissions') : Promise.resolve([])
+        apiGet<ClientCommissionApi[]>(`/api/client-commissions?status=${status}`)
       ]);
 
       const entitiesList = (Array.isArray(entitiesData) ? entitiesData : []).map(normalizeClientEntity);
       const commissionsList = (Array.isArray(commissionsData) ? commissionsData : []).map(normalizeClientCommission);
-      const allCommissionsList = (Array.isArray(allCommissionsData) ? allCommissionsData : []).map(normalizeClientCommission);
 
       setEntities(entitiesList);
       setCommissions(commissionsList);
+
+      if (status === 'accepted') {
+        const commissionsByEntity = new Map<number, ClientCommission[]>();
+        for (const commission of commissionsList) {
+          const current = commissionsByEntity.get(commission.client_entity_id) || [];
+          current.push(commission);
+          commissionsByEntity.set(commission.client_entity_id, current);
+        }
+
+        const rows: ClientGridRow[] = entitiesList.map((entity) => {
+          const entityCommissions = commissionsByEntity.get(entity.id) || [];
+          const primaryCommission = entityCommissions[0] || null;
+
+          return {
+            id: entity.id,
+            commission_id: primaryCommission?.commission_id || `${entity.entity_id}-000`,
+            client_entity_id: entity.id,
+            status: 'accepted',
+            assigned_to: primaryCommission?.assigned_to ?? null,
+            priority: primaryCommission?.priority ?? null,
+            notes: primaryCommission?.notes ?? null,
+            deadline: primaryCommission?.deadline ?? null,
+            state: primaryCommission?.state ?? null,
+            commission_value: primaryCommission?.commission_value ?? null,
+            position: primaryCommission?.position ?? null,
+            budget: primaryCommission?.budget ?? null,
+            service_position: primaryCommission?.service_position ?? null,
+            field: entity.field || primaryCommission?.field || '',
+            location: entity.location || primaryCommission?.location || '',
+            category: primaryCommission?.category ?? null,
+            phone: entity.mobile ?? primaryCommission?.phone ?? null,
+            created_at: entity.created_at,
+            updated_at: entity.updated_at,
+            subjectRow: true,
+            entity_id: entity.entity_id,
+            name: entity.name || '',
+            company: entity.company || '',
+            mobile: entity.mobile || '',
+            email: entity.email || '',
+            commission_count: entityCommissions.length,
+            primaryCommissionId: primaryCommission?.id ?? null,
+            entity
+          };
+        });
+
+        rows.sort((left, right) => left.entity_id.localeCompare(right.entity_id));
+        setGridData(rows);
+        return;
+      }
 
       // Build grid data - each row is a commission with entity info
       const rows: ClientGridRow[] = commissionsList.map(commission => {
@@ -348,50 +395,7 @@ const ClientsSectionNew: React.FC<SectionProps> = ({
         };
       });
 
-      if (status === 'accepted') {
-        const entityIdsWithAnyCommission = new Set(allCommissionsList.map((commission) => commission.client_entity_id));
-
-        const standaloneRows: ClientGridRow[] = entitiesList
-          .filter((entity) => !entityIdsWithAnyCommission.has(entity.id))
-          .map((entity) => ({
-            id: -entity.id,
-            commission_id: `${entity.entity_id}-000`,
-            client_entity_id: entity.id,
-            status: 'accepted',
-            assigned_to: null,
-            priority: null,
-            notes: null,
-            deadline: null,
-            state: null,
-            commission_value: null,
-            position: null,
-            budget: null,
-            service_position: null,
-            field: entity.field || '',
-            location: entity.location || '',
-            category: null,
-            phone: entity.mobile ?? null,
-            created_at: entity.created_at,
-            updated_at: entity.updated_at,
-            entityOnly: true,
-            entity_id: entity.entity_id,
-            name: entity.name || '',
-            company: entity.company || '',
-            mobile: entity.mobile || '',
-            email: entity.email || '',
-            entity
-          }));
-
-        rows.push(...standaloneRows);
-      }
-
-      rows.sort((left, right) => {
-        const entityCompare = left.entity_id.localeCompare(right.entity_id);
-        if (entityCompare !== 0) return entityCompare;
-        if (left.entityOnly && !right.entityOnly) return -1;
-        if (!left.entityOnly && right.entityOnly) return 1;
-        return left.commission_id.localeCompare(right.commission_id);
-      });
+      rows.sort((left, right) => left.commission_id.localeCompare(right.commission_id));
 
       setGridData(rows);
     } catch (error) {
@@ -427,7 +431,7 @@ const ClientsSectionNew: React.FC<SectionProps> = ({
     if (row.entity) {
       setSelectedEntityId(row.entity.id);
     }
-    setSelectedCommissionId(row.entityOnly ? null : row.id);
+    setSelectedCommissionId(row.primaryCommissionId ?? (row.entityOnly ? null : row.id));
   }, []);
 
   const closeProfile = useCallback(() => {
@@ -507,6 +511,32 @@ const ClientsSectionNew: React.FC<SectionProps> = ({
   }, [fetchData]);
 
   const handleDelete = useCallback(async (id: number) => {
+    if (viewMode === "active") {
+      const row = gridData.find(r => r.id === id);
+      const entityId = row?.entity?.id ?? null;
+      if (!row || entityId === null) return;
+
+      const linkedCount = row.commission_count ?? 0;
+      const label = row.name || row.company || row.entity_id;
+      const confirmMessage = linkedCount > 0
+        ? `Opravdu chcete TRVALE SMAZAT tohoto klienta a všech ${linkedCount} navázaných zakázek?\n\nKlient: ${label}\nID: ${row.entity_id}\n\nTato akce je NEzvratná!`
+        : `Opravdu chcete TRVALE SMAZAT tohoto klienta?\n\nKlient: ${label}\nID: ${row.entity_id}\n\nTato akce je NEzvratná!`;
+
+      if (!confirm(confirmMessage)) return;
+
+      try {
+        await apiDelete(`/api/client-entities/${entityId}`);
+        if (selectedEntityId === entityId) {
+          closeProfile();
+        }
+        fetchData();
+      } catch (error) {
+        console.error("Error deleting client entity:", error);
+        alert("Chyba při mazání klienta");
+      }
+      return;
+    }
+
     const commission = commissions.find(c => c.id === id);
     const row = gridData.find(r => r.id === id);
     const isArchived = commission?.status === "archived";
@@ -534,7 +564,7 @@ const ClientsSectionNew: React.FC<SectionProps> = ({
       console.error("Error performing action:", error);
       alert("Chyba při provádění akce");
     }
-  }, [commissions, gridData, fetchData]);
+  }, [closeProfile, commissions, fetchData, gridData, selectedEntityId, viewMode]);
 
   const handleCreateWithCommission = useCallback(async () => {
     setIsCreating(true);
@@ -707,7 +737,7 @@ const ClientsSectionNew: React.FC<SectionProps> = ({
     openProfile,
     rowActions: {
       viewMode,
-      entityAccusative: "zakázku",
+      entityAccusative: viewMode === "active" ? "klienta" : "zakázku",
       onApprove: handleApprove,
       onRestore: handleRestore,
       onDelete: handleDelete
@@ -849,9 +879,7 @@ const ClientsSectionNew: React.FC<SectionProps> = ({
       colId: "display_id",
       valueGetter: (params) => {
         const row = params.data as ClientGridRow;
-        if (row.entityOnly) {
-          return row.entity_id;
-        }
+        if (viewMode === "active" || row.entityOnly) return row.entity_id;
         const entityCode = row.entity_id || row.commission_id.split('-')[0] || '';
         const commissionPart = row.commission_id.split('-')[1] || row.commission_id;
         return `${entityCode}-${commissionPart}`;
@@ -901,50 +929,74 @@ const ClientsSectionNew: React.FC<SectionProps> = ({
       }
     );
 
-    // Commission info columns
-    cols.push(
-      {
-        field: "position",
-        headerName: "Zakázka",
-        filter: true,
-        editable: (params) => !params.data?.entityOnly,
-        flex: 1.5,
-        minWidth: 140,
-        valueFormatter: (params) => params.data?.entityOnly ? "" : params.value || ""
-      },
-      {
-        field: "budget",
-        headerName: "Rozpočet",
-        filter: true,
-        editable: (params) => !params.data?.entityOnly,
-        flex: 1,
-        minWidth: 100,
-        valueFormatter: (params) => params.data?.entityOnly ? "" : params.value || ""
-      },
-      {
-        field: "service_position",
-        headerName: "Typ služby",
-        filter: true,
-        editable: (params) => !params.data?.entityOnly,
-        flex: 1,
-        minWidth: 100,
-        cellEditor: 'agTextCellEditor',
-        valueFormatter: (params) => params.data?.entityOnly ? "" : params.value || ""
-      },
-      {
-        field: "priority",
-        headerName: "Priorita",
-        filter: true,
-        editable: (params) => !params.data?.entityOnly,
-        flex: 0.8,
-        minWidth: 80,
-        cellEditor: 'agSelectCellEditor',
-        cellEditorParams: {
-          values: ["Nízká", "Střední", "Vysoká", "Urgentní"]
+    if (viewMode === "active") {
+      cols.push(
+        {
+          field: "mobile",
+          headerName: "Telefon",
+          filter: true,
+          editable: true,
+          flex: 1,
+          minWidth: 120
         },
-        valueFormatter: (params) => params.data?.entityOnly ? "" : params.value || ""
-      }
-    );
+        {
+          field: "email",
+          headerName: "E-mail",
+          filter: true,
+          editable: true,
+          flex: 1.2,
+          minWidth: 170
+        },
+        {
+          field: "commission_count",
+          headerName: "Počet zakázek",
+          filter: true,
+          editable: false,
+          flex: 0.9,
+          minWidth: 120
+        }
+      );
+    } else {
+      cols.push(
+        {
+          field: "position",
+          headerName: "Zakázka",
+          filter: true,
+          editable: true,
+          flex: 1.5,
+          minWidth: 140
+        },
+        {
+          field: "budget",
+          headerName: "Rozpočet",
+          filter: true,
+          editable: true,
+          flex: 1,
+          minWidth: 100
+        },
+        {
+          field: "service_position",
+          headerName: "Typ služby",
+          filter: true,
+          editable: true,
+          flex: 1,
+          minWidth: 100,
+          cellEditor: 'agTextCellEditor'
+        },
+        {
+          field: "priority",
+          headerName: "Priorita",
+          filter: true,
+          editable: true,
+          flex: 0.8,
+          minWidth: 80,
+          cellEditor: 'agSelectCellEditor',
+          cellEditorParams: {
+            values: ["Nízká", "Střední", "Vysoká", "Urgentní"]
+          }
+        }
+      );
+    }
 
     return cols;
   }, [viewMode]);

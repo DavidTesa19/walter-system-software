@@ -1287,6 +1287,12 @@ export const db = {
     return rows[0] || null;
   },
 
+  async deletePartnerEntity(id) {
+    if (!USE_POSTGRES) return null;
+    const { rows } = await pool.query('DELETE FROM partner_entities WHERE id = $1 RETURNING *', [id]);
+    return rows[0] || null;
+  },
+
   // =========================================================================
   // PARTNER COMMISSION OPERATIONS
   // =========================================================================
@@ -1513,6 +1519,12 @@ export const db = {
       `UPDATE client_entities SET ${setClause}, updated_at = CURRENT_TIMESTAMP WHERE id = $${fields.length + 1} RETURNING *`,
       [...values, id]
     );
+    return rows[0] || null;
+  },
+
+  async deleteClientEntity(id) {
+    if (!USE_POSTGRES) return null;
+    const { rows } = await pool.query('DELETE FROM client_entities WHERE id = $1 RETURNING *', [id]);
     return rows[0] || null;
   },
 
@@ -1747,6 +1759,12 @@ export const db = {
       `UPDATE tiper_entities SET ${setClause}, updated_at = CURRENT_TIMESTAMP WHERE id = $${fields.length + 1} RETURNING *`,
       [...values, id]
     );
+    return rows[0] || null;
+  },
+
+  async deleteTiperEntity(id) {
+    if (!USE_POSTGRES) return null;
+    const { rows } = await pool.query('DELETE FROM tiper_entities WHERE id = $1 RETURNING *', [id]);
     return rows[0] || null;
   },
 

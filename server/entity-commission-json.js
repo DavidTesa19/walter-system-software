@@ -131,6 +131,16 @@ export function updatePartnerEntity(db, id, data) {
   return updated;
 }
 
+export function deletePartnerEntity(db, id) {
+  ensureEntityCommissionCollections(db);
+  const idx = db.partner_entities.findIndex(e => e.id === id);
+  if (idx === -1) return null;
+
+  const [removed] = db.partner_entities.splice(idx, 1);
+  db.partner_commissions = db.partner_commissions.filter(c => c.entity_id !== id);
+  return removed;
+}
+
 // =============================================================================
 // PARTNER COMMISSION OPERATIONS
 // =============================================================================
@@ -324,6 +334,16 @@ export function updateClientEntity(db, id, data) {
   return updated;
 }
 
+export function deleteClientEntity(db, id) {
+  ensureEntityCommissionCollections(db);
+  const idx = db.client_entities.findIndex(e => e.id === id);
+  if (idx === -1) return null;
+
+  const [removed] = db.client_entities.splice(idx, 1);
+  db.client_commissions = db.client_commissions.filter(c => c.entity_id !== id);
+  return removed;
+}
+
 // =============================================================================
 // CLIENT COMMISSION OPERATIONS
 // =============================================================================
@@ -513,6 +533,16 @@ export function updateTiperEntity(db, id, data) {
   
   db.tiper_entities[idx] = updated;
   return updated;
+}
+
+export function deleteTiperEntity(db, id) {
+  ensureEntityCommissionCollections(db);
+  const idx = db.tiper_entities.findIndex(e => e.id === id);
+  if (idx === -1) return null;
+
+  const [removed] = db.tiper_entities.splice(idx, 1);
+  db.tiper_commissions = db.tiper_commissions.filter(c => c.entity_id !== id);
+  return removed;
 }
 
 // =============================================================================

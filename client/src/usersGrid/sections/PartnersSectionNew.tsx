@@ -283,18 +283,65 @@ const PartnersSectionNew: React.FC<SectionProps> = ({ viewMode, isActive, onRegi
   const fetchData = useCallback(async () => {
     setIsLoading(true);
     try {
-      const [entitiesData, commissionsData, allCommissionsData] = await Promise.all([
+      const [entitiesData, commissionsData] = await Promise.all([
         apiGet<PartnerEntityApi[]>("/api/partner-entities"),
-        apiGet<PartnerCommissionApi[]>(`/api/partner-commissions?status=${status}`),
-        status === "accepted" ? apiGet<PartnerCommissionApi[]>("/api/partner-commissions") : Promise.resolve([])
+        apiGet<PartnerCommissionApi[]>(`/api/partner-commissions?status=${status}`)
       ]);
 
       const normalizedEntities = (Array.isArray(entitiesData) ? entitiesData : []).map(normalizePartnerEntity);
       const normalizedCommissions = (Array.isArray(commissionsData) ? commissionsData : []).map(normalizePartnerCommission);
-      const allNormalizedCommissions = (Array.isArray(allCommissionsData) ? allCommissionsData : []).map(normalizePartnerCommission);
 
       setEntities(normalizedEntities);
       setCommissions(normalizedCommissions);
+
+      if (status === "accepted") {
+        const commissionsByEntity = new Map<number, PartnerCommission[]>();
+        for (const commission of normalizedCommissions) {
+          const current = commissionsByEntity.get(commission.partner_entity_id) || [];
+          current.push(commission);
+          commissionsByEntity.set(commission.partner_entity_id, current);
+        }
+
+        const rows: PartnerGridRow[] = normalizedEntities.map((entity) => {
+          const entityCommissions = commissionsByEntity.get(entity.id) || [];
+          const primaryCommission = entityCommissions[0] || null;
+
+          return {
+            id: entity.id,
+            commission_id: primaryCommission?.commission_id || `${entity.entity_id}-000`,
+            partner_entity_id: entity.id,
+            status: "accepted",
+            assigned_to: primaryCommission?.assigned_to ?? null,
+            priority: primaryCommission?.priority ?? null,
+            notes: primaryCommission?.notes ?? null,
+            deadline: primaryCommission?.deadline ?? null,
+            state: primaryCommission?.state ?? null,
+            commission_value: primaryCommission?.commission_value ?? null,
+            position: primaryCommission?.position ?? null,
+            budget: primaryCommission?.budget ?? null,
+            service_position: primaryCommission?.service_position ?? null,
+            field: entity.field || primaryCommission?.field || "",
+            location: entity.location || primaryCommission?.location || "",
+            category: primaryCommission?.category ?? null,
+            phone: entity.mobile ?? primaryCommission?.phone ?? null,
+            created_at: entity.created_at,
+            updated_at: entity.updated_at,
+            subjectRow: true,
+            entity_id: entity.entity_id,
+            name: entity.name || "",
+            company: entity.company || "",
+            mobile: entity.mobile || "",
+            email: entity.email || "",
+            commission_count: entityCommissions.length,
+            primaryCommissionId: primaryCommission?.id ?? null,
+            entity
+          };
+        });
+
+        rows.sort((left, right) => left.entity_id.localeCompare(right.entity_id));
+        setGridData(rows);
+        return;
+      }
 
       const rows: PartnerGridRow[] = normalizedCommissions.map((commission) => {
         const entity = normalizedEntities.find((item) => item.id === commission.partner_entity_id) || null;
@@ -312,50 +359,7 @@ const PartnersSectionNew: React.FC<SectionProps> = ({ viewMode, isActive, onRegi
         };
       });
 
-      if (status === "accepted") {
-        const entityIdsWithAnyCommission = new Set(allNormalizedCommissions.map((commission) => commission.partner_entity_id));
-
-        const standaloneRows: PartnerGridRow[] = normalizedEntities
-          .filter((entity) => !entityIdsWithAnyCommission.has(entity.id))
-          .map((entity) => ({
-            id: -entity.id,
-            commission_id: `${entity.entity_id}-000`,
-            partner_entity_id: entity.id,
-            status: "accepted",
-            assigned_to: null,
-            priority: null,
-            notes: null,
-            deadline: null,
-            state: null,
-            commission_value: null,
-            position: null,
-            budget: null,
-            service_position: null,
-            field: entity.field || '',
-            location: entity.location || '',
-            category: null,
-            phone: entity.mobile ?? null,
-            created_at: entity.created_at,
-            updated_at: entity.updated_at,
-            entityOnly: true,
-            entity_id: entity.entity_id,
-            name: entity.name || "",
-            company: entity.company || "",
-            mobile: entity.mobile || "",
-            email: entity.email || "",
-            entity
-          }));
-
-        rows.push(...standaloneRows);
-      }
-
-      rows.sort((left, right) => {
-        const entityCompare = left.entity_id.localeCompare(right.entity_id);
-        if (entityCompare !== 0) return entityCompare;
-        if (left.entityOnly && !right.entityOnly) return -1;
-        if (!left.entityOnly && right.entityOnly) return 1;
-        return left.commission_id.localeCompare(right.commission_id);
-      });
+      rows.sort((left, right) => left.commission_id.localeCompare(right.commission_id));
 
       setGridData(rows);
     } catch (error) {
@@ -377,7 +381,7 @@ const PartnersSectionNew: React.FC<SectionProps> = ({ viewMode, isActive, onRegi
 
   const openProfile = useCallback((row: PartnerGridRow) => {
     if (row.entity) setSelectedEntityId(row.entity.id);
-    setSelectedCommissionId(row.entityOnly ? null : row.id);
+    setSelectedCommissionId(row.primaryCommissionId ?? (row.entityOnly ? null : row.id));
   }, []);
 
   const closeProfile = useCallback(() => {
@@ -439,6 +443,32 @@ const PartnersSectionNew: React.FC<SectionProps> = ({ viewMode, isActive, onRegi
   }, [fetchData]);
 
   const handleDelete = useCallback(async (id: number) => {
+    if (viewMode === "active") {
+      const row = gridData.find((item) => item.id === id);
+      const entityId = row?.entity?.id ?? null;
+      if (!row || entityId === null) return;
+
+      const linkedCount = row.commission_count ?? 0;
+      const label = row.name || row.company || row.entity_id;
+      const confirmMessage = linkedCount > 0
+        ? `Opravdu chcete TRVALE SMAZAT tohoto partnera a všech ${linkedCount} navázaných zakázek?\n\nPartner: ${label}\nID: ${row.entity_id}\n\nTato akce je NEzvratná!`
+        : `Opravdu chcete TRVALE SMAZAT tohoto partnera?\n\nPartner: ${label}\nID: ${row.entity_id}\n\nTato akce je NEzvratná!`;
+
+      if (!window.confirm(confirmMessage)) return;
+
+      try {
+        await apiDelete(`/api/partner-entities/${entityId}`);
+        if (selectedEntityId === entityId) {
+          closeProfile();
+        }
+        fetchData();
+      } catch (error) {
+        console.error("Error deleting partner entity:", error);
+        alert("Chyba při mazání partnera");
+      }
+      return;
+    }
+
     const commission = commissions.find((item) => item.id === id);
     const row = gridData.find((item) => item.id === id);
     const isArchived = commission?.status === "archived";
@@ -461,7 +491,7 @@ const PartnersSectionNew: React.FC<SectionProps> = ({ viewMode, isActive, onRegi
       console.error("Error deleting or archiving partner commission:", error);
       alert("Chyba při provádění akce");
     }
-  }, [commissions, fetchData, gridData]);
+  }, [closeProfile, commissions, fetchData, gridData, selectedEntityId, viewMode]);
 
   const handleCreateWithCommission = useCallback(async () => {
     setIsCreating(true);
@@ -630,7 +660,7 @@ const PartnersSectionNew: React.FC<SectionProps> = ({ viewMode, isActive, onRegi
     openProfile,
     rowActions: {
       viewMode,
-      entityAccusative: "zakázku",
+      entityAccusative: viewMode === "active" ? "partnera" : "zakázku",
       onApprove: handleApprove,
       onRestore: handleRestore,
       onDelete: handleDelete
@@ -681,6 +711,17 @@ const PartnersSectionNew: React.FC<SectionProps> = ({ viewMode, isActive, onRegi
 
   const columnDefs = useMemo<ColDef<PartnerGridRow>[]>(() => {
     const cols: ColDef<PartnerGridRow>[] = [];
+    const activeSubjectCols: ColDef<PartnerGridRow>[] = [
+      { field: "mobile", headerName: "Telefon", filter: true, editable: true, flex: 1, minWidth: 120 },
+      { field: "email", headerName: "E-mail", filter: true, editable: true, flex: 1.2, minWidth: 170 },
+      { field: "commission_count", headerName: "Počet zakázek", filter: true, editable: false, flex: 0.9, minWidth: 120 }
+    ];
+    const commissionCols: ColDef<PartnerGridRow>[] = [
+      { field: "position", headerName: "Zakázka", filter: true, editable: true, flex: 1.5, minWidth: 150 },
+      { field: "budget", headerName: "Rozpočet", filter: true, editable: true, flex: 1, minWidth: 110 },
+      { field: "commission_value", headerName: "Provize", filter: true, editable: true, flex: 1, minWidth: 110 },
+      { field: "priority", headerName: "Priorita", filter: true, editable: true, flex: 0.9, minWidth: 90, cellEditor: "agSelectCellEditor", cellEditorParams: { values: ["Nízká", "Střední", "Vysoká", "Urgentní"] } }
+    ];
 
     if (viewMode === "pending" || viewMode === "archived") {
       cols.push({ headerName: "", colId: "approve", pinned: "left", width: 36, minWidth: 36, maxWidth: 36, suppressMovable: true, lockPosition: true, sortable: false, filter: false, resizable: false, editable: false, menuTabs: [], cellClass: "action-cell", headerClass: "action-cell", cellRenderer: ApproveRestoreCellRenderer });
@@ -694,9 +735,7 @@ const PartnersSectionNew: React.FC<SectionProps> = ({ viewMode, isActive, onRegi
         colId: "display_id",
         valueGetter: (params) => {
           const row = params.data as PartnerGridRow;
-          if (row.entityOnly) {
-            return row.entity_id;
-          }
+          if (viewMode === "active" || row.entityOnly) return row.entity_id;
           const entityCode = row.entity_id || row.commission_id.split("-")[0] || "";
           const commissionPart = row.commission_id.split("-")[1] || row.commission_id;
           return `${entityCode}-${commissionPart}`;
@@ -709,10 +748,7 @@ const PartnersSectionNew: React.FC<SectionProps> = ({ viewMode, isActive, onRegi
       { field: "company", headerName: "Společnost", filter: true, editable: true, flex: 1.5, minWidth: 160 },
       { field: "field", headerName: "Obor", filter: true, editable: true, flex: 1, minWidth: 110, cellEditor: "agSelectCellEditor", cellEditorParams: { values: FIELD_OPTIONS_ARRAY } },
       { field: "location", headerName: "Lokalita", filter: true, editable: true, flex: 1, minWidth: 110 },
-      { field: "position", headerName: "Zakázka", filter: true, editable: (params) => !params.data?.entityOnly, flex: 1.5, minWidth: 150, valueFormatter: (params) => params.data?.entityOnly ? "" : params.value || "" },
-      { field: "budget", headerName: "Rozpočet", filter: true, editable: (params) => !params.data?.entityOnly, flex: 1, minWidth: 110, valueFormatter: (params) => params.data?.entityOnly ? "" : params.value || "" },
-      { field: "commission_value", headerName: "Provize", filter: true, editable: (params) => !params.data?.entityOnly, flex: 1, minWidth: 110, valueFormatter: (params) => params.data?.entityOnly ? "" : params.value || "" },
-      { field: "priority", headerName: "Priorita", filter: true, editable: (params) => !params.data?.entityOnly, flex: 0.9, minWidth: 90, cellEditor: "agSelectCellEditor", cellEditorParams: { values: ["Nízká", "Střední", "Vysoká", "Urgentní"] }, valueFormatter: (params) => params.data?.entityOnly ? "" : params.value || "" }
+      ...(viewMode === "active" ? activeSubjectCols : commissionCols)
     );
 
     return cols;

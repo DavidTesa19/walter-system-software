@@ -2189,6 +2189,21 @@ app.post("/api/partner-entities", authenticateToken, (req, res) => {
   }
 });
 
+app.delete("/api/partner-entities/:id", authenticateToken, (req, res) => {
+  try {
+    const id = Number(req.params.id);
+    const db = readDb();
+    ensureMigrated(db);
+    const deleted = entityCommissionJson.deletePartnerEntity(db, id);
+    if (!deleted) return res.status(404).json({ error: "Not found" });
+    if (!writeDb(db)) return res.status(500).json({ error: "Failed to persist" });
+    res.status(204).end();
+  } catch (error) {
+    console.error("Error deleting partner entity:", error);
+    res.status(500).json({ error: "Failed to delete partner entity" });
+  }
+});
+
 // Create partner entity with commission
 app.post("/api/partner-entities/with-commission", authenticateToken, (req, res) => {
   try {
@@ -2411,6 +2426,21 @@ app.post("/api/client-entities", authenticateToken, (req, res) => {
   }
 });
 
+app.delete("/api/client-entities/:id", authenticateToken, (req, res) => {
+  try {
+    const id = Number(req.params.id);
+    const db = readDb();
+    ensureMigrated(db);
+    const deleted = entityCommissionJson.deleteClientEntity(db, id);
+    if (!deleted) return res.status(404).json({ error: "Not found" });
+    if (!writeDb(db)) return res.status(500).json({ error: "Failed to persist" });
+    res.status(204).end();
+  } catch (error) {
+    console.error("Error deleting client entity:", error);
+    res.status(500).json({ error: "Failed to delete client entity" });
+  }
+});
+
 // Create client entity with commission
 app.post("/api/client-entities/with-commission", authenticateToken, (req, res) => {
   try {
@@ -2628,6 +2658,21 @@ app.post("/api/tiper-entities", authenticateToken, (req, res) => {
   } catch (error) {
     console.error("Error creating tiper entity:", error);
     res.status(500).json({ error: error.message || "Failed to create tiper entity" });
+  }
+});
+
+app.delete("/api/tiper-entities/:id", authenticateToken, (req, res) => {
+  try {
+    const id = Number(req.params.id);
+    const db = readDb();
+    ensureMigrated(db);
+    const deleted = entityCommissionJson.deleteTiperEntity(db, id);
+    if (!deleted) return res.status(404).json({ error: "Not found" });
+    if (!writeDb(db)) return res.status(500).json({ error: "Failed to persist" });
+    res.status(204).end();
+  } catch (error) {
+    console.error("Error deleting tiper entity:", error);
+    res.status(500).json({ error: "Failed to delete tiper entity" });
   }
 });
 

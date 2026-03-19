@@ -133,6 +133,9 @@ export interface TiperCommission extends BaseCommission {
  */
 export interface PartnerGridRow extends PartnerCommission {
   entityOnly?: boolean;
+  subjectRow?: boolean;
+  commission_count?: number;
+  primaryCommissionId?: number | null;
   // Entity info (from join)
   entity_id: string;
   name: string;
@@ -149,6 +152,9 @@ export interface PartnerGridRow extends PartnerCommission {
  */
 export interface ClientGridRow extends ClientCommission {
   entityOnly?: boolean;
+  subjectRow?: boolean;
+  commission_count?: number;
+  primaryCommissionId?: number | null;
   // Entity info (from join)
   entity_id: string;
   name: string;
@@ -165,6 +171,9 @@ export interface ClientGridRow extends ClientCommission {
  */
 export interface TiperGridRow extends TiperCommission {
   entityOnly?: boolean;
+  subjectRow?: boolean;
+  commission_count?: number;
+  primaryCommissionId?: number | null;
   // Entity info (from join)
   entity_id: string;
   name: string;

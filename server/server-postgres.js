@@ -2967,6 +2967,19 @@ const createEntityCommissionRoutes = (entityTypes) => {
       }
     });
 
+    app.delete(`${entitiesPath}/:id`, authenticateToken, async (req, res) => {
+      try {
+        const id = Number(req.params.id);
+        const deleteEntity = db[`delete${Type}Entity`].bind(db);
+        const deleted = await deleteEntity(id);
+        if (!deleted) return res.status(404).json({ error: "Not found" });
+        res.status(204).end();
+      } catch (error) {
+        console.error(`Error deleting ${type} entity:`, error);
+        res.status(500).json({ error: `Failed to delete ${type} entity` });
+      }
+    });
+
     // Create entity with commission
     app.post(`${entitiesPath}/with-commission`, authenticateToken, async (req, res) => {
       try {
