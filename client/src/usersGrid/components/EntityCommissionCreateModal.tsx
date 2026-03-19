@@ -29,9 +29,10 @@ interface DraftFieldProps {
   value: string;
   onChange: (key: string, value: string) => void;
   disabled?: boolean;
+  onKeyDown?: (event: React.KeyboardEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>, fieldType: FieldGroup["fields"][number]["type"]) => void;
 }
 
-const DraftField: React.FC<DraftFieldProps> = ({ field, value, onChange, disabled = false }) => {
+const DraftField: React.FC<DraftFieldProps> = ({ field, value, onChange, disabled = false, onKeyDown }) => {
   if (field.type === "textarea") {
     return (
       <textarea
@@ -39,6 +40,7 @@ const DraftField: React.FC<DraftFieldProps> = ({ field, value, onChange, disable
         value={value}
         disabled={disabled}
         onChange={(event) => onChange(field.key, event.target.value)}
+        onKeyDown={(event) => onKeyDown?.(event, field.type)}
         placeholder={field.placeholder || field.label}
         rows={4}
       />
@@ -52,6 +54,7 @@ const DraftField: React.FC<DraftFieldProps> = ({ field, value, onChange, disable
         value={value}
         disabled={disabled}
         onChange={(event) => onChange(field.key, event.target.value)}
+        onKeyDown={(event) => onKeyDown?.(event, field.type)}
       >
         <option value="">- Vyberte -</option>
         {(field.options || []).map((option) => (
@@ -71,6 +74,7 @@ const DraftField: React.FC<DraftFieldProps> = ({ field, value, onChange, disable
         value={value}
         disabled={disabled}
         onChange={(event) => onChange(field.key, event.target.value)}
+        onKeyDown={(event) => onKeyDown?.(event, field.type)}
       />
     );
   }
@@ -82,6 +86,7 @@ const DraftField: React.FC<DraftFieldProps> = ({ field, value, onChange, disable
       value={value}
       disabled={disabled}
       onChange={(event) => onChange(field.key, event.target.value)}
+      onKeyDown={(event) => onKeyDown?.(event, field.type)}
       placeholder={field.placeholder || field.label}
     />
   );
@@ -92,9 +97,10 @@ interface DraftFieldGroupProps {
   values: FieldValues;
   onChange: (key: string, value: string) => void;
   disabled?: boolean;
+  onFieldKeyDown?: (event: React.KeyboardEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>, fieldType: FieldGroup["fields"][number]["type"]) => void;
 }
 
-const DraftFieldGroup: React.FC<DraftFieldGroupProps> = ({ group, values, onChange, disabled = false }) => {
+const DraftFieldGroup: React.FC<DraftFieldGroupProps> = ({ group, values, onChange, disabled = false, onFieldKeyDown }) => {
   const colorClass = group.color ? `group-${group.color}` : "";
 
   return (
@@ -105,7 +111,13 @@ const DraftFieldGroup: React.FC<DraftFieldGroupProps> = ({ group, values, onChan
           <div key={field.key} className={`field-row ${field.isMultiline ? "multiline" : ""}`}>
             <label className="field-label">{field.label}</label>
             <div className="editable-field editing ec-create-field">
-              <DraftField field={field} value={values[field.key] || ""} onChange={onChange} disabled={disabled} />
+              <DraftField
+                field={field}
+                value={values[field.key] || ""}
+                onChange={onChange}
+                disabled={disabled}
+                onKeyDown={onFieldKeyDown}
+              />
             </div>
           </div>
         ))}
@@ -136,6 +148,78 @@ const EntityCommissionCreateModal: React.FC<EntityCommissionCreateModalProps> = 
   const panelRef = useRef<HTMLDivElement>(null);
   const titleId = useMemo(() => `entity-create-modal-${title.replace(/\s+/g, "-").toLowerCase()}`, [title]);
 
+  const focusField = useCallback((element: HTMLElement | null) => {
+    if (!element) return;
+    element.focus();
+
+    if (element instanceof HTMLInputElement && element.type !== "date") {
+      element.select();
+    }
+
+    if (element instanceof HTMLTextAreaElement) {
+      element.select();
+    }
+  }, []);
+
+  const getNavigableFields = useCallback(() => {
+    if (!panelRef.current) return [];
+
+    return Array.from(
+      panelRef.current.querySelectorAll<HTMLElement>(".ec-create-field .editable-input:not(:disabled)")
+    );
+  }, []);
+
+  const moveToAdjacentField = useCallback((current: HTMLElement, direction: 1 | -1) => {
+    const fields = getNavigableFields();
+    const currentIndex = fields.indexOf(current);
+
+    if (currentIndex === -1) {
+      return;
+    }
+
+    const nextField = fields[currentIndex + direction] ?? null;
+
+    if (nextField) {
+      focusField(nextField);
+      return;
+    }
+
+    if (direction === 1) {
+      const submitButton = panelRef.current?.querySelector<HTMLElement>(".ec-create-action.primary:not(:disabled)") ?? null;
+      focusField(submitButton);
+    }
+  }, [focusField, getNavigableFields]);
+
+  const handleFieldKeyDown = useCallback((event: React.KeyboardEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>, fieldType: FieldGroup["fields"][number]["type"]) => {
+    const target = event.currentTarget;
+
+    if (event.key === "Enter") {
+      const isTextarea = fieldType === "textarea";
+      const shouldKeepNewLine = isTextarea && event.shiftKey;
+
+      if (!shouldKeepNewLine) {
+        event.preventDefault();
+        moveToAdjacentField(target, 1);
+      }
+      return;
+    }
+
+    if (fieldType === "select" || fieldType === "textarea") {
+      return;
+    }
+
+    if (event.key === "ArrowDown") {
+      event.preventDefault();
+      moveToAdjacentField(target, 1);
+      return;
+    }
+
+    if (event.key === "ArrowUp") {
+      event.preventDefault();
+      moveToAdjacentField(target, -1);
+    }
+  }, [moveToAdjacentField]);
+
   useEffect(() => {
     if (!open) return undefined;
 
@@ -153,6 +237,20 @@ const EntityCommissionCreateModal: React.FC<EntityCommissionCreateModalProps> = 
       window.removeEventListener("keydown", handleKeyDown);
     };
   }, [open, onClose]);
+
+  useEffect(() => {
+    if (!open) {
+      return;
+    }
+
+    const frame = window.requestAnimationFrame(() => {
+      focusField(getNavigableFields()[0] ?? null);
+    });
+
+    return () => {
+      window.cancelAnimationFrame(frame);
+    };
+  }, [focusField, getNavigableFields, open]);
 
   const handleOverlayMouseDown = useCallback((event: React.MouseEvent<HTMLDivElement>) => {
     if (event.target === event.currentTarget) {
@@ -188,7 +286,13 @@ const EntityCommissionCreateModal: React.FC<EntityCommissionCreateModalProps> = 
                 </div>
                 <div className="ec-column-content">
                   {entityGroups.map((group, index) => (
-                    <DraftFieldGroup key={`entity-group-${index}`} group={group} values={entityValues} onChange={onEntityChange} />
+                    <DraftFieldGroup
+                      key={`entity-group-${index}`}
+                      group={group}
+                      values={entityValues}
+                      onChange={onEntityChange}
+                      onFieldKeyDown={handleFieldKeyDown}
+                    />
                   ))}
                 </div>
               </div>
@@ -215,6 +319,7 @@ const EntityCommissionCreateModal: React.FC<EntityCommissionCreateModalProps> = 
                       values={commissionValues}
                       onChange={onCommissionChange}
                       disabled={!includeCommission}
+                      onFieldKeyDown={handleFieldKeyDown}
                     />
                   ))}
                 </div>
