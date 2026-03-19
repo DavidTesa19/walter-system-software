@@ -7,7 +7,8 @@ import EntityCommissionCreateModal from "../components/EntityCommissionCreateMod
 import EntityCommissionProfilePanel, {
   type EntityData,
   type CommissionData,
-  type FieldGroup
+  type FieldGroup,
+  type LinkedCommissionItem
 } from "../components/EntityCommissionProfilePanel";
 import { mapViewToStatus } from "../constants";
 import { apiDelete, apiGet, apiPost, apiPut } from "../../utils/api";
@@ -216,6 +217,16 @@ const buildCommissionData = (commission: PartnerCommission | null): CommissionDa
   return { id: commission.id, commission_id: commission.commission_id, status: commission.status, groups };
 };
 
+const buildLinkedCommissionItems = (commissions: PartnerCommission[]): LinkedCommissionItem[] => commissions
+  .map((commission) => ({
+    id: commission.id,
+    commission_id: commission.commission_id,
+    status: commission.status,
+    title: commission.position || 'Bez názvu zakázky',
+    subtitle: [commission.service_position, commission.assigned_to].filter(Boolean).join(' • ') || null
+  }))
+  .sort((left, right) => left.commission_id.localeCompare(right.commission_id));
+
 const buildPartnerDraftEntityData = (draft: PartnerCreateDraft): EntityData => ({
   id: 0,
   entity_id: "Nový partner",
@@ -374,6 +385,7 @@ const PartnersSectionNew: React.FC<SectionProps> = ({ viewMode, isActive, onRegi
 
   const selectedEntity = useMemo(() => selectedEntityId === null ? null : entities.find((entity) => entity.id === selectedEntityId) || null, [entities, selectedEntityId]);
   const selectedCommission = useMemo(() => selectedCommissionId === null ? null : commissions.find((commission) => commission.id === selectedCommissionId) || null, [commissions, selectedCommissionId]);
+  const linkedCommissions = useMemo(() => selectedEntityId === null ? [] : buildLinkedCommissionItems(commissions.filter((commission) => commission.partner_entity_id === selectedEntityId)), [commissions, selectedEntityId]);
   const entityData = useMemo(() => buildEntityData(selectedEntity), [selectedEntity]);
   const commissionData = useMemo(() => buildCommissionData(selectedCommission), [selectedCommission]);
   const draftEntityData = useMemo(() => buildPartnerDraftEntityData(createDraft), [createDraft]);
@@ -381,8 +393,8 @@ const PartnersSectionNew: React.FC<SectionProps> = ({ viewMode, isActive, onRegi
 
   const openProfile = useCallback((row: PartnerGridRow) => {
     if (row.entity) setSelectedEntityId(row.entity.id);
-    setSelectedCommissionId(row.primaryCommissionId ?? (row.entityOnly ? null : row.id));
-  }, []);
+    setSelectedCommissionId(viewMode === "active" ? null : row.primaryCommissionId ?? (row.entityOnly ? null : row.id));
+  }, [viewMode]);
 
   const closeProfile = useCallback(() => {
     setSelectedEntityId(null);
@@ -709,6 +721,12 @@ const PartnersSectionNew: React.FC<SectionProps> = ({ viewMode, isActive, onRegi
     }
   }, [closeProfile, entities, selectedEntityId]);
 
+  useEffect(() => {
+    if (selectedCommissionId !== null && !commissions.some((commission) => commission.id === selectedCommissionId)) {
+      setSelectedCommissionId(null);
+    }
+  }, [commissions, selectedCommissionId]);
+
   const columnDefs = useMemo<ColDef<PartnerGridRow>[]>(() => {
     const cols: ColDef<PartnerGridRow>[] = [];
     const activeSubjectCols: ColDef<PartnerGridRow>[] = [
@@ -777,9 +795,12 @@ const PartnersSectionNew: React.FC<SectionProps> = ({ viewMode, isActive, onRegi
         entityLabel="Partner"
         entity={entityData}
         commission={commissionData}
+        linkedCommissions={linkedCommissions}
+        selectedCommissionId={selectedCommissionId}
+        onSelectCommission={setSelectedCommissionId}
         onDuplicateEntityCommission={handleDuplicateEntityCommission}
         onDuplicateCommission={handleDuplicateCommission}
-        onCreateCommission={selectedCommission ? undefined : handleCreateFirstCommission}
+        onCreateCommission={selectedEntity ? handleCreateFirstCommission : undefined}
         onClose={closeProfile}
         onUpdateEntity={handleUpdateEntity}
         onUpdateCommission={handleUpdateCommission}

@@ -7,7 +7,8 @@ import EntityCommissionCreateModal from "../components/EntityCommissionCreateMod
 import EntityCommissionProfilePanel, {
   type EntityData,
   type CommissionData,
-  type FieldGroup
+  type FieldGroup,
+  type LinkedCommissionItem
 } from "../components/EntityCommissionProfilePanel";
 import { mapViewToStatus } from "../constants";
 import { apiGet, apiPost, apiPut, apiDelete } from "../../utils/api";
@@ -229,6 +230,16 @@ const buildCommissionData = (commission: TiperCommission | null): CommissionData
   };
 };
 
+const buildLinkedCommissionItems = (commissions: TiperCommission[]): LinkedCommissionItem[] => commissions
+  .map((commission) => ({
+    id: commission.id,
+    commission_id: commission.commission_id,
+    status: commission.status,
+    title: commission.position || 'Bez názvu tipu',
+    subtitle: [commission.service_position, commission.assigned_to].filter(Boolean).join(' • ') || null
+  }))
+  .sort((left, right) => left.commission_id.localeCompare(right.commission_id));
+
 const buildTiperDraftEntityData = (draft: TiperCreateDraft): EntityData => ({
   id: 0,
   entity_id: "Nový tipař",
@@ -420,6 +431,11 @@ const TipersSectionNew: React.FC<SectionProps> = ({
     return commissions.find(c => c.id === selectedCommissionId) || null;
   }, [commissions, selectedCommissionId]);
 
+  const linkedCommissions = useMemo(() => {
+    if (selectedEntityId === null) return [];
+    return buildLinkedCommissionItems(commissions.filter((commission) => commission.tiper_entity_id === selectedEntityId));
+  }, [commissions, selectedEntityId]);
+
   const entityData = useMemo(() => buildEntityData(selectedEntity), [selectedEntity]);
   const commissionData = useMemo(() => buildCommissionData(selectedCommission), [selectedCommission]);
   const draftEntityData = useMemo(() => buildTiperDraftEntityData(createDraft), [createDraft]);
@@ -429,8 +445,8 @@ const TipersSectionNew: React.FC<SectionProps> = ({
     if (row.entity) {
       setSelectedEntityId(row.entity.id);
     }
-    setSelectedCommissionId(row.primaryCommissionId ?? (row.entityOnly ? null : row.id));
-  }, []);
+    setSelectedCommissionId(viewMode === "active" ? null : row.primaryCommissionId ?? (row.entityOnly ? null : row.id));
+  }, [viewMode]);
 
   const closeProfile = useCallback(() => {
     setSelectedEntityId(null);
@@ -805,6 +821,12 @@ const TipersSectionNew: React.FC<SectionProps> = ({
     }
   }, [closeProfile, entities, selectedEntityId]);
 
+  useEffect(() => {
+    if (selectedCommissionId !== null && !commissions.some(c => c.id === selectedCommissionId)) {
+      setSelectedCommissionId(null);
+    }
+  }, [commissions, selectedCommissionId]);
+
   // ==========================================================================
   // COLUMN DEFINITIONS
   // ==========================================================================
@@ -1028,9 +1050,12 @@ const TipersSectionNew: React.FC<SectionProps> = ({
         entityLabel="Tipař"
         entity={entityData}
         commission={commissionData}
+        linkedCommissions={linkedCommissions}
+        selectedCommissionId={selectedCommissionId}
+        onSelectCommission={setSelectedCommissionId}
         onDuplicateEntityCommission={handleDuplicateEntityCommission}
         onDuplicateCommission={handleDuplicateCommission}
-        onCreateCommission={selectedCommission ? undefined : handleCreateFirstCommission}
+        onCreateCommission={selectedEntity ? handleCreateFirstCommission : undefined}
         onClose={closeProfile}
         onUpdateEntity={handleUpdateEntity}
         onUpdateCommission={handleUpdateCommission}

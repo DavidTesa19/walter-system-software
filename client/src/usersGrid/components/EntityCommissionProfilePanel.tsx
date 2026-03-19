@@ -38,12 +38,23 @@ export interface CommissionData {
   groups: FieldGroup[];
 }
 
+export interface LinkedCommissionItem {
+  id: number;
+  commission_id: string;
+  status: string;
+  title: string;
+  subtitle?: string | null;
+}
+
 interface EntityCommissionProfilePanelProps {
   open: boolean;
   entityType: 'partner' | 'client' | 'tiper';
   entityLabel: string;
   entity: EntityData | null;
   commission: CommissionData | null;
+  linkedCommissions?: LinkedCommissionItem[];
+  selectedCommissionId?: number | null;
+  onSelectCommission?: (commissionId: number) => void;
   onDuplicateEntityCommission?: () => void;
   onDuplicateCommission?: () => void;
   onCreateCommission?: () => void;
@@ -294,6 +305,9 @@ const EntityCommissionProfilePanel: React.FC<EntityCommissionProfilePanelProps> 
   entityLabel,
   entity,
   commission,
+  linkedCommissions = [],
+  selectedCommissionId = null,
+  onSelectCommission,
   onDuplicateEntityCommission,
   onDuplicateCommission,
   onCreateCommission,
@@ -333,6 +347,9 @@ const EntityCommissionProfilePanel: React.FC<EntityCommissionProfilePanelProps> 
     client: 'klienta',
     tiper: 'tipaře'
   };
+
+  const commissionLabel = entityType === 'tiper' ? 'Tip / Zakázka' : 'Zakázka';
+  const hasLinkedCommissions = linkedCommissions.length > 0;
 
   const handleEntityFieldSave = useCallback((key: string, value: string | boolean | null) => {
     if (entity && onUpdateEntity) {
@@ -449,6 +466,10 @@ const EntityCommissionProfilePanel: React.FC<EntityCommissionProfilePanelProps> 
                      commission.status === 'pending' ? 'Čeká na schválení' : 'Archivováno'}
                   </span>
                 </>
+              ) : hasLinkedCommissions ? (
+                <span className="ec-linked-count-badge">
+                  {linkedCommissions.length} {linkedCommissions.length === 1 ? commissionLabel.toLowerCase() : entityType === 'tiper' ? 'tipy / zakázky' : 'zakázky'}
+                </span>
               ) : (
                 <span className="ec-standalone-badge">Bez zakázky</span>
               )}
@@ -514,18 +535,76 @@ const EntityCommissionProfilePanel: React.FC<EntityCommissionProfilePanelProps> 
               {/* Commission Info Column */}
               <div className="ec-profile-column commission-column">
                 <div className="ec-column-header">
-                  <h3 className="ec-column-title">Zakázka</h3>
-                  <span className="ec-column-id">{commission ? commission.commission_id : "Zatím žádná"}</span>
+                  <h3 className="ec-column-title">{commissionLabel}</h3>
+                  <span className="ec-column-id">
+                    {commission ? commission.commission_id : hasLinkedCommissions ? `${linkedCommissions.length} položek` : "Zatím žádná"}
+                  </span>
                 </div>
                 <div className="ec-column-content">
-                  {commission ? (
-                    commission.groups.map((group, idx) => (
-                      <FieldGroupComponent
-                        key={`commission-${idx}`}
-                        group={group}
-                        onSave={handleCommissionFieldSave}
-                      />
-                    ))
+                  {hasLinkedCommissions ? (
+                    <div className="ec-linked-commissions-section">
+                      <div className="ec-linked-commissions-header">
+                        <div>
+                          <h4 className="ec-linked-commissions-title">Navázané zakázky</h4>
+                          <p className="ec-linked-commissions-subtitle">Počet odpovídá hodnotě v tabulce subjektů.</p>
+                        </div>
+                        {onCreateCommission ? (
+                          <button type="button" className="ec-header-action secondary" onClick={onCreateCommission}>
+                            Přidat zakázku
+                          </button>
+                        ) : null}
+                      </div>
+
+                      <div className="ec-linked-commissions-list">
+                        {linkedCommissions.map((linkedCommission) => (
+                          <div
+                            key={linkedCommission.id}
+                            className={`ec-linked-commission-item ${selectedCommissionId === linkedCommission.id ? 'selected' : ''}`}
+                          >
+                            <div className="ec-linked-commission-main">
+                              <div className="ec-linked-commission-topline">
+                                <span className="ec-linked-commission-id">{linkedCommission.commission_id}</span>
+                                <span className={`ec-mini-status-badge ${linkedCommission.status}`}>{linkedCommission.status === 'accepted' ? 'Schváleno' : linkedCommission.status === 'pending' ? 'Pending' : 'Archiv'}</span>
+                              </div>
+                              <div className="ec-linked-commission-title">{linkedCommission.title}</div>
+                              {linkedCommission.subtitle ? (
+                                <div className="ec-linked-commission-subline">{linkedCommission.subtitle}</div>
+                              ) : null}
+                            </div>
+                            <button
+                              type="button"
+                              className="ec-linked-commission-open"
+                              onClick={() => onSelectCommission?.(linkedCommission.id)}
+                              title="Otevřít detail zakázky"
+                            >
+                              Otevřít
+                            </button>
+                          </div>
+                        ))}
+                      </div>
+
+                      {commission ? (
+                        <div className="ec-linked-commission-detail">
+                          <div className="ec-linked-commission-detail-header">
+                            <h4 className="ec-linked-commissions-title">Detail zakázky</h4>
+                            <span className="ec-column-id">{commission.commission_id}</span>
+                          </div>
+                          <div className="ec-linked-commission-detail-groups">
+                            {commission.groups.map((group, idx) => (
+                              <FieldGroupComponent
+                                key={`commission-${idx}`}
+                                group={group}
+                                onSave={handleCommissionFieldSave}
+                              />
+                            ))}
+                          </div>
+                        </div>
+                      ) : (
+                        <div className="ec-linked-commission-placeholder">
+                          Vyberte zakázku ze seznamu pro otevření detailu.
+                        </div>
+                      )}
+                    </div>
                   ) : (
                     <div className="ec-no-commission-state">
                       <p className="ec-no-commission-text">Tento subjekt zatím nemá žádnou zakázku.</p>

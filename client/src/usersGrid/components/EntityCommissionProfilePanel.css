@@ -125,6 +125,16 @@
   color: #475569;
 }
 
+.ec-linked-count-badge {
+  font-size: 0.75rem;
+  font-weight: 600;
+  padding: 0.25rem 0.75rem;
+  border-radius: 999px;
+  margin-left: 0.5rem;
+  background: rgba(16, 185, 129, 0.12);
+  color: #047857;
+}
+
 .ec-profile-close {
   background: none;
   border: none;
@@ -545,6 +555,156 @@
   line-height: 1.5;
 }
 
+.ec-linked-commissions-section {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+}
+
+.ec-linked-commissions-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 1rem;
+}
+
+.ec-linked-commissions-title {
+  margin: 0;
+  font-size: 0.9rem;
+  font-weight: 700;
+  color: #0f172a;
+}
+
+.ec-linked-commissions-subtitle {
+  margin: 0.25rem 0 0;
+  font-size: 0.8rem;
+  color: #64748b;
+}
+
+.ec-linked-commissions-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.65rem;
+}
+
+.ec-linked-commission-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  padding: 0.85rem 0.95rem;
+  border-radius: 12px;
+  border: 1px solid rgba(148, 163, 184, 0.22);
+  background: rgba(255, 255, 255, 0.46);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.32);
+}
+
+.ec-linked-commission-item.selected {
+  border-color: rgba(16, 185, 129, 0.35);
+  box-shadow: 0 0 0 4px rgba(16, 185, 129, 0.08);
+  background: linear-gradient(180deg, rgba(236, 253, 245, 0.82), rgba(220, 252, 231, 0.58));
+}
+
+.ec-linked-commission-main {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+}
+
+.ec-linked-commission-topline {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+}
+
+.ec-linked-commission-id {
+  font-size: 0.74rem;
+  font-weight: 700;
+  font-family: 'JetBrains Mono', 'Consolas', monospace;
+  color: #0f766e;
+}
+
+.ec-linked-commission-title {
+  font-size: 0.88rem;
+  font-weight: 600;
+  color: #0f172a;
+}
+
+.ec-linked-commission-subline {
+  font-size: 0.8rem;
+  color: #64748b;
+}
+
+.ec-linked-commission-open {
+  border: 1px solid rgba(15, 23, 42, 0.12);
+  background: rgba(15, 23, 42, 0.04);
+  color: #0f172a;
+  border-radius: 999px;
+  padding: 0.45rem 0.8rem;
+  font-size: 0.78rem;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.ec-linked-commission-open:hover {
+  background: rgba(16, 185, 129, 0.12);
+  border-color: rgba(16, 185, 129, 0.24);
+}
+
+.ec-mini-status-badge {
+  font-size: 0.68rem;
+  font-weight: 700;
+  border-radius: 999px;
+  padding: 0.18rem 0.45rem;
+}
+
+.ec-mini-status-badge.accepted {
+  background: #d1fae5;
+  color: #065f46;
+}
+
+.ec-mini-status-badge.pending {
+  background: #fef3c7;
+  color: #92400e;
+}
+
+.ec-mini-status-badge.archived {
+  background: #e5e7eb;
+  color: #4b5563;
+}
+
+.ec-linked-commission-detail {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+  padding-top: 0.5rem;
+  border-top: 1px solid rgba(148, 163, 184, 0.18);
+}
+
+.ec-linked-commission-detail-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+}
+
+.ec-linked-commission-detail-groups {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+}
+
+.ec-linked-commission-placeholder {
+  padding: 1rem 1.1rem;
+  border-radius: 12px;
+  border: 1px dashed rgba(100, 116, 139, 0.3);
+  background: rgba(255, 255, 255, 0.38);
+  color: #475569;
+  font-size: 0.9rem;
+}
+
 /* Documents Section */
 .ec-documents-section {
   border-top: 1px solid var(--color-border, #e5e7eb);
@@ -884,6 +1044,13 @@
   }
 
   .ec-create-commission-header {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+
+  .ec-linked-commissions-header,
+  .ec-linked-commission-detail-header,
+  .ec-linked-commission-item {
     flex-direction: column;
     align-items: flex-start;
   }
