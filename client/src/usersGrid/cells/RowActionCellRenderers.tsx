@@ -24,7 +24,7 @@ export const ApproveRestoreCellRenderer: React.FC<ICellRendererParams<any, any, 
   const ctx = params.context?.rowActions;
   const id = getRowId(params);
 
-  if (!ctx || id === null) {
+  if (!ctx || id === null || params.data?.entityOnly) {
     return null;
   }
 
@@ -86,7 +86,7 @@ export const DeleteArchiveCellRenderer: React.FC<ICellRendererParams<any, any, G
   const ctx = params.context?.rowActions;
   const id = getRowId(params);
 
-  if (!ctx || id === null) {
+  if (!ctx || id === null || params.data?.entityOnly) {
     return null;
   }
 

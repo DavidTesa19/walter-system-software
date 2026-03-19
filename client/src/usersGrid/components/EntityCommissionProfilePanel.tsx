@@ -46,6 +46,7 @@ interface EntityCommissionProfilePanelProps {
   commission: CommissionData | null;
   onDuplicateEntityCommission?: () => void;
   onDuplicateCommission?: () => void;
+  onCreateCommission?: () => void;
   
   // Callbacks
   onClose: () => void;
@@ -295,6 +296,7 @@ const EntityCommissionProfilePanel: React.FC<EntityCommissionProfilePanelProps> 
   commission,
   onDuplicateEntityCommission,
   onDuplicateCommission,
+  onCreateCommission,
   onClose,
   onUpdateEntity,
   onUpdateCommission,
@@ -419,7 +421,7 @@ const EntityCommissionProfilePanel: React.FC<EntityCommissionProfilePanelProps> 
     }
   };
 
-  if (!open || !entity || !commission) {
+  if (!open || !entity) {
     return null;
   }
 
@@ -438,16 +440,22 @@ const EntityCommissionProfilePanel: React.FC<EntityCommissionProfilePanelProps> 
             <h2 className="ec-profile-title">{entityLabel}</h2>
             <div className="ec-profile-ids">
               <span className="ec-id-badge entity">{entity.entity_id}</span>
-              <span className="ec-id-separator">→</span>
-              <span className="ec-id-badge commission">{commission.commission_id}</span>
-              <span className={`ec-status-badge ${commission.status}`}>
-                {commission.status === 'accepted' ? 'Schváleno' : 
-                 commission.status === 'pending' ? 'Čeká na schválení' : 'Archivováno'}
-              </span>
+              {commission ? (
+                <>
+                  <span className="ec-id-separator">→</span>
+                  <span className="ec-id-badge commission">{commission.commission_id}</span>
+                  <span className={`ec-status-badge ${commission.status}`}>
+                    {commission.status === 'accepted' ? 'Schváleno' : 
+                     commission.status === 'pending' ? 'Čeká na schválení' : 'Archivováno'}
+                  </span>
+                </>
+              ) : (
+                <span className="ec-standalone-badge">Bez zakázky</span>
+              )}
             </div>
           </div>
           <div className="ec-profile-header-actions">
-            {onDuplicateEntityCommission ? (
+            {commission && onDuplicateEntityCommission ? (
               <button
                 type="button"
                 className="ec-header-action"
@@ -457,7 +465,7 @@ const EntityCommissionProfilePanel: React.FC<EntityCommissionProfilePanelProps> 
                 Duplikovat {duplicateLabels[entityType]}
               </button>
             ) : null}
-            {onDuplicateCommission ? (
+            {commission && onDuplicateCommission ? (
               <button
                 type="button"
                 className="ec-header-action secondary"
@@ -507,16 +515,27 @@ const EntityCommissionProfilePanel: React.FC<EntityCommissionProfilePanelProps> 
               <div className="ec-profile-column commission-column">
                 <div className="ec-column-header">
                   <h3 className="ec-column-title">Zakázka</h3>
-                  <span className="ec-column-id">{commission.commission_id}</span>
+                  <span className="ec-column-id">{commission ? commission.commission_id : "Zatím žádná"}</span>
                 </div>
                 <div className="ec-column-content">
-                  {commission.groups.map((group, idx) => (
-                    <FieldGroupComponent
-                      key={`commission-${idx}`}
-                      group={group}
-                      onSave={handleCommissionFieldSave}
-                    />
-                  ))}
+                  {commission ? (
+                    commission.groups.map((group, idx) => (
+                      <FieldGroupComponent
+                        key={`commission-${idx}`}
+                        group={group}
+                        onSave={handleCommissionFieldSave}
+                      />
+                    ))
+                  ) : (
+                    <div className="ec-no-commission-state">
+                      <p className="ec-no-commission-text">Tento subjekt zatím nemá žádnou zakázku.</p>
+                      {onCreateCommission ? (
+                        <button type="button" className="ec-header-action" onClick={onCreateCommission}>
+                          Přidat první zakázku
+                        </button>
+                      ) : null}
+                    </div>
+                  )}
                 </div>
               </div>
             </div>

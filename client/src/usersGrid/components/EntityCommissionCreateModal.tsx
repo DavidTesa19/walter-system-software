@@ -15,9 +15,11 @@ interface EntityCommissionCreateModalProps {
   commissionValues: FieldValues;
   isSubmitting?: boolean;
   submitLabel?: string;
+  secondarySubmitLabel?: string;
   onClose: () => void;
   onEntityChange: (key: string, value: string) => void;
   onCommissionChange: (key: string, value: string) => void;
+  onSecondarySubmit?: () => void | Promise<void>;
   onSubmit: () => void | Promise<void>;
 }
 
@@ -116,9 +118,11 @@ const EntityCommissionCreateModal: React.FC<EntityCommissionCreateModalProps> = 
   commissionValues,
   isSubmitting = false,
   submitLabel = "Vytvořit",
+  secondarySubmitLabel,
   onClose,
   onEntityChange,
   onCommissionChange,
+  onSecondarySubmit,
   onSubmit
 }) => {
   const panelRef = useRef<HTMLDivElement>(null);
@@ -197,6 +201,11 @@ const EntityCommissionCreateModal: React.FC<EntityCommissionCreateModalProps> = 
               <button type="button" className="ec-create-action secondary" onClick={onClose} disabled={isSubmitting}>
                 Zrušit
               </button>
+              {onSecondarySubmit ? (
+                <button type="button" className="ec-create-action tertiary" onClick={onSecondarySubmit} disabled={isSubmitting}>
+                  {secondarySubmitLabel || "Vytvořit bez zakázky"}
+                </button>
+              ) : null}
               <button type="button" className="ec-create-action primary" onClick={onSubmit} disabled={isSubmitting}>
                 {isSubmitting ? "Ukládám..." : submitLabel}
               </button>

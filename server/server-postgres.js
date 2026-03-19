@@ -2956,6 +2956,17 @@ const createEntityCommissionRoutes = (entityTypes) => {
       }
     });
 
+    app.post(entitiesPath, authenticateToken, async (req, res) => {
+      try {
+        const createEntity = db[`create${Type}Entity`].bind(db);
+        const entity = await createEntity(req.body || {});
+        res.status(201).json(entity);
+      } catch (error) {
+        console.error(`Error creating ${type} entity:`, error);
+        res.status(500).json({ error: error.message || `Failed to create ${type} entity` });
+      }
+    });
+
     // Create entity with commission
     app.post(`${entitiesPath}/with-commission`, authenticateToken, async (req, res) => {
       try {

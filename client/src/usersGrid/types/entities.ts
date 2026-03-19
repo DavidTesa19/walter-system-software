@@ -132,6 +132,7 @@ export interface TiperCommission extends BaseCommission {
  * Partner Grid Row - Commission with entity info for grid display
  */
 export interface PartnerGridRow extends PartnerCommission {
+  entityOnly?: boolean;
   // Entity info (from join)
   entity_id: string;
   name: string;
@@ -147,6 +148,7 @@ export interface PartnerGridRow extends PartnerCommission {
  * Client Grid Row - Commission with entity info for grid display
  */
 export interface ClientGridRow extends ClientCommission {
+  entityOnly?: boolean;
   // Entity info (from join)
   entity_id: string;
   name: string;
@@ -162,6 +164,7 @@ export interface ClientGridRow extends ClientCommission {
  * Tiper Grid Row - Commission with entity info for grid display
  */
 export interface TiperGridRow extends TiperCommission {
+  entityOnly?: boolean;
   // Entity info (from join)
   entity_id: string;
   name: string;

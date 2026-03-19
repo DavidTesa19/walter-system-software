@@ -2176,6 +2176,19 @@ app.put("/api/partner-entities/:id", authenticateToken, (req, res) => {
   }
 });
 
+app.post("/api/partner-entities", authenticateToken, (req, res) => {
+  try {
+    const db = readDb();
+    ensureMigrated(db);
+    const entity = entityCommissionJson.createPartnerEntity(db, req.body || {});
+    if (!writeDb(db)) return res.status(500).json({ error: "Failed to persist" });
+    res.status(201).json(entity);
+  } catch (error) {
+    console.error("Error creating partner entity:", error);
+    res.status(500).json({ error: error.message || "Failed to create partner entity" });
+  }
+});
+
 // Create partner entity with commission
 app.post("/api/partner-entities/with-commission", authenticateToken, (req, res) => {
   try {
@@ -2385,6 +2398,19 @@ app.put("/api/client-entities/:id", authenticateToken, (req, res) => {
   }
 });
 
+app.post("/api/client-entities", authenticateToken, (req, res) => {
+  try {
+    const db = readDb();
+    ensureMigrated(db);
+    const entity = entityCommissionJson.createClientEntity(db, req.body || {});
+    if (!writeDb(db)) return res.status(500).json({ error: "Failed to persist" });
+    res.status(201).json(entity);
+  } catch (error) {
+    console.error("Error creating client entity:", error);
+    res.status(500).json({ error: error.message || "Failed to create client entity" });
+  }
+});
+
 // Create client entity with commission
 app.post("/api/client-entities/with-commission", authenticateToken, (req, res) => {
   try {
@@ -2589,6 +2615,19 @@ app.put("/api/tiper-entities/:id", authenticateToken, (req, res) => {
   } catch (error) {
     console.error("Error updating tiper entity:", error);
     res.status(500).json({ error: "Failed to update tiper entity" });
+  }
+});
+
+app.post("/api/tiper-entities", authenticateToken, (req, res) => {
+  try {
+    const db = readDb();
+    ensureMigrated(db);
+    const entity = entityCommissionJson.createTiperEntity(db, req.body || {});
+    if (!writeDb(db)) return res.status(500).json({ error: "Failed to persist" });
+    res.status(201).json(entity);
+  } catch (error) {
+    console.error("Error creating tiper entity:", error);
+    res.status(500).json({ error: error.message || "Failed to create tiper entity" });
   }
 });
 
