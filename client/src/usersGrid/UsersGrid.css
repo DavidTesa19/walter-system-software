@@ -310,47 +310,51 @@
 
 /* In-row delete button styles (pinned column) */
 .inrow-delete-btn {
-  background: transparent;
+  background: var(--color-surface-alt);
   color: var(--color-text-muted);
-  border: none;
+  border: 1px solid var(--color-border);
   padding: 0;
-  border-radius: 4px;
+  border-radius: 999px;
   cursor: pointer;
   transition: all 0.15s ease;
-  width: 26px;
-  height: 26px;
+  width: 28px;
+  height: 28px;
   display: flex;
   align-items: center;
   justify-content: center;
   margin: 0 auto;
+  box-shadow: var(--color-shadow-sm);
 }
 
 /* In-row approve/restore button styles (pinned column) */
 .inrow-approve-btn {
-  background: transparent;
-  color: var(--color-success);
-  border: none;
+  background: color-mix(in srgb, var(--color-success) 12%, var(--color-surface));
+  color: var(--color-success-hover);
+  border: 1px solid color-mix(in srgb, var(--color-success) 35%, var(--color-border));
   padding: 0;
-  border-radius: 4px;
+  border-radius: 999px;
   cursor: pointer;
   transition: all 0.15s ease;
-  width: 26px;
-  height: 26px;
+  width: 28px;
+  height: 28px;
   display: flex;
   align-items: center;
   justify-content: center;
   margin: 0 auto;
+  box-shadow: var(--color-shadow-sm);
 }
 
 .inrow-approve-btn:hover {
-  background: color-mix(in srgb, var(--color-success) 14%, transparent);
-  color: var(--color-success-hover);
-  transform: scale(1.05);
+  background: var(--color-success);
+  color: var(--color-success-contrast);
+  border-color: var(--color-success);
+  transform: translateY(-1px);
 }
 
 .inrow-approve-btn:active {
-  background: color-mix(in srgb, var(--color-success) 22%, transparent);
-  color: color-mix(in srgb, var(--color-success) 75%, black);
+  background: var(--color-success-hover);
+  color: var(--color-success-contrast);
+  border-color: var(--color-success-hover);
   transform: scale(1.02);
 }
 
@@ -375,14 +379,16 @@
 }
 
 .inrow-delete-btn:hover {
-  background: color-mix(in srgb, var(--color-danger) 18%, transparent);
-  color: var(--color-danger);
-  transform: scale(1.05);
+  background: var(--color-danger);
+  color: var(--color-danger-contrast);
+  border-color: var(--color-danger);
+  transform: translateY(-1px);
 }
 
 .inrow-delete-btn:active {
-  background: color-mix(in srgb, var(--color-danger) 28%, transparent);
-  color: var(--color-danger-hover);
+  background: var(--color-danger-hover);
+  color: var(--color-danger-contrast);
+  border-color: var(--color-danger-hover);
   transform: scale(1.02);
 }
 
