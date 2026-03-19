@@ -3,6 +3,7 @@ import { AgGridReact } from "ag-grid-react";
 import type { ColDef } from "ag-grid-community";
 import type { TiperEntity, TiperCommission, TiperGridRow } from "../types/entities";
 import ProfileCellRenderer from "../cells/ProfileCellRenderer";
+import EntityCommissionCreateModal from "../components/EntityCommissionCreateModal";
 import EntityCommissionProfilePanel, {
   type EntityData,
   type CommissionData,
@@ -56,6 +57,40 @@ type TiperCommissionApi = {
 
 const FIELD_OPTIONS_ARRAY = fieldOptions.map((opt) => opt.value);
 const joinName = (...parts: Array<string | null | undefined>) => parts.filter((part): part is string => Boolean(part && part.trim())).join(" ").trim();
+
+type TiperCreateDraft = {
+  entity: Record<string, string>;
+  commission: Record<string, string>;
+};
+
+const emptyToNull = (value: string) => {
+  const trimmed = value.trim();
+  return trimmed ? trimmed : null;
+};
+
+const createDefaultTiperDraft = (): TiperCreateDraft => ({
+  entity: {
+    name: "",
+    company: "",
+    field: "",
+    mobile: "",
+    email: "",
+    website: "",
+    location: "",
+    info: ""
+  },
+  commission: {
+    position: "",
+    service_position: "",
+    assigned_to: "",
+    budget: "",
+    commission_value: "",
+    priority: "",
+    state: "",
+    deadline: "",
+    notes: ""
+  }
+});
 
 const normalizeTiperEntity = (entity: TiperEntityApi): TiperEntity => ({
   id: entity.id,
@@ -194,6 +229,53 @@ const buildCommissionData = (commission: TiperCommission | null): CommissionData
   };
 };
 
+const buildTiperDraftEntityData = (draft: TiperCreateDraft): EntityData => ({
+  id: 0,
+  entity_id: "Nový tipař",
+  groups: buildEntityData({
+    id: 0,
+    entity_id: "Nový tipař",
+    name: draft.entity.name,
+    company: draft.entity.company,
+    field: draft.entity.field,
+    location: draft.entity.location,
+    address: null,
+    mobile: draft.entity.mobile,
+    email: draft.entity.email,
+    website: draft.entity.website,
+    info: draft.entity.info,
+    created_at: undefined,
+    updated_at: undefined
+  })!.groups
+});
+
+const buildTiperDraftCommissionData = (draft: TiperCreateDraft, status: TiperCommissionApi["status"]): CommissionData => ({
+  id: 0,
+  commission_id: "Nový tip",
+  status,
+  groups: buildCommissionData({
+    id: 0,
+    commission_id: "Nový tip",
+    tiper_entity_id: 0,
+    status,
+    assigned_to: draft.commission.assigned_to,
+    priority: draft.commission.priority,
+    notes: draft.commission.notes,
+    deadline: draft.commission.deadline,
+    state: draft.commission.state,
+    commission_value: draft.commission.commission_value,
+    position: draft.commission.position,
+    budget: draft.commission.budget,
+    service_position: draft.commission.service_position,
+    field: null,
+    location: null,
+    category: null,
+    phone: null,
+    created_at: undefined,
+    updated_at: undefined
+  })!.groups
+});
+
 // =============================================================================
 // TIPERS SECTION COMPONENT
 // =============================================================================
@@ -209,6 +291,9 @@ const TipersSectionNew: React.FC<SectionProps> = ({
   const [commissions, setCommissions] = useState<TiperCommission[]>([]);
   const [gridData, setGridData] = useState<TiperGridRow[]>([]);
   const [isLoading, setIsLoading] = useState(false);
+  const [createModalOpen, setCreateModalOpen] = useState(false);
+  const [isCreating, setIsCreating] = useState(false);
+  const [createDraft, setCreateDraft] = useState<TiperCreateDraft>(createDefaultTiperDraft);
   
   // Selected entity/commission for profile panel
   const [selectedEntityId, setSelectedEntityId] = useState<number | null>(null);
@@ -284,6 +369,8 @@ const TipersSectionNew: React.FC<SectionProps> = ({
 
   const entityData = useMemo(() => buildEntityData(selectedEntity), [selectedEntity]);
   const commissionData = useMemo(() => buildCommissionData(selectedCommission), [selectedCommission]);
+  const draftEntityData = useMemo(() => buildTiperDraftEntityData(createDraft), [createDraft]);
+  const draftCommissionData = useMemo(() => buildTiperDraftCommissionData(createDraft, status), [createDraft, status]);
 
   const openProfile = useCallback((row: TiperGridRow) => {
     if (row.entity) {
@@ -295,6 +382,25 @@ const TipersSectionNew: React.FC<SectionProps> = ({
   const closeProfile = useCallback(() => {
     setSelectedEntityId(null);
     setSelectedCommissionId(null);
+  }, []);
+
+  const openCreateModal = useCallback((draft?: TiperCreateDraft) => {
+    setCreateDraft(draft ?? createDefaultTiperDraft());
+    setCreateModalOpen(true);
+  }, []);
+
+  const closeCreateModal = useCallback(() => {
+    if (isCreating) return;
+    setCreateModalOpen(false);
+    setCreateDraft(createDefaultTiperDraft());
+  }, [isCreating]);
+
+  const handleDraftEntityChange = useCallback((key: string, value: string) => {
+    setCreateDraft((current) => ({ ...current, entity: { ...current.entity, [key]: value } }));
+  }, []);
+
+  const handleDraftCommissionChange = useCallback((key: string, value: string) => {
+    setCreateDraft((current) => ({ ...current, commission: { ...current.commission, [key]: value } }));
   }, []);
 
   // ==========================================================================
@@ -377,6 +483,108 @@ const TipersSectionNew: React.FC<SectionProps> = ({
     }
   }, [commissions, gridData, fetchData]);
 
+  const handleCreate = useCallback(async () => {
+    setIsCreating(true);
+    try {
+      const response = await apiPost<{ entity: TiperEntity; commission: TiperCommission }>("/api/tiper-entities/with-commission", {
+        entity: {
+          first_name: emptyToNull(createDraft.entity.name),
+          company_name: emptyToNull(createDraft.entity.company),
+          field: emptyToNull(createDraft.entity.field),
+          phone: emptyToNull(createDraft.entity.mobile),
+          email: emptyToNull(createDraft.entity.email),
+          website: emptyToNull(createDraft.entity.website),
+          location: emptyToNull(createDraft.entity.location),
+          info: emptyToNull(createDraft.entity.info)
+        },
+        commission: {
+          position: emptyToNull(createDraft.commission.position),
+          service_position: emptyToNull(createDraft.commission.service_position),
+          assigned_to: emptyToNull(createDraft.commission.assigned_to),
+          budget: emptyToNull(createDraft.commission.budget),
+          commission_value: emptyToNull(createDraft.commission.commission_value),
+          priority: emptyToNull(createDraft.commission.priority),
+          state: emptyToNull(createDraft.commission.state),
+          deadline: emptyToNull(createDraft.commission.deadline),
+          notes: emptyToNull(createDraft.commission.notes),
+          status
+        }
+      });
+
+      setCreateModalOpen(false);
+      setCreateDraft(createDefaultTiperDraft());
+      await fetchData();
+
+      if (response?.entity && response?.commission) {
+        setSelectedEntityId(response.entity.id);
+        setSelectedCommissionId(response.commission.id);
+      }
+    } catch (error) {
+      console.error("Error adding tiper:", error);
+      alert("Chyba při vytváření tipaře");
+    } finally {
+      setIsCreating(false);
+    }
+  }, [createDraft, fetchData, status]);
+
+  const handleDuplicateEntityCommission = useCallback(() => {
+    if (!selectedEntity || !selectedCommission) return;
+    closeProfile();
+    openCreateModal({
+      entity: {
+        name: selectedEntity.name ?? "",
+        company: selectedEntity.company ?? "",
+        field: selectedEntity.field ?? "",
+        mobile: selectedEntity.mobile ?? "",
+        email: selectedEntity.email ?? "",
+        website: selectedEntity.website ?? "",
+        location: selectedEntity.location ?? "",
+        info: selectedEntity.info ?? ""
+      },
+      commission: {
+        position: selectedCommission.position ?? "",
+        service_position: selectedCommission.service_position ?? "",
+        assigned_to: selectedCommission.assigned_to ?? "",
+        budget: selectedCommission.budget ?? "",
+        commission_value: selectedCommission.commission_value ?? "",
+        priority: selectedCommission.priority ?? "",
+        state: selectedCommission.state ?? "",
+        deadline: selectedCommission.deadline ?? "",
+        notes: selectedCommission.notes ?? ""
+      }
+    });
+  }, [closeProfile, openCreateModal, selectedCommission, selectedEntity]);
+
+  const handleDuplicateCommission = useCallback(async () => {
+    if (!selectedEntity || !selectedCommission) return;
+
+    try {
+      const response = await apiPost<{ id: number }>("/api/tiper-commissions", {
+        entity_id: selectedEntity.id,
+        position: selectedCommission.position,
+        service_position: selectedCommission.service_position,
+        assigned_to: selectedCommission.assigned_to,
+        budget: selectedCommission.budget,
+        commission_value: selectedCommission.commission_value,
+        priority: selectedCommission.priority,
+        state: selectedCommission.state,
+        deadline: selectedCommission.deadline,
+        notes: selectedCommission.notes,
+        status: selectedCommission.status
+      });
+
+      await fetchData();
+
+      if (response?.id) {
+        setSelectedEntityId(selectedEntity.id);
+        setSelectedCommissionId(response.id);
+      }
+    } catch (error) {
+      console.error("Error duplicating tiper commission:", error);
+      alert("Chyba při duplikaci tipu");
+    }
+  }, [fetchData, selectedCommission, selectedEntity]);
+
   // ==========================================================================
   // GRID CONTEXT
   // ==========================================================================
@@ -399,60 +607,32 @@ const TipersSectionNew: React.FC<SectionProps> = ({
   const onCellValueChanged = useCallback(async (params: any) => {
     try {
       const row = params.data as TiperGridRow;
-      const field = params.colDef.field;
+      const field = params.colDef.field as string | undefined;
       const newValue = params.newValue;
+
+      if (!field) return;
 
       const entityFields = ['name', 'company', 'field', 'location', 'mobile', 'email'];
       
       if (entityFields.includes(field) && row.entity) {
-        await apiPut(`/api/tiper-entities/${row.entity.id}`, { [field]: newValue });
+        await handleUpdateEntity(row.entity.id, { [field]: newValue });
       } else {
-        await apiPut(`/api/tiper-commissions/${row.id}`, { [field]: newValue });
+        await handleUpdateCommission(row.id, { [field]: newValue });
       }
-      
-      fetchData();
     } catch (error) {
       console.error("Error updating:", error);
       alert("Chyba při aktualizaci");
       fetchData();
     }
-  }, [fetchData]);
+  }, [fetchData, handleUpdateCommission, handleUpdateEntity]);
 
   // ==========================================================================
   // ADD NEW TIPER + COMMISSION
   // ==========================================================================
 
   const handleAdd = useCallback(async () => {
-    try {
-      const response = await apiPost<{ entity: TiperEntity; commission: TiperCommission }>('/api/tiper-entities/with-commission', {
-        entity: {
-          first_name: "Nový",
-          last_name: "Tipař",
-          company_name: "",
-          location: "",
-          phone: "",
-          email: "",
-          field: ""
-        },
-        commission: {
-          position: "Nový tip",
-          status: status,
-          budget: "",
-          commission_value: ""
-        }
-      });
-      
-      fetchData();
-      
-      if (response?.entity && response?.commission) {
-        setSelectedEntityId(response.entity.id);
-        setSelectedCommissionId(response.commission.id);
-      }
-    } catch (error) {
-      console.error("Error adding tiper:", error);
-      alert("Chyba při přidávání tipařia");
-    }
-  }, [fetchData, status]);
+    openCreateModal();
+  }, [openCreateModal]);
 
   // ==========================================================================
   // EFFECTS
@@ -677,6 +857,8 @@ const TipersSectionNew: React.FC<SectionProps> = ({
         entityLabel="Tipař"
         entity={entityData}
         commission={commissionData}
+        onDuplicateEntityCommission={handleDuplicateEntityCommission}
+        onDuplicateCommission={handleDuplicateCommission}
         onClose={closeProfile}
         onUpdateEntity={handleUpdateEntity}
         onUpdateCommission={handleUpdateCommission}
@@ -694,6 +876,23 @@ const TipersSectionNew: React.FC<SectionProps> = ({
         notesCreating={notesManager.isCreating}
         onAddNote={notesManager.createNote}
         onDeleteNote={notesManager.deleteNote}
+      />
+
+      <EntityCommissionCreateModal
+        open={createModalOpen}
+        title="Nový tipař a tip"
+        entityTitle="Tipař"
+        commissionTitle="Tip / zakázka"
+        entityGroups={draftEntityData.groups}
+        commissionGroups={draftCommissionData.groups}
+        entityValues={createDraft.entity}
+        commissionValues={createDraft.commission}
+        isSubmitting={isCreating}
+        submitLabel="Vytvořit tipaře"
+        onClose={closeCreateModal}
+        onEntityChange={handleDraftEntityChange}
+        onCommissionChange={handleDraftCommissionChange}
+        onSubmit={handleCreate}
       />
     </>
   );

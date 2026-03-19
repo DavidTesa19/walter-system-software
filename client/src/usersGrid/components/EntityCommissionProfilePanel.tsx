@@ -44,6 +44,8 @@ interface EntityCommissionProfilePanelProps {
   entityLabel: string;
   entity: EntityData | null;
   commission: CommissionData | null;
+  onDuplicateEntityCommission?: () => void;
+  onDuplicateCommission?: () => void;
   
   // Callbacks
   onClose: () => void;
@@ -291,6 +293,8 @@ const EntityCommissionProfilePanel: React.FC<EntityCommissionProfilePanelProps> 
   entityLabel,
   entity,
   commission,
+  onDuplicateEntityCommission,
+  onDuplicateCommission,
   onClose,
   onUpdateEntity,
   onUpdateCommission,
@@ -320,6 +324,12 @@ const EntityCommissionProfilePanel: React.FC<EntityCommissionProfilePanelProps> 
     partner: 'Partner',
     client: 'Klient',
     tiper: 'Tipař'
+  };
+
+  const duplicateLabels = {
+    partner: 'partnera',
+    client: 'klienta',
+    tiper: 'tipaře'
   };
 
   const handleEntityFieldSave = useCallback((key: string, value: string | boolean | null) => {
@@ -436,16 +446,38 @@ const EntityCommissionProfilePanel: React.FC<EntityCommissionProfilePanelProps> 
               </span>
             </div>
           </div>
-          <button 
-            type="button" 
-            className="ec-profile-close" 
-            onClick={onClose}
-            aria-label="Zavřít"
-          >
-            <svg width="20" height="20" viewBox="0 0 20 20" xmlns="http://www.w3.org/2000/svg">
-              <path d="M5 5L15 15M15 5L5 15" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
-            </svg>
-          </button>
+          <div className="ec-profile-header-actions">
+            {onDuplicateEntityCommission ? (
+              <button
+                type="button"
+                className="ec-header-action"
+                onClick={onDuplicateEntityCommission}
+                title={`Vytvořit kopii ${duplicateLabels[entityType]} i této zakázky`}
+              >
+                Duplikovat {duplicateLabels[entityType]}
+              </button>
+            ) : null}
+            {onDuplicateCommission ? (
+              <button
+                type="button"
+                className="ec-header-action secondary"
+                onClick={onDuplicateCommission}
+                title="Vytvořit kopii této zakázky pod stejným subjektem"
+              >
+                Duplikovat zakázku
+              </button>
+            ) : null}
+            <button 
+              type="button" 
+              className="ec-profile-close" 
+              onClick={onClose}
+              aria-label="Zavřít"
+            >
+              <svg width="20" height="20" viewBox="0 0 20 20" xmlns="http://www.w3.org/2000/svg">
+                <path d="M5 5L15 15M15 5L5 15" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
+              </svg>
+            </button>
+          </div>
         </header>
 
         {/* Main Content */}

@@ -3,6 +3,7 @@ import { AgGridReact } from "ag-grid-react";
 import type { ColDef } from "ag-grid-community";
 import type { PartnerEntity, PartnerCommission, PartnerGridRow } from "../types/entities";
 import ProfileCellRenderer from "../cells/ProfileCellRenderer";
+import EntityCommissionCreateModal from "../components/EntityCommissionCreateModal";
 import EntityCommissionProfilePanel, {
   type EntityData,
   type CommissionData,
@@ -56,8 +57,42 @@ type PartnerCommissionApi = {
 
 const FIELD_OPTIONS_ARRAY = fieldOptions.map((opt) => opt.value);
 
+type PartnerCreateDraft = {
+  entity: Record<string, string>;
+  commission: Record<string, string>;
+};
+
 const joinName = (...parts: Array<string | null | undefined>) =>
   parts.filter((part): part is string => Boolean(part && part.trim())).join(" ").trim();
+
+const emptyToNull = (value: string) => {
+  const trimmed = value.trim();
+  return trimmed ? trimmed : null;
+};
+
+const createDefaultPartnerDraft = (): PartnerCreateDraft => ({
+  entity: {
+    name: "",
+    company: "",
+    field: "",
+    mobile: "",
+    email: "",
+    website: "",
+    location: "",
+    info: ""
+  },
+  commission: {
+    position: "",
+    service_position: "",
+    assigned_to: "",
+    budget: "",
+    commission_value: "",
+    priority: "",
+    state: "",
+    deadline: "",
+    notes: ""
+  }
+});
 
 const normalizePartnerEntity = (entity: PartnerEntityApi): PartnerEntity => ({
   id: entity.id,
@@ -181,11 +216,61 @@ const buildCommissionData = (commission: PartnerCommission | null): CommissionDa
   return { id: commission.id, commission_id: commission.commission_id, status: commission.status, groups };
 };
 
+const buildPartnerDraftEntityData = (draft: PartnerCreateDraft): EntityData => ({
+  id: 0,
+  entity_id: "Nový partner",
+  groups: buildEntityData({
+    id: 0,
+    entity_id: "Nový partner",
+    name: draft.entity.name,
+    company: draft.entity.company,
+    field: draft.entity.field,
+    location: draft.entity.location,
+    address: null,
+    mobile: draft.entity.mobile,
+    email: draft.entity.email,
+    website: draft.entity.website,
+    info: draft.entity.info,
+    created_at: undefined,
+    updated_at: undefined
+  })!.groups
+});
+
+const buildPartnerDraftCommissionData = (draft: PartnerCreateDraft, status: PartnerCommissionApi["status"]): CommissionData => ({
+  id: 0,
+  commission_id: "Nová zakázka",
+  status,
+  groups: buildCommissionData({
+    id: 0,
+    commission_id: "Nová zakázka",
+    partner_entity_id: 0,
+    status,
+    assigned_to: draft.commission.assigned_to,
+    priority: draft.commission.priority,
+    notes: draft.commission.notes,
+    deadline: draft.commission.deadline,
+    state: draft.commission.state,
+    commission_value: draft.commission.commission_value,
+    position: draft.commission.position,
+    budget: draft.commission.budget,
+    service_position: draft.commission.service_position,
+    field: null,
+    location: null,
+    category: null,
+    phone: null,
+    created_at: undefined,
+    updated_at: undefined
+  })!.groups
+});
+
 const PartnersSectionNew: React.FC<SectionProps> = ({ viewMode, isActive, onRegisterAddHandler, onLoadingChange }) => {
   const [entities, setEntities] = useState<PartnerEntity[]>([]);
   const [commissions, setCommissions] = useState<PartnerCommission[]>([]);
   const [gridData, setGridData] = useState<PartnerGridRow[]>([]);
   const [isLoading, setIsLoading] = useState(false);
+  const [createModalOpen, setCreateModalOpen] = useState(false);
+  const [isCreating, setIsCreating] = useState(false);
+  const [createDraft, setCreateDraft] = useState<PartnerCreateDraft>(createDefaultPartnerDraft);
   const [selectedEntityId, setSelectedEntityId] = useState<number | null>(null);
   const [selectedCommissionId, setSelectedCommissionId] = useState<number | null>(null);
 
@@ -238,6 +323,8 @@ const PartnersSectionNew: React.FC<SectionProps> = ({ viewMode, isActive, onRegi
   const selectedCommission = useMemo(() => selectedCommissionId === null ? null : commissions.find((commission) => commission.id === selectedCommissionId) || null, [commissions, selectedCommissionId]);
   const entityData = useMemo(() => buildEntityData(selectedEntity), [selectedEntity]);
   const commissionData = useMemo(() => buildCommissionData(selectedCommission), [selectedCommission]);
+  const draftEntityData = useMemo(() => buildPartnerDraftEntityData(createDraft), [createDraft]);
+  const draftCommissionData = useMemo(() => buildPartnerDraftCommissionData(createDraft, status), [createDraft, status]);
 
   const openProfile = useCallback((row: PartnerGridRow) => {
     if (row.entity) setSelectedEntityId(row.entity.id);
@@ -247,6 +334,25 @@ const PartnersSectionNew: React.FC<SectionProps> = ({ viewMode, isActive, onRegi
   const closeProfile = useCallback(() => {
     setSelectedEntityId(null);
     setSelectedCommissionId(null);
+  }, []);
+
+  const openCreateModal = useCallback((draft?: PartnerCreateDraft) => {
+    setCreateDraft(draft ?? createDefaultPartnerDraft());
+    setCreateModalOpen(true);
+  }, []);
+
+  const closeCreateModal = useCallback(() => {
+    if (isCreating) return;
+    setCreateModalOpen(false);
+    setCreateDraft(createDefaultPartnerDraft());
+  }, [isCreating]);
+
+  const handleDraftEntityChange = useCallback((key: string, value: string) => {
+    setCreateDraft((current) => ({ ...current, entity: { ...current.entity, [key]: value } }));
+  }, []);
+
+  const handleDraftCommissionChange = useCallback((key: string, value: string) => {
+    setCreateDraft((current) => ({ ...current, commission: { ...current.commission, [key]: value } }));
   }, []);
 
   const handleUpdateEntity = useCallback(async (entityId: number, updates: Record<string, unknown>) => {
@@ -306,6 +412,108 @@ const PartnersSectionNew: React.FC<SectionProps> = ({ viewMode, isActive, onRegi
     }
   }, [commissions, fetchData, gridData]);
 
+  const handleCreate = useCallback(async () => {
+    setIsCreating(true);
+    try {
+      const response = await apiPost<{ entity: { id: number }; commission: { id: number } }>("/api/partner-entities/with-commission", {
+        entity: {
+          first_name: emptyToNull(createDraft.entity.name),
+          company_name: emptyToNull(createDraft.entity.company),
+          field: emptyToNull(createDraft.entity.field),
+          phone: emptyToNull(createDraft.entity.mobile),
+          email: emptyToNull(createDraft.entity.email),
+          website: emptyToNull(createDraft.entity.website),
+          location: emptyToNull(createDraft.entity.location),
+          info: emptyToNull(createDraft.entity.info)
+        },
+        commission: {
+          position: emptyToNull(createDraft.commission.position),
+          service_position: emptyToNull(createDraft.commission.service_position),
+          assigned_to: emptyToNull(createDraft.commission.assigned_to),
+          budget: emptyToNull(createDraft.commission.budget),
+          commission_value: emptyToNull(createDraft.commission.commission_value),
+          priority: emptyToNull(createDraft.commission.priority),
+          state: emptyToNull(createDraft.commission.state),
+          deadline: emptyToNull(createDraft.commission.deadline),
+          notes: emptyToNull(createDraft.commission.notes),
+          status
+        }
+      });
+
+      setCreateModalOpen(false);
+      setCreateDraft(createDefaultPartnerDraft());
+      await fetchData();
+
+      if (response?.entity?.id && response?.commission?.id) {
+        setSelectedEntityId(response.entity.id);
+        setSelectedCommissionId(response.commission.id);
+      }
+    } catch (error) {
+      console.error("Error creating partner entity and commission:", error);
+      alert("Chyba při vytváření partnera");
+    } finally {
+      setIsCreating(false);
+    }
+  }, [createDraft, fetchData, status]);
+
+  const handleDuplicateEntityCommission = useCallback(() => {
+    if (!selectedEntity || !selectedCommission) return;
+    closeProfile();
+    openCreateModal({
+      entity: {
+        name: selectedEntity.name ?? "",
+        company: selectedEntity.company ?? "",
+        field: selectedEntity.field ?? "",
+        mobile: selectedEntity.mobile ?? "",
+        email: selectedEntity.email ?? "",
+        website: selectedEntity.website ?? "",
+        location: selectedEntity.location ?? "",
+        info: selectedEntity.info ?? ""
+      },
+      commission: {
+        position: selectedCommission.position ?? "",
+        service_position: selectedCommission.service_position ?? "",
+        assigned_to: selectedCommission.assigned_to ?? "",
+        budget: selectedCommission.budget ?? "",
+        commission_value: selectedCommission.commission_value ?? "",
+        priority: selectedCommission.priority ?? "",
+        state: selectedCommission.state ?? "",
+        deadline: selectedCommission.deadline ?? "",
+        notes: selectedCommission.notes ?? ""
+      }
+    });
+  }, [closeProfile, openCreateModal, selectedCommission, selectedEntity]);
+
+  const handleDuplicateCommission = useCallback(async () => {
+    if (!selectedEntity || !selectedCommission) return;
+
+    try {
+      const response = await apiPost<{ id: number }>("/api/partner-commissions", {
+        entity_id: selectedEntity.id,
+        position: selectedCommission.position,
+        service_position: selectedCommission.service_position,
+        assigned_to: selectedCommission.assigned_to,
+        budget: selectedCommission.budget,
+        commission_value: selectedCommission.commission_value,
+        priority: selectedCommission.priority,
+        state: selectedCommission.state,
+        deadline: selectedCommission.deadline,
+        notes: selectedCommission.notes,
+        status: selectedCommission.status
+      });
+
+      await fetchData();
+
+      if (response?.id) {
+        setSelectedEntityId(selectedEntity.id);
+        setSelectedCommissionId(response.id);
+      }
+    } catch (error) {
+      console.error("Error duplicating partner commission:", error);
+      alert("Chyba při duplikaci zakázky");
+    }
+  }, [fetchData, selectedCommission, selectedEntity]);
+
   const gridContext = useMemo(() => ({
     openProfile,
     rowActions: {
@@ -336,35 +544,8 @@ const PartnersSectionNew: React.FC<SectionProps> = ({ viewMode, isActive, onRegi
   }, [fetchData, handleUpdateCommission, handleUpdateEntity]);
 
   const handleAdd = useCallback(async () => {
-    try {
-      const response = await apiPost<{ entity: { id: number }; commission: { id: number } }>("/api/partner-entities/with-commission", {
-        entity: {
-          first_name: "Nový Partner",
-          company_name: "Nová Společnost",
-          location: "",
-          phone: "",
-          email: "",
-          field: ""
-        },
-        commission: {
-          position: "Nová zakázka",
-          status,
-          budget: "",
-          commission_value: ""
-        }
-      });
-
-      await fetchData();
-
-      if (response?.entity?.id && response?.commission?.id) {
-        setSelectedEntityId(response.entity.id);
-        setSelectedCommissionId(response.commission.id);
-      }
-    } catch (error) {
-      console.error("Error adding partner entity and commission:", error);
-      alert("Chyba při přidávání partnera");
-    }
-  }, [fetchData, status]);
+    openCreateModal();
+  }, [openCreateModal]);
 
   useEffect(() => {
     fetchData();
@@ -445,6 +626,8 @@ const PartnersSectionNew: React.FC<SectionProps> = ({ viewMode, isActive, onRegi
         entityLabel="Partner"
         entity={entityData}
         commission={commissionData}
+        onDuplicateEntityCommission={handleDuplicateEntityCommission}
+        onDuplicateCommission={handleDuplicateCommission}
         onClose={closeProfile}
         onUpdateEntity={handleUpdateEntity}
         onUpdateCommission={handleUpdateCommission}
@@ -462,6 +645,23 @@ const PartnersSectionNew: React.FC<SectionProps> = ({ viewMode, isActive, onRegi
         notesCreating={notesManager.isCreating}
         onAddNote={notesManager.createNote}
         onDeleteNote={notesManager.deleteNote}
+      />
+
+      <EntityCommissionCreateModal
+        open={createModalOpen}
+        title="Nový partner a zakázka"
+        entityTitle="Partner"
+        commissionTitle="Zakázka"
+        entityGroups={draftEntityData.groups}
+        commissionGroups={draftCommissionData.groups}
+        entityValues={createDraft.entity}
+        commissionValues={createDraft.commission}
+        isSubmitting={isCreating}
+        submitLabel="Vytvořit partnera"
+        onClose={closeCreateModal}
+        onEntityChange={handleDraftEntityChange}
+        onCommissionChange={handleDraftCommissionChange}
+        onSubmit={handleCreate}
       />
     </>
   );

@@ -130,6 +130,35 @@
   color: var(--color-text, #1f2937);
 }
 
+.ec-profile-header-actions {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+}
+
+.ec-header-action {
+  border: 1px solid rgba(14, 116, 144, 0.18);
+  border-radius: 999px;
+  padding: 0.55rem 0.95rem;
+  background: linear-gradient(180deg, rgba(14, 165, 233, 0.12), rgba(14, 116, 144, 0.08));
+  color: #0f172a;
+  font-size: 0.8125rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: transform 0.15s ease, box-shadow 0.15s ease, background-color 0.15s ease;
+  box-shadow: 0 8px 20px rgba(14, 116, 144, 0.08);
+}
+
+.ec-header-action:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 12px 26px rgba(14, 116, 144, 0.12);
+}
+
+.ec-header-action.secondary {
+  background: linear-gradient(180deg, rgba(15, 23, 42, 0.07), rgba(15, 23, 42, 0.04));
+  border-color: rgba(15, 23, 42, 0.12);
+}
+
 /* Body */
 .ec-profile-body {
   display: flex;
@@ -392,6 +421,53 @@
 
 .editable-input.date {
   cursor: pointer;
+}
+
+.ec-create-panel {
+  max-width: 1260px;
+}
+
+.ec-create-field {
+  cursor: default;
+}
+
+.ec-create-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 0.75rem;
+  padding-top: 1.5rem;
+  border-top: 1px solid rgba(148, 163, 184, 0.2);
+}
+
+.ec-create-action {
+  border-radius: 999px;
+  padding: 0.75rem 1.25rem;
+  font-size: 0.875rem;
+  font-weight: 600;
+  cursor: pointer;
+  border: 1px solid transparent;
+  transition: background-color 0.15s ease, color 0.15s ease, border-color 0.15s ease;
+}
+
+.ec-create-action.primary {
+  background: linear-gradient(180deg, #0f766e, #0f766e 55%, #115e59);
+  color: #f8fafc;
+  box-shadow: 0 12px 24px rgba(15, 118, 110, 0.18);
+}
+
+.ec-create-action.primary:hover:not(:disabled) {
+  background: linear-gradient(180deg, #0d9488, #0f766e 60%, #115e59);
+}
+
+.ec-create-action.secondary {
+  background: rgba(15, 23, 42, 0.04);
+  color: #1e293b;
+  border-color: rgba(15, 23, 42, 0.12);
+}
+
+.ec-create-action:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
 }
 
 /* Documents Section */
@@ -687,6 +763,17 @@
 
 /* Responsive */
 @media (max-width: 768px) {
+  .ec-profile-header-actions {
+    width: 100%;
+    justify-content: flex-end;
+    flex-wrap: wrap;
+  }
+
+  .ec-header-action {
+    width: 100%;
+    justify-content: center;
+  }
+
   .ec-profile-overlay {
     padding: 0;
   }
@@ -711,5 +798,13 @@
   .field-row {
     grid-template-columns: 100px 1fr;
     gap: 0.5rem;
+  }
+
+  .ec-create-actions {
+    flex-direction: column-reverse;
+  }
+
+  .ec-create-action {
+    width: 100%;
   }
 }
