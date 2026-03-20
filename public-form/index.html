@@ -79,7 +79,7 @@
         }
 
         .hero {
-            padding: 34px 34px 22px;
+            padding: 30px 34px 20px;
             background:
                 radial-gradient(circle at top right, rgba(15, 123, 105, 0.14), transparent 30%),
                 linear-gradient(135deg, rgba(255, 255, 255, 0.14), rgba(255, 255, 255, 0));
@@ -101,45 +101,9 @@
         }
 
         h1 {
-            margin: 16px 0 12px;
+            margin: 16px 0 0;
             font-size: clamp(34px, 5vw, 52px);
             line-height: 1.02;
-        }
-
-        .subtitle {
-            max-width: 760px;
-            margin: 0;
-            color: var(--muted);
-            font-size: 15px;
-            line-height: 1.75;
-        }
-
-        .hero-grid {
-            display: grid;
-            grid-template-columns: minmax(0, 1.5fr) minmax(280px, 0.8fr);
-            gap: 20px;
-            align-items: end;
-        }
-
-        .summary-card {
-            align-self: stretch;
-            padding: 18px 18px 16px;
-            border-radius: var(--radius-lg);
-            background: rgba(255, 255, 255, 0.72);
-            border: 1px solid rgba(75, 56, 37, 0.08);
-        }
-
-        .summary-card strong {
-            display: block;
-            margin-bottom: 8px;
-            font-size: 15px;
-        }
-
-        .summary-card p {
-            margin: 0;
-            color: var(--muted);
-            font-size: 13px;
-            line-height: 1.6;
         }
 
         .content {
@@ -158,23 +122,16 @@
             background: rgba(255, 255, 255, 0.7);
             color: var(--muted);
             border-radius: 20px;
-            padding: 16px 16px 15px;
-            text-align: left;
+            padding: 14px 16px;
+            text-align: center;
             cursor: pointer;
             transition: transform 0.18s ease, box-shadow 0.18s ease, border-color 0.18s ease;
         }
 
         .type-btn strong {
             display: block;
-            margin-bottom: 4px;
             color: var(--text);
             font-size: 16px;
-        }
-
-        .type-btn span {
-            display: block;
-            font-size: 13px;
-            line-height: 1.45;
         }
 
         .type-btn:hover,
@@ -185,8 +142,7 @@
             box-shadow: 0 14px 24px rgba(15, 123, 105, 0.12);
         }
 
-        .type-btn.active strong,
-        .type-btn.active span {
+        .type-btn.active strong {
             color: var(--accent-strong);
         }
 
@@ -227,21 +183,13 @@
             display: flex;
             justify-content: space-between;
             gap: 16px;
-            align-items: flex-start;
-            margin-bottom: 18px;
+            align-items: center;
+            margin-bottom: 16px;
         }
 
         .section-head h2 {
-            margin: 0 0 6px;
-            font-size: 22px;
-        }
-
-        .section-head p {
             margin: 0;
-            color: var(--muted);
-            font-size: 14px;
-            line-height: 1.6;
-            max-width: 760px;
+            font-size: 22px;
         }
 
         .pill {
@@ -287,13 +235,6 @@
             color: #4d3b2d;
         }
 
-        .field-hint {
-            margin-top: -2px;
-            color: var(--muted);
-            font-size: 12px;
-            line-height: 1.5;
-        }
-
         input,
         select,
         textarea {
@@ -312,6 +253,118 @@
             resize: vertical;
         }
 
+        .industry-picker {
+            position: relative;
+        }
+
+        .industry-trigger {
+            width: 100%;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 12px;
+            border: 1px solid rgba(75, 56, 37, 0.14);
+            border-radius: 14px;
+            background: rgba(255, 255, 255, 0.9);
+            color: var(--text);
+            padding: 13px 14px;
+            font-size: 14px;
+            cursor: pointer;
+            transition: border-color 0.18s ease, box-shadow 0.18s ease;
+        }
+
+        .industry-trigger.placeholder {
+            color: var(--muted);
+        }
+
+        .industry-trigger::after {
+            content: "▾";
+            color: var(--muted);
+            font-size: 12px;
+            flex: 0 0 auto;
+        }
+
+        .industry-picker.open .industry-trigger,
+        .industry-trigger:hover {
+            border-color: rgba(15, 123, 105, 0.44);
+            box-shadow: 0 0 0 4px rgba(15, 123, 105, 0.08);
+        }
+
+        .industry-panel {
+            display: none;
+            position: absolute;
+            left: 0;
+            right: 0;
+            top: calc(100% + 8px);
+            z-index: 30;
+            padding: 12px;
+            border-radius: 18px;
+            border: 1px solid rgba(75, 56, 37, 0.12);
+            background: rgba(255, 251, 245, 0.98);
+            box-shadow: 0 18px 36px rgba(38, 27, 20, 0.18);
+        }
+
+        .industry-picker.open .industry-panel {
+            display: block;
+        }
+
+        .industry-search {
+            margin-bottom: 10px;
+        }
+
+        .industry-groups {
+            max-height: 280px;
+            overflow: auto;
+            display: grid;
+            gap: 10px;
+            padding-right: 2px;
+        }
+
+        .industry-group {
+            display: grid;
+            gap: 8px;
+        }
+
+        .industry-group-title {
+            font-size: 11px;
+            font-weight: 800;
+            letter-spacing: 0.05em;
+            text-transform: uppercase;
+            color: var(--warm);
+            padding: 0 4px;
+        }
+
+        .industry-options {
+            display: grid;
+            gap: 6px;
+        }
+
+        .industry-option {
+            width: 100%;
+            border: 1px solid rgba(75, 56, 37, 0.08);
+            border-radius: 12px;
+            background: rgba(255, 255, 255, 0.84);
+            color: var(--text);
+            text-align: left;
+            padding: 9px 10px;
+            font-size: 13px;
+            cursor: pointer;
+        }
+
+        .industry-option:hover,
+        .industry-option.active {
+            border-color: rgba(15, 123, 105, 0.24);
+            background: rgba(15, 123, 105, 0.1);
+            color: var(--accent-strong);
+        }
+
+        .industry-empty {
+            padding: 12px 8px;
+            color: var(--muted);
+            font-size: 13px;
+            text-align: center;
+        }
+
         input:focus,
         select:focus,
         textarea:focus {
@@ -328,19 +381,7 @@
             padding: 16px 18px;
             border-radius: 18px;
             background: var(--accent-soft);
-            margin-bottom: 20px;
-        }
-
-        .toggle-row strong {
-            display: block;
-            margin-bottom: 4px;
-            font-size: 15px;
-        }
-
-        .toggle-row span {
-            color: var(--muted);
-            font-size: 13px;
-            line-height: 1.5;
+            margin-bottom: 16px;
         }
 
         .switch {
@@ -444,13 +485,6 @@
             font-weight: 800;
         }
 
-        .submit-btn span {
-            display: block;
-            margin-top: 4px;
-            font-size: 12px;
-            opacity: 0.88;
-        }
-
         .submit-btn:hover {
             transform: translateY(-1px);
         }
@@ -465,14 +499,7 @@
             color: var(--danger);
         }
 
-        .hint {
-            font-size: 12px;
-            color: var(--muted);
-            line-height: 1.55;
-        }
-
         @media (max-width: 920px) {
-            .hero-grid,
             .type-selector,
             .grid {
                 grid-template-columns: 1fr;
@@ -487,6 +514,13 @@
             .toggle-row {
                 flex-direction: column;
                 align-items: flex-start;
+            }
+
+            .industry-panel {
+                position: fixed;
+                left: 16px;
+                right: 16px;
+                top: auto;
             }
 
             .topbar {
@@ -516,17 +550,8 @@
 
         <div class="panel">
             <div class="hero">
-                <div class="hero-grid">
-                    <div>
-                        <div class="eyebrow">Walter System intake</div>
-                        <h1>Veřejná žádost o spolupráci</h1>
-                        <p class="subtitle">Vyplňte profil subjektu i zakázky v plném rozsahu. Formulář je nově sladěný s datovým modelem v aplikaci, takže můžete rovnou zapsat kontakty, obor, kategorii, rozpočty, workflow stav i poznámky bez následného ručního doplňování.</p>
-                    </div>
-                    <div class="summary-card">
-                        <strong id="summaryTitle">Klientský subjekt + volitelná zakázka</strong>
-                        <p id="summaryText">Po odeslání se vytvoří pending subjekt a podle vyplněných údajů i pending zakázka se samostatným ID pro schválení.</p>
-                    </div>
-                </div>
+                <div class="eyebrow">Walter System intake</div>
+                <h1>Veřejná žádost o spolupráci</h1>
             </div>
 
             <div class="content">
@@ -535,25 +560,19 @@
                 <div class="type-selector">
                     <button type="button" class="type-btn active" data-type="client">
                         <strong>Klient</strong>
-                        <span>Poptávka, klientský profil a parametry zakázky.</span>
                     </button>
                     <button type="button" class="type-btn" data-type="partner">
                         <strong>Partner</strong>
-                        <span>Partner profil, nabídka spolupráce a obchodní rámec.</span>
                     </button>
                     <button type="button" class="type-btn" data-type="tiper">
                         <strong>Tipař</strong>
-                        <span>Kontakt, referral a detailní tip s navazující informací.</span>
                     </button>
                 </div>
 
                 <form id="submissionForm">
                     <section class="section-card">
                         <div class="section-head">
-                            <div>
-                                <h2>Profil subjektu</h2>
-                                <p id="entityDescription"></p>
-                            </div>
+                            <h2>Profil subjektu</h2>
                             <div class="pill" id="entityBadge">Subjekt</div>
                         </div>
                         <div class="grid" id="entityFields"></div>
@@ -561,10 +580,7 @@
 
                     <section class="section-card">
                         <div class="toggle-row">
-                            <div>
-                                <strong>Přidat rovnou i zakázku</strong>
-                                <span>Pokud vyplníte i část níže, založí se spolu se subjektem také pending zakázka s vlastním ID. Můžete vyplnit i finance, workflow stav, interní přiřazení a doplňující poznámky.</span>
-                            </div>
+                            <strong>Přidat rovnou i zakázku</strong>
                             <label class="switch" aria-label="Přidat zakázku">
                                 <input type="checkbox" id="includeCommission">
                                 <span class="slider"></span>
@@ -573,66 +589,30 @@
 
                         <div id="commissionFields" class="commission-fields">
                             <div class="section-head">
-                                <div>
-                                    <h2>Profil zakázky</h2>
-                                    <p id="commissionDescription"></p>
-                                </div>
+                                <h2>Profil zakázky</h2>
                                 <div class="pill subtle">Zakázka</div>
                             </div>
                             <div class="grid" id="commissionGrid"></div>
-                            <div class="hint" style="margin-top: 14px;">Nechte prázdné jen to, co opravdu nevíte. Formulář posílá stejné klíče, které používá entity/commission část aplikace.</div>
                         </div>
                     </section>
 
                     <button type="submit" class="submit-btn">
                         <strong id="submitTitle">Odeslat do schvalování</strong>
-                        <span id="submitMeta">Subjekt se uloží jako pending záznam v systému.</span>
                     </button>
                 </form>
             </div>
         </div>
     </div>
 
-    <datalist id="fieldSuggestions"></datalist>
     <datalist id="categorySuggestions"></datalist>
 
+    <script src="./field-options.js"></script>
     <script>
         const API_BASE_URL = ["localhost", "127.0.0.1"].includes(window.location.hostname)
             ? "http://localhost:3004"
             : "https://api.waltersystem.cz";
 
-        const FIELD_SUGGESTIONS = [
-            "Automatizace",
-            "Bankovnictví",
-            "Bydlení a reality",
-            "Data a analytika",
-            "Digitální marketing",
-            "E-commerce",
-            "Ekonomika a management",
-            "Energetika",
-            "Finance",
-            "HR (lidské zdroje, personalistika)",
-            "Informatika a vývoj software",
-            "Konstrukce a strojírenství",
-            "Logistika a doprava",
-            "Management",
-            "Marketing",
-            "Nemovitosti a reality",
-            "Obchod a prodej",
-            "Personalistika",
-            "Právo",
-            "Recruiting",
-            "Robotika a automatizace",
-            "Softwarové inženýrství",
-            "Stavebnictví",
-            "Strategie a consulting",
-            "Technologie umělé inteligence",
-            "Telekomunikace",
-            "Účetnictví",
-            "Vývoj software",
-            "Výroba",
-            "Zdravotnictví"
-        ];
+        const GROUPED_FIELD_OPTIONS = Array.isArray(window.GROUPED_FIELD_OPTIONS) ? window.GROUPED_FIELD_OPTIONS : [];
 
         const CATEGORY_SUGGESTIONS = [
             "B2B",
@@ -685,17 +665,13 @@
                 label: "Označit jako tipnutou zakázku",
                 type: "checkbox",
                 fullWidth: true,
-                hint: "Uložení příznaku is_tipped pro návazné workflow v systému."
+                hint: ""
             }
         ];
 
         const TYPE_CONFIG = {
             client: {
                 label: "Klient",
-                summaryTitle: "Klientský subjekt + volitelná klientská zakázka",
-                summaryText: "Klientský intake pokrývá kontakty, obor, kategorii, požadovanou službu, rozpočet i workflow detail zakázky.",
-                entityDescription: "Vyplňte klientský profil co nejúplněji. U klientů lze předem uložit i požadovanou službu a orientační rozpočet na úrovni subjektu.",
-                commissionDescription: "Zakázka klienta podporuje stejné workflow klíče jako v aplikaci: přiřazení, prioritu, stav, deadline, finance, obor i doplňující poznámky.",
                 entityFields: [
                     ...entityFieldBase.slice(0, 5),
                     { key: "service", label: "Požadovaná služba", placeholder: "Např. recruitment, executive search" },
@@ -706,19 +682,11 @@
             },
             partner: {
                 label: "Partner",
-                summaryTitle: "Partnerský subjekt + volitelná partnerská zakázka",
-                summaryText: "Partnerský intake je vhodný pro nabídky kapacity, spolupráci i rámcové obchodní zakázky včetně interního přiřazení.",
-                entityDescription: "Partner profil ukládá kontakty, obor, kategorii, lokaci a doplňující informace stejně jako entity karta v systému.",
-                commissionDescription: "Partnerská zakázka ukládá nabídku spolupráce, typ služby, rozpočet, provizi, workflow stav, deadline i poznámky.",
                 entityFields: entityFieldBase,
                 commissionFields: commissionFieldBase
             },
             tiper: {
                 label: "Tipař",
-                summaryTitle: "Tipařský subjekt + volitelný tip / zakázka",
-                summaryText: "Tipařský intake teď podporuje i firmu, kontakty, obor, kategorii a plný commission payload místo zkráceného starého schématu.",
-                entityDescription: "U tipařů lze nově rovnou uložit kontakt, organizaci, obor, kategorii, lokaci, web i širší kontext referral vztahu.",
-                commissionDescription: "Tip může obsahovat název, typ, přiřazení, hodnotu, provizi, workflow stav, lokaci, telefon, detailní info i poznámky.",
                 entityFields: entityFieldBase,
                 commissionFields: commissionFieldBase.map((field) => field.key === "position" ? { ...field, label: "Tip / zakázka" } : field)
             }
@@ -733,19 +701,18 @@
         const commissionFields = document.getElementById("commissionFields");
         const entityFieldsContainer = document.getElementById("entityFields");
         const commissionGrid = document.getElementById("commissionGrid");
-        const entityDescription = document.getElementById("entityDescription");
-        const commissionDescription = document.getElementById("commissionDescription");
-        const summaryTitle = document.getElementById("summaryTitle");
-        const summaryText = document.getElementById("summaryText");
         const entityBadge = document.getElementById("entityBadge");
-        const submitMeta = document.getElementById("submitMeta");
-        const fieldSuggestionsList = document.getElementById("fieldSuggestions");
         const categorySuggestionsList = document.getElementById("categorySuggestions");
 
         const trimToNull = (value) => {
             const trimmed = String(value || "").trim();
             return trimmed ? trimmed : null;
         };
+
+        const normalizeSearchValue = (value) => String(value || "")
+            .normalize("NFD")
+            .replace(/[\u0300-\u036f]/g, "")
+            .toLowerCase();
 
         const hasMeaningfulPayload = (payload) => {
             if (!payload || typeof payload !== "object") return false;
@@ -794,7 +761,18 @@
             ].filter(Boolean).join(" ");
 
             let control = "";
-            if (field.type === "textarea") {
+            if (field.type === "industry") {
+                control = `
+                    <div class="industry-picker" data-input-id="${id}" data-placeholder="${field.placeholder || "Vyberte obor"}">
+                        <input type="hidden" id="${id}" name="${field.key}">
+                        <button type="button" class="industry-trigger placeholder">${field.placeholder || "Vyberte obor"}</button>
+                        <div class="industry-panel">
+                            <input type="text" class="industry-search" placeholder="Hledat obor">
+                            <div class="industry-groups"></div>
+                        </div>
+                    </div>
+                `;
+            } else if (field.type === "textarea") {
                 control = `<textarea ${commonAttrs}></textarea>`;
             } else if (field.type === "select") {
                 const options = (field.options || []).map((option) => `<option value="${option}">${option}</option>`).join("");
@@ -806,36 +784,95 @@
             return `
                 <div class="${classes.join(" ")}">
                     <label for="${id}">${field.label}${requiredMarkup}</label>
-                    ${field.hint ? `<div class="field-hint">${field.hint}</div>` : ""}
                     ${control}
                 </div>
             `;
         };
 
         const populateSuggestionLists = () => {
-            fieldSuggestionsList.innerHTML = createOptionMarkup(FIELD_SUGGESTIONS);
             categorySuggestionsList.innerHTML = createOptionMarkup(CATEGORY_SUGGESTIONS);
         };
 
-        const updateSubmitMetaText = () => {
-            const config = TYPE_CONFIG[currentType];
-            submitMeta.textContent = includeCommission.checked
-                ? `${config.label} subjekt i zakázka se uloží jako pending záznamy.`
-                : `${config.label} subjekt se uloží jako pending záznam v systému.`;
+        const renderIndustryOptions = (groupsElement, activeValue, query) => {
+            const normalizedQuery = normalizeSearchValue(query);
+            const markup = GROUPED_FIELD_OPTIONS.map((group) => {
+                const options = group.options.filter((option) => normalizeSearchValue(option.label).includes(normalizedQuery));
+                if (!options.length) return "";
+
+                return `
+                    <div class="industry-group">
+                        <div class="industry-group-title">${group.label}</div>
+                        <div class="industry-options">
+                            ${options.map((option) => `
+                                <button type="button" class="industry-option${option.value === activeValue ? " active" : ""}" data-value="${option.value.replace(/"/g, "&quot;")}">${option.label}</button>
+                            `).join("")}
+                        </div>
+                    </div>
+                `;
+            }).join("");
+
+            groupsElement.innerHTML = markup || '<div class="industry-empty">Žádná shoda</div>';
         };
+
+        const syncIndustryTriggerLabel = (picker) => {
+            const hiddenInput = picker.querySelector('input[type="hidden"]');
+            const trigger = picker.querySelector('.industry-trigger');
+            const placeholder = picker.dataset.placeholder || 'Vyberte obor';
+            const value = hiddenInput.value;
+            trigger.textContent = value || placeholder;
+            trigger.classList.toggle('placeholder', !value);
+        };
+
+        const initializeIndustryPickers = () => {
+            document.querySelectorAll('.industry-picker').forEach((picker) => {
+                const hiddenInput = picker.querySelector('input[type="hidden"]');
+                const trigger = picker.querySelector('.industry-trigger');
+                const searchInput = picker.querySelector('.industry-search');
+                const groupsElement = picker.querySelector('.industry-groups');
+
+                syncIndustryTriggerLabel(picker);
+                renderIndustryOptions(groupsElement, hiddenInput.value, '');
+
+                trigger.addEventListener('click', () => {
+                    const willOpen = !picker.classList.contains('open');
+                    document.querySelectorAll('.industry-picker.open').forEach((openPicker) => openPicker.classList.remove('open'));
+                    picker.classList.toggle('open', willOpen);
+                    if (willOpen) {
+                        searchInput.value = '';
+                        renderIndustryOptions(groupsElement, hiddenInput.value, '');
+                        searchInput.focus();
+                    }
+                });
+
+                searchInput.addEventListener('input', () => {
+                    renderIndustryOptions(groupsElement, hiddenInput.value, searchInput.value);
+                });
+
+                groupsElement.addEventListener('click', (event) => {
+                    const option = event.target.closest('.industry-option');
+                    if (!option) return;
+                    hiddenInput.value = option.dataset.value || '';
+                    syncIndustryTriggerLabel(picker);
+                    renderIndustryOptions(groupsElement, hiddenInput.value, searchInput.value);
+                    picker.classList.remove('open');
+                });
+            });
+        };
+
+        document.addEventListener('click', (event) => {
+            if (!event.target.closest('.industry-picker')) {
+                document.querySelectorAll('.industry-picker.open').forEach((picker) => picker.classList.remove('open'));
+            }
+        });
 
         const renderCurrentType = () => {
             const config = TYPE_CONFIG[currentType];
 
-            summaryTitle.textContent = config.summaryTitle;
-            summaryText.textContent = config.summaryText;
-            entityDescription.textContent = config.entityDescription;
-            commissionDescription.textContent = config.commissionDescription;
             entityBadge.textContent = config.label;
-            updateSubmitMetaText();
 
             entityFieldsContainer.innerHTML = config.entityFields.map((field) => renderField("entity", field)).join("");
             commissionGrid.innerHTML = config.commissionFields.map((field) => renderField("commission", field)).join("");
+            initializeIndustryPickers();
 
             typeButtons.forEach((button) => {
                 button.classList.toggle("active", button.dataset.type === currentType);
@@ -857,12 +894,18 @@
             }, {});
         };
 
+        entityFieldBase.forEach((field) => {
+            if (field.key === 'field') field.type = 'industry';
+        });
+        commissionFieldBase.forEach((field) => {
+            if (field.key === 'field') field.type = 'industry';
+        });
+
         populateSuggestionLists();
         renderCurrentType();
 
         includeCommission.addEventListener("change", () => {
             commissionFields.classList.toggle("visible", includeCommission.checked);
-            updateSubmitMetaText();
         });
 
         typeButtons.forEach((button) => {
