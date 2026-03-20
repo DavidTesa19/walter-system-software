@@ -2,13 +2,931 @@
 <html lang="cs">
 <head>
     <meta charset="UTF-8">
-    <meta http-equiv="refresh" content="0; url=/">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Walter System - Přesměrování formuláře</title>
+    <title>Walter System - Veřejná žádost</title>
+    <style>
+        :root {
+            --canvas: #efe8dc;
+            --panel: rgba(255, 251, 245, 0.94);
+            --panel-border: rgba(75, 56, 37, 0.12);
+            --text: #261b14;
+            --muted: #6f5a49;
+            --accent: #0f7b69;
+            --accent-strong: #0a5f52;
+            --accent-soft: rgba(15, 123, 105, 0.12);
+            --warm: #b67a35;
+            --danger: #b64f42;
+            --shadow: 0 28px 64px rgba(38, 27, 20, 0.16);
+            --radius-xl: 28px;
+            --radius-lg: 22px;
+            --radius-md: 16px;
+        }
+
+        * {
+            box-sizing: border-box;
+        }
+
+        body {
+            margin: 0;
+            min-height: 100vh;
+            padding: 28px 16px 40px;
+            color: var(--text);
+            font-family: "Segoe UI", "Inter", Arial, sans-serif;
+            background:
+                radial-gradient(circle at top left, rgba(15, 123, 105, 0.18), transparent 32%),
+                radial-gradient(circle at bottom right, rgba(182, 122, 53, 0.16), transparent 26%),
+                linear-gradient(150deg, #f7f1e6 0%, #eadcc6 100%);
+        }
+
+        .shell {
+            max-width: 1180px;
+            margin: 0 auto;
+        }
+
+        .topbar {
+            display: flex;
+            justify-content: flex-end;
+            margin-bottom: 14px;
+        }
+
+        .app-link {
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            padding: 12px 16px;
+            border-radius: 999px;
+            background: rgba(255, 255, 255, 0.84);
+            border: 1px solid rgba(75, 56, 37, 0.1);
+            color: var(--accent-strong);
+            text-decoration: none;
+            font-size: 14px;
+            font-weight: 700;
+            box-shadow: 0 10px 20px rgba(38, 27, 20, 0.08);
+        }
+
+        .app-link svg {
+            width: 16px;
+            height: 16px;
+        }
+
+        .panel {
+            background: var(--panel);
+            border: 1px solid var(--panel-border);
+            border-radius: var(--radius-xl);
+            box-shadow: var(--shadow);
+            overflow: hidden;
+            backdrop-filter: blur(16px);
+        }
+
+        .hero {
+            padding: 34px 34px 22px;
+            background:
+                radial-gradient(circle at top right, rgba(15, 123, 105, 0.14), transparent 30%),
+                linear-gradient(135deg, rgba(255, 255, 255, 0.14), rgba(255, 255, 255, 0));
+            border-bottom: 1px solid rgba(75, 56, 37, 0.08);
+        }
+
+        .eyebrow {
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            padding: 8px 12px;
+            border-radius: 999px;
+            background: rgba(255, 255, 255, 0.72);
+            color: var(--accent-strong);
+            font-size: 12px;
+            font-weight: 800;
+            letter-spacing: 0.08em;
+            text-transform: uppercase;
+        }
+
+        h1 {
+            margin: 16px 0 12px;
+            font-size: clamp(34px, 5vw, 52px);
+            line-height: 1.02;
+        }
+
+        .subtitle {
+            max-width: 760px;
+            margin: 0;
+            color: var(--muted);
+            font-size: 15px;
+            line-height: 1.75;
+        }
+
+        .hero-grid {
+            display: grid;
+            grid-template-columns: minmax(0, 1.5fr) minmax(280px, 0.8fr);
+            gap: 20px;
+            align-items: end;
+        }
+
+        .summary-card {
+            align-self: stretch;
+            padding: 18px 18px 16px;
+            border-radius: var(--radius-lg);
+            background: rgba(255, 255, 255, 0.72);
+            border: 1px solid rgba(75, 56, 37, 0.08);
+        }
+
+        .summary-card strong {
+            display: block;
+            margin-bottom: 8px;
+            font-size: 15px;
+        }
+
+        .summary-card p {
+            margin: 0;
+            color: var(--muted);
+            font-size: 13px;
+            line-height: 1.6;
+        }
+
+        .content {
+            padding: 28px 34px 34px;
+        }
+
+        .type-selector {
+            display: grid;
+            grid-template-columns: repeat(3, minmax(0, 1fr));
+            gap: 12px;
+            margin-bottom: 24px;
+        }
+
+        .type-btn {
+            border: 1px solid rgba(75, 56, 37, 0.12);
+            background: rgba(255, 255, 255, 0.7);
+            color: var(--muted);
+            border-radius: 20px;
+            padding: 16px 16px 15px;
+            text-align: left;
+            cursor: pointer;
+            transition: transform 0.18s ease, box-shadow 0.18s ease, border-color 0.18s ease;
+        }
+
+        .type-btn strong {
+            display: block;
+            margin-bottom: 4px;
+            color: var(--text);
+            font-size: 16px;
+        }
+
+        .type-btn span {
+            display: block;
+            font-size: 13px;
+            line-height: 1.45;
+        }
+
+        .type-btn:hover,
+        .type-btn.active {
+            transform: translateY(-1px);
+            border-color: rgba(15, 123, 105, 0.28);
+            background: linear-gradient(180deg, rgba(15, 123, 105, 0.12), rgba(255, 255, 255, 0.92));
+            box-shadow: 0 14px 24px rgba(15, 123, 105, 0.12);
+        }
+
+        .type-btn.active strong,
+        .type-btn.active span {
+            color: var(--accent-strong);
+        }
+
+        .message {
+            display: none;
+            margin-bottom: 20px;
+            padding: 14px 16px;
+            border-radius: var(--radius-md);
+            font-size: 14px;
+            line-height: 1.65;
+        }
+
+        .message.show {
+            display: block;
+        }
+
+        .message.success {
+            background: rgba(15, 123, 105, 0.1);
+            color: var(--accent-strong);
+            border: 1px solid rgba(15, 123, 105, 0.18);
+        }
+
+        .message.error {
+            background: rgba(182, 79, 66, 0.1);
+            color: var(--danger);
+            border: 1px solid rgba(182, 79, 66, 0.18);
+        }
+
+        .section-card {
+            margin-top: 22px;
+            padding: 22px;
+            border-radius: var(--radius-lg);
+            background: rgba(255, 255, 255, 0.56);
+            border: 1px solid rgba(75, 56, 37, 0.08);
+        }
+
+        .section-head {
+            display: flex;
+            justify-content: space-between;
+            gap: 16px;
+            align-items: flex-start;
+            margin-bottom: 18px;
+        }
+
+        .section-head h2 {
+            margin: 0 0 6px;
+            font-size: 22px;
+        }
+
+        .section-head p {
+            margin: 0;
+            color: var(--muted);
+            font-size: 14px;
+            line-height: 1.6;
+            max-width: 760px;
+        }
+
+        .pill {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            min-height: 38px;
+            padding: 10px 14px;
+            border-radius: 999px;
+            background: rgba(255, 255, 255, 0.8);
+            border: 1px solid rgba(75, 56, 37, 0.1);
+            color: var(--accent-strong);
+            font-size: 12px;
+            font-weight: 800;
+            letter-spacing: 0.04em;
+            text-transform: uppercase;
+            white-space: nowrap;
+        }
+
+        .pill.subtle {
+            color: var(--warm);
+        }
+
+        .grid {
+            display: grid;
+            grid-template-columns: repeat(2, minmax(0, 1fr));
+            gap: 14px 18px;
+        }
+
+        .form-group {
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+        }
+
+        .full-width {
+            grid-column: 1 / -1;
+        }
+
+        label {
+            font-size: 13px;
+            font-weight: 700;
+            color: #4d3b2d;
+        }
+
+        .field-hint {
+            margin-top: -2px;
+            color: var(--muted);
+            font-size: 12px;
+            line-height: 1.5;
+        }
+
+        input,
+        select,
+        textarea {
+            width: 100%;
+            border: 1px solid rgba(75, 56, 37, 0.14);
+            border-radius: 14px;
+            background: rgba(255, 255, 255, 0.9);
+            color: var(--text);
+            padding: 13px 14px;
+            font-size: 14px;
+            transition: border-color 0.18s ease, box-shadow 0.18s ease, transform 0.18s ease;
+        }
+
+        textarea {
+            min-height: 110px;
+            resize: vertical;
+        }
+
+        input:focus,
+        select:focus,
+        textarea:focus {
+            outline: none;
+            border-color: rgba(15, 123, 105, 0.44);
+            box-shadow: 0 0 0 4px rgba(15, 123, 105, 0.12);
+        }
+
+        .toggle-row {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 16px;
+            padding: 16px 18px;
+            border-radius: 18px;
+            background: var(--accent-soft);
+            margin-bottom: 20px;
+        }
+
+        .toggle-row strong {
+            display: block;
+            margin-bottom: 4px;
+            font-size: 15px;
+        }
+
+        .toggle-row span {
+            color: var(--muted);
+            font-size: 13px;
+            line-height: 1.5;
+        }
+
+        .switch {
+            position: relative;
+            width: 58px;
+            height: 32px;
+            flex: 0 0 auto;
+        }
+
+        .switch input {
+            opacity: 0;
+            width: 0;
+            height: 0;
+            position: absolute;
+        }
+
+        .slider {
+            position: absolute;
+            inset: 0;
+            background: rgba(38, 27, 20, 0.18);
+            border-radius: 999px;
+            cursor: pointer;
+            transition: 0.2s ease;
+        }
+
+        .slider::before {
+            content: "";
+            position: absolute;
+            width: 24px;
+            height: 24px;
+            left: 4px;
+            top: 4px;
+            border-radius: 50%;
+            background: white;
+            transition: 0.2s ease;
+            box-shadow: 0 6px 14px rgba(38, 27, 20, 0.16);
+        }
+
+        .switch input:checked + .slider {
+            background: var(--accent);
+        }
+
+        .switch input:checked + .slider::before {
+            transform: translateX(26px);
+        }
+
+        .commission-fields {
+            display: none;
+        }
+
+        .commission-fields.visible {
+            display: block;
+        }
+
+        .checkbox-card {
+            display: flex;
+            gap: 12px;
+            align-items: flex-start;
+            padding: 14px 16px;
+            border-radius: 16px;
+            background: rgba(255, 255, 255, 0.78);
+            border: 1px solid rgba(75, 56, 37, 0.08);
+        }
+
+        .checkbox-card input {
+            width: 18px;
+            height: 18px;
+            margin-top: 2px;
+            flex: 0 0 auto;
+        }
+
+        .checkbox-card strong {
+            display: block;
+            margin-bottom: 4px;
+            font-size: 14px;
+        }
+
+        .checkbox-card span {
+            display: block;
+            color: var(--muted);
+            font-size: 12px;
+            line-height: 1.5;
+        }
+
+        .submit-btn {
+            width: 100%;
+            margin-top: 24px;
+            border: none;
+            border-radius: 20px;
+            background: linear-gradient(135deg, var(--accent), #14856f);
+            color: white;
+            padding: 16px 18px;
+            cursor: pointer;
+            transition: transform 0.18s ease, opacity 0.18s ease, box-shadow 0.18s ease;
+            box-shadow: 0 18px 28px rgba(15, 123, 105, 0.2);
+        }
+
+        .submit-btn strong {
+            display: block;
+            font-size: 16px;
+            font-weight: 800;
+        }
+
+        .submit-btn span {
+            display: block;
+            margin-top: 4px;
+            font-size: 12px;
+            opacity: 0.88;
+        }
+
+        .submit-btn:hover {
+            transform: translateY(-1px);
+        }
+
+        .submit-btn:disabled {
+            opacity: 0.72;
+            cursor: not-allowed;
+            transform: none;
+        }
+
+        .required {
+            color: var(--danger);
+        }
+
+        .hint {
+            font-size: 12px;
+            color: var(--muted);
+            line-height: 1.55;
+        }
+
+        @media (max-width: 920px) {
+            .hero-grid,
+            .type-selector,
+            .grid {
+                grid-template-columns: 1fr;
+            }
+
+            .hero,
+            .content {
+                padding: 24px 20px;
+            }
+
+            .section-head,
+            .toggle-row {
+                flex-direction: column;
+                align-items: flex-start;
+            }
+
+            .topbar {
+                justify-content: stretch;
+            }
+
+            .app-link {
+                width: 100%;
+                justify-content: center;
+            }
+        }
+    </style>
 </head>
 <body>
+    <div class="shell">
+        <div class="topbar">
+            <a href="https://app.waltersystem.cz" class="app-link" title="Aplikace" target="_blank" rel="noopener noreferrer">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <rect x="3" y="3" width="7" height="7"></rect>
+                    <rect x="14" y="3" width="7" height="7"></rect>
+                    <rect x="14" y="14" width="7" height="7"></rect>
+                    <rect x="3" y="14" width="7" height="7"></rect>
+                </svg>
+                <span>Aplikace Walter System</span>
+            </a>
+        </div>
+
+        <div class="panel">
+            <div class="hero">
+                <div class="hero-grid">
+                    <div>
+                        <div class="eyebrow">Walter System intake</div>
+                        <h1>Veřejná žádost o spolupráci</h1>
+                        <p class="subtitle">Vyplňte profil subjektu i zakázky v plném rozsahu. Formulář je nově sladěný s datovým modelem v aplikaci, takže můžete rovnou zapsat kontakty, obor, kategorii, rozpočty, workflow stav i poznámky bez následného ručního doplňování.</p>
+                    </div>
+                    <div class="summary-card">
+                        <strong id="summaryTitle">Klientský subjekt + volitelná zakázka</strong>
+                        <p id="summaryText">Po odeslání se vytvoří pending subjekt a podle vyplněných údajů i pending zakázka se samostatným ID pro schválení.</p>
+                    </div>
+                </div>
+            </div>
+
+            <div class="content">
+                <div id="message" class="message"></div>
+
+                <div class="type-selector">
+                    <button type="button" class="type-btn active" data-type="client">
+                        <strong>Klient</strong>
+                        <span>Poptávka, klientský profil a parametry zakázky.</span>
+                    </button>
+                    <button type="button" class="type-btn" data-type="partner">
+                        <strong>Partner</strong>
+                        <span>Partner profil, nabídka spolupráce a obchodní rámec.</span>
+                    </button>
+                    <button type="button" class="type-btn" data-type="tiper">
+                        <strong>Tipař</strong>
+                        <span>Kontakt, referral a detailní tip s navazující informací.</span>
+                    </button>
+                </div>
+
+                <form id="submissionForm">
+                    <section class="section-card">
+                        <div class="section-head">
+                            <div>
+                                <h2>Profil subjektu</h2>
+                                <p id="entityDescription"></p>
+                            </div>
+                            <div class="pill" id="entityBadge">Subjekt</div>
+                        </div>
+                        <div class="grid" id="entityFields"></div>
+                    </section>
+
+                    <section class="section-card">
+                        <div class="toggle-row">
+                            <div>
+                                <strong>Přidat rovnou i zakázku</strong>
+                                <span>Pokud vyplníte i část níže, založí se spolu se subjektem také pending zakázka s vlastním ID. Můžete vyplnit i finance, workflow stav, interní přiřazení a doplňující poznámky.</span>
+                            </div>
+                            <label class="switch" aria-label="Přidat zakázku">
+                                <input type="checkbox" id="includeCommission">
+                                <span class="slider"></span>
+                            </label>
+                        </div>
+
+                        <div id="commissionFields" class="commission-fields">
+                            <div class="section-head">
+                                <div>
+                                    <h2>Profil zakázky</h2>
+                                    <p id="commissionDescription"></p>
+                                </div>
+                                <div class="pill subtle">Zakázka</div>
+                            </div>
+                            <div class="grid" id="commissionGrid"></div>
+                            <div class="hint" style="margin-top: 14px;">Nechte prázdné jen to, co opravdu nevíte. Formulář posílá stejné klíče, které používá entity/commission část aplikace.</div>
+                        </div>
+                    </section>
+
+                    <button type="submit" class="submit-btn">
+                        <strong id="submitTitle">Odeslat do schvalování</strong>
+                        <span id="submitMeta">Subjekt se uloží jako pending záznam v systému.</span>
+                    </button>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <datalist id="fieldSuggestions"></datalist>
+    <datalist id="categorySuggestions"></datalist>
+
     <script>
-        window.location.replace('/');
+        const API_BASE_URL = ["localhost", "127.0.0.1"].includes(window.location.hostname)
+            ? "http://localhost:3004"
+            : "https://api.waltersystem.cz";
+
+        const FIELD_SUGGESTIONS = [
+            "Automatizace",
+            "Bankovnictví",
+            "Bydlení a reality",
+            "Data a analytika",
+            "Digitální marketing",
+            "E-commerce",
+            "Ekonomika a management",
+            "Energetika",
+            "Finance",
+            "HR (lidské zdroje, personalistika)",
+            "Informatika a vývoj software",
+            "Konstrukce a strojírenství",
+            "Logistika a doprava",
+            "Management",
+            "Marketing",
+            "Nemovitosti a reality",
+            "Obchod a prodej",
+            "Personalistika",
+            "Právo",
+            "Recruiting",
+            "Robotika a automatizace",
+            "Softwarové inženýrství",
+            "Stavebnictví",
+            "Strategie a consulting",
+            "Technologie umělé inteligence",
+            "Telekomunikace",
+            "Účetnictví",
+            "Vývoj software",
+            "Výroba",
+            "Zdravotnictví"
+        ];
+
+        const CATEGORY_SUGGESTIONS = [
+            "B2B",
+            "B2C",
+            "Consulting",
+            "Executive search",
+            "Interim",
+            "Lead",
+            "Outsourcing",
+            "Partnerství",
+            "Referral",
+            "Retained",
+            "Sales",
+            "Sourcing",
+            "Strategická spolupráce"
+        ];
+
+        const PRIORITY_OPTIONS = ["Nízká", "Střední", "Vysoká", "Urgentní"];
+
+        const entityFieldBase = [
+            { key: "first_name", label: "Jméno", placeholder: "Např. Jan", required: false },
+            { key: "last_name", label: "Příjmení", placeholder: "Např. Novák", required: false },
+            { key: "company_name", label: "Společnost", placeholder: "Např. Walter Consulting", required: false },
+            { key: "field", label: "Obor", placeholder: "Např. IT, finance, energetika", list: "fieldSuggestions" },
+            { key: "category", label: "Kategorie", placeholder: "Např. B2B, referral, outsourcing", list: "categorySuggestions" },
+            { key: "location", label: "Lokalita", placeholder: "Např. Praha / Brno / remote" },
+            { key: "phone", label: "Telefon", type: "tel", placeholder: "+420 777 123 456" },
+            { key: "email", label: "E-mail", type: "email", placeholder: "kontakt@firma.cz" },
+            { key: "website", label: "Web", type: "url", placeholder: "https://www.example.com" },
+            { key: "info", label: "Info / poznámky", type: "textarea", placeholder: "Kontext, specializace, preference nebo další detaily.", fullWidth: true }
+        ];
+
+        const commissionFieldBase = [
+            { key: "position", label: "Zakázka / pozice", placeholder: "Např. Senior obchodník" },
+            { key: "service_position", label: "Typ služby", placeholder: "Např. recruiting, outsourcing, konzultace" },
+            { key: "assigned_to", label: "Přiřazeno komu", placeholder: "Např. David / Sales team" },
+            { key: "budget", label: "Rozpočet / hodnota", placeholder: "Např. 120 000 CZK" },
+            { key: "commission_value", label: "Provize", placeholder: "Např. 15 %" },
+            { key: "priority", label: "Priorita", type: "select", options: PRIORITY_OPTIONS },
+            { key: "state", label: "Stav", placeholder: "Např. nové zadání" },
+            { key: "deadline", label: "Termín", type: "date" },
+            { key: "field", label: "Obor zakázky", placeholder: "Např. management, IT, sales", list: "fieldSuggestions" },
+            { key: "category", label: "Kategorie zakázky", placeholder: "Např. executive search", list: "categorySuggestions" },
+            { key: "location", label: "Lokalita zakázky", placeholder: "Např. Praha / hybrid / remote" },
+            { key: "phone", label: "Telefon ke zakázce", type: "tel", placeholder: "+420 777 123 456" },
+            { key: "info", label: "Info k zakázce", type: "textarea", placeholder: "Doplňující kontext, zadání, parametry nebo očekávání.", fullWidth: true },
+            { key: "notes", label: "Poznámky", type: "textarea", placeholder: "Interní poznámky nebo doplnění k workflow.", fullWidth: true },
+            {
+                key: "is_tipped",
+                label: "Označit jako tipnutou zakázku",
+                type: "checkbox",
+                fullWidth: true,
+                hint: "Uložení příznaku is_tipped pro návazné workflow v systému."
+            }
+        ];
+
+        const TYPE_CONFIG = {
+            client: {
+                label: "Klient",
+                summaryTitle: "Klientský subjekt + volitelná klientská zakázka",
+                summaryText: "Klientský intake pokrývá kontakty, obor, kategorii, požadovanou službu, rozpočet i workflow detail zakázky.",
+                entityDescription: "Vyplňte klientský profil co nejúplněji. U klientů lze předem uložit i požadovanou službu a orientační rozpočet na úrovni subjektu.",
+                commissionDescription: "Zakázka klienta podporuje stejné workflow klíče jako v aplikaci: přiřazení, prioritu, stav, deadline, finance, obor i doplňující poznámky.",
+                entityFields: [
+                    ...entityFieldBase.slice(0, 5),
+                    { key: "service", label: "Požadovaná služba", placeholder: "Např. recruitment, executive search" },
+                    { key: "budget", label: "Rozpočet subjektu", placeholder: "Např. 500 000 CZK" },
+                    ...entityFieldBase.slice(5)
+                ],
+                commissionFields: commissionFieldBase.map((field) => field.key === "position" ? { ...field, label: "Zakázka / poptávka" } : field)
+            },
+            partner: {
+                label: "Partner",
+                summaryTitle: "Partnerský subjekt + volitelná partnerská zakázka",
+                summaryText: "Partnerský intake je vhodný pro nabídky kapacity, spolupráci i rámcové obchodní zakázky včetně interního přiřazení.",
+                entityDescription: "Partner profil ukládá kontakty, obor, kategorii, lokaci a doplňující informace stejně jako entity karta v systému.",
+                commissionDescription: "Partnerská zakázka ukládá nabídku spolupráce, typ služby, rozpočet, provizi, workflow stav, deadline i poznámky.",
+                entityFields: entityFieldBase,
+                commissionFields: commissionFieldBase
+            },
+            tiper: {
+                label: "Tipař",
+                summaryTitle: "Tipařský subjekt + volitelný tip / zakázka",
+                summaryText: "Tipařský intake teď podporuje i firmu, kontakty, obor, kategorii a plný commission payload místo zkráceného starého schématu.",
+                entityDescription: "U tipařů lze nově rovnou uložit kontakt, organizaci, obor, kategorii, lokaci, web i širší kontext referral vztahu.",
+                commissionDescription: "Tip může obsahovat název, typ, přiřazení, hodnotu, provizi, workflow stav, lokaci, telefon, detailní info i poznámky.",
+                entityFields: entityFieldBase,
+                commissionFields: commissionFieldBase.map((field) => field.key === "position" ? { ...field, label: "Tip / zakázka" } : field)
+            }
+        };
+
+        let currentType = "client";
+
+        const form = document.getElementById("submissionForm");
+        const messageEl = document.getElementById("message");
+        const typeButtons = document.querySelectorAll(".type-btn");
+        const includeCommission = document.getElementById("includeCommission");
+        const commissionFields = document.getElementById("commissionFields");
+        const entityFieldsContainer = document.getElementById("entityFields");
+        const commissionGrid = document.getElementById("commissionGrid");
+        const entityDescription = document.getElementById("entityDescription");
+        const commissionDescription = document.getElementById("commissionDescription");
+        const summaryTitle = document.getElementById("summaryTitle");
+        const summaryText = document.getElementById("summaryText");
+        const entityBadge = document.getElementById("entityBadge");
+        const submitMeta = document.getElementById("submitMeta");
+        const fieldSuggestionsList = document.getElementById("fieldSuggestions");
+        const categorySuggestionsList = document.getElementById("categorySuggestions");
+
+        const trimToNull = (value) => {
+            const trimmed = String(value || "").trim();
+            return trimmed ? trimmed : null;
+        };
+
+        const hasMeaningfulPayload = (payload) => {
+            if (!payload || typeof payload !== "object") return false;
+            return Object.values(payload).some((value) => value !== null && value !== undefined && value !== false && String(value).trim() !== "");
+        };
+
+        const createOptionMarkup = (values) => values.map((value) => `<option value="${value.replace(/"/g, "&quot;")}"></option>`).join("");
+
+        const showMessage = (html, type) => {
+            messageEl.innerHTML = html;
+            messageEl.className = `message ${type} show`;
+        };
+
+        const resetMessage = () => {
+            messageEl.className = "message";
+            messageEl.textContent = "";
+        };
+
+        const getFieldId = (scope, key) => `${scope}-${key}`;
+
+        const renderField = (scope, field) => {
+            const id = getFieldId(scope, field.key);
+            const classes = ["form-group"];
+            if (field.fullWidth) classes.push("full-width");
+
+            if (field.type === "checkbox") {
+                return `
+                    <div class="${classes.join(" ")}">
+                        <label class="checkbox-card" for="${id}">
+                            <input type="checkbox" id="${id}" name="${field.key}">
+                            <span>
+                                <strong>${field.label}</strong>
+                                <span>${field.hint || ""}</span>
+                            </span>
+                        </label>
+                    </div>
+                `;
+            }
+
+            const requiredMarkup = field.required ? ' <span class="required">*</span>' : "";
+            const commonAttrs = [
+                `id="${id}"`,
+                `name="${field.key}"`,
+                field.placeholder ? `placeholder="${field.placeholder.replace(/"/g, "&quot;")}"` : "",
+                field.list ? `list="${field.list}"` : ""
+            ].filter(Boolean).join(" ");
+
+            let control = "";
+            if (field.type === "textarea") {
+                control = `<textarea ${commonAttrs}></textarea>`;
+            } else if (field.type === "select") {
+                const options = (field.options || []).map((option) => `<option value="${option}">${option}</option>`).join("");
+                control = `<select ${commonAttrs}><option value="">Nevybráno</option>${options}</select>`;
+            } else {
+                control = `<input type="${field.type || "text"}" ${commonAttrs}>`;
+            }
+
+            return `
+                <div class="${classes.join(" ")}">
+                    <label for="${id}">${field.label}${requiredMarkup}</label>
+                    ${field.hint ? `<div class="field-hint">${field.hint}</div>` : ""}
+                    ${control}
+                </div>
+            `;
+        };
+
+        const populateSuggestionLists = () => {
+            fieldSuggestionsList.innerHTML = createOptionMarkup(FIELD_SUGGESTIONS);
+            categorySuggestionsList.innerHTML = createOptionMarkup(CATEGORY_SUGGESTIONS);
+        };
+
+        const updateSubmitMetaText = () => {
+            const config = TYPE_CONFIG[currentType];
+            submitMeta.textContent = includeCommission.checked
+                ? `${config.label} subjekt i zakázka se uloží jako pending záznamy.`
+                : `${config.label} subjekt se uloží jako pending záznam v systému.`;
+        };
+
+        const renderCurrentType = () => {
+            const config = TYPE_CONFIG[currentType];
+
+            summaryTitle.textContent = config.summaryTitle;
+            summaryText.textContent = config.summaryText;
+            entityDescription.textContent = config.entityDescription;
+            commissionDescription.textContent = config.commissionDescription;
+            entityBadge.textContent = config.label;
+            updateSubmitMetaText();
+
+            entityFieldsContainer.innerHTML = config.entityFields.map((field) => renderField("entity", field)).join("");
+            commissionGrid.innerHTML = config.commissionFields.map((field) => renderField("commission", field)).join("");
+
+            typeButtons.forEach((button) => {
+                button.classList.toggle("active", button.dataset.type === currentType);
+            });
+        };
+
+        const collectValues = (scope, fields) => {
+            return fields.reduce((accumulator, field) => {
+                const element = document.getElementById(getFieldId(scope, field.key));
+                if (!element) return accumulator;
+
+                if (field.type === "checkbox") {
+                    accumulator[field.key] = element.checked;
+                    return accumulator;
+                }
+
+                accumulator[field.key] = trimToNull(element.value);
+                return accumulator;
+            }, {});
+        };
+
+        populateSuggestionLists();
+        renderCurrentType();
+
+        includeCommission.addEventListener("change", () => {
+            commissionFields.classList.toggle("visible", includeCommission.checked);
+            updateSubmitMetaText();
+        });
+
+        typeButtons.forEach((button) => {
+            button.addEventListener("click", () => {
+                currentType = button.dataset.type;
+                resetMessage();
+                renderCurrentType();
+            });
+        });
+
+        form.addEventListener("submit", async (event) => {
+            event.preventDefault();
+            resetMessage();
+
+            const config = TYPE_CONFIG[currentType];
+            const submitButton = form.querySelector(".submit-btn");
+            const submitTitle = document.getElementById("submitTitle");
+            submitButton.disabled = true;
+            submitTitle.textContent = "Odesílání...";
+
+            const entity = collectValues("entity", config.entityFields);
+            const commissionPayload = collectValues("commission", config.commissionFields);
+            const commission = includeCommission.checked && hasMeaningfulPayload(commissionPayload) ? commissionPayload : null;
+
+            const hasIdentity = [entity.first_name, entity.last_name, entity.company_name].some(Boolean);
+            if (!hasIdentity) {
+                submitButton.disabled = false;
+                submitTitle.textContent = "Odeslat do schvalování";
+                showMessage("Vyplňte prosím alespoň jméno, příjmení nebo název společnosti, aby šel subjekt založit.", "error");
+                return;
+            }
+
+            try {
+                const response = await fetch(`${API_BASE_URL}/public-submissions/${currentType}`, {
+                    method: "POST",
+                    headers: {
+                        "Content-Type": "application/json"
+                    },
+                    body: JSON.stringify({ entity, commission })
+                });
+
+                const payload = await response.json().catch(() => ({}));
+                if (!response.ok) {
+                    throw new Error(payload.error || "Server error");
+                }
+
+                const idLines = [
+                    payload.entityId ? `Subjekt ID: <strong>${payload.entityId}</strong>` : null,
+                    payload.commissionId ? `Zakázka ID: <strong>${payload.commissionId}</strong>` : null
+                ].filter(Boolean).join("<br>");
+
+                showMessage(`Žádost byla úspěšně odeslána do schvalování.<br>${idLines}`, "success");
+                form.reset();
+                includeCommission.checked = false;
+                commissionFields.classList.remove("visible");
+                renderCurrentType();
+            } catch (error) {
+                console.error("Error:", error);
+                showMessage(`Chyba při odesílání žádosti. ${error.message || "Zkuste to prosím znovu."}`, "error");
+            } finally {
+                submitButton.disabled = false;
+                submitTitle.textContent = "Odeslat do schvalování";
+            }
+        });
     </script>
 </body>
 </html>
