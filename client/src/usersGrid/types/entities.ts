@@ -8,6 +8,7 @@
 export interface BaseEntity {
   id: number;
   entity_id: string;  // P001, K001, T001
+  status: 'pending' | 'accepted' | 'archived';
   created_at?: string;
   updated_at?: string;
 }

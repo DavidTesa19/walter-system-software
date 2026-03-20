@@ -21,6 +21,7 @@ import { fieldOptions } from "../fieldOptions";
 type PartnerEntityApi = {
   id: number;
   entity_id: string;
+  status: "pending" | "accepted" | "archived";
   company_name?: string | null;
   field?: string | null;
   location?: string | null;
@@ -52,6 +53,13 @@ type PartnerCommissionApi = {
   phone?: string | null;
   commission_value?: string | null;
   notes?: string | null;
+  entity_company_name?: string | null;
+  entity_first_name?: string | null;
+  entity_last_name?: string | null;
+  entity_field?: string | null;
+  entity_location?: string | null;
+  entity_phone?: string | null;
+  entity_email?: string | null;
   created_at?: string;
   updated_at?: string;
 };
@@ -98,6 +106,7 @@ const createDefaultPartnerDraft = (): PartnerCreateDraft => ({
 const normalizePartnerEntity = (entity: PartnerEntityApi): PartnerEntity => ({
   id: entity.id,
   entity_id: entity.entity_id,
+  status: entity.status,
   name: joinName(entity.first_name, entity.last_name) || entity.company_name || entity.entity_id,
   company: entity.company_name ?? null,
   field: entity.field ?? null,
@@ -132,6 +141,9 @@ const normalizePartnerCommission = (commission: PartnerCommissionApi): PartnerCo
   created_at: commission.created_at,
   updated_at: commission.updated_at
 });
+
+const getCommissionEntityName = (commission: PartnerCommissionApi) =>
+  joinName(commission.entity_first_name, commission.entity_last_name) || commission.entity_company_name || commission.commission_id.split("-")[0] || "";
 
 const mapPartnerEntityUpdates = (updates: Record<string, unknown>) => {
   const mapped: Record<string, unknown> = {};
@@ -233,6 +245,7 @@ const buildPartnerDraftEntityData = (draft: PartnerCreateDraft): EntityData => (
   groups: buildEntityData({
     id: 0,
     entity_id: "Nový partner",
+    status: "accepted",
     name: draft.entity.name,
     company: draft.entity.company,
     field: draft.entity.field,
@@ -295,7 +308,7 @@ const PartnersSectionNew: React.FC<SectionProps> = ({ viewMode, isActive, onRegi
     setIsLoading(true);
     try {
       const [entitiesData, commissionsData] = await Promise.all([
-        apiGet<PartnerEntityApi[]>("/api/partner-entities"),
+        apiGet<PartnerEntityApi[]>(`/api/partner-entities?status=${status}`),
         apiGet<PartnerCommissionApi[]>(`/api/partner-commissions?status=${status}`)
       ]);
 
@@ -321,7 +334,7 @@ const PartnersSectionNew: React.FC<SectionProps> = ({ viewMode, isActive, onRegi
             id: entity.id,
             commission_id: primaryCommission?.commission_id || `${entity.entity_id}-000`,
             partner_entity_id: entity.id,
-            status: "accepted",
+            status: entity.status,
             assigned_to: primaryCommission?.assigned_to ?? null,
             priority: primaryCommission?.priority ?? null,
             notes: primaryCommission?.notes ?? null,
@@ -354,21 +367,59 @@ const PartnersSectionNew: React.FC<SectionProps> = ({ viewMode, isActive, onRegi
         return;
       }
 
-      const rows: PartnerGridRow[] = normalizedCommissions.map((commission) => {
+      const entityIdsWithCommission = new Set<number>(normalizedCommissions.map((commission) => commission.partner_entity_id));
+
+      const commissionRows: PartnerGridRow[] = normalizedCommissions.map((commission, index) => {
         const entity = normalizedEntities.find((item) => item.id === commission.partner_entity_id) || null;
+        const rawCommission = (Array.isArray(commissionsData) ? commissionsData : [])[index];
         return {
           ...commission,
           entityOnly: false,
           entity_id: entity?.entity_id || commission.commission_id.split("-")[0] || "",
-          name: entity?.name || "",
-          company: entity?.company || "",
-          field: entity?.field || commission.field || "",
-          location: entity?.location || commission.location || "",
-          mobile: entity?.mobile || commission.phone || "",
-          email: entity?.email || "",
+          name: entity?.name || getCommissionEntityName(rawCommission),
+          company: entity?.company || rawCommission?.entity_company_name || "",
+          field: entity?.field || rawCommission?.entity_field || commission.field || "",
+          location: entity?.location || rawCommission?.entity_location || commission.location || "",
+          mobile: entity?.mobile || rawCommission?.entity_phone || commission.phone || "",
+          email: entity?.email || rawCommission?.entity_email || "",
           entity
         };
       });
+
+      const entityOnlyRows: PartnerGridRow[] = normalizedEntities
+        .filter((entity) => !entityIdsWithCommission.has(entity.id))
+        .map((entity) => ({
+          id: -entity.id,
+          commission_id: `${entity.entity_id}-000`,
+          partner_entity_id: entity.id,
+          status: entity.status,
+          assigned_to: null,
+          priority: null,
+          notes: null,
+          deadline: null,
+          state: null,
+          commission_value: null,
+          position: null,
+          budget: null,
+          service_position: null,
+          field: entity.field || "",
+          location: entity.location || "",
+          category: null,
+          phone: entity.mobile || null,
+          created_at: entity.created_at,
+          updated_at: entity.updated_at,
+          entityOnly: true,
+          entity_id: entity.entity_id,
+          name: entity.name || "",
+          company: entity.company || "",
+          mobile: entity.mobile || "",
+          email: entity.email || "",
+          commission_count: 0,
+          primaryCommissionId: null,
+          entity
+        }));
+
+      const rows = [...commissionRows, ...entityOnlyRows];
 
       rows.sort((left, right) => left.commission_id.localeCompare(right.commission_id));
 
@@ -436,23 +487,29 @@ const PartnersSectionNew: React.FC<SectionProps> = ({ viewMode, isActive, onRegi
 
   const handleApprove = useCallback(async (id: number) => {
     try {
-      await apiPost(`/api/partner-commissions/${id}/approve`);
+      const row = gridData.find((item) => item.id === id);
+      if (!row) return;
+      if (row.entityOnly && row.entity) await apiPost(`/api/partner-entities/${row.entity.id}/approve`);
+      else await apiPost(`/api/partner-commissions/${id}/approve`);
       fetchData();
     } catch (error) {
       console.error("Error approving partner commission:", error);
       alert("Chyba při schvalování zakázky");
     }
-  }, [fetchData]);
+  }, [fetchData, gridData]);
 
   const handleRestore = useCallback(async (id: number) => {
     try {
-      await apiPost(`/api/partner-commissions/${id}/restore`);
+      const row = gridData.find((item) => item.id === id);
+      if (!row) return;
+      if (row.entityOnly && row.entity) await apiPost(`/api/partner-entities/${row.entity.id}/restore`);
+      else await apiPost(`/api/partner-commissions/${id}/restore`);
       fetchData();
     } catch (error) {
       console.error("Error restoring partner commission:", error);
       alert("Chyba při obnovování zakázky");
     }
-  }, [fetchData]);
+  }, [fetchData, gridData]);
 
   const handleDelete = useCallback(async (id: number) => {
     if (viewMode === "active") {
@@ -483,6 +540,27 @@ const PartnersSectionNew: React.FC<SectionProps> = ({ viewMode, isActive, onRegi
 
     const commission = commissions.find((item) => item.id === id);
     const row = gridData.find((item) => item.id === id);
+    if (row?.entityOnly && row.entity) {
+      const isArchivedEntity = row.status === "archived";
+      const confirmMessage = isArchivedEntity
+        ? `Opravdu chcete TRVALE SMAZAT tohoto partnera z databáze?\n\nPartner: ${row.name || row.company || row.entity_id}\nID: ${row.entity_id}\n\nTato akce je NEzvratná!`
+        : `Opravdu chcete zamítnout tohoto partnera?\n\nPartner: ${row.name || row.company || row.entity_id}\nID: ${row.entity_id}`;
+
+      if (!window.confirm(confirmMessage)) return;
+
+      try {
+        await apiDelete(`/api/partner-entities/${row.entity.id}`);
+        if (selectedEntityId === row.entity.id) {
+          closeProfile();
+        }
+        fetchData();
+      } catch (error) {
+        console.error("Error deleting partner entity:", error);
+        alert("Chyba při provádění akce");
+      }
+      return;
+    }
+
     const isArchived = commission?.status === "archived";
     const isPending = commission?.status === "pending";
     const subject = commission?.position || "N/A";
@@ -510,6 +588,7 @@ const PartnersSectionNew: React.FC<SectionProps> = ({ viewMode, isActive, onRegi
     try {
       const response = await apiPost<{ entity: { id: number }; commission: { id: number } }>("/api/partner-entities/with-commission", {
         entity: {
+          status,
           first_name: emptyToNull(createDraft.entity.name),
           company_name: emptyToNull(createDraft.entity.company),
           field: emptyToNull(createDraft.entity.field),
@@ -553,6 +632,7 @@ const PartnersSectionNew: React.FC<SectionProps> = ({ viewMode, isActive, onRegi
     setIsCreating(true);
     try {
       const entity = await apiPost<PartnerEntityApi>("/api/partner-entities", {
+        status,
         first_name: emptyToNull(createDraft.entity.name),
         company_name: emptyToNull(createDraft.entity.company),
         field: emptyToNull(createDraft.entity.field),
@@ -577,7 +657,7 @@ const PartnersSectionNew: React.FC<SectionProps> = ({ viewMode, isActive, onRegi
     } finally {
       setIsCreating(false);
     }
-  }, [createDraft, fetchData]);
+  }, [createDraft, fetchData, status]);
 
   const handleCreate = useCallback(async () => {
     if (includeCommission) {
@@ -687,7 +767,7 @@ const PartnersSectionNew: React.FC<SectionProps> = ({ viewMode, isActive, onRegi
     try {
       if (["name", "company", "field", "location", "mobile", "email"].includes(field) && row.entity) {
         await handleUpdateEntity(row.entity.id, { [field]: params.newValue });
-      } else {
+      } else if (!row.entityOnly) {
         await handleUpdateCommission(row.id, { [field]: params.newValue });
       }
     } catch (error) {
@@ -735,10 +815,10 @@ const PartnersSectionNew: React.FC<SectionProps> = ({ viewMode, isActive, onRegi
       { field: "commission_count", headerName: "Počet zakázek", filter: true, editable: false, flex: 0.9, minWidth: 120 }
     ];
     const commissionCols: ColDef<PartnerGridRow>[] = [
-      { field: "position", headerName: "Zakázka", filter: true, editable: true, flex: 1.5, minWidth: 150 },
-      { field: "budget", headerName: "Rozpočet", filter: true, editable: true, flex: 1, minWidth: 110 },
-      { field: "commission_value", headerName: "Provize", filter: true, editable: true, flex: 1, minWidth: 110 },
-      { field: "priority", headerName: "Priorita", filter: true, editable: true, flex: 0.9, minWidth: 90, cellEditor: "agSelectCellEditor", cellEditorParams: { values: ["Nízká", "Střední", "Vysoká", "Urgentní"] } }
+      { field: "position", headerName: "Zakázka", filter: true, editable: (params) => !params.data?.entityOnly, flex: 1.5, minWidth: 150 },
+      { field: "budget", headerName: "Rozpočet", filter: true, editable: (params) => !params.data?.entityOnly, flex: 1, minWidth: 110 },
+      { field: "commission_value", headerName: "Provize", filter: true, editable: (params) => !params.data?.entityOnly, flex: 1, minWidth: 110 },
+      { field: "priority", headerName: "Priorita", filter: true, editable: (params) => !params.data?.entityOnly, flex: 0.9, minWidth: 90, cellEditor: "agSelectCellEditor", cellEditorParams: { values: ["Nízká", "Střední", "Vysoká", "Urgentní"] } }
     ];
 
     if (viewMode === "pending" || viewMode === "archived") {

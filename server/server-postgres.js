@@ -2911,6 +2911,22 @@ app.get("/health", (_req, res) => {
 // ENTITY & COMMISSION ENDPOINTS (DUAL MODE)
 // ============================================
 
+const resolvePublicSubmissionType = (rawType) => {
+  const normalized = String(rawType || '').toLowerCase();
+  if (normalized === 'partner' || normalized === 'partners') return 'partner';
+  if (normalized === 'client' || normalized === 'clients') return 'client';
+  if (normalized === 'tiper' || normalized === 'tipers') return 'tiper';
+  return null;
+};
+
+const hasCommissionPayload = (commission) => {
+  if (!commission || typeof commission !== 'object') return false;
+  return Object.values(commission).some((value) => {
+    if (value === null || value === undefined) return false;
+    return String(value).trim() !== '';
+  });
+};
+
 const createEntityCommissionRoutes = (entityTypes) => {
   for (const type of entityTypes) {
     const Type = type.charAt(0).toUpperCase() + type.slice(1);
@@ -2922,7 +2938,7 @@ const createEntityCommissionRoutes = (entityTypes) => {
     app.get(entitiesPath, authenticateToken, async (req, res) => {
       try {
         const getEntities = db[`get${Type}Entities`].bind(db);
-        const records = await getEntities();
+        const records = await getEntities(req.query);
         res.json(records);
       } catch (error) {
         console.error(`Error fetching ${type} entities:`, error);
@@ -2964,6 +2980,45 @@ const createEntityCommissionRoutes = (entityTypes) => {
       } catch (error) {
         console.error(`Error creating ${type} entity:`, error);
         res.status(500).json({ error: error.message || `Failed to create ${type} entity` });
+      }
+    });
+
+    app.post(`${entitiesPath}/:id/approve`, authenticateToken, async (req, res) => {
+      try {
+        const id = Number(req.params.id);
+        const updateEntity = db[`update${Type}Entity`].bind(db);
+        const updated = await updateEntity(id, { status: 'accepted' });
+        if (!updated) return res.status(404).json({ error: 'Not found' });
+        res.json(updated);
+      } catch (error) {
+        console.error(`Error approving ${type} entity:`, error);
+        res.status(500).json({ error: `Failed to approve ${type} entity` });
+      }
+    });
+
+    app.post(`${entitiesPath}/:id/archive`, authenticateToken, async (req, res) => {
+      try {
+        const id = Number(req.params.id);
+        const updateEntity = db[`update${Type}Entity`].bind(db);
+        const updated = await updateEntity(id, { status: 'archived' });
+        if (!updated) return res.status(404).json({ error: 'Not found' });
+        res.json(updated);
+      } catch (error) {
+        console.error(`Error archiving ${type} entity:`, error);
+        res.status(500).json({ error: `Failed to archive ${type} entity` });
+      }
+    });
+
+    app.post(`${entitiesPath}/:id/restore`, authenticateToken, async (req, res) => {
+      try {
+        const id = Number(req.params.id);
+        const updateEntity = db[`update${Type}Entity`].bind(db);
+        const updated = await updateEntity(id, { status: 'accepted' });
+        if (!updated) return res.status(404).json({ error: 'Not found' });
+        res.json(updated);
+      } catch (error) {
+        console.error(`Error restoring ${type} entity:`, error);
+        res.status(500).json({ error: `Failed to restore ${type} entity` });
       }
     });
 
@@ -3089,6 +3144,10 @@ const createEntityCommissionRoutes = (entityTypes) => {
         const updateCommission = db[`update${Type}Commission`].bind(db);
         const updated = await updateCommission(id, { status: "accepted" });
         if (!updated) return res.status(404).json({ error: "Not found" });
+        if (updated.entity_id) {
+          const updateEntity = db[`update${Type}Entity`].bind(db);
+          await updateEntity(updated.entity_id, { status: 'accepted' });
+        }
         res.json(updated);
       } catch (error) {
         console.error(`Error approving ${type} commission:`, error);
@@ -3115,6 +3174,10 @@ const createEntityCommissionRoutes = (entityTypes) => {
         const updateCommission = db[`update${Type}Commission`].bind(db);
         const updated = await updateCommission(id, { status: "accepted" });
         if (!updated) return res.status(404).json({ error: "Not found" });
+        if (updated.entity_id) {
+          const updateEntity = db[`update${Type}Entity`].bind(db);
+          await updateEntity(updated.entity_id, { status: 'accepted' });
+        }
         res.json(updated);
       } catch (error) {
         console.error(`Error restoring ${type} commission:`, error);
@@ -3125,6 +3188,50 @@ const createEntityCommissionRoutes = (entityTypes) => {
 };
 
 createEntityCommissionRoutes(['partner', 'client', 'tiper']);
+
+app.post('/public-submissions/:type', async (req, res) => {
+  try {
+    const type = resolvePublicSubmissionType(req.params.type);
+    if (!type) {
+      return res.status(404).json({ error: 'Unknown submission type' });
+    }
+
+    const Type = type.charAt(0).toUpperCase() + type.slice(1);
+    const entity = req.body?.entity;
+    const commission = req.body?.commission;
+
+    if (!entity || typeof entity !== 'object') {
+      return res.status(400).json({ error: 'entity data is required' });
+    }
+
+    if (hasCommissionPayload(commission)) {
+      const createWithCommission = db[`create${Type}WithCommission`].bind(db);
+      const result = await createWithCommission(
+        { ...entity, status: 'pending' },
+        { ...commission, status: 'pending' }
+      );
+
+      return res.status(201).json({
+        entity: result.entity,
+        commission: result.commission,
+        entityId: result.entity?.entity_id || null,
+        commissionId: result.commission?.commission_id || null
+      });
+    }
+
+    const createEntity = db[`create${Type}Entity`].bind(db);
+    const createdEntity = await createEntity({ ...entity, status: 'pending' });
+    return res.status(201).json({
+      entity: createdEntity,
+      commission: null,
+      entityId: createdEntity?.entity_id || null,
+      commissionId: null
+    });
+  } catch (error) {
+    console.error('Error creating public submission:', error);
+    res.status(500).json({ error: error.message || 'Failed to create public submission' });
+  }
+});
 
 createCrudRoutes('partners');
 createCrudRoutes('clients');

@@ -1,5 +1,6 @@
 import "ag-grid-community/styles/ag-theme-quartz.css";
 import "../usersGrid/UsersGrid.css";
+import "./FutureFunctionsGrid.css";
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { AgGridReact } from "ag-grid-react";
 import { AllCommunityModule, ModuleRegistry, type CellValueChangedEvent, type ColDef, type CellClickedEvent } from "ag-grid-community";
@@ -807,7 +808,7 @@ const FutureFunctionsGrid: React.FC = () => {
   const currentRowData = isArchiveView ? archivedFunctions : activeFunctions;
   const currentColumnDefs = isArchiveView ? archiveColumnDefs : activeColumnDefs;
   const currentOnCellValueChanged = isArchiveView ? onArchiveCellValueChanged : onCellValueChanged;
-  const currentGridHeight = "75vh";
+  const currentGridHeight = "clamp(520px, 68vh, 760px)";
 
   // Status counts for summary strip
   const statusSummary = useMemo(() => {
@@ -834,7 +835,7 @@ const FutureFunctionsGrid: React.FC = () => {
   }, [activeFunctions, archivedFunctions]);
 
   return (
-    <div className="page-container">
+    <div className="page-container future-functions-page">
       <div
         className="header-section"
         style={{
@@ -900,6 +901,7 @@ const FutureFunctionsGrid: React.FC = () => {
 
       {/* Status summary */}
       <div
+        className="future-functions-summary"
         style={{
           display: "flex",
           flexDirection: "column",
@@ -945,9 +947,9 @@ const FutureFunctionsGrid: React.FC = () => {
         ))}
       </div>
 
-      <div className="table-section">
-        <div className="grid-container">
-          <div ref={activeWrapperRef} className="grid-wrapper ag-theme-quartz" style={{ height: currentGridHeight }}>
+      <div className="table-section future-functions-table-section">
+        <div className="grid-container future-functions-grid-container">
+          <div ref={activeWrapperRef} className="grid-wrapper ff-grid-wrapper ag-theme-quartz" style={{ height: currentGridHeight }}>
             <AgGridReact<FutureFunction>
               rowData={currentRowData}
               columnDefs={currentColumnDefs}

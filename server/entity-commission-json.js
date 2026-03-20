@@ -58,6 +58,15 @@ export function ensureEntityCommissionCollections(db) {
   if (!db.client_commissions) db.client_commissions = [];
   if (!db.tiper_commissions) db.tiper_commissions = [];
   if (!db.entity_counters) db.entity_counters = { partner: 1, client: 1, tiper: 1 };
+  db.partner_entities.forEach((entity) => {
+    if (!entity.status) entity.status = 'accepted';
+  });
+  db.client_entities.forEach((entity) => {
+    if (!entity.status) entity.status = 'accepted';
+  });
+  db.tiper_entities.forEach((entity) => {
+    if (!entity.status) entity.status = 'accepted';
+  });
   return db;
 }
 
@@ -72,9 +81,13 @@ export function getNextId(collection) {
 // PARTNER ENTITY OPERATIONS
 // =============================================================================
 
-export function getPartnerEntities(db) {
+export function getPartnerEntities(db, filters = {}) {
   ensureEntityCommissionCollections(db);
-  return [...db.partner_entities].sort((a, b) => a.entity_id.localeCompare(b.entity_id));
+  let entities = [...db.partner_entities];
+  if (filters.status) {
+    entities = entities.filter((entity) => entity.status === filters.status);
+  }
+  return entities.sort((a, b) => a.entity_id.localeCompare(b.entity_id));
 }
 
 export function getPartnerEntityById(db, id) {
@@ -96,6 +109,7 @@ export function createPartnerEntity(db, data) {
   const entity = {
     id,
     entity_id: entityId,
+    status: data.status || 'accepted',
     company_name: data.company_name || 'Nová společnost',
     field: data.field || null,
     location: data.location || null,
@@ -273,9 +287,13 @@ export function deletePartnerCommission(db, id) {
 // CLIENT ENTITY OPERATIONS
 // =============================================================================
 
-export function getClientEntities(db) {
+export function getClientEntities(db, filters = {}) {
   ensureEntityCommissionCollections(db);
-  return [...db.client_entities].sort((a, b) => a.entity_id.localeCompare(b.entity_id));
+  let entities = [...db.client_entities];
+  if (filters.status) {
+    entities = entities.filter((entity) => entity.status === filters.status);
+  }
+  return entities.sort((a, b) => a.entity_id.localeCompare(b.entity_id));
 }
 
 export function getClientEntityById(db, id) {
@@ -297,6 +315,7 @@ export function createClientEntity(db, data) {
   const entity = {
     id,
     entity_id: entityId,
+    status: data.status || 'accepted',
     company_name: data.company_name || 'Nová společnost',
     field: data.field || null,
     service: data.service || null,
@@ -477,9 +496,13 @@ export function deleteClientCommission(db, id) {
 // TIPER ENTITY OPERATIONS
 // =============================================================================
 
-export function getTiperEntities(db) {
+export function getTiperEntities(db, filters = {}) {
   ensureEntityCommissionCollections(db);
-  return [...db.tiper_entities].sort((a, b) => a.entity_id.localeCompare(b.entity_id));
+  let entities = [...db.tiper_entities];
+  if (filters.status) {
+    entities = entities.filter((entity) => entity.status === filters.status);
+  }
+  return entities.sort((a, b) => a.entity_id.localeCompare(b.entity_id));
 }
 
 export function getTiperEntityById(db, id) {
@@ -501,6 +524,7 @@ export function createTiperEntity(db, data) {
   const entity = {
     id,
     entity_id: entityId,
+    status: data.status || 'accepted',
     first_name: data.first_name || 'Nový',
     last_name: data.last_name || 'Tipař',
     field: data.field || null,
@@ -662,19 +686,28 @@ export function deleteTiperCommission(db, id) {
 // =============================================================================
 
 export function createPartnerWithCommission(db, entityData, commissionData) {
-  const entity = createPartnerEntity(db, entityData);
+  const entity = createPartnerEntity(db, {
+    ...entityData,
+    status: entityData?.status || commissionData?.status || 'accepted'
+  });
   const commission = createPartnerCommission(db, entity.id, commissionData);
   return { entity, commission };
 }
 
 export function createClientWithCommission(db, entityData, commissionData) {
-  const entity = createClientEntity(db, entityData);
+  const entity = createClientEntity(db, {
+    ...entityData,
+    status: entityData?.status || commissionData?.status || 'accepted'
+  });
   const commission = createClientCommission(db, entity.id, commissionData);
   return { entity, commission };
 }
 
 export function createTiperWithCommission(db, entityData, commissionData) {
-  const entity = createTiperEntity(db, entityData);
+  const entity = createTiperEntity(db, {
+    ...entityData,
+    status: entityData?.status || commissionData?.status || 'accepted'
+  });
   const commission = createTiperCommission(db, entity.id, commissionData);
   return { entity, commission };
 }
@@ -701,6 +734,7 @@ export function migrateOldData(db) {
       const entity = {
         id: index + 1,
         entity_id: entityId,
+        status: partner.status || 'pending',
         company_name: partner.company || partner.name || 'Bez názvu',
         field: partner.field || null,
         location: partner.location || null,
@@ -752,6 +786,7 @@ export function migrateOldData(db) {
       const entity = {
         id: index + 1,
         entity_id: entityId,
+        status: client.status || 'pending',
         company_name: client.company || client.name || 'Bez názvu',
         field: client.field || null,
         service: null,
@@ -805,6 +840,7 @@ export function migrateOldData(db) {
       const entity = {
         id: index + 1,
         entity_id: entityId,
+        status: tiper.status || 'pending',
         first_name: nameParts[0] || 'Bez',
         last_name: nameParts.slice(1).join(' ') || 'jména',
         field: tiper.field || null,

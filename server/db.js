@@ -305,7 +305,10 @@ export async function initDatabase() {
       "ALTER TABLE users ADD COLUMN IF NOT EXISTS password_hash VARCHAR(255)",
       "ALTER TABLE users ADD COLUMN IF NOT EXISTS role VARCHAR(50) DEFAULT 'employee'",
       "ALTER TABLE documents ADD COLUMN IF NOT EXISTS archived_at TIMESTAMP DEFAULT NULL",
-      "ALTER TABLE documents ADD COLUMN IF NOT EXISTS note_id INTEGER DEFAULT NULL"
+      "ALTER TABLE documents ADD COLUMN IF NOT EXISTS note_id INTEGER DEFAULT NULL",
+      "ALTER TABLE partner_entities ADD COLUMN IF NOT EXISTS status VARCHAR(50) DEFAULT 'accepted'",
+      "ALTER TABLE client_entities ADD COLUMN IF NOT EXISTS status VARCHAR(50) DEFAULT 'accepted'",
+      "ALTER TABLE tiper_entities ADD COLUMN IF NOT EXISTS status VARCHAR(50) DEFAULT 'accepted'"
     ];
 
     for (const sql of columnMigrations) {
@@ -316,6 +319,9 @@ export async function initDatabase() {
     await client.query("UPDATE partners SET status = 'accepted' WHERE status IS NULL");
     await client.query("UPDATE clients SET status = 'accepted' WHERE status IS NULL");
     await client.query("UPDATE tipers SET status = 'accepted' WHERE status IS NULL");
+    await client.query("UPDATE partner_entities SET status = 'accepted' WHERE status IS NULL");
+    await client.query("UPDATE client_entities SET status = 'accepted' WHERE status IS NULL");
+    await client.query("UPDATE tiper_entities SET status = 'accepted' WHERE status IS NULL");
     await client.query("UPDATE partners SET stage = 'Not Started' WHERE stage IS NULL");
     await client.query("UPDATE clients SET stage = 'Not Started' WHERE stage IS NULL");
     await client.query("UPDATE tipers SET stage = 'Not Started' WHERE stage IS NULL");
@@ -373,6 +379,7 @@ export async function initDatabase() {
       CREATE TABLE IF NOT EXISTS partner_entities (
         id SERIAL PRIMARY KEY,
         entity_id VARCHAR(50) UNIQUE NOT NULL,
+        status VARCHAR(50) DEFAULT 'accepted',
         company_name VARCHAR(255),
         field VARCHAR(255),
         location VARCHAR(255),
@@ -420,6 +427,7 @@ export async function initDatabase() {
       CREATE TABLE IF NOT EXISTS client_entities (
         id SERIAL PRIMARY KEY,
         entity_id VARCHAR(50) UNIQUE NOT NULL,
+        status VARCHAR(50) DEFAULT 'accepted',
         company_name VARCHAR(255),
         field VARCHAR(255),
         service VARCHAR(255),
@@ -473,6 +481,7 @@ export async function initDatabase() {
       CREATE TABLE IF NOT EXISTS tiper_entities (
         id SERIAL PRIMARY KEY,
         entity_id VARCHAR(50) UNIQUE NOT NULL,
+        status VARCHAR(50) DEFAULT 'accepted',
         company_name VARCHAR(255),
         field VARCHAR(255),
         location VARCHAR(255),
@@ -1240,9 +1249,16 @@ export const db = {
   // PARTNER ENTITY OPERATIONS
   // =========================================================================
 
-  async getPartnerEntities() {
+  async getPartnerEntities(filters = {}) {
     if (!USE_POSTGRES) return null;
-    const { rows } = await pool.query('SELECT * FROM partner_entities ORDER BY entity_id');
+    let query = 'SELECT * FROM partner_entities';
+    const values = [];
+    if (filters.status) {
+      query += ' WHERE status = $1';
+      values.push(filters.status);
+    }
+    query += ' ORDER BY entity_id';
+    const { rows } = await pool.query(query, values);
     return rows;
   },
 
@@ -1263,10 +1279,10 @@ export const db = {
 
     const entityId = await this.getNextEntityId('partner');
     const { rows } = await pool.query(
-      `INSERT INTO partner_entities (entity_id, company_name, field, location, info, category, first_name, last_name, email, phone, website)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
+      `INSERT INTO partner_entities (entity_id, status, company_name, field, location, info, category, first_name, last_name, email, phone, website)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
        RETURNING *`,
-      [entityId, data.company_name, data.field, data.location, data.info, data.category, data.first_name, data.last_name, data.email, data.phone, data.website]
+      [entityId, data.status || 'accepted', data.company_name, data.field, data.location, data.info, data.category, data.first_name, data.last_name, data.email, data.phone, data.website]
     );
     return rows[0];
   },
@@ -1475,9 +1491,16 @@ export const db = {
   // CLIENT ENTITY OPERATIONS
   // =========================================================================
 
-  async getClientEntities() {
+  async getClientEntities(filters = {}) {
     if (!USE_POSTGRES) return null;
-    const { rows } = await pool.query('SELECT * FROM client_entities ORDER BY entity_id');
+    let query = 'SELECT * FROM client_entities';
+    const values = [];
+    if (filters.status) {
+      query += ' WHERE status = $1';
+      values.push(filters.status);
+    }
+    query += ' ORDER BY entity_id';
+    const { rows } = await pool.query(query, values);
     return rows;
   },
 
@@ -1498,10 +1521,10 @@ export const db = {
 
     const entityId = await this.getNextEntityId('client');
     const { rows } = await pool.query(
-      `INSERT INTO client_entities (entity_id, company_name, field, service, location, info, category, budget, first_name, last_name, email, phone, website)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)
+      `INSERT INTO client_entities (entity_id, status, company_name, field, service, location, info, category, budget, first_name, last_name, email, phone, website)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14)
        RETURNING *`,
-      [entityId, data.company_name, data.field, data.service, data.location, data.info, data.category, data.budget, data.first_name, data.last_name, data.email, data.phone, data.website]
+      [entityId, data.status || 'accepted', data.company_name, data.field, data.service, data.location, data.info, data.category, data.budget, data.first_name, data.last_name, data.email, data.phone, data.website]
     );
     return rows[0];
   },
@@ -1715,9 +1738,16 @@ export const db = {
   // TIPER ENTITY OPERATIONS
   // =========================================================================
 
-  async getTiperEntities() {
+  async getTiperEntities(filters = {}) {
     if (!USE_POSTGRES) return null;
-    const { rows } = await pool.query('SELECT * FROM tiper_entities ORDER BY entity_id');
+    let query = 'SELECT * FROM tiper_entities';
+    const values = [];
+    if (filters.status) {
+      query += ' WHERE status = $1';
+      values.push(filters.status);
+    }
+    query += ' ORDER BY entity_id';
+    const { rows } = await pool.query(query, values);
     return rows;
   },
 
@@ -1738,10 +1768,10 @@ export const db = {
 
     const entityId = await this.getNextEntityId('tiper');
     const { rows } = await pool.query(
-      `INSERT INTO tiper_entities (entity_id, company_name, first_name, last_name, field, location, info, category, email, phone, website)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
+      `INSERT INTO tiper_entities (entity_id, status, company_name, first_name, last_name, field, location, info, category, email, phone, website)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
        RETURNING *`,
-      [entityId, data.company_name, data.first_name, data.last_name, data.field, data.location, data.info, data.category, data.email, data.phone, data.website]
+      [entityId, data.status || 'accepted', data.company_name, data.first_name, data.last_name, data.field, data.location, data.info, data.category, data.email, data.phone, data.website]
     );
     return rows[0];
   },
@@ -1958,7 +1988,10 @@ export const db = {
       await client.query('BEGIN');
 
       // Create entity
-      const entity = await this.createPartnerEntity(entityData);
+      const entity = await this.createPartnerEntity({
+        ...entityData,
+        status: entityData?.status || commissionData?.status || 'accepted'
+      });
 
       // Create first commission
       const commission = await this.createPartnerCommission(entity.id, commissionData);
@@ -1983,7 +2016,10 @@ export const db = {
     try {
       await client.query('BEGIN');
 
-      const entity = await this.createClientEntity(entityData);
+      const entity = await this.createClientEntity({
+        ...entityData,
+        status: entityData?.status || commissionData?.status || 'accepted'
+      });
       const commission = await this.createClientCommission(entity.id, commissionData);
 
       await client.query('COMMIT');
@@ -2006,7 +2042,10 @@ export const db = {
     try {
       await client.query('BEGIN');
 
-      const entity = await this.createTiperEntity(entityData);
+      const entity = await this.createTiperEntity({
+        ...entityData,
+        status: entityData?.status || commissionData?.status || 'accepted'
+      });
       const commission = await this.createTiperCommission(entity.id, commissionData);
 
       await client.query('COMMIT');

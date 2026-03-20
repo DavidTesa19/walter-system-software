@@ -21,6 +21,7 @@ import { fieldOptions } from "../fieldOptions";
 type ClientEntityApi = {
   id: number;
   entity_id: string;
+  status: "pending" | "accepted" | "archived";
   company_name?: string | null;
   field?: string | null;
   service?: string | null;
@@ -54,6 +55,13 @@ type ClientCommissionApi = {
   phone?: string | null;
   commission_value?: string | null;
   notes?: string | null;
+  entity_company_name?: string | null;
+  entity_first_name?: string | null;
+  entity_last_name?: string | null;
+  entity_field?: string | null;
+  entity_location?: string | null;
+  entity_phone?: string | null;
+  entity_email?: string | null;
   created_at?: string;
   updated_at?: string;
 };
@@ -98,6 +106,7 @@ const createDefaultClientDraft = (): ClientCreateDraft => ({
 const normalizeClientEntity = (entity: ClientEntityApi): ClientEntity => ({
   id: entity.id,
   entity_id: entity.entity_id,
+  status: entity.status,
   name: joinName(entity.first_name, entity.last_name) || entity.company_name || entity.entity_id,
   company: entity.company_name ?? null,
   field: entity.field ?? null,
@@ -132,6 +141,9 @@ const normalizeClientCommission = (commission: ClientCommissionApi): ClientCommi
   created_at: commission.created_at,
   updated_at: commission.updated_at
 });
+
+const getCommissionEntityName = (commission: ClientCommissionApi) =>
+  joinName(commission.entity_first_name, commission.entity_last_name) || commission.entity_company_name || commission.commission_id.split('-')[0] || '';
 
 const mapClientEntityUpdates = (updates: Record<string, unknown>) => {
   const mapped: Record<string, unknown> = {};
@@ -248,6 +260,7 @@ const buildClientDraftEntityData = (draft: ClientCreateDraft): EntityData => ({
   groups: buildEntityData({
     id: 0,
     entity_id: "Nový klient",
+    status: "accepted",
     name: draft.entity.name,
     company: draft.entity.company,
     field: draft.entity.field,
@@ -330,7 +343,7 @@ const ClientsSectionNew: React.FC<SectionProps> = ({
     setIsLoading(true);
     try {
       const [entitiesData, commissionsData] = await Promise.all([
-        apiGet<ClientEntityApi[]>('/api/client-entities'),
+        apiGet<ClientEntityApi[]>(`/api/client-entities?status=${status}`),
         apiGet<ClientCommissionApi[]>(`/api/client-commissions?status=${status}`)
       ]);
 
@@ -356,7 +369,7 @@ const ClientsSectionNew: React.FC<SectionProps> = ({
             id: entity.id,
             commission_id: primaryCommission?.commission_id || `${entity.entity_id}-000`,
             client_entity_id: entity.id,
-            status: 'accepted',
+            status: entity.status,
             assigned_to: primaryCommission?.assigned_to ?? null,
             priority: primaryCommission?.priority ?? null,
             notes: primaryCommission?.notes ?? null,
@@ -390,21 +403,59 @@ const ClientsSectionNew: React.FC<SectionProps> = ({
       }
 
       // Build grid data - each row is a commission with entity info
-      const rows: ClientGridRow[] = commissionsList.map(commission => {
-        const entity = entitiesList.find(e => e.id === commission.client_entity_id);
+      const entityIdsWithCommission = new Set<number>(commissionsList.map((commission) => commission.client_entity_id));
+
+      const commissionRows: ClientGridRow[] = commissionsList.map((commission, index) => {
+        const entity = entitiesList.find((e) => e.id === commission.client_entity_id);
+        const rawCommission = (Array.isArray(commissionsData) ? commissionsData : [])[index];
         return {
           ...commission,
           entityOnly: false,
           entity_id: entity?.entity_id || commission.commission_id.split('-')[0] || '',
-          name: entity?.name || '',
-          company: entity?.company || '',
-          field: entity?.field || commission.field || '',
-          location: entity?.location || commission.location || '',
-          mobile: entity?.mobile || commission.phone || '',
-          email: entity?.email || '',
+          name: entity?.name || getCommissionEntityName(rawCommission),
+          company: entity?.company || rawCommission?.entity_company_name || '',
+          field: entity?.field || rawCommission?.entity_field || commission.field || '',
+          location: entity?.location || rawCommission?.entity_location || commission.location || '',
+          mobile: entity?.mobile || rawCommission?.entity_phone || commission.phone || '',
+          email: entity?.email || rawCommission?.entity_email || '',
           entity: entity || null
         };
       });
+
+      const entityOnlyRows: ClientGridRow[] = entitiesList
+        .filter((entity) => !entityIdsWithCommission.has(entity.id))
+        .map((entity) => ({
+          id: -entity.id,
+          commission_id: `${entity.entity_id}-000`,
+          client_entity_id: entity.id,
+          status: entity.status,
+          assigned_to: null,
+          priority: null,
+          notes: null,
+          deadline: null,
+          state: null,
+          commission_value: null,
+          position: null,
+          budget: null,
+          service_position: null,
+          field: entity.field || '',
+          location: entity.location || '',
+          category: null,
+          phone: entity.mobile || null,
+          created_at: entity.created_at,
+          updated_at: entity.updated_at,
+          entityOnly: true,
+          entity_id: entity.entity_id,
+          name: entity.name || '',
+          company: entity.company || '',
+          mobile: entity.mobile || '',
+          email: entity.email || '',
+          commission_count: 0,
+          primaryCommissionId: null,
+          entity: entity || null
+        }));
+
+      const rows = [...commissionRows, ...entityOnlyRows];
 
       rows.sort((left, right) => left.commission_id.localeCompare(right.commission_id));
 
@@ -508,23 +559,29 @@ const ClientsSectionNew: React.FC<SectionProps> = ({
 
   const handleApprove = useCallback(async (id: number) => {
     try {
-      await apiPost(`/api/client-commissions/${id}/approve`);
+      const row = gridData.find((item) => item.id === id);
+      if (!row) return;
+      if (row.entityOnly && row.entity) await apiPost(`/api/client-entities/${row.entity.id}/approve`);
+      else await apiPost(`/api/client-commissions/${id}/approve`);
       fetchData();
     } catch (error) {
       console.error("Error approving commission:", error);
       alert("Chyba při schvalování zakázky");
     }
-  }, [fetchData]);
+  }, [fetchData, gridData]);
 
   const handleRestore = useCallback(async (id: number) => {
     try {
-      await apiPost(`/api/client-commissions/${id}/restore`);
+      const row = gridData.find((item) => item.id === id);
+      if (!row) return;
+      if (row.entityOnly && row.entity) await apiPost(`/api/client-entities/${row.entity.id}/restore`);
+      else await apiPost(`/api/client-commissions/${id}/restore`);
       fetchData();
     } catch (error) {
       console.error("Error restoring commission:", error);
       alert("Chyba při obnovování zakázky");
     }
-  }, [fetchData]);
+  }, [fetchData, gridData]);
 
   const handleDelete = useCallback(async (id: number) => {
     if (viewMode === "active") {
@@ -555,6 +612,26 @@ const ClientsSectionNew: React.FC<SectionProps> = ({
 
     const commission = commissions.find(c => c.id === id);
     const row = gridData.find(r => r.id === id);
+    if (row?.entityOnly && row.entity) {
+      const isArchivedEntity = row.status === "archived";
+      const confirmMessage = isArchivedEntity
+        ? `Opravdu chcete TRVALE SMAZAT tohoto klienta z databáze?\n\nKlient: ${row.name || row.company || row.entity_id}\nID: ${row.entity_id}\n\nTato akce je NEzvratná!`
+        : `Opravdu chcete zamítnout tohoto klienta?\n\nKlient: ${row.name || row.company || row.entity_id}\nID: ${row.entity_id}`;
+
+      if (!confirm(confirmMessage)) return;
+
+      try {
+        await apiDelete(`/api/client-entities/${row.entity.id}`);
+        if (selectedEntityId === row.entity.id) {
+          closeProfile();
+        }
+        fetchData();
+      } catch (error) {
+        console.error("Error deleting client entity:", error);
+        alert("Chyba při provádění akce");
+      }
+      return;
+    }
     const isArchived = commission?.status === "archived";
     const isPending = commission?.status === "pending";
 
@@ -587,6 +664,7 @@ const ClientsSectionNew: React.FC<SectionProps> = ({
     try {
       const response = await apiPost<{ entity: ClientEntity; commission: ClientCommission }>("/api/client-entities/with-commission", {
         entity: {
+          status,
           first_name: emptyToNull(createDraft.entity.name),
           company_name: emptyToNull(createDraft.entity.company),
           field: emptyToNull(createDraft.entity.field),
@@ -630,6 +708,7 @@ const ClientsSectionNew: React.FC<SectionProps> = ({
     setIsCreating(true);
     try {
       const entity = await apiPost<ClientEntityApi>('/api/client-entities', {
+        status,
         first_name: emptyToNull(createDraft.entity.name),
         company_name: emptyToNull(createDraft.entity.company),
         field: emptyToNull(createDraft.entity.field),
@@ -654,7 +733,7 @@ const ClientsSectionNew: React.FC<SectionProps> = ({
     } finally {
       setIsCreating(false);
     }
-  }, [createDraft, fetchData]);
+  }, [createDraft, fetchData, status]);
 
   const handleCreate = useCallback(async () => {
     if (includeCommission) {
@@ -776,7 +855,7 @@ const ClientsSectionNew: React.FC<SectionProps> = ({
       
       if (entityFields.includes(field) && row.entity) {
         await handleUpdateEntity(row.entity.id, { [field]: newValue });
-      } else {
+      } else if (!row.entityOnly) {
         await handleUpdateCommission(row.id, { [field]: newValue });
       }
     } catch (error) {
@@ -984,7 +1063,7 @@ const ClientsSectionNew: React.FC<SectionProps> = ({
           field: "position",
           headerName: "Zakázka",
           filter: true,
-          editable: true,
+          editable: (params) => !params.data?.entityOnly,
           flex: 1.5,
           minWidth: 140
         },
@@ -992,7 +1071,7 @@ const ClientsSectionNew: React.FC<SectionProps> = ({
           field: "budget",
           headerName: "Rozpočet",
           filter: true,
-          editable: true,
+          editable: (params) => !params.data?.entityOnly,
           flex: 1,
           minWidth: 100
         },
@@ -1000,7 +1079,7 @@ const ClientsSectionNew: React.FC<SectionProps> = ({
           field: "service_position",
           headerName: "Typ služby",
           filter: true,
-          editable: true,
+          editable: (params) => !params.data?.entityOnly,
           flex: 1,
           minWidth: 100,
           cellEditor: 'agTextCellEditor'
@@ -1009,7 +1088,7 @@ const ClientsSectionNew: React.FC<SectionProps> = ({
           field: "priority",
           headerName: "Priorita",
           filter: true,
-          editable: true,
+          editable: (params) => !params.data?.entityOnly,
           flex: 0.8,
           minWidth: 80,
           cellEditor: 'agSelectCellEditor',
