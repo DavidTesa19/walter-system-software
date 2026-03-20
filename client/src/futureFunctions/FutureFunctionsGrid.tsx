@@ -10,19 +10,9 @@ import { useUndoRedo } from "../utils/undoRedo";
 import InfoPopupEditor from "./cells/InfoPopupEditor";
 import OptionSelectEditor from "./cells/OptionSelectEditor";
 import FutureFunctionDetail from "./FutureFunctionDetail";
+import FutureFunctionCreateModal from "./FutureFunctionCreateModal";
+import type { FutureFunction, FutureFunctionDraft } from "./futureFunction.interface";
 import type { ICellRendererParams } from "ag-grid-community";
-
-export interface FutureFunction {
-  id: number;
-  name: string;
-  priority: string;
-  complexity: string;
-  phase: string;
-  info: string;
-  status: string;
-  archived: boolean;
-  completedAt?: string | null;
-}
 
 ModuleRegistry.registerModules([AllCommunityModule]);
 
@@ -77,11 +67,23 @@ const ARCHIVE_STATUS_ORDER: Record<string, number> = {
 const SUMMARY_ACTIVE_ORDER = ["Schváleno", "Neschváleno", "Dokončeno", "Ke kontrole", "Probíhá", "Aktuální", "Plánováno"];
 const SUMMARY_ARCHIVE_ORDER = ["Schváleno", "Dokončeno", "Odloženo", "Zrušeno"];
 
+const createInitialDraft = (mode: "active" | "archive"): FutureFunctionDraft => ({
+  name: "",
+  priority: PRIORITY_OPTIONS[1],
+  complexity: COMPLEXITY_OPTIONS[1],
+  phase: PHASE_OPTIONS[1],
+  info: "",
+  status: mode === "archive" ? "Odloženo" : "Plánováno",
+  archived: mode === "archive"
+});
+
 const FutureFunctionsGrid: React.FC = () => {
   const [futureFunctions, setFutureFunctions] = useState<FutureFunction[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [isArchiveView, setIsArchiveView] = useState(false);
   const [selectedFunction, setSelectedFunction] = useState<FutureFunction | null>(null);
+  const [createModalOpen, setCreateModalOpen] = useState(false);
+  const [createDraft, setCreateDraft] = useState<FutureFunctionDraft>(createInitialDraft("active"));
   const activeWrapperRef = useRef<HTMLDivElement | null>(null);
   const { pushAction, signal, canUndo, canRedo, isBusy, undo, redo } = useUndoRedo();
   const { user } = useAuth();
@@ -138,17 +140,26 @@ const FutureFunctionsGrid: React.FC = () => {
     [futureFunctions]
   );
 
-  const handleAddFunction = useCallback(
-    async (mode: "active" | "archive") => {
-      const isArchive = mode === "archive";
+  const openCreateModal = useCallback((mode: "active" | "archive") => {
+    setCreateDraft(createInitialDraft(mode));
+    setCreateModalOpen(true);
+  }, []);
+
+  const closeCreateModal = useCallback(() => {
+    if (isLoading) {
+      return;
+    }
+
+    setCreateModalOpen(false);
+  }, [isLoading]);
+
+  const handleCreateFunction = useCallback(
+    async (draft: FutureFunctionDraft) => {
       const newFunction: Omit<FutureFunction, "id"> = {
-        name: "Nová funkce",
-        priority: PRIORITY_OPTIONS[1],
-        complexity: COMPLEXITY_OPTIONS[1],
-        phase: PHASE_OPTIONS[1],
-        info: "",
-        status: isArchive ? "Odloženo" : "Plánováno",
-        archived: isArchive
+        ...draft,
+        completedAt: (COMPLETION_STATUSES as readonly string[]).includes(draft.status)
+          ? new Date().toISOString().split("T")[0]
+          : null
       };
 
       try {
@@ -162,7 +173,9 @@ const FutureFunctionsGrid: React.FC = () => {
             undo: async () => { await apiDelete(`/future-functions/${created.id}`); },
             redo: async () => { await apiPost(`/future-functions`, { ...newFunction, id: created.id }); }
           });
+          setSelectedFunction(created);
         }
+        setCreateModalOpen(false);
       } catch (error) {
         console.error("Error adding future function:", error);
         alert("Nepodařilo se přidat funkci");
@@ -876,7 +889,7 @@ const FutureFunctionsGrid: React.FC = () => {
           {!isReadOnly && (
             <button
               className="add-user-btn"
-              onClick={() => handleAddFunction(isArchiveView ? "archive" : "active")}
+              onClick={() => openCreateModal(isArchiveView ? "archive" : "active")}
               disabled={isLoading}
             >
               + Přidat funkci
@@ -956,6 +969,18 @@ const FutureFunctionsGrid: React.FC = () => {
       </div>
 
       {/* Detail Modal */}
+      <FutureFunctionCreateModal
+        open={createModalOpen}
+        initialValues={createDraft}
+        priorityOptions={PRIORITY_OPTIONS}
+        complexityOptions={COMPLEXITY_OPTIONS}
+        phaseOptions={PHASE_OPTIONS}
+        statusOptions={ALL_STATUS_OPTIONS}
+        isSubmitting={isLoading}
+        onClose={closeCreateModal}
+        onSubmit={handleCreateFunction}
+      />
+
       {selectedFunction && (
         <FutureFunctionDetail
           func={selectedFunction}

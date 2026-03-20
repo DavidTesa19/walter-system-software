@@ -9,3 +9,13 @@ export interface FutureFunction {
   archived: boolean;
   completedAt?: string | null;
 }
+
+export interface FutureFunctionDraft {
+  name: string;
+  priority: string;
+  complexity: string;
+  phase: string;
+  info: string;
+  status: string;
+  archived: boolean;
+}

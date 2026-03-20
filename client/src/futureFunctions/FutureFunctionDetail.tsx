@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useCallback, useRef } from "react";
 import { apiGet, apiPost, apiDelete, apiUpload, apiDownload, apiGetBlob } from "../utils/api";
 import DocumentViewerModal from "../components/DocumentViewerModal";
-import type { FutureFunction } from "./FutureFunctionsGrid";
+import type { FutureFunction } from "./futureFunction.interface";
 import "./FutureFunctionDetail.css";
 
 /* ------------------------------------------------------------------ */

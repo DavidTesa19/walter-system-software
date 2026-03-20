@@ -1,0 +1,214 @@
+.ff-create-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 9100;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+  background: rgba(10, 16, 26, 0.58);
+  backdrop-filter: blur(5px);
+}
+
+.ff-create-modal {
+  width: min(760px, 100%);
+  max-height: min(88vh, 900px);
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  border-radius: 18px;
+  border: 1px solid color-mix(in srgb, var(--color-border, #d7dee8) 85%, white);
+  background:
+    radial-gradient(circle at top right, rgba(59, 130, 246, 0.14), transparent 34%),
+    linear-gradient(180deg, color-mix(in srgb, var(--color-surface, #ffffff) 94%, white) 0%, var(--color-surface, #ffffff) 100%);
+  box-shadow: 0 24px 70px rgba(15, 23, 42, 0.28);
+}
+
+.ff-create-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 24px 28px 18px;
+  border-bottom: 1px solid var(--color-border, #d7dee8);
+}
+
+.ff-create-kicker {
+  display: inline-block;
+  margin-bottom: 6px;
+  color: var(--color-text-muted, #667085);
+  font-size: 0.75rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.ff-create-title {
+  margin: 0;
+  color: var(--color-text, #101828);
+  font-family: var(--font-heading);
+  font-size: 1.5rem;
+  line-height: 1.15;
+}
+
+.ff-create-close {
+  border: 0;
+  background: transparent;
+  color: var(--color-text-muted, #667085);
+  font-size: 1.9rem;
+  line-height: 1;
+  cursor: pointer;
+}
+
+.ff-create-form {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+}
+
+.ff-create-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 18px;
+  padding: 24px 28px;
+  overflow: auto;
+}
+
+.ff-create-field {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.ff-create-field span,
+.ff-create-checkbox span {
+  color: var(--color-text, #101828);
+  font-size: 0.92rem;
+  font-weight: 600;
+}
+
+.ff-create-field input,
+.ff-create-field select,
+.ff-create-field textarea {
+  width: 100%;
+  border: 1px solid var(--color-border, #d7dee8);
+  border-radius: 12px;
+  background: color-mix(in srgb, var(--color-surface, #ffffff) 92%, white);
+  color: var(--color-text, #101828);
+  font: inherit;
+  padding: 12px 14px;
+  outline: none;
+  transition: border-color 0.18s ease, box-shadow 0.18s ease, transform 0.18s ease;
+}
+
+.ff-create-field textarea {
+  resize: vertical;
+  min-height: 140px;
+}
+
+.ff-create-field input:focus,
+.ff-create-field select:focus,
+.ff-create-field textarea:focus {
+  border-color: var(--color-primary, #2563eb);
+  box-shadow: 0 0 0 4px rgba(37, 99, 235, 0.12);
+}
+
+.ff-create-field-wide {
+  grid-column: 1 / -1;
+}
+
+.ff-create-checkbox {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  align-self: end;
+  min-height: 48px;
+}
+
+.ff-create-checkbox input {
+  width: 18px;
+  height: 18px;
+  accent-color: var(--color-primary, #2563eb);
+}
+
+.ff-create-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 12px;
+  padding: 18px 28px 24px;
+  border-top: 1px solid var(--color-border, #d7dee8);
+}
+
+.ff-create-secondary,
+.ff-create-primary {
+  border-radius: 999px;
+  padding: 11px 18px;
+  font: inherit;
+  font-weight: 700;
+  cursor: pointer;
+  transition: transform 0.18s ease, box-shadow 0.18s ease, opacity 0.18s ease;
+}
+
+.ff-create-secondary {
+  border: 1px solid var(--color-border, #d7dee8);
+  background: var(--color-surface, #ffffff);
+  color: var(--color-text, #101828);
+}
+
+.ff-create-primary {
+  border: 1px solid transparent;
+  background: linear-gradient(135deg, var(--color-primary, #2563eb), color-mix(in srgb, var(--color-primary, #2563eb) 62%, black));
+  color: white;
+  box-shadow: 0 12px 30px rgba(37, 99, 235, 0.24);
+}
+
+.ff-create-secondary:hover,
+.ff-create-primary:hover {
+  transform: translateY(-1px);
+}
+
+.ff-create-secondary:disabled,
+.ff-create-primary:disabled,
+.ff-create-close:disabled,
+.ff-create-field input:disabled,
+.ff-create-field select:disabled,
+.ff-create-field textarea:disabled {
+  cursor: not-allowed;
+  opacity: 0.65;
+}
+
+@media (max-width: 720px) {
+  .ff-create-overlay {
+    padding: 12px;
+    align-items: flex-end;
+  }
+
+  .ff-create-modal {
+    width: 100%;
+    max-height: 92vh;
+    border-radius: 20px 20px 0 0;
+  }
+
+  .ff-create-grid {
+    grid-template-columns: 1fr;
+    padding: 20px;
+  }
+
+  .ff-create-field-wide {
+    grid-column: auto;
+  }
+
+  .ff-create-header,
+  .ff-create-actions {
+    padding-inline: 20px;
+  }
+
+  .ff-create-actions {
+    flex-direction: column-reverse;
+  }
+
+  .ff-create-secondary,
+  .ff-create-primary {
+    width: 100%;
+  }
+}
