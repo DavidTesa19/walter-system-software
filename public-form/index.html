@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Walter System - Veřejná žádost</title>
+    <title>WSS - Žádost o spolupráci</title>
     <style>
         :root {
             --canvas: #efe8dc;
@@ -550,8 +550,8 @@
 
         <div class="panel">
             <div class="hero">
-                <div class="eyebrow">Walter System intake</div>
-                <h1>Veřejná žádost o spolupráci</h1>
+                <div class="eyebrow">Walter System</div>
+                <h1>Žádost o spolupráci</h1>
             </div>
 
             <div class="content">
@@ -580,7 +580,7 @@
 
                     <section class="section-card">
                         <div class="toggle-row">
-                            <strong>Přidat rovnou i zakázku</strong>
+                            <strong>Přidat i zakázku</strong>
                             <label class="switch" aria-label="Přidat zakázku">
                                 <input type="checkbox" id="includeCommission">
                                 <span class="slider"></span>
@@ -597,7 +597,7 @@
                     </section>
 
                     <button type="submit" class="submit-btn">
-                        <strong id="submitTitle">Odeslat do schvalování</strong>
+                        <strong id="submitTitle">Odeslat</strong>
                     </button>
                 </form>
             </div>
@@ -606,13 +606,32 @@
 
     <datalist id="categorySuggestions"></datalist>
 
-    <script src="./field-options.js"></script>
     <script>
+        (async () => {
         const API_BASE_URL = ["localhost", "127.0.0.1"].includes(window.location.hostname)
             ? "http://localhost:3004"
             : "https://api.waltersystem.cz";
 
-        const GROUPED_FIELD_OPTIONS = Array.isArray(window.GROUPED_FIELD_OPTIONS) ? window.GROUPED_FIELD_OPTIONS : [];
+        let GROUPED_FIELD_OPTIONS = [];
+
+        try {
+            const fieldOptionsResponse = await fetch("./field-options.json");
+            if (!fieldOptionsResponse.ok) {
+                throw new Error(`HTTP ${fieldOptionsResponse.status}`);
+            }
+
+            const fieldOptionsPayload = await fieldOptionsResponse.json();
+            GROUPED_FIELD_OPTIONS = Array.isArray(fieldOptionsPayload)
+                ? fieldOptionsPayload.map((group) => ({
+                    ...group,
+                    options: Array.isArray(group.options)
+                        ? group.options.map((option) => ({ value: option, label: option }))
+                        : []
+                }))
+                : [];
+        } catch (error) {
+            console.error("Failed to load field options:", error);
+        }
 
         const CATEGORY_SUGGESTIONS = [
             "B2B",
@@ -970,6 +989,7 @@
                 submitTitle.textContent = "Odeslat do schvalování";
             }
         });
+        })();
     </script>
 </body>
 </html>
