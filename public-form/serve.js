@@ -4,17 +4,18 @@ import { fileURLToPath } from 'url';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
+const canonicalFormPath = path.resolve(__dirname, '..', 'public-submission.html');
 
 const app = express();
 const PORT = process.env.PORT || 3005;
 
-// Serve static files
-app.use(express.static(__dirname));
-
-// Serve the form at root
-app.get('/', (req, res) => {
-  res.sendFile(path.join(__dirname, 'index.html'));
+// Serve the canonical public form from the repo root so the deployment stays in sync.
+app.get(['/', '/index.html'], (_req, res) => {
+  res.sendFile(canonicalFormPath);
 });
+
+// Serve any local fallback files if needed.
+app.use(express.static(__dirname));
 
 // Health check
 app.get('/health', (req, res) => {

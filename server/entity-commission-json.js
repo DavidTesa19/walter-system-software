@@ -525,8 +525,9 @@ export function createTiperEntity(db, data) {
     id,
     entity_id: entityId,
     status: data.status || 'accepted',
-    first_name: data.first_name || 'Nový',
-    last_name: data.last_name || 'Tipař',
+    company_name: data.company_name || null,
+    first_name: data.first_name || null,
+    last_name: data.last_name || null,
     field: data.field || null,
     location: data.location || null,
     info: data.info || null,
@@ -586,6 +587,7 @@ export function getTiperCommissions(db, filters = {}) {
     const entity = db.tiper_entities.find(e => e.id === commission.entity_id);
     return {
       ...commission,
+      entity_company_name: entity?.company_name || null,
       entity_first_name: entity?.first_name || null,
       entity_last_name: entity?.last_name || null,
       entity_field: entity?.field || null,
@@ -607,6 +609,7 @@ export function getTiperCommissionById(db, id) {
   const entity = db.tiper_entities.find(e => e.id === commission.entity_id);
   return {
     ...commission,
+    entity_company_name: entity?.company_name || null,
     entity_first_name: entity?.first_name || null,
     entity_last_name: entity?.last_name || null,
     entity_field: entity?.field || null,
@@ -635,9 +638,23 @@ export function createTiperCommission(db, entityInternalId, data) {
     entity_id: entityInternalId,
     entity_code: entity.entity_id,
     status: data.status || 'pending',
+    position: data.position || null,
+    budget: data.budget || null,
+    state: data.state || null,
+    assigned_to: data.assigned_to || null,
+    field: data.field || null,
+    service_position: data.service_position || null,
+    location: data.location || null,
+    info: data.info || null,
+    category: data.category || null,
+    deadline: data.deadline || null,
+    priority: data.priority || null,
+    phone: data.phone || null,
     linked_entity_type: data.linked_entity_type || null,
     linked_commission_id: data.linked_commission_id || null,
     commission_value: data.commission_value || null,
+    is_tipped: data.is_tipped || false,
+    notes: data.notes || null,
     created_at: new Date().toISOString(),
     updated_at: new Date().toISOString()
   };
