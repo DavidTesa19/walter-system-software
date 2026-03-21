@@ -3,7 +3,11 @@
   "private": true,
   "version": "0.0.0",
   "type": "module",
+  "engines": {
+    "node": ">=20.19.0"
+  },
   "scripts": {
+    "prebuild": "node scripts/sync-field-options.mjs",
     "dev": "vite",
     "build": "tsc -b && vite build",
     "lint": "eslint .",

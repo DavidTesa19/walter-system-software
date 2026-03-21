@@ -8,7 +8,7 @@ export interface FieldCategory {
   options: FieldOption[];
 }
 
-import rawGroupedFieldOptions from "../../../public-form/field-options.json";
+import rawGroupedFieldOptions from "./field-options.json";
 
 type RawFieldCategory = {
   label: string;
