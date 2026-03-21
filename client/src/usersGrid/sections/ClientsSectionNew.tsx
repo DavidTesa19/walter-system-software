@@ -59,9 +59,13 @@ type ClientCommissionApi = {
   entity_first_name?: string | null;
   entity_last_name?: string | null;
   entity_field?: string | null;
+  entity_service?: string | null;
+  entity_budget?: string | null;
   entity_location?: string | null;
+  entity_info?: string | null;
   entity_phone?: string | null;
   entity_email?: string | null;
+  entity_website?: string | null;
   created_at?: string;
   updated_at?: string;
 };
@@ -84,6 +88,8 @@ const createDefaultClientDraft = (): ClientCreateDraft => ({
     name: "",
     company: "",
     field: "",
+    service: "",
+    budget: "",
     mobile: "",
     email: "",
     website: "",
@@ -110,6 +116,8 @@ const normalizeClientEntity = (entity: ClientEntityApi): ClientEntity => ({
   name: joinName(entity.first_name, entity.last_name) || entity.company_name || entity.entity_id,
   company: entity.company_name ?? null,
   field: entity.field ?? null,
+  service: entity.service ?? null,
+  budget: entity.budget ?? null,
   location: entity.location ?? null,
   address: null,
   mobile: entity.phone ?? null,
@@ -151,9 +159,33 @@ const mapClientEntityUpdates = (updates: Record<string, unknown>) => {
     if (key === "name") mapped.first_name = value;
     else if (key === "company") mapped.company_name = value;
     else if (key === "mobile") mapped.phone = value;
-    else if (["field", "location", "email", "website", "info"].includes(key)) mapped[key] = value;
+    else if (["field", "service", "budget", "location", "email", "website", "info"].includes(key)) mapped[key] = value;
   }
   return mapped;
+};
+
+const deriveClientEntityFromCommission = (commission: ClientCommissionApi): ClientEntity | null => {
+  const entityId = Number(commission.entity_id);
+  if (!Number.isFinite(entityId)) return null;
+
+  return {
+    id: entityId,
+    entity_id: commission.commission_id.split('-')[0] || String(entityId),
+    status: commission.status,
+    name: joinName(commission.entity_first_name, commission.entity_last_name) || commission.entity_company_name || commission.commission_id.split('-')[0] || String(entityId),
+    company: commission.entity_company_name ?? null,
+    field: commission.entity_field ?? null,
+    service: commission.entity_service ?? null,
+    budget: commission.entity_budget ?? null,
+    location: commission.entity_location ?? null,
+    address: null,
+    mobile: commission.entity_phone ?? null,
+    email: commission.entity_email ?? null,
+    website: commission.entity_website ?? null,
+    info: commission.entity_info ?? null,
+    created_at: undefined,
+    updated_at: undefined
+  };
 };
 
 // =============================================================================
@@ -171,6 +203,8 @@ const buildEntityData = (entity: ClientEntity | null): EntityData | null => {
         { key: "name", label: "Jméno / Název", value: entity.name, type: "text" },
         { key: "company", label: "Společnost", value: entity.company, type: "text" },
         { key: "field", label: "Obor činnosti", value: entity.field, type: "select", options: FIELD_OPTIONS_ARRAY },
+        { key: "service", label: "Požadovaná služba", value: entity.service, type: "text" },
+        { key: "budget", label: "Rozpočet subjektu", value: entity.budget, type: "text" },
       ]
     },
     {
@@ -264,6 +298,8 @@ const buildClientDraftEntityData = (draft: ClientCreateDraft): EntityData => ({
     name: draft.entity.name,
     company: draft.entity.company,
     field: draft.entity.field,
+    service: draft.entity.service,
+    budget: draft.entity.budget,
     location: draft.entity.location,
     address: null,
     mobile: draft.entity.mobile,
@@ -406,8 +442,8 @@ const ClientsSectionNew: React.FC<SectionProps> = ({
       const entityIdsWithCommission = new Set<number>(commissionsList.map((commission) => commission.client_entity_id));
 
       const commissionRows: ClientGridRow[] = commissionsList.map((commission, index) => {
-        const entity = entitiesList.find((e) => e.id === commission.client_entity_id);
         const rawCommission = (Array.isArray(commissionsData) ? commissionsData : [])[index];
+        const entity = entitiesList.find((e) => e.id === commission.client_entity_id) || deriveClientEntityFromCommission(rawCommission);
         return {
           ...commission,
           entityOnly: false,
@@ -495,9 +531,8 @@ const ClientsSectionNew: React.FC<SectionProps> = ({
   const draftCommissionData = useMemo(() => buildClientDraftCommissionData(createDraft, status), [createDraft, status]);
 
   const openProfile = useCallback((row: ClientGridRow) => {
-    if (row.entity) {
-      setSelectedEntityId(row.entity.id);
-    }
+    const entityId = row.entity?.id ?? row.client_entity_id ?? null;
+    if (entityId !== null) setSelectedEntityId(entityId);
     setSelectedCommissionId(viewMode === "active" ? null : row.primaryCommissionId ?? (row.entityOnly ? null : row.id));
   }, [viewMode]);
 
@@ -668,6 +703,8 @@ const ClientsSectionNew: React.FC<SectionProps> = ({
           first_name: emptyToNull(createDraft.entity.name),
           company_name: emptyToNull(createDraft.entity.company),
           field: emptyToNull(createDraft.entity.field),
+          service: emptyToNull(createDraft.entity.service),
+          budget: emptyToNull(createDraft.entity.budget),
           phone: emptyToNull(createDraft.entity.mobile),
           email: emptyToNull(createDraft.entity.email),
           website: emptyToNull(createDraft.entity.website),
@@ -712,6 +749,8 @@ const ClientsSectionNew: React.FC<SectionProps> = ({
         first_name: emptyToNull(createDraft.entity.name),
         company_name: emptyToNull(createDraft.entity.company),
         field: emptyToNull(createDraft.entity.field),
+        service: emptyToNull(createDraft.entity.service),
+        budget: emptyToNull(createDraft.entity.budget),
         phone: emptyToNull(createDraft.entity.mobile),
         email: emptyToNull(createDraft.entity.email),
         website: emptyToNull(createDraft.entity.website),
@@ -751,6 +790,8 @@ const ClientsSectionNew: React.FC<SectionProps> = ({
         name: selectedEntity.name ?? "",
         company: selectedEntity.company ?? "",
         field: selectedEntity.field ?? "",
+        service: selectedEntity.service ?? "",
+        budget: selectedEntity.budget ?? "",
         mobile: selectedEntity.mobile ?? "",
         email: selectedEntity.email ?? "",
         website: selectedEntity.website ?? "",

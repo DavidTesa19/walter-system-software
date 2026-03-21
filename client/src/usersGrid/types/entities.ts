@@ -35,6 +35,8 @@ export interface ClientEntity extends BaseEntity {
   name: string;
   company: string | null;
   field: string | null;
+  service: string | null;
+  budget: string | null;
   location: string | null;
   address: string | null;
   mobile: string | null;

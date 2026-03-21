@@ -58,8 +58,10 @@ type PartnerCommissionApi = {
   entity_last_name?: string | null;
   entity_field?: string | null;
   entity_location?: string | null;
+  entity_info?: string | null;
   entity_phone?: string | null;
   entity_email?: string | null;
+  entity_website?: string | null;
   created_at?: string;
   updated_at?: string;
 };
@@ -156,6 +158,28 @@ const mapPartnerEntityUpdates = (updates: Record<string, unknown>) => {
   }
 
   return mapped;
+};
+
+const derivePartnerEntityFromCommission = (commission: PartnerCommissionApi): PartnerEntity | null => {
+  const entityId = Number(commission.entity_id);
+  if (!Number.isFinite(entityId)) return null;
+
+  return {
+    id: entityId,
+    entity_id: commission.commission_id.split("-")[0] || String(entityId),
+    status: commission.status,
+    name: joinName(commission.entity_first_name, commission.entity_last_name) || commission.entity_company_name || commission.commission_id.split("-")[0] || String(entityId),
+    company: commission.entity_company_name ?? null,
+    field: commission.entity_field ?? null,
+    location: commission.entity_location ?? null,
+    address: null,
+    mobile: commission.entity_phone ?? null,
+    email: commission.entity_email ?? null,
+    website: commission.entity_website ?? null,
+    info: commission.entity_info ?? null,
+    created_at: undefined,
+    updated_at: undefined
+  };
 };
 
 const buildEntityData = (entity: PartnerEntity | null): EntityData | null => {
@@ -370,8 +394,8 @@ const PartnersSectionNew: React.FC<SectionProps> = ({ viewMode, isActive, onRegi
       const entityIdsWithCommission = new Set<number>(normalizedCommissions.map((commission) => commission.partner_entity_id));
 
       const commissionRows: PartnerGridRow[] = normalizedCommissions.map((commission, index) => {
-        const entity = normalizedEntities.find((item) => item.id === commission.partner_entity_id) || null;
         const rawCommission = (Array.isArray(commissionsData) ? commissionsData : [])[index];
+        const entity = normalizedEntities.find((item) => item.id === commission.partner_entity_id) || derivePartnerEntityFromCommission(rawCommission);
         return {
           ...commission,
           entityOnly: false,
@@ -443,7 +467,8 @@ const PartnersSectionNew: React.FC<SectionProps> = ({ viewMode, isActive, onRegi
   const draftCommissionData = useMemo(() => buildPartnerDraftCommissionData(createDraft, status), [createDraft, status]);
 
   const openProfile = useCallback((row: PartnerGridRow) => {
-    if (row.entity) setSelectedEntityId(row.entity.id);
+    const entityId = row.entity?.id ?? row.partner_entity_id ?? null;
+    if (entityId !== null) setSelectedEntityId(entityId);
     setSelectedCommissionId(viewMode === "active" ? null : row.primaryCommissionId ?? (row.entityOnly ? null : row.id));
   }, [viewMode]);
 

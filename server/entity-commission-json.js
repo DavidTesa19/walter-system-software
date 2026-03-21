@@ -380,6 +380,8 @@ export function getClientCommissions(db, filters = {}) {
     const entity = db.client_entities.find(e => e.id === commission.entity_id);
     return {
       ...commission,
+      position: commission.position || null,
+      service_position: commission.service_position || commission.service || null,
       entity_company_name: entity?.company_name || null,
       entity_field: entity?.field || null,
       entity_service: entity?.service || null,
@@ -404,6 +406,8 @@ export function getClientCommissionById(db, id) {
   const entity = db.client_entities.find(e => e.id === commission.entity_id);
   return {
     ...commission,
+    position: commission.position || null,
+    service_position: commission.service_position || commission.service || null,
     entity_company_name: entity?.company_name || null,
     entity_field: entity?.field || null,
     entity_service: entity?.service || null,
@@ -435,11 +439,12 @@ export function createClientCommission(db, entityInternalId, data) {
     entity_id: entityInternalId,
     entity_code: entity.entity_id,
     status: data.status || 'pending',
-    service: data.service || null,
+    position: data.position || null,
     budget: data.budget || null,
     state: data.state || null,
     assigned_to: data.assigned_to || null,
     field: data.field || null,
+    service_position: data.service_position || data.service || null,
     location: data.location || null,
     info: data.info || null,
     category: data.category || null,

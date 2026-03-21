@@ -58,8 +58,10 @@ type TiperCommissionApi = {
   entity_last_name?: string | null;
   entity_field?: string | null;
   entity_location?: string | null;
+  entity_info?: string | null;
   entity_phone?: string | null;
   entity_email?: string | null;
+  entity_website?: string | null;
   created_at?: string;
   updated_at?: string;
 };
@@ -152,6 +154,28 @@ const mapTiperEntityUpdates = (updates: Record<string, unknown>) => {
     else if (["field", "location", "email", "website", "info"].includes(key)) mapped[key] = value;
   }
   return mapped;
+};
+
+const deriveTiperEntityFromCommission = (commission: TiperCommissionApi): TiperEntity | null => {
+  const entityId = Number(commission.entity_id);
+  if (!Number.isFinite(entityId)) return null;
+
+  return {
+    id: entityId,
+    entity_id: commission.commission_id.split('-')[0] || String(entityId),
+    status: commission.status,
+    name: joinName(commission.entity_first_name, commission.entity_last_name) || commission.entity_company_name || commission.commission_id.split('-')[0] || String(entityId),
+    company: commission.entity_company_name ?? null,
+    field: commission.entity_field ?? null,
+    location: commission.entity_location ?? null,
+    address: null,
+    mobile: commission.entity_phone ?? null,
+    email: commission.entity_email ?? null,
+    website: commission.entity_website ?? null,
+    info: commission.entity_info ?? null,
+    created_at: undefined,
+    updated_at: undefined
+  };
 };
 
 // =============================================================================
@@ -404,8 +428,8 @@ const TipersSectionNew: React.FC<SectionProps> = ({
       const entityIdsWithCommission = new Set<number>(commissionsList.map((commission) => commission.tiper_entity_id));
 
       const commissionRows: TiperGridRow[] = commissionsList.map((commission, index) => {
-        const entity = entitiesList.find((e) => e.id === commission.tiper_entity_id);
         const rawCommission = (Array.isArray(commissionsData) ? commissionsData : [])[index];
+        const entity = entitiesList.find((e) => e.id === commission.tiper_entity_id) || deriveTiperEntityFromCommission(rawCommission);
         return {
           ...commission,
           entityOnly: false,
@@ -493,9 +517,8 @@ const TipersSectionNew: React.FC<SectionProps> = ({
   const draftCommissionData = useMemo(() => buildTiperDraftCommissionData(createDraft, status), [createDraft, status]);
 
   const openProfile = useCallback((row: TiperGridRow) => {
-    if (row.entity) {
-      setSelectedEntityId(row.entity.id);
-    }
+    const entityId = row.entity?.id ?? row.tiper_entity_id ?? null;
+    if (entityId !== null) setSelectedEntityId(entityId);
     setSelectedCommissionId(viewMode === "active" ? null : row.primaryCommissionId ?? (row.entityOnly ? null : row.id));
   }, [viewMode]);
 
