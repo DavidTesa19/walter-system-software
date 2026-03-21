@@ -604,7 +604,7 @@
         </div>
     </div>
 
-    <datalist id="categorySuggestions"></datalist>
+
 
     <script>
         (async () => {
@@ -633,22 +633,6 @@
             console.error("Failed to load field options:", error);
         }
 
-        const CATEGORY_SUGGESTIONS = [
-            "B2B",
-            "B2C",
-            "Consulting",
-            "Executive search",
-            "Interim",
-            "Lead",
-            "Outsourcing",
-            "Partnerství",
-            "Referral",
-            "Retained",
-            "Sales",
-            "Sourcing",
-            "Strategická spolupráce"
-        ];
-
         const PRIORITY_OPTIONS = ["Nízká", "Střední", "Vysoká", "Urgentní"];
 
         const entityFieldBase = [
@@ -656,7 +640,6 @@
             { key: "last_name", label: "Příjmení", placeholder: "Např. Novák", required: false },
             { key: "company_name", label: "Společnost", placeholder: "Např. Walter Consulting", required: false },
             { key: "field", label: "Obor", placeholder: "Např. IT, finance, energetika", list: "fieldSuggestions" },
-            { key: "category", label: "Kategorie", placeholder: "Např. B2B, referral, outsourcing", list: "categorySuggestions" },
             { key: "location", label: "Lokalita", placeholder: "Např. Praha / Brno / remote" },
             { key: "phone", label: "Telefon", type: "tel", placeholder: "+420 777 123 456" },
             { key: "email", label: "E-mail", type: "email", placeholder: "kontakt@firma.cz" },
@@ -673,11 +656,6 @@
             { key: "priority", label: "Priorita", type: "select", options: PRIORITY_OPTIONS },
             { key: "state", label: "Stav", placeholder: "Např. nové zadání" },
             { key: "deadline", label: "Termín", type: "date" },
-            { key: "field", label: "Obor zakázky", placeholder: "Např. management, IT, sales", list: "fieldSuggestions" },
-            { key: "category", label: "Kategorie zakázky", placeholder: "Např. executive search", list: "categorySuggestions" },
-            { key: "location", label: "Lokalita zakázky", placeholder: "Např. Praha / hybrid / remote" },
-            { key: "phone", label: "Telefon ke zakázce", type: "tel", placeholder: "+420 777 123 456" },
-            { key: "info", label: "Info k zakázce", type: "textarea", placeholder: "Doplňující kontext, zadání, parametry nebo očekávání.", fullWidth: true },
             { key: "notes", label: "Poznámky", type: "textarea", placeholder: "Interní poznámky nebo doplnění k workflow.", fullWidth: true },
             {
                 key: "is_tipped",
@@ -692,10 +670,10 @@
             client: {
                 label: "Klient",
                 entityFields: [
-                    ...entityFieldBase.slice(0, 5),
+                    ...entityFieldBase.slice(0, 4),
                     { key: "service", label: "Požadovaná služba", placeholder: "Např. recruitment, executive search" },
                     { key: "budget", label: "Rozpočet subjektu", placeholder: "Např. 500 000 CZK" },
-                    ...entityFieldBase.slice(5)
+                    ...entityFieldBase.slice(4)
                 ],
                 commissionFields: commissionFieldBase.map((field) => field.key === "position" ? { ...field, label: "Zakázka / poptávka" } : field)
             },
@@ -721,7 +699,6 @@
         const entityFieldsContainer = document.getElementById("entityFields");
         const commissionGrid = document.getElementById("commissionGrid");
         const entityBadge = document.getElementById("entityBadge");
-        const categorySuggestionsList = document.getElementById("categorySuggestions");
 
         const trimToNull = (value) => {
             const trimmed = String(value || "").trim();
@@ -808,9 +785,7 @@
             `;
         };
 
-        const populateSuggestionLists = () => {
-            categorySuggestionsList.innerHTML = createOptionMarkup(CATEGORY_SUGGESTIONS);
-        };
+
 
         const renderIndustryOptions = (groupsElement, activeValue, query) => {
             const normalizedQuery = normalizeSearchValue(query);
@@ -916,11 +891,7 @@
         entityFieldBase.forEach((field) => {
             if (field.key === 'field') field.type = 'industry';
         });
-        commissionFieldBase.forEach((field) => {
-            if (field.key === 'field') field.type = 'industry';
-        });
 
-        populateSuggestionLists();
         renderCurrentType();
 
         includeCommission.addEventListener("change", () => {
