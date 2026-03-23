@@ -874,6 +874,7 @@ const ClientsSectionNew: React.FC<SectionProps> = ({
     rowActions: {
       viewMode,
       entityAccusative: viewMode === "active" ? "klienta" : "zakázku",
+      entityOnlyAccusative: "klienta",
       onApprove: handleApprove,
       onRestore: handleRestore,
       onDelete: handleDelete

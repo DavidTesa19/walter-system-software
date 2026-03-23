@@ -778,6 +778,7 @@ const PartnersSectionNew: React.FC<SectionProps> = ({ viewMode, isActive, onRegi
     rowActions: {
       viewMode,
       entityAccusative: viewMode === "active" ? "partnera" : "zakázku",
+      entityOnlyAccusative: "partnera",
       onApprove: handleApprove,
       onRestore: handleRestore,
       onDelete: handleDelete

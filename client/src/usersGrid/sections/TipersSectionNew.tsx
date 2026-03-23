@@ -854,6 +854,7 @@ const TipersSectionNew: React.FC<SectionProps> = ({
     rowActions: {
       viewMode,
       entityAccusative: viewMode === "active" ? "tipaře" : "tip",
+      entityOnlyAccusative: "tipaře",
       onApprove: handleApprove,
       onRestore: handleRestore,
       onDelete: handleDelete

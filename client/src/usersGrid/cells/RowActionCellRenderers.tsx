@@ -6,6 +6,7 @@ type ViewMode = "active" | "pending" | "archived";
 type RowActionsContext = {
   viewMode: ViewMode;
   entityAccusative: string;
+  entityOnlyAccusative?: string;
   onApprove?: (id: number) => void;
   onRestore?: (id: number) => void;
   onDelete?: (id: number) => void;
@@ -23,8 +24,9 @@ const getRowId = (params: ICellRendererParams<any, any>): number | null => {
 export const ApproveRestoreCellRenderer: React.FC<ICellRendererParams<any, any, GridContext>> = (params) => {
   const ctx = params.context?.rowActions;
   const id = getRowId(params);
+  const label = params.data?.entityOnly ? ctx?.entityOnlyAccusative ?? ctx?.entityAccusative : ctx?.entityAccusative;
 
-  if (!ctx || id === null || params.data?.entityOnly) {
+  if (!ctx || id === null || !label) {
     return null;
   }
 
@@ -34,7 +36,7 @@ export const ApproveRestoreCellRenderer: React.FC<ICellRendererParams<any, any, 
         type="button"
         onClick={() => ctx.onApprove?.(id)}
         className="inrow-approve-btn"
-        title={`Schválit ${ctx.entityAccusative}`}
+        title={`Schválit ${label}`}
       >
         <svg width="16" height="16" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
           <path
@@ -55,7 +57,7 @@ export const ApproveRestoreCellRenderer: React.FC<ICellRendererParams<any, any, 
         type="button"
         onClick={() => ctx.onRestore?.(id)}
         className="inrow-approve-btn"
-        title={`Obnovit ${ctx.entityAccusative}`}
+        title={`Obnovit ${label}`}
       >
         <svg width="16" height="16" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
           <path
@@ -85,19 +87,20 @@ export const ApproveRestoreCellRenderer: React.FC<ICellRendererParams<any, any, 
 export const DeleteArchiveCellRenderer: React.FC<ICellRendererParams<any, any, GridContext>> = (params) => {
   const ctx = params.context?.rowActions;
   const id = getRowId(params);
+  const label = params.data?.entityOnly ? ctx?.entityOnlyAccusative ?? ctx?.entityAccusative : ctx?.entityAccusative;
 
-  if (!ctx || id === null || params.data?.entityOnly) {
+  if (!ctx || id === null || !label) {
     return null;
   }
 
   const title =
     params.data?.subjectRow
-      ? `Smazat ${ctx.entityAccusative}`
+      ? `Smazat ${label}`
       : ctx.viewMode === "pending"
-      ? `Zamítnout ${ctx.entityAccusative}`
+      ? `Zamítnout ${label}`
       : ctx.viewMode === "archived"
-        ? `Trvale smazat ${ctx.entityAccusative}`
-        : `Archivovat ${ctx.entityAccusative}`;
+        ? `Trvale smazat ${label}`
+        : `Archivovat ${label}`;
 
   return (
     <button
