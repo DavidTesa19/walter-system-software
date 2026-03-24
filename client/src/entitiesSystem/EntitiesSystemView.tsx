@@ -8,10 +8,16 @@ import ClientsSectionNew from "../usersGrid/sections/ClientsSectionNew";
 import TipersSectionNew from "../usersGrid/sections/TipersSectionNew";
 import type { AddHandler } from "../usersGrid/sections/SectionTypes";
 import { useUndoRedo } from "../utils/undoRedo";
+import {
+  ENTITIES_SYSTEM_TABLE_STORAGE_KEY,
+  getStoredTableView,
+  setStoredTableView,
+  type SubjectTableType
+} from "../utils/tableViewState";
 
 ModuleRegistry.registerModules([AllCommunityModule]);
 
-type TableType = "clients" | "partners" | "tipers";
+type TableType = SubjectTableType;
 
 const NAV_CONFIG: Record<TableType, { label: string; icon: string; addLabel: string }> = {
   clients: { label: "Klienti", icon: "👥", addLabel: "Klienta" },
@@ -30,7 +36,7 @@ interface EntitiesSystemViewProps {
 }
 
 const EntitiesSystemView: React.FC<EntitiesSystemViewProps> = ({ viewMode }) => {
-  const [activeTable, setActiveTable] = useState<TableType>("partners");
+  const [activeTable, setActiveTable] = useState<TableType>(() => getStoredTableView(ENTITIES_SYSTEM_TABLE_STORAGE_KEY));
   const addHandlerRef = useRef<AddHandler | null>(null);
   const [isAddDisabled, setIsAddDisabled] = useState(false);
   const { canUndo, canRedo, isBusy, undo, redo } = useUndoRedo();
@@ -47,6 +53,10 @@ const EntitiesSystemView: React.FC<EntitiesSystemViewProps> = ({ viewMode }) => 
     addHandlerRef.current = null;
     setIsAddDisabled(false);
   }, [activeTable, viewMode]);
+
+  useEffect(() => {
+    setStoredTableView(ENTITIES_SYSTEM_TABLE_STORAGE_KEY, activeTable);
+  }, [activeTable]);
 
   const handleAddClick = useCallback(() => {
     void addHandlerRef.current?.();

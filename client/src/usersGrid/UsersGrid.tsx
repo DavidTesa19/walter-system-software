@@ -9,10 +9,16 @@ import PartnersSection from "./sections/PartnersSection";
 import TipersSection from "./sections/TipersSection";
 import type { AddHandler } from "./sections/SectionTypes";
 import { useUndoRedo } from "../utils/undoRedo";
+import {
+  getStoredTableView,
+  setStoredTableView,
+  USERS_GRID_TABLE_STORAGE_KEY,
+  type SubjectTableType
+} from "../utils/tableViewState";
 
 ModuleRegistry.registerModules([AllCommunityModule]);
 
-type TableType = "clients" | "partners" | "tipers";
+type TableType = SubjectTableType;
 
 interface UsersGridProps {
   viewMode: GridView;
@@ -26,7 +32,7 @@ const NAV_CONFIG: Record<TableType, { label: string; icon: string; addLabel: str
 };
 
 const UsersGrid: React.FC<UsersGridProps> = ({ viewMode, searchTarget }) => {
-  const [activeTable, setActiveTable] = useState<TableType>("clients");
+  const [activeTable, setActiveTable] = useState<TableType>(() => getStoredTableView(USERS_GRID_TABLE_STORAGE_KEY));
   const addHandlerRef = useRef<AddHandler | null>(null);
   const [isAddDisabled, setIsAddDisabled] = useState(false);
   const { canUndo, canRedo, isBusy, undo, redo } = useUndoRedo();
@@ -37,6 +43,10 @@ const UsersGrid: React.FC<UsersGridProps> = ({ viewMode, searchTarget }) => {
     }
     setActiveTable(searchTarget.table);
   }, [searchTarget, viewMode]);
+
+  useEffect(() => {
+    setStoredTableView(USERS_GRID_TABLE_STORAGE_KEY, activeTable);
+  }, [activeTable]);
 
   const registerAddHandler = useCallback((handler: AddHandler) => {
     addHandlerRef.current = handler;

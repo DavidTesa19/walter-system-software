@@ -1,3 +1,5 @@
+import { clearStoredTableViews } from './tableViewState';
+
 /**
  * Centralized API utility with automatic authentication
  * All API calls should use these functions to ensure tokens are included
@@ -46,6 +48,7 @@ const handleResponse = async <T>(response: Response): Promise<T> => {
     // Token expired or invalid - clear auth and redirect to login
     localStorage.removeItem('walterUser');
     localStorage.removeItem('walterSessionStart');
+    clearStoredTableViews();
     window.location.reload();
     throw new Error('Session expired. Please log in again.');
   }
@@ -167,6 +170,7 @@ export const apiDownload = async (endpoint: string, filename: string): Promise<v
   if (response.status === 401 || response.status === 403) {
     localStorage.removeItem('walterUser');
     localStorage.removeItem('walterSessionStart');
+    clearStoredTableViews();
     window.location.reload();
     throw new Error('Session expired. Please log in again.');
   }
@@ -206,6 +210,7 @@ export const apiGetBlob = async (endpoint: string): Promise<Blob> => {
   if (response.status === 401 || response.status === 403) {
     localStorage.removeItem('walterUser');
     localStorage.removeItem('walterSessionStart');
+    clearStoredTableViews();
     window.location.reload();
     throw new Error('Session expired. Please log in again.');
   }
@@ -237,6 +242,7 @@ export const apiView = async (endpoint: string): Promise<void> => {
   if (response.status === 401 || response.status === 403) {
     localStorage.removeItem('walterUser');
     localStorage.removeItem('walterSessionStart');
+    clearStoredTableViews();
     window.location.reload();
     throw new Error('Session expired. Please log in again.');
   }
