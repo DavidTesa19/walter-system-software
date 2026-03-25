@@ -7,6 +7,7 @@ import React, {
   useState
 } from "react";
 import type { ICellEditorParams } from "ag-grid-community";
+import ThemeToggleButton from "../../components/ThemeToggleButton";
 
 interface InfoEditorRef {
   getValue: () => string;
@@ -119,6 +120,10 @@ const InfoPopupEditor = forwardRef<InfoEditorRef, ICellEditorParams>((params, re
 
   return (
     <div className="info-editor-container" ref={containerRef}>
+      <div className="info-editor-header">
+        <span className="info-editor-title">Editor obsahu</span>
+        <ThemeToggleButton variant="icon" />
+      </div>
       <textarea
         ref={textareaRef}
         className="info-editor-textarea"

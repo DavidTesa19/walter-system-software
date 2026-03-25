@@ -8,6 +8,7 @@ import {
   useState
 } from "react";
 import type { ICellEditorParams } from "ag-grid-community";
+import ThemeToggleButton from "../../components/ThemeToggleButton";
 
 type OptionValue = string;
 
@@ -99,6 +100,10 @@ const OptionSelectEditor = forwardRef<OptionSelectEditorRef, OptionSelectEditorP
 
   return (
     <div className="select-editor-container" ref={containerRef} tabIndex={-1}>
+      <div className="select-editor-header">
+        <span className="select-editor-title">Vyberte hodnotu</span>
+        <ThemeToggleButton variant="icon" />
+      </div>
       {options.map((option) => {
         const isActive = option === selected;
         return (
