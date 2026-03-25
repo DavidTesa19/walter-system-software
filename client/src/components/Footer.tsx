@@ -1,12 +1,18 @@
 import React from 'react';
 import ThemeToggleButton from './ThemeToggleButton';
+import { THEME_SHORTCUT_LABEL } from '../theme/ThemeContext';
 import './Footer.css';
 
 const Footer: React.FC = () => {
   return (
     <footer className="app-footer">
       <div className="footer-toolbar">
-        <ThemeToggleButton variant="footer" className="footer-theme-toggle" />
+        <div className="footer-theme-area">
+          <ThemeToggleButton variant="footer" className="footer-theme-toggle" />
+          <span className="footer-theme-shortcut" aria-label={`Klávesová zkratka pro přepnutí motivu: ${THEME_SHORTCUT_LABEL}`}>
+            Zkratka <kbd>{THEME_SHORTCUT_LABEL}</kbd>
+          </span>
+        </div>
         <div className="footer-links">
           <a href="https://zoom.us/join" target="_blank" rel="noopener noreferrer" className="footer-link">Zoom</a>
           <a href="https://teams.microsoft.com/" target="_blank" rel="noopener noreferrer" className="footer-link">Teams</a>
