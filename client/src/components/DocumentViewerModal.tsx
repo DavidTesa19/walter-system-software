@@ -1,5 +1,6 @@
 import React, { useEffect, useState, useCallback } from 'react';
 import { apiGetBlob, apiGet, apiDownload, API_BASE } from '../utils/api';
+import ThemeToggleButton from './ThemeToggleButton';
 import './DocumentViewerModal.css';
 
 interface DocumentViewerModalProps {
@@ -224,6 +225,7 @@ const DocumentViewerModal: React.FC<DocumentViewerModalProps> = ({ documentId, f
           </div>
 
           <div className="dv-header-right">
+            <ThemeToggleButton variant="icon" />
             {viewerType !== 'unsupported' && (
               <button className="dv-hdr-btn" onClick={handleOpenNewTab} title="Otevřít v novém panelu">
                 <svg width="16" height="16" viewBox="0 0 16 16" fill="none">

@@ -13,11 +13,20 @@
   align-items: center;
 }
 
+.footer-toolbar {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+}
+
 .footer-links {
   display: flex;
   gap: 1rem;
   flex-wrap: wrap;
   justify-content: center;
+  flex: 1;
 }
 
 .footer-link {
@@ -44,8 +53,21 @@
   box-shadow: var(--color-shadow-sm);
 }
 
+.footer-theme-toggle {
+  flex-shrink: 0;
+}
+
 @media (max-width: 960px) {
   .app-footer {
     left: 240px; /* Match sidebar width on smaller screens */
+  }
+
+  .footer-toolbar {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .footer-theme-toggle {
+    align-self: center;
   }
 }

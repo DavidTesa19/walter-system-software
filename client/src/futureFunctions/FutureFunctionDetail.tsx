@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useCallback, useRef } from "react";
 import { apiGet, apiPost, apiDelete, apiUpload, apiDownload, apiGetBlob, apiPut } from "../utils/api";
 import DocumentViewerModal from "../components/DocumentViewerModal";
+import ThemeToggleButton from "../components/ThemeToggleButton";
 import type { FutureFunction } from "./futureFunction.interface";
 import "./FutureFunctionDetail.css";
 
@@ -670,13 +671,16 @@ const FutureFunctionDetail: React.FC<FutureFunctionDetailProps> = ({
               <span className="ff-detail-id">#{func.id}</span>
               <h2 className="ff-detail-title">{draft.name}</h2>
             </div>
-            <button
-              className="ff-detail-close"
-              onClick={onClose}
-              title="Zavřít"
-            >
-              ×
-            </button>
+            <div className="ff-detail-header-actions">
+              <ThemeToggleButton variant="icon" />
+              <button
+                className="ff-detail-close"
+                onClick={onClose}
+                title="Zavřít"
+              >
+                ×
+              </button>
+            </div>
           </div>
 
           {/* Body */}

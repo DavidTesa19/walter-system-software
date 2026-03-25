@@ -791,6 +791,14 @@
   animation: slideUp 0.2s ease;
 }
 
+.modal-header-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  margin-bottom: 1.25rem;
+}
+
 @keyframes slideUp {
   from {
     opacity: 0;
@@ -803,7 +811,7 @@
 }
 
 .modal-content h2 {
-  margin: 0 0 1.25rem 0;
+  margin: 0;
   font-size: 1.25rem;
   font-weight: 700;
   color: var(--color-text);

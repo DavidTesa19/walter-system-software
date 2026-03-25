@@ -48,6 +48,13 @@
   min-width: 0;
 }
 
+.ff-detail-header-actions {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-shrink: 0;
+}
+
 .ff-detail-id {
   font-size: 0.8rem;
   color: var(--color-text-muted, #999);

@@ -3,6 +3,7 @@ import type { ProfileBadge, ProfileDocument, ProfileSection, ProfileNote } from 
 import { apiDownload } from "../../utils/api";
 import { isDocumentViewable } from "../../utils/documentUtils";
 import DocumentViewerModal from "../../components/DocumentViewerModal";
+import ThemeToggleButton from "../../components/ThemeToggleButton";
 import "./ProfilePanel.css";
 
 interface ProfileMetaItem {
@@ -213,6 +214,9 @@ const ProfilePanel: React.FC<ProfilePanelProps> = ({
                   ))}
                 </dl>
               ) : null}
+            </div>
+            <div className="profile-panel__header-actions">
+              <ThemeToggleButton variant="icon" />
             </div>
           </header>
 

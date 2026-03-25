@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { useAuth } from '../auth/AuthContext';
+import ThemeToggleButton from '../components/ThemeToggleButton';
 import './TeamChatView.css';
 
 interface ChatRoom {
@@ -667,7 +668,10 @@ export default function TeamChatView() {
       {showNewRoomModal && (
         <div className="modal-overlay" onClick={() => setShowNewRoomModal(false)}>
           <div className="modal-content" onClick={e => e.stopPropagation()}>
-            <h2>Vytvořit novou místnost</h2>
+            <div className="modal-header-row">
+              <h2>Vytvořit novou místnost</h2>
+              <ThemeToggleButton variant="icon" />
+            </div>
             <form onSubmit={handleCreateRoom}>
               <div className="form-group">
                 <label htmlFor="roomName">Název místnosti *</label>

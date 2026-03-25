@@ -51,6 +51,12 @@
   text-align: left;
 }
 
+.profile-panel__header-actions {
+  display: flex;
+  align-items: flex-start;
+  justify-content: flex-end;
+}
+
 .profile-panel__entity {
   font-size: 0.85rem;
   text-transform: uppercase;

@@ -1,5 +1,6 @@
 // src/components/ClockTimePicker.tsx
 import React, { useState } from 'react';
+import ThemeToggleButton from './ThemeToggleButton';
 import './ClockTimePicker.css';
 
 interface ClockTimePickerProps {
@@ -248,6 +249,9 @@ export const ClockTimePicker: React.FC<ClockTimePickerProps> = ({
         onClick={(e) => e.stopPropagation()}
       >
         <div className="clock-header">
+           <div className="clock-header-actions">
+             <ThemeToggleButton variant="icon" />
+           </div>
            <div 
              className={`time-display ${mode === 'h' ? 'active' : ''}`}
              onClick={() => setMode('h')}

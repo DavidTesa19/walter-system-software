@@ -25,12 +25,19 @@
 }
 
 .clock-header {
+  position: relative;
   background: #3b82f6; /* Function Blue */
   padding: 24px;
   display: flex;
   justify-content: center;
   align-items: center;
   color: rgba(255, 255, 255, 0.6);
+}
+
+.clock-header-actions {
+  position: absolute;
+  top: 14px;
+  right: 14px;
 }
 
 .time-display {

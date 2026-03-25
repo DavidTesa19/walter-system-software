@@ -1,4 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useRef } from "react";
+import ThemeToggleButton from "../../components/ThemeToggleButton";
 import type { FieldGroup } from "./EntityCommissionProfilePanel";
 import "./EntityCommissionProfilePanel.css";
 
@@ -270,11 +271,14 @@ const EntityCommissionCreateModal: React.FC<EntityCommissionCreateModalProps> = 
             <span className="ec-profile-type">Nový záznam</span>
             <h2 className="ec-profile-title" id={titleId}>{title}</h2>
           </div>
-          <button type="button" className="ec-profile-close" onClick={onClose} aria-label="Zavřít">
-            <svg width="20" height="20" viewBox="0 0 20 20" xmlns="http://www.w3.org/2000/svg">
-              <path d="M5 5L15 15M15 5L5 15" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
-            </svg>
-          </button>
+          <div className="ec-profile-header-actions">
+            <ThemeToggleButton variant="icon" />
+            <button type="button" className="ec-profile-close" onClick={onClose} aria-label="Zavřít">
+              <svg width="20" height="20" viewBox="0 0 20 20" xmlns="http://www.w3.org/2000/svg">
+                <path d="M5 5L15 15M15 5L5 15" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
+              </svg>
+            </button>
+          </div>
         </header>
 
         <div className="ec-profile-body">

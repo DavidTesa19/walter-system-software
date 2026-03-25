@@ -3,6 +3,7 @@ import type { ProfileDocument, ProfileNote } from "../types/profile";
 import { apiDownload } from "../../utils/api";
 import { isDocumentViewable } from "../../utils/documentUtils";
 import DocumentViewerModal from "../../components/DocumentViewerModal";
+import ThemeToggleButton from "../../components/ThemeToggleButton";
 import "./EntityCommissionProfilePanel.css";
 
 // =============================================================================
@@ -476,6 +477,7 @@ const EntityCommissionProfilePanel: React.FC<EntityCommissionProfilePanelProps> 
             </div>
           </div>
           <div className="ec-profile-header-actions">
+            <ThemeToggleButton variant="icon" />
             {commission && onDuplicateEntityCommission ? (
               <button
                 type="button"

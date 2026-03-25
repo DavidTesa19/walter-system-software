@@ -1,4 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import ThemeToggleButton from "../components/ThemeToggleButton";
 import type { FutureFunctionDraft } from "./futureFunction.interface";
 import "./FutureFunctionCreateModal.css";
 
@@ -219,9 +220,12 @@ const FutureFunctionCreateModal: React.FC<FutureFunctionCreateModalProps> = ({
             <span className="ff-create-kicker">Nová funkce</span>
             <h2 className="ff-create-title" id={titleId}>Vytvořit funkci</h2>
           </div>
-          <button type="button" className="ff-create-close" onClick={onClose} disabled={isSubmitting} aria-label="Zavřít">
-            ×
-          </button>
+          <div className="ff-create-header-actions">
+            <ThemeToggleButton variant="icon" />
+            <button type="button" className="ff-create-close" onClick={onClose} disabled={isSubmitting} aria-label="Zavřít">
+              ×
+            </button>
+          </div>
         </div>
 
         <form ref={formRef} className="ff-create-form" onSubmit={handleSubmit}>
