@@ -1,5 +1,5 @@
 import React from 'react';
-import { useTheme } from '../theme/ThemeContext';
+import { THEME_SHORTCUT_LABEL, useTheme } from '../theme/ThemeContext';
 import './ThemeToggleButton.css';
 
 interface ThemeToggleButtonProps {
@@ -34,7 +34,7 @@ const ThemeToggleButton: React.FC<ThemeToggleButtonProps> = ({
   const { theme, toggleTheme } = useTheme();
   const nextTheme = theme === 'light' ? 'dark' : 'light';
   const label = nextTheme === 'dark' ? 'Tmavý režim' : 'Světlý režim';
-  const title = `Přepnout na ${label.toLowerCase()}`;
+  const title = `Přepnout na ${label.toLowerCase()} (${THEME_SHORTCUT_LABEL})`;
 
   return (
     <button

@@ -68,6 +68,24 @@ const ThemeContext = createContext<ThemeContextType | undefined>(undefined);
 
 const LOCAL_THEME_KEY = 'walter-theme';
 const API_BASE = import.meta.env.VITE_API_URL || 'http://localhost:3004';
+export const THEME_SHORTCUT_LABEL = 'Shift+T';
+
+const isEditableTarget = (target: EventTarget | null): boolean => {
+  if (!(target instanceof HTMLElement)) {
+    return false;
+  }
+
+  if (target.isContentEditable) {
+    return true;
+  }
+
+  const tagName = target.tagName.toLowerCase();
+  if (tagName === 'input' || tagName === 'textarea' || tagName === 'select') {
+    return true;
+  }
+
+  return Boolean(target.closest('[contenteditable="true"]'));
+};
 
 const FALLBACK_COLORS: Record<Theme, PaletteColors> = {
   light: {
@@ -386,6 +404,32 @@ export const ThemeProvider: React.FC<{ children: React.ReactNode }> = ({ childre
       return next;
     });
   }, [getActivePalette]);
+
+  useEffect(() => {
+    const handleThemeShortcut = (event: KeyboardEvent) => {
+      if (event.defaultPrevented || event.repeat) {
+        return;
+      }
+
+      if (isEditableTarget(event.target)) {
+        return;
+      }
+
+      if (event.key.toLowerCase() !== 't') {
+        return;
+      }
+
+      if (!event.shiftKey || event.altKey || event.ctrlKey || event.metaKey) {
+        return;
+      }
+
+      event.preventDefault();
+      toggleTheme();
+    };
+
+    window.addEventListener('keydown', handleThemeShortcut);
+    return () => window.removeEventListener('keydown', handleThemeShortcut);
+  }, [toggleTheme]);
 
   const createPalette = useCallback(
     async (input: PaletteInput) => {
