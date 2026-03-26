@@ -358,18 +358,8 @@ const FutureFunctionsGrid: React.FC = () => {
       <button
         type="button"
         onClick={() => handleArchiveFunction(data)}
-        className="inrow-archive-btn"
+        className="ff-detail-open-btn"
         title="Archivovat funkci"
-        style={{
-          display: "flex",
-          alignItems: "center",
-          justifyContent: "center",
-          background: "none",
-          border: "none",
-          cursor: "pointer",
-          color: "var(--ag-header-foreground-color, #aaa)",
-          padding: "2px"
-        }}
       >
         <svg width="14" height="14" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
           <path d="M21 8v13H3V8" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
