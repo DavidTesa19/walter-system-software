@@ -63,6 +63,7 @@
 .table-section {
   margin-bottom: 0;
   flex: 1;
+  height: 100%;
   min-height: 0;
   display: flex;
   flex-direction: column;
@@ -143,6 +144,7 @@
   width: 100%;
   overflow: hidden;
   flex: 1;
+  height: 100%;
   min-height: var(--grid-min-height);
   align-items: stretch;
 }
@@ -349,14 +351,30 @@
   max-width: 100%;
   overflow: hidden;
   min-width: 0; /* allows flex child to shrink and prevents overflow */
+  display: flex;
+  flex-direction: column;
   min-height: var(--grid-min-height);
-  height: 100%;
+  height: max(100%, var(--grid-min-height));
 }
 
+.grid-wrapper .ag-root,
 .grid-wrapper .ag-root-wrapper,
 .grid-wrapper .ag-root-wrapper-body {
+  flex: 1;
   height: 100%;
   min-height: 0;
+}
+
+.grid-wrapper .ag-layout-normal,
+.grid-wrapper .ag-body,
+.grid-wrapper .ag-body-viewport,
+.grid-wrapper .ag-center-cols-viewport,
+.grid-wrapper .ag-center-cols-container,
+.grid-wrapper .ag-overlay,
+.grid-wrapper .ag-overlay-wrapper,
+.grid-wrapper .ag-overlay-no-rows-wrapper,
+.grid-wrapper .ag-overlay-loading-wrapper {
+  min-height: 100%;
 }
 
 /* In-row delete button styles (pinned column) */
