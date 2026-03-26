@@ -819,7 +819,7 @@ const FutureFunctionsGrid: React.FC = () => {
   const currentRowData = isArchiveView ? archivedFunctions : activeFunctions;
   const currentColumnDefs = isArchiveView ? archiveColumnDefs : activeColumnDefs;
   const currentOnCellValueChanged = isArchiveView ? onArchiveCellValueChanged : onCellValueChanged;
-  const currentGridHeight = "var(--app-grid-height)";
+  const currentGridHeight = "100%";
 
   // Status counts for summary strip
   const statusSummary = useMemo(() => {

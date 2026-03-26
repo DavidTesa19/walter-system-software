@@ -2,7 +2,7 @@
 
 :root {
   --app-footer-height: 88px;
-  --app-grid-height: clamp(520px, calc(100vh - var(--app-footer-height) - 210px), 820px);
+  --grid-min-height: clamp(420px, calc(100vh - var(--app-footer-height) - 240px), 760px);
   --font-heading: 'Inter', system-ui, sans-serif;
   --font-subheading: 'Poppins', 'Segoe UI', sans-serif;
   --font-body: 'Inter', system-ui, sans-serif;
@@ -231,6 +231,6 @@ code, pre {
 @media (max-width: 960px) {
   :root {
     --app-footer-height: 128px;
-    --app-grid-height: clamp(460px, calc(100vh - var(--app-footer-height) - 190px), 720px);
+    --grid-min-height: clamp(360px, calc(100vh - var(--app-footer-height) - 220px), 620px);
   }
 }

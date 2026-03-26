@@ -143,7 +143,7 @@
   width: 100%;
   overflow: hidden;
   flex: 1;
-  min-height: 0;
+  min-height: var(--grid-min-height);
   align-items: stretch;
 }
 
@@ -344,13 +344,13 @@
   padding: 1rem;
   box-shadow: var(--color-shadow-md);
   margin: 0 auto;
-  flex: 0 0 auto;
+  flex: 1;
   box-sizing: border-box;
   max-width: 100%;
   overflow: hidden;
   min-width: 0; /* allows flex child to shrink and prevents overflow */
-  min-height: var(--app-grid-height);
-  height: var(--app-grid-height);
+  min-height: var(--grid-min-height);
+  height: 100%;
 }
 
 .grid-wrapper .ag-root-wrapper,

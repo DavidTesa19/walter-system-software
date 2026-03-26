@@ -773,7 +773,7 @@ const ClientsSection: React.FC<SectionProps> = ({
   return (
     <>
       <div className="grid-container">
-        <div className="grid-wrapper ag-theme-quartz">
+        <div className="grid-wrapper ag-theme-quartz" style={{ height: "100%" }}>
           <AgGridReact<UserInterface>
             ref={gridRef}
             rowData={clientsData}
