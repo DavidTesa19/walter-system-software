@@ -521,6 +521,12 @@
   opacity: 0.8;
 }
 
+.profile-note-edited {
+  color: var(--color-primary);
+  font-weight: 700;
+}
+
+.profile-note-edit,
 .profile-note-delete {
   background: none;
   border: none;
@@ -534,8 +540,14 @@
   margin-left: 0.25rem;
 }
 
-.profile-note-wrapper:hover .profile-note-delete {
+.profile-note-wrapper:hover .profile-note-delete,
+.profile-note-wrapper:hover .profile-note-edit {
   opacity: 0.6;
+}
+
+.profile-note-edit:hover {
+  opacity: 1 !important;
+  color: var(--color-primary);
 }
 
 .profile-note-delete:hover {
@@ -565,6 +577,27 @@
   padding-top: 1rem;
   border-top: 1px solid var(--color-border);
   flex-shrink: 0;
+}
+
+.profile-notes__editing-info {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  padding: 0.7rem 0.8rem;
+  border-radius: 0.75rem;
+  background: color-mix(in srgb, var(--color-primary) 8%, var(--color-surface));
+  color: var(--color-text);
+  font-size: 0.78rem;
+  line-height: 1.45;
+}
+
+.profile-notes__editing-cancel {
+  background: none;
+  border: none;
+  color: var(--color-primary);
+  font-weight: 700;
+  cursor: pointer;
 }
 
 .profile-notes__textarea {

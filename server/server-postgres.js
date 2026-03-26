@@ -2234,6 +2234,7 @@ app.post("/:entity/:id/notes", authenticateToken, async (req, res) => {
       content: content.trim(),
       author,
       createdAt: new Date().toISOString(),
+      updatedAt: null,
       attachments: []
     };
 
@@ -2250,6 +2251,60 @@ app.post("/:entity/:id/notes", authenticateToken, async (req, res) => {
   } catch (error) {
     console.error("Error creating note:", error);
     res.status(500).json({ error: "Failed to create note" });
+  }
+});
+
+app.put("/notes/:noteId", authenticateToken, async (req, res) => {
+  const noteId = Number(req.params.noteId);
+  const { content } = req.body ?? {};
+
+  if (Number.isNaN(noteId)) {
+    return res.status(400).json({ error: "Invalid note id" });
+  }
+  if (!content || typeof content !== "string" || !content.trim()) {
+    return res.status(400).json({ error: "Content is required" });
+  }
+
+  try {
+    if (db.isPostgres()) {
+      const updatedNote = await db.updateNote(noteId, { content: content.trim() });
+      if (!updatedNote) {
+        return res.status(404).json({ error: "Note not found" });
+      }
+      return res.json(updatedNote);
+    }
+
+    const store = readDb();
+    if (!store.notes) {
+      return res.status(404).json({ error: "Note not found" });
+    }
+
+    const idx = store.notes.findIndex((note) => note.id === noteId);
+    if (idx === -1) {
+      return res.status(404).json({ error: "Note not found" });
+    }
+
+    const updatedNote = {
+      ...store.notes[idx],
+      content: content.trim(),
+      updatedAt: new Date().toISOString()
+    };
+
+    store.notes[idx] = updatedNote;
+
+    if (!writeDb(store)) {
+      return res.status(500).json({ error: "Failed to update note" });
+    }
+
+    const docs = store.documents || [];
+    const noteAttachments = docs
+      .filter((document) => document.noteId === noteId)
+      .map((document) => stripDocumentData(document));
+
+    return res.json({ ...updatedNote, attachments: noteAttachments });
+  } catch (error) {
+    console.error("Error updating note:", error);
+    res.status(500).json({ error: "Failed to update note" });
   }
 });
 

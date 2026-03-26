@@ -168,8 +168,14 @@ export async function initDatabase() {
         entity_id INTEGER NOT NULL,
         content TEXT NOT NULL,
         author VARCHAR(255),
-        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        updated_at TIMESTAMP
       )
+    `);
+
+    await client.query(`
+      ALTER TABLE notes
+      ADD COLUMN IF NOT EXISTS updated_at TIMESTAMP
     `);
 
     await client.query(`
@@ -1073,7 +1079,7 @@ export const db = {
     if (!USE_POSTGRES) return null;
 
     const notesResult = await pool.query(
-      `SELECT id, entity_type, entity_id, content, author, created_at
+      `SELECT id, entity_type, entity_id, content, author, created_at, updated_at
          FROM notes
         WHERE entity_type = $1 AND entity_id = $2
         ORDER BY created_at DESC`,
@@ -1114,6 +1120,7 @@ export const db = {
       content: row.content,
       author: row.author,
       createdAt: row.created_at,
+      updatedAt: row.updated_at,
       attachments: docsByNoteId[row.id] || []
     }));
   },
@@ -1124,7 +1131,7 @@ export const db = {
     const result = await pool.query(
       `INSERT INTO notes (entity_type, entity_id, content, author)
        VALUES ($1, $2, $3, $4)
-       RETURNING id, entity_type, entity_id, content, author, created_at`,
+       RETURNING id, entity_type, entity_id, content, author, created_at, updated_at`,
       [entityType, entityId, content, author]
     );
 
@@ -1136,7 +1143,52 @@ export const db = {
       content: row.content,
       author: row.author,
       createdAt: row.created_at,
+      updatedAt: row.updated_at,
       attachments: []
+    };
+  },
+
+  async updateNote(id, { content }) {
+    if (!USE_POSTGRES) return null;
+
+    const result = await pool.query(
+      `UPDATE notes
+          SET content = $2,
+              updated_at = CURRENT_TIMESTAMP
+        WHERE id = $1
+      RETURNING id, entity_type, entity_id, content, author, created_at, updated_at`,
+      [id, content]
+    );
+
+    const row = result.rows[0];
+    if (!row) return null;
+
+    const docsResult = await pool.query(
+      `SELECT id, entity_type, entity_id, filename, mime_type, size_bytes, created_at, archived_at, note_id
+         FROM documents
+        WHERE note_id = $1`,
+      [id]
+    );
+
+    return {
+      id: row.id,
+      entityType: row.entity_type,
+      entityId: row.entity_id,
+      content: row.content,
+      author: row.author,
+      createdAt: row.created_at,
+      updatedAt: row.updated_at,
+      attachments: docsResult.rows.map((doc) => ({
+        id: doc.id,
+        entityType: doc.entity_type,
+        entityId: doc.entity_id,
+        filename: doc.filename,
+        mimeType: doc.mime_type,
+        sizeBytes: Number(doc.size_bytes || 0),
+        createdAt: doc.created_at,
+        archivedAt: doc.archived_at ?? null,
+        noteId: doc.note_id
+      }))
     };
   },
 

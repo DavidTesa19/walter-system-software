@@ -815,6 +815,7 @@ const ClientsSection: React.FC<SectionProps> = ({
         notesLoading={notesManager.isLoading}
         notesCreating={notesManager.isCreating}
         onAddNote={notesManager.createNote}
+        onUpdateNote={notesManager.updateNote}
         onDeleteNote={notesManager.deleteNote}
         onClose={handleCloseProfile}
       />

@@ -16,6 +16,7 @@ interface Note {
   content: string;
   author: string;
   createdAt: string;
+  updatedAt?: string | null;
   attachments?: Attachment[];
 }
 
@@ -105,6 +106,8 @@ const FutureFunctionDetail: React.FC<FutureFunctionDetailProps> = ({
   const [notesLoading, setNotesLoading] = useState(false);
   const [pendingNoteFiles, setPendingNoteFiles] = useState<File[]>([]);
   const [noteSending, setNoteSending] = useState(false);
+  const [editingNote, setEditingNote] = useState<Note | null>(null);
+  const [noteUpdating, setNoteUpdating] = useState(false);
 
   // Attachments state
   const [attachments, setAttachments] = useState<Attachment[]>([]);
@@ -433,6 +436,7 @@ const FutureFunctionDetail: React.FC<FutureFunctionDetailProps> = ({
 
       setNoteText("");
       setPendingNoteFiles([]);
+      setEditingNote(null);
       await fetchNotes();
       await fetchAttachments();
     } catch (err) {
@@ -447,6 +451,11 @@ const FutureFunctionDetail: React.FC<FutureFunctionDetailProps> = ({
     async (noteId: number) => {
       if (!confirm("Smazat tuto poznámku?")) return;
       try {
+        if (editingNote?.id === noteId) {
+          setEditingNote(null);
+          setNoteText("");
+          setPendingNoteFiles([]);
+        }
         await apiDelete(`/notes/${noteId}`);
         await fetchNotes();
       } catch (err) {
@@ -454,8 +463,40 @@ const FutureFunctionDetail: React.FC<FutureFunctionDetailProps> = ({
         alert("Nepodařilo se smazat poznámku");
       }
     },
-    [fetchNotes]
+    [editingNote?.id, fetchNotes]
   );
+
+  const handleStartEditNote = useCallback((note: Note) => {
+    setEditingNote(note);
+    setNoteText(note.content);
+    setPendingNoteFiles([]);
+    setActiveTab("notes");
+  }, []);
+
+  const handleCancelEditNote = useCallback(() => {
+    setEditingNote(null);
+    setNoteText("");
+    setPendingNoteFiles([]);
+  }, []);
+
+  const handleUpdateNote = useCallback(async () => {
+    if (!editingNote || !noteText.trim()) return;
+
+    setNoteUpdating(true);
+    try {
+      await apiPut<Note>(`/notes/${editingNote.id}`, {
+        content: noteText.trim(),
+      });
+      setEditingNote(null);
+      setNoteText("");
+      await fetchNotes();
+    } catch (err) {
+      console.error("Error updating note:", err);
+      alert("Nepodařilo se upravit poznámku");
+    } finally {
+      setNoteUpdating(false);
+    }
+  }, [editingNote, noteText, fetchNotes]);
 
   /* ---- Note file staging ---- */
 
@@ -910,6 +951,14 @@ const FutureFunctionDetail: React.FC<FutureFunctionDetailProps> = ({
                       onDragOver={handleDragOver}
                       onDrop={handleDrop}
                     >
+                      {editingNote && (
+                        <div className="ff-note-editing-banner">
+                          <span>Upravujete zprávu od {editingNote.author}. Přílohy zůstanou beze změny, upraví se pouze text.</span>
+                          <button type="button" className="ff-note-edit-cancel" onClick={handleCancelEditNote}>
+                            Zrušit
+                          </button>
+                        </div>
+                      )}
                       <div className="ff-notes-input-row">
                         <textarea
                           placeholder="Napište poznámku nebo aktualizaci..."
@@ -918,7 +967,7 @@ const FutureFunctionDetail: React.FC<FutureFunctionDetailProps> = ({
                           onKeyDown={(e) => {
                             if (e.key === "Enter" && !e.shiftKey) {
                               e.preventDefault();
-                              void handleAddNote();
+                              void (editingNote ? handleUpdateNote() : handleAddNote());
                             }
                           }}
                         />
@@ -928,19 +977,21 @@ const FutureFunctionDetail: React.FC<FutureFunctionDetailProps> = ({
                             className="ff-note-attach-btn"
                             onClick={() => noteFileInputRef.current?.click()}
                             title="Přiložit soubor"
+                            disabled={Boolean(editingNote)}
                           >
                             📎
                           </button>
                           <button
                             type="button"
                             className="ff-note-submit-btn"
-                            onClick={() => void handleAddNote()}
+                            onClick={() => void (editingNote ? handleUpdateNote() : handleAddNote())}
                             disabled={
-                              (!noteText.trim() && pendingNoteFiles.length === 0) ||
-                              noteSending
+                              editingNote
+                                ? !noteText.trim() || noteUpdating
+                                : (!noteText.trim() && pendingNoteFiles.length === 0) || noteSending
                             }
                           >
-                            {noteSending ? "Odesílám..." : "Přidat"}
+                            {editingNote ? (noteUpdating ? "Ukládám..." : "Uložit") : noteSending ? "Odesílám..." : "Přidat"}
                           </button>
                         </div>
                         <input
@@ -953,7 +1004,7 @@ const FutureFunctionDetail: React.FC<FutureFunctionDetailProps> = ({
                       </div>
 
                       {/* Staged files preview */}
-                      {pendingNoteFiles.length > 0 && (
+                      {pendingNoteFiles.length > 0 && !editingNote && (
                         <div className="ff-pending-files">
                           {pendingNoteFiles.map((file, idx) => (
                             <div key={idx} className="ff-pending-file-chip">
@@ -1000,6 +1051,17 @@ const FutureFunctionDetail: React.FC<FutureFunctionDetailProps> = ({
                               <span className="ff-note-date">
                                 {formatDate(note.createdAt)}
                               </span>
+                              {note.updatedAt ? <span className="ff-note-edited">upraveno</span> : null}
+                              {!readOnly && (
+                                <button
+                                  type="button"
+                                  className="ff-note-edit"
+                                  onClick={() => handleStartEditNote(note)}
+                                  title="Upravit poznámku"
+                                >
+                                  ✎
+                                </button>
+                              )}
                             </div>
                             <p className="ff-note-content">{note.content}</p>
 

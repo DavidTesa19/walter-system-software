@@ -32,6 +32,7 @@ interface ProfilePanelProps {
   notesLoading?: boolean;
   notesCreating?: boolean;
   onAddNote?: (content: string) => Promise<void> | void;
+  onUpdateNote?: (noteId: number, content: string) => Promise<void> | void;
   onDeleteNote?: (noteId: number) => Promise<boolean | void> | boolean | void;
   onClose: () => void;
 }
@@ -69,12 +70,15 @@ const ProfilePanel: React.FC<ProfilePanelProps> = ({
   notesLoading = false,
   notesCreating = false,
   onAddNote,
+  onUpdateNote,
   onDeleteNote,
   onClose
 }) => {
   const panelRef = useRef<HTMLDivElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [newNote, setNewNote] = useState("");
+  const [editingNote, setEditingNote] = useState<ProfileNote | null>(null);
+  const [noteSubmitting, setNoteSubmitting] = useState(false);
   const [showArchivedDocs, setShowArchivedDocs] = useState(false);
   const [viewingDocument, setViewingDocument] = useState<{ id: number; filename: string } | null>(null);
 
@@ -129,20 +133,47 @@ const ProfilePanel: React.FC<ProfilePanelProps> = ({
     },
     [onArchiveDocument]
   );
-  const handleAddNote = useCallback(() => {
-    if (!onAddNote || !newNote.trim()) return;
-    onAddNote(newNote);
+  const handleStartNoteEdit = useCallback((note: ProfileNote) => {
+    setEditingNote(note);
+    setNewNote(note.content);
+  }, []);
+
+  const handleCancelNoteEdit = useCallback(() => {
+    setEditingNote(null);
     setNewNote("");
-  }, [onAddNote, newNote]);
+  }, []);
+
+  const handleAddNote = useCallback(async () => {
+    if (!newNote.trim()) return;
+
+    setNoteSubmitting(true);
+    try {
+      if (editingNote) {
+        if (!onUpdateNote) return;
+        await Promise.resolve(onUpdateNote(editingNote.id, newNote.trim()));
+      } else {
+        if (!onAddNote) return;
+        await Promise.resolve(onAddNote(newNote.trim()));
+      }
+
+      setNewNote("");
+      setEditingNote(null);
+    } finally {
+      setNoteSubmitting(false);
+    }
+  }, [editingNote, newNote, onAddNote, onUpdateNote]);
 
   const handleDeleteNote = useCallback(
     (noteId: number) => {
       if (!onDeleteNote) return;
       const confirmed = window.confirm("Opravdu chcete smazat tuto poznámku?");
       if (!confirmed) return;
+      if (editingNote?.id === noteId) {
+        handleCancelNoteEdit();
+      }
       onDeleteNote(noteId);
     },
-    [onDeleteNote]
+    [editingNote?.id, handleCancelNoteEdit, onDeleteNote]
   );
 
   const showDocumentsSection = Boolean(
@@ -400,6 +431,16 @@ const ProfilePanel: React.FC<ProfilePanelProps> = ({
                       <div className="profile-note-meta">
                         <span className="profile-note-author">{note.author}</span>
                         <span className="profile-note-date">{formatDocumentDate(note.createdAt)}</span>
+                        {note.updatedAt ? <span className="profile-note-edited">upraveno</span> : null}
+                        {onUpdateNote && (
+                          <button
+                            className="profile-note-edit"
+                            onClick={() => handleStartNoteEdit(note)}
+                            title="Upravit poznámku"
+                          >
+                            ✎
+                          </button>
+                        )}
                         {onDeleteNote && (
                           <button 
                             className="profile-note-delete"
@@ -420,9 +461,17 @@ const ProfilePanel: React.FC<ProfilePanelProps> = ({
 
               {onAddNote && (
                 <div className="profile-notes__input-area">
+                  {editingNote && (
+                    <div className="profile-notes__editing-info">
+                      <span>Upravujete zprávu od {editingNote.author}. Změní se pouze text poznámky.</span>
+                      <button type="button" className="profile-notes__editing-cancel" onClick={handleCancelNoteEdit}>
+                        Zrušit
+                      </button>
+                    </div>
+                  )}
                   <textarea
                     className="profile-notes__textarea"
-                    placeholder="Napsat poznámku..."
+                    placeholder={editingNote ? "Upravit text poznámky..." : "Napsat poznámku..."}
                     value={newNote}
                     onChange={(e) => setNewNote(e.target.value)}
                     onKeyDown={(e) => {
@@ -431,14 +480,14 @@ const ProfilePanel: React.FC<ProfilePanelProps> = ({
                         handleAddNote();
                       }
                     }}
-                    disabled={notesCreating}
+                    disabled={notesCreating || noteSubmitting}
                   />
                   <button 
                     className="profile-notes__submit"
                     onClick={handleAddNote}
-                    disabled={!newNote.trim() || notesCreating}
+                    disabled={!newNote.trim() || notesCreating || noteSubmitting}
                   >
-                    {notesCreating ? "..." : "Odeslat"}
+                    {notesCreating || noteSubmitting ? "..." : editingNote ? "Uložit" : "Odeslat"}
                   </button>
                 </div>
               )}

@@ -81,6 +81,7 @@ interface EntityCommissionProfilePanelProps {
   notesLoading?: boolean;
   notesCreating?: boolean;
   onAddNote?: (content: string) => Promise<void> | void;
+  onUpdateNote?: (noteId: number, content: string) => Promise<void> | void;
   onDeleteNote?: (noteId: number) => Promise<boolean | void> | boolean | void;
 }
 
@@ -328,11 +329,14 @@ const EntityCommissionProfilePanel: React.FC<EntityCommissionProfilePanelProps> 
   notesLoading = false,
   notesCreating = false,
   onAddNote,
+  onUpdateNote,
   onDeleteNote
 }) => {
   const panelRef = useRef<HTMLDivElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [newNote, setNewNote] = useState("");
+  const [editingNote, setEditingNote] = useState<ProfileNote | null>(null);
+  const [noteSubmitting, setNoteSubmitting] = useState(false);
   const [showArchivedDocs, setShowArchivedDocs] = useState(false);
   const [viewingDocument, setViewingDocument] = useState<{ id: number; filename: string } | null>(null);
 
@@ -398,20 +402,47 @@ const EntityCommissionProfilePanel: React.FC<EntityCommissionProfilePanelProps> 
     [onArchiveDocument]
   );
 
-  const handleAddNote = useCallback(() => {
-    if (!onAddNote || !newNote.trim()) return;
-    onAddNote(newNote);
+  const handleStartNoteEdit = useCallback((note: ProfileNote) => {
+    setEditingNote(note);
+    setNewNote(note.content);
+  }, []);
+
+  const handleCancelNoteEdit = useCallback(() => {
+    setEditingNote(null);
     setNewNote("");
-  }, [onAddNote, newNote]);
+  }, []);
+
+  const handleAddNote = useCallback(async () => {
+    if (!newNote.trim()) return;
+
+    setNoteSubmitting(true);
+    try {
+      if (editingNote) {
+        if (!onUpdateNote) return;
+        await Promise.resolve(onUpdateNote(editingNote.id, newNote.trim()));
+      } else {
+        if (!onAddNote) return;
+        await Promise.resolve(onAddNote(newNote.trim()));
+      }
+
+      setNewNote("");
+      setEditingNote(null);
+    } finally {
+      setNoteSubmitting(false);
+    }
+  }, [editingNote, newNote, onAddNote, onUpdateNote]);
 
   const handleDeleteNote = useCallback(
     (noteId: number) => {
       if (!onDeleteNote) return;
       const confirmed = window.confirm("Opravdu chcete smazat tuto poznámku?");
       if (!confirmed) return;
+      if (editingNote?.id === noteId) {
+        handleCancelNoteEdit();
+      }
       onDeleteNote(noteId);
     },
-    [onDeleteNote]
+    [editingNote?.id, handleCancelNoteEdit, onDeleteNote]
   );
 
   // Keyboard handling
@@ -774,6 +805,16 @@ const EntityCommissionProfilePanel: React.FC<EntityCommissionProfilePanelProps> 
                       <div className="ec-note-header">
                         <span className="ec-note-author">{note.author}</span>
                         <span className="ec-note-date">{formatDate(note.createdAt)}</span>
+                        {note.updatedAt ? <span className="ec-note-edited">upraveno</span> : null}
+                        {onUpdateNote && (
+                          <button
+                            className="ec-note-edit"
+                            onClick={() => handleStartNoteEdit(note)}
+                            title="Upravit"
+                          >
+                            ✎
+                          </button>
+                        )}
                         {onDeleteNote && (
                           <button 
                             className="ec-note-delete"
@@ -794,9 +835,17 @@ const EntityCommissionProfilePanel: React.FC<EntityCommissionProfilePanelProps> 
 
               {onAddNote && (
                 <div className="ec-notes-input">
+                  {editingNote && (
+                    <div className="ec-note-editing-info">
+                      <span>Upravujete zprávu od {editingNote.author}. Změní se pouze text poznámky.</span>
+                      <button type="button" className="ec-note-edit-cancel" onClick={handleCancelNoteEdit}>
+                        Zrušit
+                      </button>
+                    </div>
+                  )}
                   <textarea
                     className="ec-notes-textarea"
-                    placeholder="Napsat poznámku..."
+                    placeholder={editingNote ? "Upravit text poznámky..." : "Napsat poznámku..."}
                     value={newNote}
                     onChange={(e) => setNewNote(e.target.value)}
                     onKeyDown={(e) => {
@@ -805,14 +854,14 @@ const EntityCommissionProfilePanel: React.FC<EntityCommissionProfilePanelProps> 
                         handleAddNote();
                       }
                     }}
-                    disabled={notesCreating}
+                    disabled={notesCreating || noteSubmitting}
                   />
                   <button 
                     className="ec-notes-submit"
                     onClick={handleAddNote}
-                    disabled={!newNote.trim() || notesCreating}
+                    disabled={!newNote.trim() || notesCreating || noteSubmitting}
                   >
-                    {notesCreating ? "..." : "Odeslat"}
+                    {notesCreating || noteSubmitting ? "..." : editingNote ? "Uložit" : "Odeslat"}
                   </button>
                 </div>
               )}

@@ -37,4 +37,5 @@ export interface ProfileNote {
   content: string;
   author: string;
   createdAt: string;
+  updatedAt?: string | null;
 }

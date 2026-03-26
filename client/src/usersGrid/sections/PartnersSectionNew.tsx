@@ -923,6 +923,7 @@ const PartnersSectionNew: React.FC<SectionProps> = ({ viewMode, isActive, onRegi
         notesLoading={notesManager.isLoading}
         notesCreating={notesManager.isCreating}
         onAddNote={notesManager.createNote}
+        onUpdateNote={notesManager.updateNote}
         onDeleteNote={notesManager.deleteNote}
       />
 

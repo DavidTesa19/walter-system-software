@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from "react";
-import { apiGet, apiPost, apiDelete } from "../../utils/api";
+import { apiGet, apiPost, apiDelete, apiPut } from "../../utils/api";
 
 export interface ProfileNote {
   id: number;
@@ -8,6 +8,7 @@ export interface ProfileNote {
   content: string;
   author: string;
   createdAt: string;
+  updatedAt?: string | null;
 }
 
 type NoteResource = "clients" | "partners" | "tipers";
@@ -17,6 +18,7 @@ type UseProfileNotesResult = {
   isLoading: boolean;
   isCreating: boolean;
   createNote: (content: string) => Promise<void>;
+  updateNote: (noteId: number, content: string) => Promise<void>;
   deleteNote: (noteId: number) => Promise<boolean>;
 };
 
@@ -73,11 +75,22 @@ export const useProfileNotes = (resource: NoteResource, entityId: number | null)
     }
   }, []);
 
+  const updateNote = useCallback(async (noteId: number, content: string) => {
+    try {
+      await apiPut(`/notes/${noteId}`, { content });
+      await fetchNotes();
+    } catch (error) {
+      console.error("Error updating note:", error);
+      alert("Nepodařilo se upravit poznámku. Zkuste to prosím znovu.");
+    }
+  }, [fetchNotes]);
+
   return {
     notes,
     isLoading,
     isCreating,
     createNote,
+    updateNote,
     deleteNote
   };
 };
