@@ -526,6 +526,76 @@
             display: block;
         }
 
+        .commission-stack {
+            display: grid;
+            gap: 18px;
+        }
+
+        .commission-card {
+            padding: 18px;
+            border-radius: 18px;
+            background: rgba(255, 255, 255, 0.7);
+            border: 1px solid rgba(75, 56, 37, 0.08);
+        }
+
+        .commission-card-head {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 12px;
+            margin-bottom: 14px;
+        }
+
+        .commission-card-title {
+            display: flex;
+            flex-direction: column;
+            gap: 4px;
+        }
+
+        .commission-card-title strong {
+            font-size: 16px;
+            color: var(--text);
+        }
+
+        .commission-card-title span {
+            font-size: 12px;
+            color: var(--muted);
+            line-height: 1.5;
+        }
+
+        .commission-actions {
+            display: flex;
+            justify-content: flex-end;
+            margin-top: 16px;
+        }
+
+        .ghost-btn {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            min-height: 42px;
+            padding: 11px 16px;
+            border: 1px solid rgba(15, 123, 105, 0.2);
+            border-radius: 14px;
+            background: rgba(255, 255, 255, 0.72);
+            color: var(--accent-strong);
+            font-size: 13px;
+            font-weight: 700;
+            cursor: pointer;
+            transition: transform 0.18s ease, border-color 0.18s ease, box-shadow 0.18s ease;
+        }
+
+        .ghost-btn:hover {
+            transform: translateY(-1px);
+            border-color: rgba(15, 123, 105, 0.34);
+            box-shadow: 0 10px 18px rgba(15, 123, 105, 0.08);
+        }
+
+        .ghost-btn.danger {
+            border-color: rgba(182, 79, 66, 0.18);
+            color: var(--danger);
+        }
+
         .checkbox-card {
             display: flex;
             gap: 12px;
@@ -626,7 +696,8 @@
             }
 
             .section-head,
-            .toggle-row {
+            .toggle-row,
+            .commission-card-head {
                 flex-direction: column;
                 align-items: flex-start;
             }
@@ -715,7 +786,10 @@
                                 <h2>Profil zakázky</h2>
                                 <div class="pill subtle">Zakázka</div>
                             </div>
-                            <div class="grid" id="commissionGrid"></div>
+                            <div id="commissionList" class="commission-stack"></div>
+                            <div class="commission-actions">
+                                <button type="button" class="ghost-btn" id="addCommissionButton">Přidat další zakázku</button>
+                            </div>
                         </div>
                     </section>
 
@@ -832,6 +906,7 @@
         };
 
         let currentType = "client";
+        let commissionInstanceCounter = 0;
 
         const form = document.getElementById("submissionForm");
         const messageEl = document.getElementById("message");
@@ -839,7 +914,8 @@
         const includeCommission = document.getElementById("includeCommission");
         const commissionFields = document.getElementById("commissionFields");
         const entityFieldsContainer = document.getElementById("entityFields");
-        const commissionGrid = document.getElementById("commissionGrid");
+        const commissionList = document.getElementById("commissionList");
+        const addCommissionButton = document.getElementById("addCommissionButton");
         const entityBadge = document.getElementById("entityBadge");
 
         const trimToNull = (value) => {
@@ -870,6 +946,8 @@
         };
 
         const getFieldId = (scope, key) => `${scope}-${key}`;
+
+        const getCommissionScope = (index) => `commission-${index}`;
 
         const renderField = (scope, field) => {
             const id = getFieldId(scope, field.key);
@@ -966,8 +1044,11 @@
             trigger.classList.toggle('placeholder', !value);
         };
 
-        const initializeIndustryPickers = () => {
-            document.querySelectorAll('.industry-picker').forEach((picker) => {
+        const initializeIndustryPickers = (root = document) => {
+            root.querySelectorAll('.industry-picker').forEach((picker) => {
+                if (picker.dataset.initialized === 'true') return;
+                picker.dataset.initialized = 'true';
+
                 const hiddenInput = picker.querySelector('input[type="hidden"]');
                 const trigger = picker.querySelector('.industry-trigger');
                 const searchInput = picker.querySelector('.industry-search');
@@ -1008,14 +1089,59 @@
             }
         });
 
+        const renderCommissionCard = (index) => {
+            const config = TYPE_CONFIG[currentType];
+            const scope = getCommissionScope(index);
+            const card = document.createElement('section');
+            card.className = 'commission-card';
+            card.dataset.commissionIndex = String(index);
+            card.innerHTML = `
+                <div class="commission-card-head">
+                    <div class="commission-card-title">
+                        <strong>${config.label} zakázka ${index + 1}</strong>
+                        <span>Vyplňte pouze detaily k této konkrétní zakázce. Subjektové údaje se použijí společně pro všechny zakázky v odeslání.</span>
+                    </div>
+                    ${index > 0 ? `<button type="button" class="ghost-btn danger" data-remove-commission="${index}">Odebrat zakázku</button>` : ''}
+                </div>
+                <div class="grid">
+                    ${config.commissionFields.map((field) => renderField(scope, field)).join('')}
+                </div>
+            `;
+
+            commissionList.appendChild(card);
+            initializeIndustryPickers(card);
+        };
+
+        const refreshCommissionCards = () => {
+            const cards = Array.from(commissionList.querySelectorAll('.commission-card'));
+            cards.forEach((card, displayIndex) => {
+                const title = card.querySelector('.commission-card-title strong');
+                if (title) {
+                    title.textContent = `${TYPE_CONFIG[currentType].label} zakázka ${displayIndex + 1}`;
+                }
+            });
+        };
+
+        const resetCommissionCards = () => {
+            commissionInstanceCounter = 0;
+            commissionList.innerHTML = '';
+            renderCommissionCard(commissionInstanceCounter++);
+            refreshCommissionCards();
+        };
+
+        const addCommissionCard = () => {
+            renderCommissionCard(commissionInstanceCounter++);
+            refreshCommissionCards();
+        };
+
         const renderCurrentType = () => {
             const config = TYPE_CONFIG[currentType];
 
             entityBadge.textContent = config.label;
 
             entityFieldsContainer.innerHTML = config.entityFields.map((field) => renderField("entity", field)).join("");
-            commissionGrid.innerHTML = config.commissionFields.map((field) => renderField("commission", field)).join("");
             initializeIndustryPickers();
+            resetCommissionCards();
 
             typeButtons.forEach((button) => {
                 button.classList.toggle("active", button.dataset.type === currentType);
@@ -1041,10 +1167,37 @@
             if (field.key === 'field') field.type = 'industry';
         });
 
+        commissionFieldBase.forEach((field) => {
+            if (field.key === 'field') field.type = 'industry';
+        });
+
         renderCurrentType();
 
         includeCommission.addEventListener("change", () => {
             commissionFields.classList.toggle("visible", includeCommission.checked);
+            if (includeCommission.checked && !commissionList.children.length) {
+                resetCommissionCards();
+            }
+        });
+
+        addCommissionButton.addEventListener('click', () => {
+            addCommissionCard();
+        });
+
+        commissionList.addEventListener('click', (event) => {
+            const removeButton = event.target.closest('[data-remove-commission]');
+            if (!removeButton) return;
+
+            const card = removeButton.closest('.commission-card');
+            if (!card) return;
+
+            card.remove();
+            if (!commissionList.children.length) {
+                resetCommissionCards();
+                return;
+            }
+
+            refreshCommissionCards();
         });
 
         typeButtons.forEach((button) => {
@@ -1066,8 +1219,15 @@
             submitTitle.textContent = "Odesílání...";
 
             const entity = collectValues("entity", config.entityFields);
-            const commissionPayload = collectValues("commission", config.commissionFields);
-            const commission = includeCommission.checked && hasMeaningfulPayload(commissionPayload) ? commissionPayload : null;
+            const commissions = includeCommission.checked
+                ? Array.from(commissionList.querySelectorAll('.commission-card'))
+                    .map((card) => {
+                        const index = Number(card.dataset.commissionIndex);
+                        const payload = collectValues(getCommissionScope(index), config.commissionFields);
+                        return hasMeaningfulPayload(payload) ? payload : null;
+                    })
+                    .filter(Boolean)
+                : [];
 
             const hasIdentity = [entity.first_name, entity.last_name, entity.company_name].some(Boolean);
             if (!hasIdentity) {
@@ -1083,7 +1243,7 @@
                     headers: {
                         "Content-Type": "application/json"
                     },
-                    body: JSON.stringify({ entity, commission })
+                    body: JSON.stringify({ entity, commissions })
                 });
 
                 const payload = await response.json().catch(() => ({}));
@@ -1091,9 +1251,13 @@
                     throw new Error(payload.error || "Server error");
                 }
 
+                const commissionIds = Array.isArray(payload.commissionIds)
+                    ? payload.commissionIds.filter(Boolean)
+                    : (payload.commissionId ? [payload.commissionId] : []);
+
                 const idLines = [
                     payload.entityId ? `Subjekt ID: <strong>${payload.entityId}</strong>` : null,
-                    payload.commissionId ? `Zakázka ID: <strong>${payload.commissionId}</strong>` : null
+                    commissionIds.length ? `Zakázky ID: <strong>${commissionIds.join(', ')}</strong>` : null
                 ].filter(Boolean).join("<br>");
 
                 showMessage(`Žádost byla úspěšně odeslána do schvalování.<br>${idLines}`, "success");

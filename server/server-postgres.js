@@ -2922,9 +2922,18 @@ const resolvePublicSubmissionType = (rawType) => {
 const hasCommissionPayload = (commission) => {
   if (!commission || typeof commission !== 'object') return false;
   return Object.values(commission).some((value) => {
-    if (value === null || value === undefined) return false;
+    if (value === null || value === undefined || value === false) return false;
     return String(value).trim() !== '';
   });
+};
+
+const getPublicSubmissionCommissions = (body) => {
+  const arrayPayload = Array.isArray(body?.commissions) ? body.commissions : [];
+  if (arrayPayload.length) {
+    return arrayPayload.filter(hasCommissionPayload);
+  }
+
+  return hasCommissionPayload(body?.commission) ? [body.commission] : [];
 };
 
 const createEntityCommissionRoutes = (entityTypes) => {
@@ -3198,34 +3207,29 @@ app.post('/public-submissions/:type', async (req, res) => {
 
     const Type = type.charAt(0).toUpperCase() + type.slice(1);
     const entity = req.body?.entity;
-    const commission = req.body?.commission;
+    const commissions = getPublicSubmissionCommissions(req.body);
 
     if (!entity || typeof entity !== 'object') {
       return res.status(400).json({ error: 'entity data is required' });
     }
 
-    if (hasCommissionPayload(commission)) {
-      const createWithCommission = db[`create${Type}WithCommission`].bind(db);
-      const result = await createWithCommission(
-        { ...entity, status: 'pending' },
-        { ...commission, status: 'pending' }
-      );
-
-      return res.status(201).json({
-        entity: result.entity,
-        commission: result.commission,
-        entityId: result.entity?.entity_id || null,
-        commissionId: result.commission?.commission_id || null
-      });
-    }
-
     const createEntity = db[`create${Type}Entity`].bind(db);
     const createdEntity = await createEntity({ ...entity, status: 'pending' });
+    const createCommission = db[`create${Type}Commission`].bind(db);
+    const createdCommissions = [];
+
+    for (const commission of commissions) {
+      const createdCommission = await createCommission(createdEntity.id, { ...commission, status: 'pending' });
+      createdCommissions.push(createdCommission);
+    }
+
     return res.status(201).json({
       entity: createdEntity,
-      commission: null,
+      commission: createdCommissions[0] || null,
+      commissions: createdCommissions,
       entityId: createdEntity?.entity_id || null,
-      commissionId: null
+      commissionId: createdCommissions[0]?.commission_id || null,
+      commissionIds: createdCommissions.map((item) => item?.commission_id).filter(Boolean)
     });
   } catch (error) {
     console.error('Error creating public submission:', error);

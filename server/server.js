@@ -2133,9 +2133,18 @@ const resolvePublicSubmissionType = (rawType) => {
 const hasCommissionPayload = (commission) => {
   if (!commission || typeof commission !== 'object') return false;
   return Object.values(commission).some((value) => {
-    if (value === null || value === undefined) return false;
+    if (value === null || value === undefined || value === false) return false;
     return String(value).trim() !== '';
   });
+};
+
+const getPublicSubmissionCommissions = (body) => {
+  const arrayPayload = Array.isArray(body?.commissions) ? body.commissions : [];
+  if (arrayPayload.length) {
+    return arrayPayload.filter(hasCommissionPayload);
+  }
+
+  return hasCommissionPayload(body?.commission) ? [body.commission] : [];
 };
 
 // Helper to migrate old data if needed
@@ -3025,28 +3034,34 @@ app.post('/public-submissions/:type', (req, res) => {
     ensureMigrated(db);
 
     const entity = req.body?.entity;
-    const commission = req.body?.commission;
+    const commissions = getPublicSubmissionCommissions(req.body);
     if (!entity || typeof entity !== 'object') {
       return res.status(400).json({ error: 'entity data is required' });
     }
 
-    let result;
-    if (hasCommissionPayload(commission)) {
-      const createWithCommission = entityCommissionJson[`create${Type}WithCommission`];
-      result = createWithCommission(db, { ...entity, status: 'pending' }, { ...commission, status: 'pending' });
-    } else {
-      const createEntity = entityCommissionJson[`create${Type}Entity`];
-      const createdEntity = createEntity(db, { ...entity, status: 'pending' });
-      result = { entity: createdEntity, commission: null };
-    }
+    const createEntity = entityCommissionJson[`create${Type}Entity`];
+    const createCommission = entityCommissionJson[`create${Type}Commission`];
+
+    const createdEntity = createEntity(db, { ...entity, status: 'pending' });
+    const createdCommissions = commissions.map((commission) => {
+      return createCommission(db, createdEntity.id, { ...commission, status: 'pending' });
+    });
+
+    const result = {
+      entity: createdEntity,
+      commissions: createdCommissions,
+      commission: createdCommissions[0] || null
+    };
 
     if (!writeDb(db)) return res.status(500).json({ error: 'Failed to persist' });
 
     return res.status(201).json({
       entity: result.entity,
       commission: result.commission,
+      commissions: result.commissions,
       entityId: result.entity?.entity_id || null,
-      commissionId: result.commission?.commission_id || null
+      commissionId: result.commission?.commission_id || null,
+      commissionIds: result.commissions.map((item) => item?.commission_id).filter(Boolean)
     });
   } catch (error) {
     console.error('Error creating public submission:', error);
