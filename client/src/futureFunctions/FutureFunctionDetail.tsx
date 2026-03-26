@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useCallback, useRef } from "react";
 import { apiGet, apiPost, apiDelete, apiUpload, apiDownload, apiGetBlob, apiPut } from "../utils/api";
+import { useAuth } from "../auth/AuthContext";
 import DocumentViewerModal from "../components/DocumentViewerModal";
 import ThemeToggleButton from "../components/ThemeToggleButton";
 import type { FutureFunction } from "./futureFunction.interface";
@@ -95,6 +96,7 @@ const FutureFunctionDetail: React.FC<FutureFunctionDetailProps> = ({
   onUpdate,
   readOnly,
 }) => {
+  const { user } = useAuth();
   const [activeTab, setActiveTab] = useState<"notes" | "attachments">("notes");
   const [draft, setDraft] = useState<FutureFunction>(func);
   const [savedDraft, setSavedDraft] = useState<FutureFunction>(func);
@@ -467,11 +469,16 @@ const FutureFunctionDetail: React.FC<FutureFunctionDetailProps> = ({
   );
 
   const handleStartEditNote = useCallback((note: Note) => {
+    if (note.author !== user?.username) {
+      return;
+    }
     setEditingNote(note);
     setNoteText(note.content);
     setPendingNoteFiles([]);
     setActiveTab("notes");
-  }, []);
+  }, [user?.username]);
+
+  const canEditNote = useCallback((note: Note) => note.author === user?.username, [user?.username]);
 
   const handleCancelEditNote = useCallback(() => {
     setEditingNote(null);
@@ -1052,7 +1059,7 @@ const FutureFunctionDetail: React.FC<FutureFunctionDetailProps> = ({
                                 {formatDate(note.createdAt)}
                               </span>
                               {note.updatedAt ? <span className="ff-note-edited">upraveno</span> : null}
-                              {!readOnly && (
+                              {!readOnly && canEditNote(note) && (
                                 <button
                                   type="button"
                                   className="ff-note-edit"

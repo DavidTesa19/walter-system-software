@@ -2257,6 +2257,7 @@ app.post("/:entity/:id/notes", authenticateToken, async (req, res) => {
 app.put("/notes/:noteId", authenticateToken, async (req, res) => {
   const noteId = Number(req.params.noteId);
   const { content } = req.body ?? {};
+  const currentUsername = req.user?.username || "Admin";
 
   if (Number.isNaN(noteId)) {
     return res.status(400).json({ error: "Invalid note id" });
@@ -2267,6 +2268,14 @@ app.put("/notes/:noteId", authenticateToken, async (req, res) => {
 
   try {
     if (db.isPostgres()) {
+      const existingNote = await db.getNoteById(noteId);
+      if (!existingNote) {
+        return res.status(404).json({ error: "Note not found" });
+      }
+      if (existingNote.author !== currentUsername) {
+        return res.status(403).json({ error: "You can only edit your own notes" });
+      }
+
       const updatedNote = await db.updateNote(noteId, { content: content.trim() });
       if (!updatedNote) {
         return res.status(404).json({ error: "Note not found" });
@@ -2282,6 +2291,10 @@ app.put("/notes/:noteId", authenticateToken, async (req, res) => {
     const idx = store.notes.findIndex((note) => note.id === noteId);
     if (idx === -1) {
       return res.status(404).json({ error: "Note not found" });
+    }
+
+    if (store.notes[idx]?.author !== currentUsername) {
+      return res.status(403).json({ error: "You can only edit your own notes" });
     }
 
     const updatedNote = {

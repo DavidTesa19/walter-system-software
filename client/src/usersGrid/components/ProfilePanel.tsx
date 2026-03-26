@@ -1,5 +1,6 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { ProfileBadge, ProfileDocument, ProfileSection, ProfileNote } from "../types/profile";
+import { useAuth } from "../../auth/AuthContext";
 import { apiDownload } from "../../utils/api";
 import { isDocumentViewable } from "../../utils/documentUtils";
 import DocumentViewerModal from "../../components/DocumentViewerModal";
@@ -74,6 +75,7 @@ const ProfilePanel: React.FC<ProfilePanelProps> = ({
   onDeleteNote,
   onClose
 }) => {
+  const { user } = useAuth();
   const panelRef = useRef<HTMLDivElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [newNote, setNewNote] = useState("");
@@ -134,9 +136,14 @@ const ProfilePanel: React.FC<ProfilePanelProps> = ({
     [onArchiveDocument]
   );
   const handleStartNoteEdit = useCallback((note: ProfileNote) => {
+    if (note.author !== user?.username) {
+      return;
+    }
     setEditingNote(note);
     setNewNote(note.content);
-  }, []);
+  }, [user?.username]);
+
+  const canEditNote = useCallback((note: ProfileNote) => note.author === user?.username, [user?.username]);
 
   const handleCancelNoteEdit = useCallback(() => {
     setEditingNote(null);
@@ -432,7 +439,7 @@ const ProfilePanel: React.FC<ProfilePanelProps> = ({
                         <span className="profile-note-author">{note.author}</span>
                         <span className="profile-note-date">{formatDocumentDate(note.createdAt)}</span>
                         {note.updatedAt ? <span className="profile-note-edited">upraveno</span> : null}
-                        {onUpdateNote && (
+                        {onUpdateNote && canEditNote(note) && (
                           <button
                             className="profile-note-edit"
                             onClick={() => handleStartNoteEdit(note)}

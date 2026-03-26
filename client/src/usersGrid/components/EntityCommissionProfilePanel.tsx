@@ -1,6 +1,7 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { ProfileDocument, ProfileNote } from "../types/profile";
 import { apiDownload } from "../../utils/api";
+import { useAuth } from "../../auth/AuthContext";
 import { isDocumentViewable } from "../../utils/documentUtils";
 import DocumentViewerModal from "../../components/DocumentViewerModal";
 import ThemeToggleButton from "../../components/ThemeToggleButton";
@@ -332,6 +333,7 @@ const EntityCommissionProfilePanel: React.FC<EntityCommissionProfilePanelProps> 
   onUpdateNote,
   onDeleteNote
 }) => {
+  const { user } = useAuth();
   const panelRef = useRef<HTMLDivElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [newNote, setNewNote] = useState("");
@@ -403,9 +405,14 @@ const EntityCommissionProfilePanel: React.FC<EntityCommissionProfilePanelProps> 
   );
 
   const handleStartNoteEdit = useCallback((note: ProfileNote) => {
+    if (note.author !== user?.username) {
+      return;
+    }
     setEditingNote(note);
     setNewNote(note.content);
-  }, []);
+  }, [user?.username]);
+
+  const canEditNote = useCallback((note: ProfileNote) => note.author === user?.username, [user?.username]);
 
   const handleCancelNoteEdit = useCallback(() => {
     setEditingNote(null);
@@ -806,7 +813,7 @@ const EntityCommissionProfilePanel: React.FC<EntityCommissionProfilePanelProps> 
                         <span className="ec-note-author">{note.author}</span>
                         <span className="ec-note-date">{formatDate(note.createdAt)}</span>
                         {note.updatedAt ? <span className="ec-note-edited">upraveno</span> : null}
-                        {onUpdateNote && (
+                        {onUpdateNote && canEditNote(note) && (
                           <button
                             className="ec-note-edit"
                             onClick={() => handleStartNoteEdit(note)}

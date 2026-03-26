@@ -1192,6 +1192,30 @@ export const db = {
     };
   },
 
+  async getNoteById(id) {
+    if (!USE_POSTGRES) return null;
+
+    const result = await pool.query(
+      `SELECT id, entity_type, entity_id, content, author, created_at, updated_at
+         FROM notes
+        WHERE id = $1`,
+      [id]
+    );
+
+    const row = result.rows[0];
+    if (!row) return null;
+
+    return {
+      id: row.id,
+      entityType: row.entity_type,
+      entityId: row.entity_id,
+      content: row.content,
+      author: row.author,
+      createdAt: row.created_at,
+      updatedAt: row.updated_at
+    };
+  },
+
   async deleteNote(id) {
     if (!USE_POSTGRES) return null;
 
