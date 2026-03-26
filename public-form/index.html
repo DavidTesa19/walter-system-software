@@ -223,16 +223,100 @@
             display: flex;
             flex-direction: column;
             gap: 8px;
+            position: relative;
         }
 
         .full-width {
             grid-column: 1 / -1;
         }
 
-        label {
+        .field-label-row,
+        .checkbox-card-title-row,
+        .toggle-title-row {
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            flex-wrap: wrap;
+        }
+
+        label,
+        .checkbox-card-title-row strong,
+        .toggle-title-row strong {
             font-size: 13px;
             font-weight: 700;
             color: #4d3b2d;
+        }
+
+        .field-label {
+            display: inline-flex;
+            align-items: center;
+        }
+
+        .info-tooltip {
+            position: relative;
+            display: inline-flex;
+            align-items: center;
+        }
+
+        .info-trigger {
+            width: 19px;
+            height: 19px;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            padding: 0;
+            border: 1px solid rgba(15, 123, 105, 0.28);
+            border-radius: 999px;
+            background: rgba(15, 123, 105, 0.08);
+            color: var(--accent-strong);
+            font-size: 11px;
+            font-weight: 800;
+            line-height: 1;
+            cursor: help;
+        }
+
+        .info-trigger:focus-visible {
+            outline: none;
+            box-shadow: 0 0 0 4px rgba(15, 123, 105, 0.12);
+        }
+
+        .info-bubble {
+            position: absolute;
+            left: 0;
+            top: calc(100% + 10px);
+            z-index: 40;
+            width: min(280px, calc(100vw - 48px));
+            padding: 12px 14px;
+            border-radius: 14px;
+            border: 1px solid rgba(75, 56, 37, 0.12);
+            background: rgba(38, 27, 20, 0.96);
+            color: #fffaf4;
+            font-size: 12px;
+            font-weight: 500;
+            line-height: 1.55;
+            box-shadow: 0 18px 30px rgba(38, 27, 20, 0.22);
+            opacity: 0;
+            visibility: hidden;
+            transform: translateY(-4px);
+            transition: opacity 0.16s ease, transform 0.16s ease, visibility 0.16s ease;
+            pointer-events: none;
+        }
+
+        .info-bubble::before {
+            content: "";
+            position: absolute;
+            left: 12px;
+            bottom: calc(100% - 1px);
+            border-width: 7px;
+            border-style: solid;
+            border-color: transparent transparent rgba(38, 27, 20, 0.96) transparent;
+        }
+
+        .info-tooltip:hover .info-bubble,
+        .info-tooltip:focus-within .info-bubble {
+            opacity: 1;
+            visibility: visible;
+            transform: translateY(0);
         }
 
         input,
@@ -384,6 +468,12 @@
             margin-bottom: 16px;
         }
 
+        .toggle-copy {
+            display: flex;
+            flex-direction: column;
+            gap: 4px;
+        }
+
         .switch {
             position: relative;
             width: 58px;
@@ -456,6 +546,31 @@
         .checkbox-card strong {
             display: block;
             margin-bottom: 4px;
+            font-size: 14px;
+        }
+
+        .checkbox-card .checkbox-card-copy {
+            display: block;
+            min-width: 0;
+            flex: 1 1 auto;
+        }
+
+        .checkbox-card .checkbox-card-title-row {
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            flex-wrap: wrap;
+            color: #4d3b2d;
+        }
+
+        .checkbox-card .checkbox-card-label {
+            display: inline-flex;
+            align-items: center;
+            cursor: pointer;
+        }
+
+        .checkbox-card-title-row strong {
+            margin-bottom: 0;
             font-size: 14px;
         }
 
@@ -580,7 +695,15 @@
 
                     <section class="section-card">
                         <div class="toggle-row">
-                            <strong>Přidat i zakázku</strong>
+                            <div class="toggle-copy">
+                                <div class="toggle-title-row">
+                                    <strong>Přidat i zakázku</strong>
+                                    <span class="info-tooltip">
+                                        <button type="button" class="info-trigger" aria-label="Co znamená Přidat i zakázku">i</button>
+                                        <span class="info-bubble" role="tooltip">Zapněte tuto volbu, pokud chcete spolu se subjektem rovnou založit i konkrétní zakázku, poptávku nebo tip.</span>
+                                    </span>
+                                </div>
+                            </div>
                             <label class="switch" aria-label="Přidat zakázku">
                                 <input type="checkbox" id="includeCommission">
                                 <span class="slider"></span>
@@ -635,34 +758,53 @@
 
         const PRIORITY_OPTIONS = ["Nízká", "Střední", "Vysoká", "Urgentní"];
 
+        const escapeHtml = (value) => String(value || "")
+            .replace(/&/g, "&amp;")
+            .replace(/</g, "&lt;")
+            .replace(/>/g, "&gt;")
+            .replace(/\"/g, "&quot;")
+            .replace(/'/g, "&#39;");
+
+        const renderInfoTooltip = (description, ariaLabel) => {
+            if (!description) return "";
+
+            return `
+                <span class="info-tooltip">
+                    <button type="button" class="info-trigger" aria-label="${escapeHtml(ariaLabel)}">i</button>
+                    <span class="info-bubble" role="tooltip">${escapeHtml(description)}</span>
+                </span>
+            `;
+        };
+
         const entityFieldBase = [
-            { key: "first_name", label: "Jméno", placeholder: "Např. Jan", required: false },
-            { key: "last_name", label: "Příjmení", placeholder: "Např. Novák", required: false },
-            { key: "company_name", label: "Společnost", placeholder: "Např. Walter Consulting", required: false },
-            { key: "field", label: "Obor", placeholder: "Např. IT, finance, energetika", list: "fieldSuggestions" },
-            { key: "location", label: "Lokalita", placeholder: "Např. Praha / Brno / remote" },
-            { key: "phone", label: "Telefon", type: "tel", placeholder: "+420 777 123 456" },
-            { key: "email", label: "E-mail", type: "email", placeholder: "kontakt@firma.cz" },
-            { key: "website", label: "Web", type: "url", placeholder: "https://www.example.com" },
-            { key: "info", label: "Info / poznámky", type: "textarea", placeholder: "Kontext, specializace, preference nebo další detaily.", fullWidth: true }
+            { key: "first_name", label: "Jméno", placeholder: "Např. Jan", required: false, description: "Vyplňte křestní jméno hlavní kontaktní osoby nebo osoby, které se poptávka týká." },
+            { key: "last_name", label: "Příjmení", placeholder: "Např. Novák", required: false, description: "Vyplňte příjmení hlavní kontaktní osoby, pokud je známé." },
+            { key: "company_name", label: "Společnost", placeholder: "Např. Walter Consulting", required: false, description: "Zadejte název firmy nebo organizace, za kterou subjekt vystupuje." },
+            { key: "field", label: "Obor", placeholder: "Např. IT, finance, energetika", list: "fieldSuggestions", description: "Vyberte hlavní obor nebo segment, ve kterém subjekt působí. Pomůže to s filtrováním a přiřazením." },
+            { key: "location", label: "Lokalita", placeholder: "Např. Praha / Brno / remote", description: "Uveďte město, region nebo informaci, zda je spolupráce možná remote." },
+            { key: "phone", label: "Telefon", type: "tel", placeholder: "+420 777 123 456", description: "Telefonní číslo použijeme pro rychlý kontakt nebo doplnění detailů." },
+            { key: "email", label: "E-mail", type: "email", placeholder: "kontakt@firma.cz", description: "Primární e-mail pro komunikaci se subjektem nebo kontaktní osobou." },
+            { key: "website", label: "Web", type: "url", placeholder: "https://www.example.com", description: "Odkaz na firemní web, LinkedIn nebo jinou veřejnou prezentaci subjektu." },
+            { key: "info", label: "Info / poznámky", type: "textarea", placeholder: "Kontext, specializace, preference nebo další detaily.", fullWidth: true, description: "Doplňte vše podstatné, co se nevešlo do ostatních polí: kontext, specializaci, preference nebo omezení." }
         ];
 
         const commissionFieldBase = [
-            { key: "position", label: "Zakázka / pozice", placeholder: "Např. Senior obchodník" },
-            { key: "service_position", label: "Typ služby", placeholder: "Např. recruiting, outsourcing, konzultace" },
-            { key: "assigned_to", label: "Přiřazeno komu", placeholder: "Např. David / Sales team" },
-            { key: "budget", label: "Rozpočet / hodnota", placeholder: "Např. 120 000 CZK" },
-            { key: "commission_value", label: "Provize", placeholder: "Např. 15 %" },
-            { key: "priority", label: "Priorita", type: "select", options: PRIORITY_OPTIONS },
-            { key: "state", label: "Stav", placeholder: "Např. nové zadání" },
-            { key: "deadline", label: "Termín", type: "date" },
-            { key: "notes", label: "Poznámky", type: "textarea", placeholder: "Interní poznámky nebo doplnění k workflow.", fullWidth: true },
+            { key: "position", label: "Zakázka / pozice", placeholder: "Např. Senior obchodník", description: "Napište stručný název zakázky, role nebo obchodní příležitosti, aby bylo jasné, čeho se případ týká." },
+            { key: "service_position", label: "Typ služby", placeholder: "Např. recruiting, outsourcing, konzultace", description: "Upřesněte, jaký typ spolupráce nebo služby je požadován." },
+            { key: "assigned_to", label: "Přiřazeno komu", placeholder: "Např. David / Sales team", description: "Pokud už víte, kdo bude zakázku řešit, uveďte konkrétní osobu nebo tým." },
+            { key: "budget", label: "Rozpočet / hodnota", placeholder: "Např. 120 000 CZK", description: "Uveďte odhadovaný rozpočet, hodnotu zakázky nebo finanční rámec." },
+            { key: "commission_value", label: "Provize", placeholder: "Např. 15 %", description: "Zadejte domluvenou nebo očekávanou provizi, procento nebo fixní částku." },
+            { key: "priority", label: "Priorita", type: "select", options: PRIORITY_OPTIONS, description: "Zvolte, jak urgentní nebo důležitá je tato zakázka pro další zpracování." },
+            { key: "state", label: "Stav", placeholder: "Např. nové zadání", description: "Krátce popište aktuální stav zakázky, například nové zadání, v jednání nebo uzavřeno." },
+            { key: "deadline", label: "Termín", type: "date", description: "Vyberte termín dodání, uzávěrky nebo jiný klíčový deadline." },
+            { key: "notes", label: "Poznámky", type: "textarea", placeholder: "Interní poznámky nebo doplnění k workflow.", fullWidth: true, description: "Doplňující interní informace k zakázce, workflow nebo dalším krokům." },
             {
                 key: "is_tipped",
                 label: "Označit jako tipnutou zakázku",
                 type: "checkbox",
                 fullWidth: true,
-                hint: ""
+                hint: "",
+                description: "Zaškrtněte, pokud jde o tipnutou zakázku a chcete ji takto evidovat v systému."
             }
         ];
 
@@ -671,8 +813,8 @@
                 label: "Klient",
                 entityFields: [
                     ...entityFieldBase.slice(0, 4),
-                    { key: "service", label: "Požadovaná služba", placeholder: "Např. recruitment, executive search" },
-                    { key: "budget", label: "Rozpočet subjektu", placeholder: "Např. 500 000 CZK" },
+                    { key: "service", label: "Požadovaná služba", placeholder: "Např. recruitment, executive search", description: "Upřesněte, jakou službu klient poptává nebo očekává od spolupráce." },
+                    { key: "budget", label: "Rozpočet subjektu", placeholder: "Např. 500 000 CZK", description: "Rozpočet klienta pro spolupráci, projekt nebo nákup služby." },
                     ...entityFieldBase.slice(4)
                 ],
                 commissionFields: commissionFieldBase.map((field) => field.key === "position" ? { ...field, label: "Zakázka / poptávka" } : field)
@@ -733,17 +875,21 @@
             const id = getFieldId(scope, field.key);
             const classes = ["form-group"];
             if (field.fullWidth) classes.push("full-width");
+            const tooltipMarkup = renderInfoTooltip(field.description, `Popis pole ${field.label}`);
 
             if (field.type === "checkbox") {
                 return `
                     <div class="${classes.join(" ")}">
-                        <label class="checkbox-card" for="${id}">
+                        <div class="checkbox-card">
                             <input type="checkbox" id="${id}" name="${field.key}">
-                            <span>
-                                <strong>${field.label}</strong>
+                            <span class="checkbox-card-copy">
+                                <span class="checkbox-card-title-row">
+                                    <label class="checkbox-card-label" for="${id}"><strong>${field.label}</strong></label>
+                                    ${tooltipMarkup}
+                                </span>
                                 <span>${field.hint || ""}</span>
                             </span>
-                        </label>
+                        </div>
                     </div>
                 `;
             }
@@ -779,7 +925,10 @@
 
             return `
                 <div class="${classes.join(" ")}">
-                    <label for="${id}">${field.label}${requiredMarkup}</label>
+                    <div class="field-label-row">
+                        <label for="${id}" class="field-label">${field.label}${requiredMarkup}</label>
+                        ${tooltipMarkup}
+                    </div>
                     ${control}
                 </div>
             `;
