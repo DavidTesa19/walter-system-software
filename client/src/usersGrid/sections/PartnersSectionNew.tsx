@@ -898,7 +898,7 @@ const PartnersSectionNew: React.FC<SectionProps> = ({ viewMode, isActive, onRegi
   return (
     <>
       <div className="grid-container">
-        <div className="grid-wrapper ag-theme-quartz" style={{ height: "100%" }}>
+        <div className="grid-wrapper ag-theme-quartz">
           <AgGridReact<PartnerGridRow>
             ref={gridRef}
             rowData={gridData}
