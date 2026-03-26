@@ -315,21 +315,24 @@
 .main-content {
   margin-left: 260px;
   width: calc(100% - 260px);
-  min-height: 100vh;
-  max-height: 100vh;
+  min-height: calc(100vh - var(--app-footer-height));
+  height: calc(100vh - var(--app-footer-height));
+  max-height: calc(100vh - var(--app-footer-height));
   background: var(--color-background);
   color: var(--color-text);
   overflow: auto;
   display: flex;
   flex-direction: column;
-  /* Footer is position:fixed; keep content scrollable above it */
-  padding-bottom: 96px;
+  padding-bottom: 0;
 }
 
 .main-content--fullscreen {
   overflow: hidden;
   padding: 0;
   padding-bottom: 0;
+  min-height: 100vh;
+  height: 100vh;
+  max-height: 100vh;
 }
 
 @media (max-width: 960px) {

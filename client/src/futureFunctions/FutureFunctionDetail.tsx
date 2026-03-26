@@ -4,6 +4,7 @@ import { useAuth } from "../auth/AuthContext";
 import DocumentViewerModal from "../components/DocumentViewerModal";
 import ThemeToggleButton from "../components/ThemeToggleButton";
 import type { FutureFunction } from "./futureFunction.interface";
+import { formatProfileDate } from "../usersGrid/utils/profileUtils";
 import "./FutureFunctionDetail.css";
 
 /* ------------------------------------------------------------------ */
@@ -74,6 +75,8 @@ const formatDate = (iso: string) => {
     minute: "2-digit",
   });
 };
+
+const formatShortDate = (value?: string | null) => formatProfileDate(value) ?? "—";
 
 const formatSize = (bytes: number) => {
   if (bytes < 1024) return `${bytes} B`;
@@ -863,6 +866,11 @@ const FutureFunctionDetail: React.FC<FutureFunctionDetailProps> = ({
                       ))}
                     </select>
                   )}
+                </div>
+
+                <div className="ff-info-item">
+                  <span className="ff-info-label">Datum přidání</span>
+                  <div className="ff-info-value">{formatShortDate(draft.created_at)}</div>
                 </div>
 
                 <div className="ff-info-item">

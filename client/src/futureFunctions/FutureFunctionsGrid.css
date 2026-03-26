@@ -1,6 +1,6 @@
 .future-functions-page {
   overflow: visible;
-  padding-bottom: 2rem;
+  padding-bottom: 1rem;
 }
 
 .future-functions-summary {
@@ -13,10 +13,14 @@
 
 .future-functions-table-section {
   margin-bottom: 0;
+  flex: 1;
+  min-height: 0;
 }
 
 .future-functions-grid-container {
   align-items: stretch;
+  flex: 1;
+  min-height: 0;
 }
 
 .ff-grid-wrapper {
@@ -28,6 +32,8 @@
   background:
     linear-gradient(180deg, color-mix(in srgb, var(--color-surface, #ffffff) 98%, transparent) 0%, var(--color-surface, #ffffff) 100%);
   box-shadow: var(--color-shadow-lg, 0 20px 55px rgba(15, 23, 42, 0.16));
+  height: 100%;
+  min-height: 0;
 }
 
 .ff-grid-wrapper::after {

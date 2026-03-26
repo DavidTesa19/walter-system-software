@@ -7,6 +7,8 @@ export interface FutureFunction {
   info: string;
   status: string;
   archived: boolean;
+  created_at?: string | null;
+  updated_at?: string | null;
   completedAt?: string | null;
 }
 

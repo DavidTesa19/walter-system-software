@@ -3,6 +3,7 @@ import type { ReactNode } from 'react';
 import { API_BASE } from '../usersGrid/constants';
 import { trackEvent, startActiveTimeTracking, stopActiveTimeTracking, flushSectionTime } from '../utils/analytics';
 import { clearStoredTableViews } from '../utils/tableViewState';
+import { clearStoredNavigationState } from '../utils/navigationState';
 
 // Define available roles
 export type UserRole = 'admin' | 'manager' | 'employee' | 'salesman' | 'viewer';
@@ -49,6 +50,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
     localStorage.removeItem('walterUser');
     localStorage.removeItem('walterSessionStart');
     clearStoredTableViews();
+    clearStoredNavigationState();
     clearSessionTimer();
   }, [clearSessionTimer]);
 
@@ -72,6 +74,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
         // Expecting backend to return { user: { id, username, role }, token: "..." }
         const userData: User = { ...data.user, token: data.token };
         clearStoredTableViews();
+        clearStoredNavigationState();
         
         // Save to state and local storage
         setUser(userData);

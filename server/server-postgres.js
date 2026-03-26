@@ -2864,8 +2864,16 @@ function createFutureFunctionsRoutes() {
       }
 
       const store = readDb();
-      const maxId = store.futureFunctions.reduce((max, item) => (item.id > max ? item.id : max), 0);
-      const entry = { id: maxId + 1, ...payload };
+      const futureFunctions = Array.isArray(store.futureFunctions) ? store.futureFunctions : [];
+      const now = new Date().toISOString();
+      const maxId = futureFunctions.reduce((max, item) => (item.id > max ? item.id : max), 0);
+      const entry = {
+        id: maxId + 1,
+        ...payload,
+        created_at: typeof req.body?.created_at === 'string' && req.body.created_at ? req.body.created_at : now,
+        updated_at: now
+      };
+      store.futureFunctions = futureFunctions;
       store.futureFunctions.push(entry);
       if (!writeDb(store)) {
         return res.status(500).json({ error: 'Failed to persist' });
@@ -2895,7 +2903,13 @@ function createFutureFunctionsRoutes() {
       if (idx === -1) {
         return res.status(404).json({ error: 'Not found' });
       }
-      store.futureFunctions[idx] = { ...store.futureFunctions[idx], ...payload, id };
+      store.futureFunctions[idx] = {
+        ...store.futureFunctions[idx],
+        ...payload,
+        id,
+        created_at: store.futureFunctions[idx].created_at ?? req.body?.created_at ?? new Date().toISOString(),
+        updated_at: new Date().toISOString()
+      };
       if (!writeDb(store)) {
         return res.status(500).json({ error: 'Failed to persist' });
       }
@@ -2924,7 +2938,13 @@ function createFutureFunctionsRoutes() {
       if (idx === -1) {
         return res.status(404).json({ error: 'Not found' });
       }
-      store.futureFunctions[idx] = { ...store.futureFunctions[idx], ...patch, id };
+      store.futureFunctions[idx] = {
+        ...store.futureFunctions[idx],
+        ...patch,
+        id,
+        created_at: store.futureFunctions[idx].created_at ?? req.body?.created_at ?? new Date().toISOString(),
+        updated_at: new Date().toISOString()
+      };
       if (!writeDb(store)) {
         return res.status(500).json({ error: 'Failed to persist' });
       }

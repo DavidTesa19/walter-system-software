@@ -14,6 +14,8 @@ import FutureFunctionDetail from "./FutureFunctionDetail";
 import FutureFunctionCreateModal from "./FutureFunctionCreateModal";
 import type { FutureFunction, FutureFunctionDraft } from "./futureFunction.interface";
 import type { ICellRendererParams } from "ag-grid-community";
+import { formatProfileDate } from "../usersGrid/utils/profileUtils";
+import { getStoredFutureFunctionsView, setStoredFutureFunctionsView } from "../utils/navigationState";
 
 ModuleRegistry.registerModules([AllCommunityModule]);
 
@@ -78,10 +80,12 @@ const createInitialDraft = (mode: "active" | "archive"): FutureFunctionDraft => 
   archived: mode === "archive"
 });
 
+const formatAddedDate = (value: string | null | undefined) => formatProfileDate(value) ?? "";
+
 const FutureFunctionsGrid: React.FC = () => {
   const [futureFunctions, setFutureFunctions] = useState<FutureFunction[]>([]);
   const [isLoading, setIsLoading] = useState(false);
-  const [isArchiveView, setIsArchiveView] = useState(false);
+  const [isArchiveView, setIsArchiveView] = useState(() => getStoredFutureFunctionsView("active") === "archive");
   const [selectedFunction, setSelectedFunction] = useState<FutureFunction | null>(null);
   const [createModalOpen, setCreateModalOpen] = useState(false);
   const [createDraft, setCreateDraft] = useState<FutureFunctionDraft>(createInitialDraft("active"));
@@ -129,6 +133,10 @@ const FutureFunctionsGrid: React.FC = () => {
   useEffect(() => {
     void fetchFutureFunctions();
   }, [fetchFutureFunctions]);
+
+  useEffect(() => {
+    setStoredFutureFunctionsView(isArchiveView ? "archive" : "active");
+  }, [isArchiveView]);
 
   // Split data into active and archived
   const activeFunctions = useMemo(
@@ -522,6 +530,8 @@ const FutureFunctionsGrid: React.FC = () => {
         filter: true,
         flex: 1,
         minWidth: 160,
+        sort: "asc",
+        sortIndex: 0,
         cellRenderer: StatusCellRenderer,
         cellEditor: OptionSelectEditor,
         cellEditorPopup: true,
@@ -532,13 +542,22 @@ const FutureFunctionsGrid: React.FC = () => {
         onCellClicked: onCellClickedHandler
       },
       {
+        field: "created_at",
+        headerName: "Datum přidání",
+        editable: false,
+        filter: true,
+        width: 145,
+        minWidth: 130,
+        valueFormatter: (params: { value: string | null | undefined }) => formatAddedDate(params.value)
+      },
+      {
         field: "completedAt",
         headerName: "Datum dokončení",
         editable: false,
         filter: true,
         width: 145,
         minWidth: 135,
-        valueFormatter: (params: { value: string | null | undefined }) => params.value ?? ""
+        valueFormatter: (params: { value: string | null | undefined }) => formatAddedDate(params.value)
       },
       {
         field: "priority",
@@ -698,6 +717,8 @@ const FutureFunctionsGrid: React.FC = () => {
         flex: 1,
         minWidth: 190,
         width: 210,
+        sort: "asc",
+        sortIndex: 0,
         cellRenderer: StatusCellRenderer,
         cellEditor: OptionSelectEditor,
         cellEditorPopup: true,
@@ -708,13 +729,22 @@ const FutureFunctionsGrid: React.FC = () => {
         onCellClicked: onCellClickedHandler
       },
       {
+        field: "created_at",
+        headerName: "Datum přidání",
+        editable: false,
+        filter: true,
+        width: 145,
+        minWidth: 130,
+        valueFormatter: (params: { value: string | null | undefined }) => formatAddedDate(params.value)
+      },
+      {
         field: "completedAt",
         headerName: "Datum dokončení",
         editable: false,
         filter: true,
         width: 145,
         minWidth: 135,
-        valueFormatter: (params: { value: string | null | undefined }) => params.value ?? ""
+        valueFormatter: (params: { value: string | null | undefined }) => formatAddedDate(params.value)
       },
       {
         field: "priority",
@@ -789,7 +819,7 @@ const FutureFunctionsGrid: React.FC = () => {
   const currentRowData = isArchiveView ? archivedFunctions : activeFunctions;
   const currentColumnDefs = isArchiveView ? archiveColumnDefs : activeColumnDefs;
   const currentOnCellValueChanged = isArchiveView ? onArchiveCellValueChanged : onCellValueChanged;
-  const currentGridHeight = "clamp(520px, 68vh, 760px)";
+  const currentGridHeight = "100%";
 
   // Status counts for summary strip
   const statusSummary = useMemo(() => {

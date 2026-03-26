@@ -30,6 +30,8 @@ export interface FieldGroup {
 export interface EntityData {
   id: number;
   entity_id: string;
+  createdAt?: string | null;
+  updatedAt?: string | null;
   groups: FieldGroup[];
 }
 
@@ -37,6 +39,8 @@ export interface CommissionData {
   id: number;
   commission_id: string;
   status: string;
+  createdAt?: string | null;
+  updatedAt?: string | null;
   groups: FieldGroup[];
 }
 
@@ -558,7 +562,10 @@ const EntityCommissionProfilePanel: React.FC<EntityCommissionProfilePanelProps> 
               {/* Entity Info Column */}
               <div className="ec-profile-column entity-column">
                 <div className="ec-column-header">
-                  <h3 className="ec-column-title">{entityTypeLabels[entityType]}</h3>
+                  <div className="ec-column-heading">
+                    <h3 className="ec-column-title">{entityTypeLabels[entityType]}</h3>
+                    <span className="ec-column-meta">Datum přidání: {formatDate(entity.createdAt) || "—"}</span>
+                  </div>
                   <span className="ec-column-id">{entity.entity_id}</span>
                 </div>
                 <div className="ec-column-content">
@@ -575,7 +582,10 @@ const EntityCommissionProfilePanel: React.FC<EntityCommissionProfilePanelProps> 
               {/* Commission Info Column */}
               <div className="ec-profile-column commission-column">
                 <div className="ec-column-header">
-                  <h3 className="ec-column-title">{commissionLabel}</h3>
+                  <div className="ec-column-heading">
+                    <h3 className="ec-column-title">{commissionLabel}</h3>
+                    <span className="ec-column-meta">Datum přidání: {formatDate(commission?.createdAt) || "—"}</span>
+                  </div>
                   <span className="ec-column-id">
                     {commission ? commission.commission_id : hasLinkedCommissions ? `${linkedCommissions.length} položek` : "Zatím žádná"}
                   </span>
@@ -906,7 +916,7 @@ function formatFileSize(bytes?: number) {
   return `${value.toFixed(1)} ${units[u]}`;
 }
 
-function formatDate(value?: string) {
+function formatDate(value?: string | null) {
   if (!value) return "";
   const date = new Date(value);
   if (Number.isNaN(date.getTime())) return value;

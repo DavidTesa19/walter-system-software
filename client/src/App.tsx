@@ -21,6 +21,7 @@ import type { GlobalSearchResult, GridSearchNavigationTarget, SearchTable } from
 import type { UserInterface } from './usersGrid/user.interface';
 import type { FutureFunction } from './futureFunctions/futureFunction.interface';
 import { apiGet } from './utils/api';
+import { getStoredAppView, setStoredAppView } from './utils/navigationState';
 import './components/Sidebar.css';
 
 type SearchField = keyof UserInterface;
@@ -115,9 +116,17 @@ const getRowTitle = (row: UserInterface): string => {
 
 const AppContent: React.FC = () => {
   const { isAuthenticated } = useAuth();
-  const [viewMode, setViewMode] = useState<AppView>('active');
+  const [viewMode, setViewMode] = useState<AppView>(() => getStoredAppView('active'));
   const [gridSearchTarget, setGridSearchTarget] = useState<GridSearchNavigationTarget | null>(null);
   const searchIndexCacheRef = useRef<{ records: SearchableRecord[]; futureFunctions: SearchableFutureFunction[]; fetchedAt: number } | null>(null);
+
+  useEffect(() => {
+    if (!isAuthenticated) {
+      return;
+    }
+
+    setStoredAppView(viewMode);
+  }, [isAuthenticated, viewMode]);
 
   // Track section visits and time spent
   useEffect(() => {

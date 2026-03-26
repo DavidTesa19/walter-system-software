@@ -225,8 +225,16 @@
   display: flex;
   align-items: center;
   justify-content: space-between;
+  gap: 1rem;
   padding-bottom: 0.75rem;
   border-bottom: 2px solid var(--color-border, #e5e7eb);
+}
+
+.ec-column-heading {
+  display: flex;
+  flex-direction: column;
+  gap: 0.2rem;
+  min-width: 0;
 }
 
 .entity-column .ec-column-header {
@@ -242,6 +250,11 @@
   font-weight: 600;
   color: var(--color-text, #1f2937);
   margin: 0;
+}
+
+.ec-column-meta {
+  font-size: 0.75rem;
+  color: var(--color-text-muted, #6b7280);
 }
 
 .ec-column-id {

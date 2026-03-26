@@ -17,6 +17,7 @@ import useProfileDocuments from "../hooks/useProfileDocuments";
 import useProfileNotes from "../hooks/useProfileNotes";
 import { ApproveRestoreCellRenderer, DeleteArchiveCellRenderer } from "../cells/RowActionCellRenderers";
 import { fieldOptions } from "../fieldOptions";
+import { formatProfileDate } from "../utils/profileUtils";
 
 type PartnerEntityApi = {
   id: number;
@@ -214,7 +215,13 @@ const buildEntityData = (entity: PartnerEntity | null): EntityData | null => {
     }
   ];
 
-  return { id: entity.id, entity_id: entity.entity_id, groups };
+  return {
+    id: entity.id,
+    entity_id: entity.entity_id,
+    createdAt: entity.created_at,
+    updatedAt: entity.updated_at,
+    groups
+  };
 };
 
 const buildCommissionData = (commission: PartnerCommission | null): CommissionData | null => {
@@ -250,8 +257,17 @@ const buildCommissionData = (commission: PartnerCommission | null): CommissionDa
     }
   ];
 
-  return { id: commission.id, commission_id: commission.commission_id, status: commission.status, groups };
+  return {
+    id: commission.id,
+    commission_id: commission.commission_id,
+    status: commission.status,
+    createdAt: commission.created_at,
+    updatedAt: commission.updated_at,
+    groups
+  };
 };
+
+const formatAddedDate = (value?: string | null) => formatProfileDate(value) ?? "";
 
 const buildLinkedCommissionItems = (commissions: PartnerCommission[]): LinkedCommissionItem[] => commissions
   .map((commission) => ({
@@ -872,6 +888,7 @@ const PartnersSectionNew: React.FC<SectionProps> = ({ viewMode, isActive, onRegi
       { field: "company", headerName: "Společnost", filter: true, editable: true, flex: 1.5, minWidth: 160 },
       { field: "field", headerName: "Obor", filter: true, editable: true, flex: 1, minWidth: 110, cellEditor: "agSelectCellEditor", cellEditorParams: { values: FIELD_OPTIONS_ARRAY } },
       { field: "location", headerName: "Lokalita", filter: true, editable: true, flex: 1, minWidth: 110 },
+      { field: "created_at", headerName: "Datum přidání", filter: true, editable: false, flex: 0.95, minWidth: 130, valueFormatter: (params) => formatAddedDate(params.value) },
       ...(viewMode === "active" ? activeSubjectCols : commissionCols)
     );
 
@@ -881,7 +898,7 @@ const PartnersSectionNew: React.FC<SectionProps> = ({ viewMode, isActive, onRegi
   return (
     <>
       <div className="grid-container">
-        <div className="grid-wrapper ag-theme-quartz" style={{ height: "75vh" }}>
+        <div className="grid-wrapper ag-theme-quartz" style={{ height: "100%" }}>
           <AgGridReact<PartnerGridRow>
             ref={gridRef}
             rowData={gridData}

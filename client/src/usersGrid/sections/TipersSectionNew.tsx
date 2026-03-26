@@ -17,6 +17,7 @@ import useProfileDocuments from "../hooks/useProfileDocuments";
 import useProfileNotes from "../hooks/useProfileNotes";
 import { ApproveRestoreCellRenderer, DeleteArchiveCellRenderer } from "../cells/RowActionCellRenderers";
 import { fieldOptions } from "../fieldOptions";
+import { formatProfileDate } from "../utils/profileUtils";
 
 type TiperEntityApi = {
   id: number;
@@ -217,6 +218,8 @@ const buildEntityData = (entity: TiperEntity | null): EntityData | null => {
   return {
     id: entity.id,
     entity_id: entity.entity_id,
+    createdAt: entity.created_at,
+    updatedAt: entity.updated_at,
     groups
   };
 };
@@ -262,9 +265,13 @@ const buildCommissionData = (commission: TiperCommission | null): CommissionData
     id: commission.id,
     commission_id: commission.commission_id,
     status: commission.status,
+    createdAt: commission.created_at,
+    updatedAt: commission.updated_at,
     groups
   };
 };
+
+const formatAddedDate = (value?: string | null) => formatProfileDate(value) ?? "";
 
 const buildLinkedCommissionItems = (commissions: TiperCommission[]): LinkedCommissionItem[] => commissions
   .map((commission) => ({
@@ -1012,6 +1019,16 @@ const TipersSectionNew: React.FC<SectionProps> = ({
       editable: false
     });
 
+    cols.push({
+      field: "created_at",
+      headerName: "Datum přidání",
+      filter: true,
+      editable: false,
+      flex: 0.95,
+      minWidth: 130,
+      valueFormatter: (params) => formatAddedDate(params.value)
+    });
+
     // Entity info columns
     cols.push(
       {
@@ -1130,7 +1147,7 @@ const TipersSectionNew: React.FC<SectionProps> = ({
   return (
     <>
       <div className="grid-container">
-        <div className="grid-wrapper ag-theme-quartz" style={{ height: "75vh" }}>
+        <div className="grid-wrapper ag-theme-quartz" style={{ height: "100%" }}>
           <AgGridReact<TiperGridRow>
             ref={gridRef}
             rowData={gridData}

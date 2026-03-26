@@ -3143,8 +3143,16 @@ app.post("/future-functions", authenticateToken, (req, res) => {
   const db = readDb();
   const body = isPlainObject(req.body) ? req.body : {};
   const payload = { ...FUTURE_FUNCTION_DEFAULTS, ...body };
-  const maxId = db.futureFunctions.reduce((max, item) => Math.max(max, Number(item.id) || 0), 0);
-  const entry = { id: maxId + 1, ...payload };
+  const futureFunctions = Array.isArray(db.futureFunctions) ? db.futureFunctions : [];
+  const now = new Date().toISOString();
+  const maxId = futureFunctions.reduce((max, item) => Math.max(max, Number(item.id) || 0), 0);
+  const entry = {
+    id: maxId + 1,
+    ...payload,
+    created_at: typeof body.created_at === "string" && body.created_at ? body.created_at : now,
+    updated_at: now
+  };
+  db.futureFunctions = futureFunctions;
   db.futureFunctions.push(entry);
   if (!writeDb(db)) return res.status(500).json({ error: "Failed to persist" });
   res.status(201).json(entry);
@@ -3156,7 +3164,14 @@ app.put("/future-functions/:id", authenticateToken, (req, res) => {
   const idx = db.futureFunctions.findIndex((record) => record.id === id);
   if (idx === -1) return res.status(404).json({ error: "Not found" });
   const body = isPlainObject(req.body) ? req.body : {};
-  const updated = { ...FUTURE_FUNCTION_DEFAULTS, ...db.futureFunctions[idx], ...body, id };
+  const updated = {
+    ...FUTURE_FUNCTION_DEFAULTS,
+    ...db.futureFunctions[idx],
+    ...body,
+    id,
+    created_at: db.futureFunctions[idx].created_at ?? body.created_at ?? new Date().toISOString(),
+    updated_at: new Date().toISOString()
+  };
   db.futureFunctions[idx] = updated;
   if (!writeDb(db)) return res.status(500).json({ error: "Failed to persist" });
   res.json(updated);
@@ -3168,7 +3183,13 @@ app.patch("/future-functions/:id", authenticateToken, (req, res) => {
   const idx = db.futureFunctions.findIndex((record) => record.id === id);
   if (idx === -1) return res.status(404).json({ error: "Not found" });
   const body = isPlainObject(req.body) ? req.body : {};
-  db.futureFunctions[idx] = { ...db.futureFunctions[idx], ...body, id };
+  db.futureFunctions[idx] = {
+    ...db.futureFunctions[idx],
+    ...body,
+    id,
+    created_at: db.futureFunctions[idx].created_at ?? body.created_at ?? new Date().toISOString(),
+    updated_at: new Date().toISOString()
+  };
   if (!writeDb(db)) return res.status(500).json({ error: "Failed to persist" });
   res.json(db.futureFunctions[idx]);
 });
