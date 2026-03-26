@@ -77,6 +77,46 @@
   background-color: color-mix(in srgb, var(--color-primary, #2563eb) 7%, var(--color-surface, #ffffff)) !important;
 }
 
+.ff-detail-open-btn {
+  width: 28px;
+  height: 28px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin: 0 auto;
+  padding: 0;
+  border: 1px solid var(--color-border, rgba(148, 163, 184, 0.35));
+  border-radius: 999px;
+  background: var(--color-surface-alt, #f8fafc);
+  color: var(--color-text, #0f172a);
+  cursor: pointer;
+  box-shadow: var(--color-shadow-sm, 0 4px 14px rgba(15, 23, 42, 0.08));
+  transition: transform 0.15s ease, background-color 0.15s ease, border-color 0.15s ease, color 0.15s ease;
+}
+
+.ff-detail-open-btn:hover {
+  background: color-mix(in srgb, var(--color-primary, #2563eb) 10%, var(--color-surface, #ffffff));
+  border-color: color-mix(in srgb, var(--color-primary, #2563eb) 32%, var(--color-border, rgba(148, 163, 184, 0.35)));
+  color: var(--color-primary, #2563eb);
+  transform: translateY(-1px);
+}
+
+.ff-detail-open-btn:focus-visible {
+  outline: none;
+  box-shadow:
+    0 0 0 3px color-mix(in srgb, var(--color-primary, #2563eb) 18%, transparent),
+    var(--color-shadow-sm, 0 4px 14px rgba(15, 23, 42, 0.08));
+}
+
+.ff-detail-open-btn svg {
+  pointer-events: none;
+}
+
+[data-theme='dark'] .ff-detail-open-btn {
+  background: color-mix(in srgb, var(--color-surface-alt, #1f2937) 82%, var(--color-surface, #111827));
+  color: var(--color-text, #f8fafc);
+}
+
 @media (max-width: 900px) {
   .future-functions-page {
     padding-bottom: 1.25rem;

@@ -319,19 +319,10 @@ const FutureFunctionsGrid: React.FC = () => {
     if (!data) return null;
     return (
       <button
+        className="ff-detail-open-btn"
         type="button"
         onClick={() => setSelectedFunction(data)}
         title="Otevřít detail"
-        style={{
-          display: "flex",
-          alignItems: "center",
-          justifyContent: "center",
-          background: "none",
-          border: "none",
-          cursor: "pointer",
-          color: "var(--ag-header-foreground-color, #aaa)",
-          padding: "2px"
-        }}
       >
         <svg width="14" height="14" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
           <circle cx="11" cy="11" r="7" stroke="currentColor" strokeWidth="2"/>
