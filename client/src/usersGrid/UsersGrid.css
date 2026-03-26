@@ -138,12 +138,13 @@
 
 .grid-container {
   display: flex;
+  flex-direction: column;
   position: relative;
   max-width: 100%;
   width: 100%;
   overflow: hidden;
   flex: 1;
-  min-height: 400px;
+  min-height: var(--grid-min-height);
   align-items: stretch;
 }
 
@@ -351,8 +352,7 @@
   min-width: 0; /* allows flex child to shrink and prevents overflow */
   display: flex;
   flex-direction: column;
-  height: calc(100vh - var(--app-footer-height) - 155px);
-  min-height: 400px;
+  min-height: var(--grid-min-height);
 }
 
 .grid-wrapper .ag-root,
