@@ -819,7 +819,6 @@ const FutureFunctionsGrid: React.FC = () => {
   const currentRowData = isArchiveView ? archivedFunctions : activeFunctions;
   const currentColumnDefs = isArchiveView ? archiveColumnDefs : activeColumnDefs;
   const currentOnCellValueChanged = isArchiveView ? onArchiveCellValueChanged : onCellValueChanged;
-  const currentGridHeight = "100%";
 
   // Status counts for summary strip
   const statusSummary = useMemo(() => {
@@ -960,7 +959,7 @@ const FutureFunctionsGrid: React.FC = () => {
 
       <div className="table-section future-functions-table-section">
         <div className="grid-container future-functions-grid-container">
-          <div ref={activeWrapperRef} className="grid-wrapper ff-grid-wrapper ag-theme-quartz" style={{ height: currentGridHeight }}>
+          <div ref={activeWrapperRef} className="grid-wrapper ff-grid-wrapper ag-theme-quartz">
             <AgGridReact<FutureFunction>
               rowData={currentRowData}
               columnDefs={currentColumnDefs}

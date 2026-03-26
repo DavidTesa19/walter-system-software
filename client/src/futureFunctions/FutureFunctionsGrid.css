@@ -14,15 +14,13 @@
 .future-functions-table-section {
   margin-bottom: 0;
   flex: 1;
-  height: 100%;
   min-height: 0;
 }
 
 .future-functions-grid-container {
   align-items: stretch;
   flex: 1;
-  height: 100%;
-  min-height: var(--grid-min-height);
+  min-height: 350px;
 }
 
 .ff-grid-wrapper {
@@ -36,8 +34,8 @@
   background:
     linear-gradient(180deg, color-mix(in srgb, var(--color-surface, #ffffff) 98%, transparent) 0%, var(--color-surface, #ffffff) 100%);
   box-shadow: var(--color-shadow-lg, 0 20px 55px rgba(15, 23, 42, 0.16));
-  height: max(100%, var(--grid-min-height));
-  min-height: var(--grid-min-height);
+  height: calc(100vh - var(--app-footer-height) - 280px);
+  min-height: 350px;
 }
 
 .ff-grid-wrapper::after {
