@@ -344,7 +344,7 @@
   border-radius: 1rem;
   padding: 1rem;
   box-shadow: var(--color-shadow-md);
-  margin: 0 auto;
+  margin: 0;
   flex: 1;
   box-sizing: border-box;
   max-width: 100%;
