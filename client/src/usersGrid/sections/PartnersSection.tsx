@@ -10,10 +10,12 @@ import { apiGet, apiPost, apiPut, apiDelete } from "../../utils/api";
 import { formatProfileDate, normalizeText, toStatusBadge } from "../utils/profileUtils";
 import type { ProfileSection } from "../types/profile";
 import type { SectionProps } from "./SectionTypes";
+import StatusCellRenderer from "../cells/StatusCellRenderer";
 import useProfileDocuments from "../hooks/useProfileDocuments";
 import useProfileNotes from "../hooks/useProfileNotes";
 import { ApproveRestoreCellRenderer, DeleteArchiveCellRenderer } from "../cells/RowActionCellRenderers";
 import { useUndoRedo } from "../../utils/undoRedo";
+import { getNormalizedWorkflowStatus } from "../workflowStatus";
 
 const cloneRecord = (r: any) => JSON.parse(JSON.stringify(r));
 
@@ -90,7 +92,7 @@ const normalizePartnerCommissionRow = (commission: PartnerCommissionApi): UserIn
   info: commission.entity_info ?? commission.info ?? "",
   date: commission.deadline ?? commission.created_at,
   status: commission.status ?? undefined,
-  stage: commission.state ?? undefined,
+  stage: getNormalizedWorkflowStatus(commission.state),
   field: commission.entity_field ?? commission.field ?? "",
   email: commission.entity_email ?? "",
   website: commission.entity_website ?? "",
@@ -751,6 +753,15 @@ const PartnersSection: React.FC<SectionProps> = ({
         filter: true,
         flex: 1,
         minWidth: 120
+      },
+      {
+        field: "stage",
+        headerName: "Stav",
+        editable: false,
+        filter: true,
+        flex: 1,
+        minWidth: 120,
+        cellRenderer: StatusCellRenderer
       },
       {
         field: "commission",

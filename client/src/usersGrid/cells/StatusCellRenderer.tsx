@@ -1,17 +1,10 @@
 import React from "react";
-
-// Order: Nezahájeno → V procesu → Dokončeno
-const STATUS_OPTIONS = [
-  { value: "Not Started", label: "Nezahájeno", dotColor: "#6b7280" },
-  { value: "In Process", label: "V procesu",  dotColor: "#f59e0b" },
-  { value: "Done",        label: "Dokončeno",  dotColor: "#22c55e" },
-] as const;
+import { getWorkflowStatusOption, WORKFLOW_STATUS_OPTIONS } from "../workflowStatus";
 
 const StatusCellRenderer: React.FC<any> = (params) => {
   const isDark = document.documentElement.getAttribute("data-theme") === "dark";
 
-  const current =
-    STATUS_OPTIONS.find((o) => o.value === params.value) ?? STATUS_OPTIONS[0];
+  const current = getWorkflowStatusOption(params.value);
 
   const handleClick = (e: React.MouseEvent) => {
     e.stopPropagation();
@@ -44,7 +37,7 @@ const StatusCellRenderer: React.FC<any> = (params) => {
       }
     };
 
-    STATUS_OPTIONS.forEach((option) => {
+    WORKFLOW_STATUS_OPTIONS.forEach((option) => {
       const row = document.createElement("div");
       row.style.cssText = `
         display: flex;

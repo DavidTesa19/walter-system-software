@@ -10,6 +10,7 @@ import EntityCommissionProfilePanel, {
   type FieldGroup,
   type LinkedCommissionItem
 } from "../components/EntityCommissionProfilePanel";
+import StatusCellRenderer from "../cells/StatusCellRenderer";
 import { mapViewToStatus } from "../constants";
 import { apiGet, apiPost, apiPut, apiDelete } from "../../utils/api";
 import type { SectionProps } from "./SectionTypes";
@@ -18,6 +19,7 @@ import useProfileNotes from "../hooks/useProfileNotes";
 import { ApproveRestoreCellRenderer, DeleteArchiveCellRenderer } from "../cells/RowActionCellRenderers";
 import { fieldOptions } from "../fieldOptions";
 import { formatProfileDate } from "../utils/profileUtils";
+import { DEFAULT_WORKFLOW_STATUS, getNormalizedWorkflowStatus, WORKFLOW_STATUS_VALUES } from "../workflowStatus";
 
 type ClientEntityApi = {
   id: number;
@@ -104,7 +106,7 @@ const createDefaultClientDraft = (): ClientCreateDraft => ({
     budget: "",
     commission_value: "",
     priority: "",
-    state: "",
+    state: DEFAULT_WORKFLOW_STATUS,
     deadline: "",
     notes: ""
   }
@@ -266,7 +268,7 @@ const buildCommissionData = (commission: ClientCommission | null): CommissionDat
       title: "Časové údaje",
       color: "orange",
       fields: [
-        { key: "state", label: "Stav", value: commission.state, type: "text" },
+        { key: "state", label: "Stav", value: getNormalizedWorkflowStatus(commission.state), type: "select", options: [...WORKFLOW_STATUS_VALUES] },
         { key: "deadline", label: "Termín", value: commission.deadline, type: "date" },
         { key: "notes", label: "Poznámky", value: commission.notes, type: "textarea", isMultiline: true },
       ]
@@ -331,7 +333,7 @@ const buildClientDraftCommissionData = (draft: ClientCreateDraft, status: Client
     priority: draft.commission.priority,
     notes: draft.commission.notes,
     deadline: draft.commission.deadline,
-    state: draft.commission.state,
+    state: getNormalizedWorkflowStatus(draft.commission.state),
     commission_value: draft.commission.commission_value,
     position: draft.commission.position,
     budget: draft.commission.budget,
@@ -421,7 +423,7 @@ const ClientsSectionNew: React.FC<SectionProps> = ({
             priority: primaryCommission?.priority ?? null,
             notes: primaryCommission?.notes ?? null,
             deadline: primaryCommission?.deadline ?? null,
-            state: primaryCommission?.state ?? null,
+            state: getNormalizedWorkflowStatus(primaryCommission?.state),
             commission_value: primaryCommission?.commission_value ?? null,
             position: primaryCommission?.position ?? null,
             budget: primaryCommission?.budget ?? null,
@@ -1146,6 +1148,15 @@ const ClientsSectionNew: React.FC<SectionProps> = ({
           flex: 1,
           minWidth: 100,
           cellEditor: 'agTextCellEditor'
+        },
+        {
+          field: "state",
+          headerName: "Stav",
+          filter: true,
+          editable: false,
+          flex: 1,
+          minWidth: 140,
+          cellRenderer: StatusCellRenderer
         },
         {
           field: "priority",

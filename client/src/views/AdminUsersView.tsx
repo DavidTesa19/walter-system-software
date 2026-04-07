@@ -31,9 +31,9 @@ const ROLE_OPTIONS: Array<{ value: UserRole; label: string; description: string 
 ];
 
 const ACCESS_SCOPE_OPTIONS: Array<{ value: AccessScope; label: string; description: string }> = [
-  { value: 'all', label: 'Obojí', description: 'Normální systém i Projects' },
+  { value: 'all', label: 'Obojí', description: 'Normální systém i Projekty' },
   { value: 'standard', label: 'Standard', description: 'Jen normální zakázky a subjekty' },
-  { value: 'projects', label: 'Projects', description: 'Jen Projects zakázky a subjekty' },
+  { value: 'projects', label: 'Projekty', description: 'Jen Projekty zakázky a subjekty' },
 ];
 
 const formatDateTime = (value?: string | null): string => {
@@ -272,7 +272,7 @@ export default function AdminUsersView() {
         <div>
           <span className="admin-users-eyebrow">Admin</span>
           <h1>Správa uživatelů</h1>
-          <p>Nastavte roli uživatele a určete, jestli vidí standardní systém, Projects, nebo obojí.</p>
+          <p>Nastavte roli uživatele a určete, jestli vidí standardní systém, Projekty, nebo obojí.</p>
         </div>
         <button
           type="button"
@@ -299,7 +299,7 @@ export default function AdminUsersView() {
         </div>
         <div className="admin-users-metric">
           <span className="admin-users-metric-value">{counts.projects}</span>
-          <span className="admin-users-metric-label">Jen Projects</span>
+          <span className="admin-users-metric-label">Jen Projekty</span>
         </div>
       </div>
 

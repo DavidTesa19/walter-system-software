@@ -80,7 +80,7 @@ const ProjectsView: React.FC<ProjectsViewProps> = ({ viewMode, searchTarget }) =
           viewMode={viewMode}
           systemNamespace="projects"
           storageKey={PROJECTS_SUBJECTS_TABLE_STORAGE_KEY}
-          title={`Projects - Subjekty - ${titleSuffix}`}
+          title={`Projekty - Subjekty - ${titleSuffix}`}
         />
       ) : (
         <UsersGrid
@@ -88,7 +88,7 @@ const ProjectsView: React.FC<ProjectsViewProps> = ({ viewMode, searchTarget }) =
           searchTarget={searchTarget}
           systemNamespace="projects"
           storageKey={PROJECTS_COMMISSIONS_TABLE_STORAGE_KEY}
-          title={`Projects - Zakázky - ${titleSuffix}`}
+          title={`Projekty - Zakázky - ${titleSuffix}`}
         />
       )}
     </div>

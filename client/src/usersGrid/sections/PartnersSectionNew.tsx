@@ -10,6 +10,7 @@ import EntityCommissionProfilePanel, {
   type FieldGroup,
   type LinkedCommissionItem
 } from "../components/EntityCommissionProfilePanel";
+import StatusCellRenderer from "../cells/StatusCellRenderer";
 import { mapViewToStatus } from "../constants";
 import { apiDelete, apiGet, apiPost, apiPut } from "../../utils/api";
 import type { SectionProps } from "./SectionTypes";
@@ -18,6 +19,7 @@ import useProfileNotes from "../hooks/useProfileNotes";
 import { ApproveRestoreCellRenderer, DeleteArchiveCellRenderer } from "../cells/RowActionCellRenderers";
 import { fieldOptions } from "../fieldOptions";
 import { formatProfileDate } from "../utils/profileUtils";
+import { DEFAULT_WORKFLOW_STATUS, getNormalizedWorkflowStatus, WORKFLOW_STATUS_VALUES } from "../workflowStatus";
 
 type PartnerEntityApi = {
   id: number;
@@ -100,7 +102,7 @@ const createDefaultPartnerDraft = (): PartnerCreateDraft => ({
     budget: "",
     commission_value: "",
     priority: "",
-    state: "",
+    state: DEFAULT_WORKFLOW_STATUS,
     deadline: "",
     notes: ""
   }
@@ -250,7 +252,7 @@ const buildCommissionData = (commission: PartnerCommission | null): CommissionDa
       title: "Průběh",
       color: "orange",
       fields: [
-        { key: "state", label: "Stav", value: commission.state, type: "text" },
+        { key: "state", label: "Stav", value: getNormalizedWorkflowStatus(commission.state), type: "select", options: [...WORKFLOW_STATUS_VALUES] },
         { key: "deadline", label: "Termín", value: commission.deadline, type: "date" },
         { key: "notes", label: "Poznámky", value: commission.notes, type: "textarea", isMultiline: true }
       ]
@@ -313,7 +315,7 @@ const buildPartnerDraftCommissionData = (draft: PartnerCreateDraft, status: Part
     priority: draft.commission.priority,
     notes: draft.commission.notes,
     deadline: draft.commission.deadline,
-    state: draft.commission.state,
+    state: getNormalizedWorkflowStatus(draft.commission.state),
     commission_value: draft.commission.commission_value,
     position: draft.commission.position,
     budget: draft.commission.budget,
@@ -382,7 +384,7 @@ const PartnersSectionNew: React.FC<SectionProps> = ({ viewMode, isActive, system
             priority: primaryCommission?.priority ?? null,
             notes: primaryCommission?.notes ?? null,
             deadline: primaryCommission?.deadline ?? null,
-            state: primaryCommission?.state ?? null,
+            state: getNormalizedWorkflowStatus(primaryCommission?.state),
             commission_value: primaryCommission?.commission_value ?? null,
             position: primaryCommission?.position ?? null,
             budget: primaryCommission?.budget ?? null,
@@ -863,6 +865,7 @@ const PartnersSectionNew: React.FC<SectionProps> = ({ viewMode, isActive, system
       { field: "position", headerName: "Zakázka", filter: true, editable: (params) => !params.data?.entityOnly, flex: 1.5, minWidth: 150 },
       { field: "budget", headerName: "Rozpočet", filter: true, editable: (params) => !params.data?.entityOnly, flex: 1, minWidth: 110 },
       { field: "commission_value", headerName: "Provize", filter: true, editable: (params) => !params.data?.entityOnly, flex: 1, minWidth: 110 },
+      { field: "state", headerName: "Stav", filter: true, editable: false, flex: 1.1, minWidth: 140, cellRenderer: StatusCellRenderer },
       { field: "priority", headerName: "Priorita", filter: true, editable: (params) => !params.data?.entityOnly, flex: 0.9, minWidth: 90, cellEditor: "agSelectCellEditor", cellEditorParams: { values: ["Nízká", "Střední", "Vysoká", "Urgentní"] } }
     ];
 

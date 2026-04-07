@@ -16,6 +16,7 @@ import { formatProfileDate, normalizeText, toStatusBadge } from "../utils/profil
 import type { SectionProps } from "./SectionTypes";
 import { ApproveRestoreCellRenderer, DeleteArchiveCellRenderer } from "../cells/RowActionCellRenderers";
 import { useUndoRedo } from "../../utils/undoRedo";
+import { getNormalizedWorkflowStatus } from "../workflowStatus";
 
 const cloneRecord = (r: any) => JSON.parse(JSON.stringify(r));
 
@@ -94,7 +95,7 @@ const normalizeClientCommissionRow = (commission: ClientCommissionApi): UserInte
   info: commission.position ?? commission.notes ?? commission.entity_info ?? commission.info ?? "",
   date: commission.deadline ?? commission.created_at,
   status: commission.status ?? undefined,
-  stage: commission.state ?? commission.status ?? undefined,
+  stage: getNormalizedWorkflowStatus(commission.state ?? commission.status),
   field: commission.entity_field ?? commission.field ?? "",
   email: commission.entity_email ?? "",
   website: commission.entity_website ?? "",

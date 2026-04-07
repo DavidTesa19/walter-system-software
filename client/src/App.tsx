@@ -92,12 +92,12 @@ const VIEW_LABELS: Record<AppView, string> = {
   entities_active: 'Aktuální subjekty',
   entities_pending: 'Subjekty ke schválení',
   entities_archived: 'Archiv subjektů',
-  projects_active: 'Projects - Zakázky - Aktivní',
-  projects_pending: 'Projects - Zakázky - Ke schválení',
-  projects_archived: 'Projects - Zakázky - Archiv',
-  projects_subjects_active: 'Projects - Subjekty - Aktivní',
-  projects_subjects_pending: 'Projects - Subjekty - Ke schválení',
-  projects_subjects_archived: 'Projects - Subjekty - Archiv'
+  projects_active: 'Projekty - Zakázky - Aktivní',
+  projects_pending: 'Projekty - Zakázky - Ke schválení',
+  projects_archived: 'Projekty - Zakázky - Archiv',
+  projects_subjects_active: 'Projekty - Subjekty - Aktivní',
+  projects_subjects_pending: 'Projekty - Subjekty - Ke schválení',
+  projects_subjects_archived: 'Projekty - Subjekty - Archiv'
 };
 
 const TABLE_LABELS: Record<SearchTable, string> = {
@@ -456,17 +456,17 @@ const AppContent: React.FC = () => {
             case 'entities_archived':
               return <EntitiesSystemView viewMode="archived" />;
             case 'projects_active':
-              return <UsersGrid viewMode="active" searchTarget={gridSearchTarget} systemNamespace="projects" storageKey={PROJECTS_COMMISSIONS_TABLE_STORAGE_KEY} title="Projects - Zakázky - Aktivní" />;
+              return <UsersGrid viewMode="active" searchTarget={gridSearchTarget} systemNamespace="projects" storageKey={PROJECTS_COMMISSIONS_TABLE_STORAGE_KEY} title="Projekty - Zakázky - Aktivní" />;
             case 'projects_pending':
-              return <UsersGrid viewMode="pending" searchTarget={gridSearchTarget} systemNamespace="projects" storageKey={PROJECTS_COMMISSIONS_TABLE_STORAGE_KEY} title="Projects - Zakázky - Ke schválení" />;
+              return <UsersGrid viewMode="pending" searchTarget={gridSearchTarget} systemNamespace="projects" storageKey={PROJECTS_COMMISSIONS_TABLE_STORAGE_KEY} title="Projekty - Zakázky - Ke schválení" />;
             case 'projects_archived':
-              return <UsersGrid viewMode="archived" searchTarget={gridSearchTarget} systemNamespace="projects" storageKey={PROJECTS_COMMISSIONS_TABLE_STORAGE_KEY} title="Projects - Zakázky - Archiv" />;
+              return <UsersGrid viewMode="archived" searchTarget={gridSearchTarget} systemNamespace="projects" storageKey={PROJECTS_COMMISSIONS_TABLE_STORAGE_KEY} title="Projekty - Zakázky - Archiv" />;
             case 'projects_subjects_active':
-              return <EntitiesSystemView viewMode="active" systemNamespace="projects" storageKey={PROJECTS_SUBJECTS_TABLE_STORAGE_KEY} title="Projects - Subjekty - Aktivní" />;
+              return <EntitiesSystemView viewMode="active" systemNamespace="projects" storageKey={PROJECTS_SUBJECTS_TABLE_STORAGE_KEY} title="Projekty - Subjekty - Aktivní" />;
             case 'projects_subjects_pending':
-              return <EntitiesSystemView viewMode="pending" systemNamespace="projects" storageKey={PROJECTS_SUBJECTS_TABLE_STORAGE_KEY} title="Projects - Subjekty - Ke schválení" />;
+              return <EntitiesSystemView viewMode="pending" systemNamespace="projects" storageKey={PROJECTS_SUBJECTS_TABLE_STORAGE_KEY} title="Projekty - Subjekty - Ke schválení" />;
             case 'projects_subjects_archived':
-              return <EntitiesSystemView viewMode="archived" systemNamespace="projects" storageKey={PROJECTS_SUBJECTS_TABLE_STORAGE_KEY} title="Projects - Subjekty - Archiv" />;
+              return <EntitiesSystemView viewMode="archived" systemNamespace="projects" storageKey={PROJECTS_SUBJECTS_TABLE_STORAGE_KEY} title="Projekty - Subjekty - Archiv" />;
             default:
               return null;
           }

@@ -1,0 +1,59 @@
+export type WorkflowStatusOption = {
+  value: string;
+  label: string;
+  dotColor: string;
+};
+
+export const WORKFLOW_STATUS_OPTIONS: readonly WorkflowStatusOption[] = [
+  { value: "Zrušeno", label: "Zrušeno", dotColor: "#dc2626" },
+  { value: "Odloženo", label: "Odloženo", dotColor: "#6b7280" },
+  { value: "Plánováno", label: "Plánováno", dotColor: "#3b82f6" },
+  { value: "Probíhá", label: "Probíhá", dotColor: "#f59e0b" },
+  { value: "Aktuální", label: "Aktuální", dotColor: "#22d3ee" },
+  { value: "Před podpisem", label: "Před podpisem", dotColor: "#eab308" },
+  { value: "Podepsáno", label: "Podepsáno", dotColor: "#a3e635" },
+  { value: "Uzavřeno", label: "Uzavřeno", dotColor: "#16a34a" },
+] as const;
+
+const WORKFLOW_STATUS_ALIASES: Record<string, string> = {
+  "not started": "Plánováno",
+  "in process": "Probíhá",
+  "in progress": "Probíhá",
+  done: "Uzavřeno",
+  completed: "Uzavřeno",
+  closed: "Uzavřeno",
+  current: "Aktuální",
+  active: "Aktuální",
+  signed: "Podepsáno",
+  approved: "Podepsáno",
+  cancelled: "Zrušeno",
+  canceled: "Zrušeno",
+  postponed: "Odloženo",
+};
+
+export const DEFAULT_WORKFLOW_STATUS = "Plánováno";
+export const WORKFLOW_STATUS_VALUES = WORKFLOW_STATUS_OPTIONS.map((option) => option.value);
+
+export const getNormalizedWorkflowStatus = (value?: string | null): string => {
+  const trimmed = `${value ?? ""}`.trim();
+  if (!trimmed) {
+    return DEFAULT_WORKFLOW_STATUS;
+  }
+
+  const directMatch = WORKFLOW_STATUS_OPTIONS.find((option) => option.value === trimmed);
+  if (directMatch) {
+    return directMatch.value;
+  }
+
+  const alias = WORKFLOW_STATUS_ALIASES[trimmed.toLowerCase()];
+  return alias ?? trimmed;
+};
+
+export const getWorkflowStatusOption = (value?: string | null): WorkflowStatusOption => {
+  const normalized = getNormalizedWorkflowStatus(value);
+  return WORKFLOW_STATUS_OPTIONS.find((option) => option.value === normalized) ?? {
+    value: normalized,
+    label: normalized,
+    dotColor: "#64748b",
+  };
+};
