@@ -274,6 +274,7 @@ const buildTiperMeta = (tiper: UserInterface | null): Array<{ label: string; val
 const TipersSection: React.FC<SectionProps> = ({
   viewMode,
   isActive,
+  systemNamespace,
   onRegisterAddHandler,
   onLoadingChange,
   focusRecordId,
@@ -283,25 +284,28 @@ const TipersSection: React.FC<SectionProps> = ({
   const [isLoading, setIsLoading] = useState(false);
   const gridRef = useRef<AgGridReact<UserInterface>>(null);
   const [selectedId, setSelectedId] = useState<number | null>(null);
-  const documentManager = useProfileDocuments("tipers", selectedId);
-  const notesManager = useProfileNotes("tipers", selectedId);
+  const resourceKey = systemNamespace ? "project-tipers" : "tipers";
+  const entityApiBase = systemNamespace ? `/api/${systemNamespace}/tiper-entities` : "/api/tiper-entities";
+  const commissionApiBase = systemNamespace ? `/api/${systemNamespace}/tiper-commissions` : "/api/tiper-commissions";
+  const documentManager = useProfileDocuments(resourceKey, selectedId);
+  const notesManager = useProfileNotes(resourceKey, selectedId);
   const { pushAction, signal } = useUndoRedo();
   const editSnapshotRef = useRef<Record<number, any>>({});
 
   // Refetch when other views mutate the same resource
   useEffect(() => {
-    if (signal?.resource === "tipers") {
+    if (signal?.resource === resourceKey) {
       fetchTipersData();
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [signal]);
+  }, [resourceKey, signal]);
 
   const status = useMemo(() => mapViewToStatus(viewMode), [viewMode]);
 
   const fetchTipersData = useCallback(async () => {
     setIsLoading(true);
     try {
-      const data = await apiGet<TiperCommissionApi[]>(`/api/tiper-commissions?status=${status}`);
+      const data = await apiGet<TiperCommissionApi[]>(`${commissionApiBase}?status=${status}`);
       setTipersData(Array.isArray(data) ? data.map(normalizeTiperCommissionRow) : []);
     } catch (error) {
       console.error("Error fetching tipers:", error);
@@ -309,7 +313,7 @@ const TipersSection: React.FC<SectionProps> = ({
     } finally {
       setIsLoading(false);
     }
-  }, [status]);
+  }, [commissionApiBase, status]);
 
   const selectedTiper = useMemo(() => {
     if (selectedId === null) {
@@ -350,16 +354,16 @@ const TipersSection: React.FC<SectionProps> = ({
       const prev = cloneRecord(tipersData.find((t) => t.id === id));
       if (!prev) return;
       try {
-        await apiPost(`/api/tiper-commissions/${id}/approve`);
+        await apiPost(`${commissionApiBase}/${id}/approve`);
         fetchTipersData();
         pushAction({
           label: `Schválení zakázky #${id}`,
-          resource: "tipers",
+          resource: resourceKey,
           undo: async () => {
-            await apiPut(`/api/tiper-commissions/${id}`, { status: prev.status ?? "pending" });
+            await apiPut(`${commissionApiBase}/${id}`, { status: prev.status ?? "pending" });
           },
           redo: async () => {
-            await apiPost(`/api/tiper-commissions/${id}/approve`);
+            await apiPost(`${commissionApiBase}/${id}/approve`);
           }
         });
       } catch (error) {
@@ -367,7 +371,7 @@ const TipersSection: React.FC<SectionProps> = ({
         alert("Chyba při schvalování tipaře");
       }
     },
-    [tipersData, fetchTipersData, pushAction]
+    [commissionApiBase, fetchTipersData, pushAction, resourceKey, tipersData]
   );
 
   const handleRestoreTiper = useCallback(
@@ -375,16 +379,16 @@ const TipersSection: React.FC<SectionProps> = ({
       const prev = cloneRecord(tipersData.find((t) => t.id === id));
       if (!prev) return;
       try {
-        await apiPost(`/api/tiper-commissions/${id}/restore`);
+        await apiPost(`${commissionApiBase}/${id}/restore`);
         fetchTipersData();
         pushAction({
           label: `Obnovení zakázky #${id}`,
-          resource: "tipers",
+          resource: resourceKey,
           undo: async () => {
-            await apiPut(`/api/tiper-commissions/${id}`, { status: prev.status ?? "archived" });
+            await apiPut(`${commissionApiBase}/${id}`, { status: prev.status ?? "archived" });
           },
           redo: async () => {
-            await apiPost(`/api/tiper-commissions/${id}/restore`);
+            await apiPost(`${commissionApiBase}/${id}/restore`);
           }
         });
       } catch (error) {
@@ -392,7 +396,7 @@ const TipersSection: React.FC<SectionProps> = ({
         alert("Chyba při obnovování tipaře");
       }
     },
-    [tipersData, fetchTipersData, pushAction]
+    [commissionApiBase, fetchTipersData, pushAction, resourceKey, tipersData]
   );
 
   const handleDeleteTiper = useCallback(
@@ -420,33 +424,33 @@ const TipersSection: React.FC<SectionProps> = ({
 
       try {
         if (isArchived || isPending) {
-          await apiDelete(`/api/tiper-commissions/${id}`);
+          await apiDelete(`${commissionApiBase}/${id}`);
           let restoredId: number | null = null;
           pushAction({
             label: `Smazání zakázky #${id}`,
-            resource: "tipers",
+            resource: resourceKey,
             undo: async () => {
               if (!tiper?.entity_internal_id) return;
-              const restored = await apiPost<{ id: number }>(`/api/tiper-commissions`, {
+              const restored = await apiPost<{ id: number }>(commissionApiBase, {
                 entity_id: tiper.entity_internal_id,
                 ...mapTiperCommissionPayload(tiper)
               });
               restoredId = restored?.id ?? null;
             },
             redo: async () => {
-              await apiDelete(`/api/tiper-commissions/${restoredId ?? id}`);
+              await apiDelete(`${commissionApiBase}/${restoredId ?? id}`);
             }
           });
         } else {
-          await apiPost(`/api/tiper-commissions/${id}/archive`);
+          await apiPost(`${commissionApiBase}/${id}/archive`);
           pushAction({
             label: `Archivace zakázky #${id}`,
-            resource: "tipers",
+            resource: resourceKey,
             undo: async () => {
-              await apiPost(`/api/tiper-commissions/${id}/restore`);
+              await apiPost(`${commissionApiBase}/${id}/restore`);
             },
             redo: async () => {
-              await apiPost(`/api/tiper-commissions/${id}/archive`);
+              await apiPost(`${commissionApiBase}/${id}/archive`);
             }
           });
         }
@@ -456,7 +460,7 @@ const TipersSection: React.FC<SectionProps> = ({
         alert("Chyba při mazání tipaře");
       }
     },
-    [fetchTipersData, tipersData, pushAction]
+    [commissionApiBase, fetchTipersData, pushAction, resourceKey, tipersData]
   );
 
   const gridContext = useMemo(
@@ -489,31 +493,31 @@ const TipersSection: React.FC<SectionProps> = ({
           if (!updatedTiper.entity_internal_id) {
             throw new Error("Missing linked entity id for tiper row");
           }
-          await apiPut(`/api/tiper-entities/${updatedTiper.entity_internal_id}`, mapTiperEntityPayload(updatedTiper));
+          await apiPut(`${entityApiBase}/${updatedTiper.entity_internal_id}`, mapTiperEntityPayload(updatedTiper));
         } else {
-          await apiPut(`/api/tiper-commissions/${updatedTiper.id}`, mapTiperCommissionPayload(updatedTiper));
+          await apiPut(`${commissionApiBase}/${updatedTiper.id}`, mapTiperCommissionPayload(updatedTiper));
         }
 
         if (snapshot) {
           const after = cloneRecord(updatedTiper);
           pushAction({
             label: `Úprava zakázky #${id}`,
-            resource: "tipers",
+            resource: resourceKey,
             undo: async () => {
               if (isEntityField) {
                 if (!snapshot.entity_internal_id) return;
-                await apiPut(`/api/tiper-entities/${snapshot.entity_internal_id}`, mapTiperEntityPayload(snapshot));
+                await apiPut(`${entityApiBase}/${snapshot.entity_internal_id}`, mapTiperEntityPayload(snapshot));
                 return;
               }
-              await apiPut(`/api/tiper-commissions/${id}`, mapTiperCommissionPayload(snapshot));
+              await apiPut(`${commissionApiBase}/${id}`, mapTiperCommissionPayload(snapshot));
             },
             redo: async () => {
               if (isEntityField) {
                 if (!after.entity_internal_id) return;
-                await apiPut(`/api/tiper-entities/${after.entity_internal_id}`, mapTiperEntityPayload(after));
+                await apiPut(`${entityApiBase}/${after.entity_internal_id}`, mapTiperEntityPayload(after));
                 return;
               }
-              await apiPut(`/api/tiper-commissions/${id}`, mapTiperCommissionPayload(after));
+              await apiPut(`${commissionApiBase}/${id}`, mapTiperCommissionPayload(after));
             }
           });
           delete editSnapshotRef.current[id];
@@ -524,7 +528,7 @@ const TipersSection: React.FC<SectionProps> = ({
         fetchTipersData();
       }
     },
-    [fetchTipersData, pushAction]
+    [commissionApiBase, entityApiBase, fetchTipersData, pushAction, resourceKey]
   );
 
   const handleAddTiper = useCallback(async () => {
@@ -538,7 +542,7 @@ const TipersSection: React.FC<SectionProps> = ({
 
     try {
       let createdId: number | null = null;
-      const created = await apiPost<TiperCommissionApi>(`/api/tiper-commissions`, {
+      const created = await apiPost<TiperCommissionApi>(commissionApiBase, {
         entity_data: mapTiperEntityPayload(newTiper),
         commission_data: mapTiperCommissionPayload(newTiper)
       });
@@ -547,12 +551,12 @@ const TipersSection: React.FC<SectionProps> = ({
       if (createdId !== null) {
         pushAction({
           label: "Přidání zakázky",
-          resource: "tipers",
+          resource: resourceKey,
           undo: async () => {
-            await apiDelete(`/api/tiper-commissions/${createdId}`);
+            await apiDelete(`${commissionApiBase}/${createdId}`);
           },
           redo: async () => {
-            const recreated = await apiPost<TiperCommissionApi>(`/api/tiper-commissions`, {
+            const recreated = await apiPost<TiperCommissionApi>(commissionApiBase, {
               entity_data: mapTiperEntityPayload(newTiper),
               commission_data: mapTiperCommissionPayload(newTiper)
             });
@@ -564,7 +568,7 @@ const TipersSection: React.FC<SectionProps> = ({
       console.error("Error adding tiper:", error);
       alert("Chyba při přidávání tipaře");
     }
-  }, [fetchTipersData, pushAction, status]);
+  }, [commissionApiBase, fetchTipersData, pushAction, resourceKey, status]);
 
   useEffect(() => {
     fetchTipersData();

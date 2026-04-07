@@ -4,14 +4,68 @@ import { API_BASE } from '../usersGrid/constants';
 import { trackEvent, startActiveTimeTracking, stopActiveTimeTracking, flushSectionTime } from '../utils/analytics';
 import { clearStoredTableViews } from '../utils/tableViewState';
 import { clearStoredNavigationState } from '../utils/navigationState';
+import type { AppView } from '../types/appView';
 
 // Define available roles
 export type UserRole = 'admin' | 'manager' | 'employee' | 'salesman' | 'viewer';
+export type UserAccessScope = 'all' | 'standard' | 'projects';
+
+const DEFAULT_ACCESS_SCOPE: UserAccessScope = 'all';
+
+export const normalizeUserAccessScope = (value: unknown): UserAccessScope => {
+  if (value === 'standard' || value === 'projects' || value === 'all') {
+    return value;
+  }
+
+  return DEFAULT_ACCESS_SCOPE;
+};
+
+export const canAccessStandardSystem = (scope: UserAccessScope | null | undefined): boolean => {
+  const normalizedScope = normalizeUserAccessScope(scope);
+  return normalizedScope === 'all' || normalizedScope === 'standard';
+};
+
+export const canAccessProjectsSystem = (scope: UserAccessScope | null | undefined): boolean => {
+  const normalizedScope = normalizeUserAccessScope(scope);
+  return normalizedScope === 'all' || normalizedScope === 'projects';
+};
+
+export const isViewAllowedForScope = (
+  scope: UserAccessScope | null | undefined,
+  view: AppView
+): boolean => {
+  if (view === 'active' || view === 'pending' || view === 'archived') {
+    return canAccessStandardSystem(scope);
+  }
+
+  if (view === 'entities_active' || view === 'entities_pending' || view === 'entities_archived') {
+    return canAccessStandardSystem(scope);
+  }
+
+  if (view === 'projects_active' || view === 'projects_pending' || view === 'projects_archived') {
+    return canAccessProjectsSystem(scope);
+  }
+
+  return true;
+};
+
+export const getDefaultViewForScope = (scope: UserAccessScope | null | undefined): AppView => {
+  if (canAccessStandardSystem(scope)) {
+    return 'active';
+  }
+
+  if (canAccessProjectsSystem(scope)) {
+    return 'projects_active';
+  }
+
+  return 'future';
+};
 
 export interface User {
   id: number;
   username: string;
   role: UserRole;
+  accessScope: UserAccessScope;
   token?: string;
 }
 
@@ -22,6 +76,7 @@ interface AuthContextType {
   logout: () => void;
   resetSessionTimer: () => void;
   hasRole: (allowedRoles: UserRole[]) => boolean;
+  hasAccessScope: (allowedScopes: UserAccessScope[]) => boolean;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -35,6 +90,20 @@ interface AuthProviderProps {
 export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
   const [user, setUser] = useState<User | null>(null);
   const sessionTimerRef = useRef<number | undefined>(undefined);
+
+  const normalizeUser = useCallback((rawUser: Partial<User> | null | undefined): User | null => {
+    if (!rawUser || typeof rawUser.id !== 'number' || typeof rawUser.username !== 'string' || typeof rawUser.role !== 'string') {
+      return null;
+    }
+
+    return {
+      id: rawUser.id,
+      username: rawUser.username,
+      role: rawUser.role as UserRole,
+      accessScope: normalizeUserAccessScope(rawUser.accessScope),
+      token: rawUser.token,
+    };
+  }, []);
 
   const clearSessionTimer = useCallback(() => {
     if (sessionTimerRef.current !== undefined) {
@@ -71,8 +140,10 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
 
       if (response.ok) {
         const data = await response.json();
-        // Expecting backend to return { user: { id, username, role }, token: "..." }
-        const userData: User = { ...data.user, token: data.token };
+        const userData = normalizeUser({ ...data.user, token: data.token });
+        if (!userData) {
+          return false;
+        }
         clearStoredTableViews();
         clearStoredNavigationState();
         
@@ -96,8 +167,8 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
   };
 
   // Validate token with the server
-  const validateToken = async (userData: User): Promise<boolean> => {
-    if (!userData.token) return false;
+  const validateToken = async (userData: User): Promise<User | null> => {
+    if (!userData.token) return null;
     
     try {
       const response = await fetch(`${API_BASE}/auth/me`, {
@@ -108,14 +179,15 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
       });
       
       if (response.ok) {
-        return true;
+        const currentUser = await response.json();
+        return normalizeUser({ ...currentUser, token: userData.token });
       }
       
       // Token is invalid or expired
-      return false;
+      return null;
     } catch (error) {
       console.error("Token validation failed:", error);
-      return false;
+      return null;
     }
   };
 
@@ -132,13 +204,18 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
         const remaining = SESSION_DURATION - elapsed;
         
         if (remaining > 0) {
-          const userData = JSON.parse(storedUser);
+          const userData = normalizeUser(JSON.parse(storedUser));
+          if (!userData) {
+            logout();
+            return;
+          }
           
           // Validate the token with the server before trusting it
-          const isValid = await validateToken(userData);
+          const validatedUser = await validateToken(userData);
           
-          if (isValid) {
-            setUser(userData);
+          if (validatedUser) {
+            setUser(validatedUser);
+            localStorage.setItem('walterUser', JSON.stringify(validatedUser));
             startSessionTimer(remaining);
             startActiveTimeTracking();
           } else {
@@ -204,13 +281,19 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
     return allowedRoles.includes(user.role);
   };
 
+  const hasAccessScope = (allowedScopes: UserAccessScope[]) => {
+    if (!user) return false;
+    return allowedScopes.includes(user.accessScope);
+  };
+
   const value: AuthContextType = {
     user,
     isAuthenticated: !!user,
     login,
     logout,
     resetSessionTimer,
-    hasRole
+    hasRole,
+    hasAccessScope
   };
 
   return (

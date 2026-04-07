@@ -92,6 +92,7 @@ export async function initDatabase() {
         username VARCHAR(255) UNIQUE NOT NULL,
         password_hash VARCHAR(255),
         role VARCHAR(50) DEFAULT 'employee',
+        access_scope VARCHAR(50) DEFAULT 'all',
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
         updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
       )
@@ -176,6 +177,17 @@ export async function initDatabase() {
     await client.query(`
       ALTER TABLE notes
       ADD COLUMN IF NOT EXISTS updated_at TIMESTAMP
+    `);
+
+    await client.query(`
+      ALTER TABLE users
+      ADD COLUMN IF NOT EXISTS access_scope VARCHAR(50) DEFAULT 'all'
+    `);
+
+    await client.query(`
+      UPDATE users
+      SET access_scope = 'all'
+      WHERE access_scope IS NULL
     `);
 
     await client.query(`
@@ -310,6 +322,7 @@ export async function initDatabase() {
       "ALTER TABLE future_functions ADD COLUMN IF NOT EXISTS archived BOOLEAN DEFAULT FALSE",
       "ALTER TABLE users ADD COLUMN IF NOT EXISTS password_hash VARCHAR(255)",
       "ALTER TABLE users ADD COLUMN IF NOT EXISTS role VARCHAR(50) DEFAULT 'employee'",
+      "ALTER TABLE users ADD COLUMN IF NOT EXISTS access_scope VARCHAR(50) DEFAULT 'all'",
       "ALTER TABLE documents ADD COLUMN IF NOT EXISTS archived_at TIMESTAMP DEFAULT NULL",
       "ALTER TABLE documents ADD COLUMN IF NOT EXISTS note_id INTEGER DEFAULT NULL",
       "ALTER TABLE partner_entities ADD COLUMN IF NOT EXISTS status VARCHAR(50) DEFAULT 'accepted'",
@@ -522,6 +535,154 @@ export async function initDatabase() {
         deadline VARCHAR(100),
         priority VARCHAR(50),
         phone VARCHAR(50),
+        commission_value VARCHAR(100),
+        is_tipped BOOLEAN DEFAULT false,
+        notes TEXT,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+      )
+    `);
+
+    // Create project_partner_entities and project_partner_commissions
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS project_partner_entities (
+        id SERIAL PRIMARY KEY,
+        entity_id VARCHAR(50) UNIQUE NOT NULL,
+        status VARCHAR(50) DEFAULT 'accepted',
+        company_name VARCHAR(255),
+        field VARCHAR(255),
+        location VARCHAR(255),
+        info TEXT,
+        category VARCHAR(100),
+        first_name VARCHAR(255),
+        last_name VARCHAR(255),
+        email VARCHAR(255),
+        phone VARCHAR(50),
+        website VARCHAR(255),
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+      )
+    `);
+
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS project_partner_commissions (
+        id SERIAL PRIMARY KEY,
+        commission_id VARCHAR(50) UNIQUE NOT NULL,
+        entity_id INTEGER REFERENCES project_partner_entities(id) ON DELETE CASCADE,
+        entity_code VARCHAR(50),
+        status VARCHAR(50) DEFAULT 'pending',
+        position VARCHAR(255),
+        budget VARCHAR(100),
+        state VARCHAR(100),
+        assigned_to VARCHAR(255),
+        field VARCHAR(255),
+        service_position VARCHAR(255),
+        location VARCHAR(255),
+        info TEXT,
+        category VARCHAR(100),
+        deadline VARCHAR(100),
+        priority VARCHAR(50),
+        phone VARCHAR(50),
+        commission_value VARCHAR(100),
+        is_tipped BOOLEAN DEFAULT false,
+        notes TEXT,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+      )
+    `);
+
+    // Create project_client_entities and project_client_commissions
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS project_client_entities (
+        id SERIAL PRIMARY KEY,
+        entity_id VARCHAR(50) UNIQUE NOT NULL,
+        status VARCHAR(50) DEFAULT 'accepted',
+        company_name VARCHAR(255),
+        field VARCHAR(255),
+        service VARCHAR(255),
+        location VARCHAR(255),
+        info TEXT,
+        category VARCHAR(100),
+        budget VARCHAR(100),
+        first_name VARCHAR(255),
+        last_name VARCHAR(255),
+        email VARCHAR(255),
+        phone VARCHAR(50),
+        website VARCHAR(255),
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+      )
+    `);
+
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS project_client_commissions (
+        id SERIAL PRIMARY KEY,
+        commission_id VARCHAR(50) UNIQUE NOT NULL,
+        entity_id INTEGER REFERENCES project_client_entities(id) ON DELETE CASCADE,
+        entity_code VARCHAR(50),
+        status VARCHAR(50) DEFAULT 'pending',
+        position VARCHAR(255),
+        budget VARCHAR(100),
+        state VARCHAR(100),
+        assigned_to VARCHAR(255),
+        field VARCHAR(255),
+        service_position VARCHAR(255),
+        location VARCHAR(255),
+        info TEXT,
+        category VARCHAR(100),
+        deadline VARCHAR(100),
+        priority VARCHAR(50),
+        phone VARCHAR(50),
+        commission_value VARCHAR(100),
+        is_tipped BOOLEAN DEFAULT false,
+        notes TEXT,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+      )
+    `);
+
+    // Create project_tiper_entities and project_tiper_commissions
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS project_tiper_entities (
+        id SERIAL PRIMARY KEY,
+        entity_id VARCHAR(50) UNIQUE NOT NULL,
+        status VARCHAR(50) DEFAULT 'accepted',
+        company_name VARCHAR(255),
+        field VARCHAR(255),
+        location VARCHAR(255),
+        info TEXT,
+        category VARCHAR(100),
+        first_name VARCHAR(255),
+        last_name VARCHAR(255),
+        email VARCHAR(255),
+        phone VARCHAR(50),
+        website VARCHAR(255),
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+      )
+    `);
+
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS project_tiper_commissions (
+        id SERIAL PRIMARY KEY,
+        commission_id VARCHAR(50) UNIQUE NOT NULL,
+        entity_id INTEGER REFERENCES project_tiper_entities(id) ON DELETE CASCADE,
+        entity_code VARCHAR(50),
+        status VARCHAR(50) DEFAULT 'pending',
+        position VARCHAR(255),
+        budget VARCHAR(100),
+        state VARCHAR(100),
+        assigned_to VARCHAR(255),
+        field VARCHAR(255),
+        service_position VARCHAR(255),
+        location VARCHAR(255),
+        info TEXT,
+        category VARCHAR(100),
+        deadline VARCHAR(100),
+        priority VARCHAR(50),
+        phone VARCHAR(50),
+        linked_entity_type VARCHAR(50),
+        linked_commission_id VARCHAR(50),
         commission_value VARCHAR(100),
         is_tipped BOOLEAN DEFAULT false,
         notes TEXT,
@@ -1270,7 +1431,14 @@ export const db = {
   async getNextEntityId(entityType) {
     if (!USE_POSTGRES) return null;
 
-    const prefixMap = { partner: 'P', client: 'K', tiper: 'T' };
+    const prefixMap = {
+      partner: 'P',
+      client: 'K',
+      tiper: 'T',
+      project_partner: 'PP',
+      project_client: 'PK',
+      project_tiper: 'PT'
+    };
     const prefix = prefixMap[entityType];
     if (!prefix) return null;
 

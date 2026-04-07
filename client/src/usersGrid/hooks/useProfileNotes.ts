@@ -11,7 +11,7 @@ export interface ProfileNote {
   updatedAt?: string | null;
 }
 
-type NoteResource = "clients" | "partners" | "tipers";
+type NoteResource = "clients" | "partners" | "tipers" | "project-clients" | "project-partners" | "project-tipers";
 
 type UseProfileNotesResult = {
   notes: ProfileNote[];

@@ -93,13 +93,31 @@ const getInitialPalettes = (db) => {
   return cloneDefaultPalettes();
 };
 
-const DOCUMENT_ENTITY_TYPES = new Set(["clients", "partners", "tipers", "future-functions"]);
+const DOCUMENT_ENTITY_TYPES = new Set([
+  "clients",
+  "partners",
+  "tipers",
+  "future-functions",
+  "project-clients",
+  "project-partners",
+  "project-tipers"
+]);
 
 // Map URL entity names to JSON store keys (for entities with different naming conventions)
 const ENTITY_STORE_KEY = {
   "future-functions": "futureFunctions"
 };
+const ENTITY_PARENT_STORE_KEYS = {
+  partners: ["partners", "partner_entities", "partner_commissions"],
+  clients: ["clients", "client_entities", "client_commissions"],
+  tipers: ["tipers", "tiper_entities", "tiper_commissions"],
+  "future-functions": ["futureFunctions"],
+  "project-partners": ["project_partner_entities", "project_partner_commissions"],
+  "project-clients": ["project_client_entities", "project_client_commissions"],
+  "project-tipers": ["project_tiper_entities", "project_tiper_commissions"]
+};
 const getStoreKey = (entity) => ENTITY_STORE_KEY[entity] || entity;
+const getParentStoreKeys = (entity) => ENTITY_PARENT_STORE_KEYS[entity] || [getStoreKey(entity)];
 const MAX_DOCUMENT_SIZE_BYTES = 50 * 1024 * 1024; // 50 MB
 const upload = multer({
   storage: multer.memoryStorage(),
@@ -980,12 +998,19 @@ if (!fs.existsSync(DATA_FILE)) {
           employees: [],
           futureFunctions: [],
           documents: [],
+          notes: [],
           partner_entities: [],
           partner_commissions: [],
           client_entities: [],
           client_commissions: [],
           tiper_entities: [],
           tiper_commissions: [],
+          project_partner_entities: [],
+          project_partner_commissions: [],
+          project_client_entities: [],
+          project_client_commissions: [],
+          project_tiper_entities: [],
+          project_tiper_commissions: [],
           color_palettes: cloneDefaultPalettes()
         };
       fs.writeFileSync(DATA_FILE, JSON.stringify(defaultData, null, 2));
@@ -1022,6 +1047,42 @@ function readDb() {
     if (!obj.futureFunctions) {
       obj.futureFunctions = [];
     }
+    if (!Array.isArray(obj.partner_entities)) {
+      obj.partner_entities = [];
+    }
+    if (!Array.isArray(obj.partner_commissions)) {
+      obj.partner_commissions = [];
+    }
+    if (!Array.isArray(obj.client_entities)) {
+      obj.client_entities = [];
+    }
+    if (!Array.isArray(obj.client_commissions)) {
+      obj.client_commissions = [];
+    }
+    if (!Array.isArray(obj.tiper_entities)) {
+      obj.tiper_entities = [];
+    }
+    if (!Array.isArray(obj.tiper_commissions)) {
+      obj.tiper_commissions = [];
+    }
+    if (!Array.isArray(obj.project_partner_entities)) {
+      obj.project_partner_entities = [];
+    }
+    if (!Array.isArray(obj.project_partner_commissions)) {
+      obj.project_partner_commissions = [];
+    }
+    if (!Array.isArray(obj.project_client_entities)) {
+      obj.project_client_entities = [];
+    }
+    if (!Array.isArray(obj.project_client_commissions)) {
+      obj.project_client_commissions = [];
+    }
+    if (!Array.isArray(obj.project_tiper_entities)) {
+      obj.project_tiper_entities = [];
+    }
+    if (!Array.isArray(obj.project_tiper_commissions)) {
+      obj.project_tiper_commissions = [];
+    }
     if (!Array.isArray(obj.documents)) {
       obj.documents = [];
     }
@@ -1053,6 +1114,19 @@ function readDb() {
       employees: [],
       futureFunctions: [],
       documents: [],
+      notes: [],
+      partner_entities: [],
+      partner_commissions: [],
+      client_entities: [],
+      client_commissions: [],
+      tiper_entities: [],
+      tiper_commissions: [],
+      project_partner_entities: [],
+      project_partner_commissions: [],
+      project_client_entities: [],
+      project_client_commissions: [],
+      project_tiper_entities: [],
+      project_tiper_commissions: [],
       // color_palettes: cloneDefaultPalettes() // No longer needed for global palettes
     };
   }
@@ -1069,6 +1143,28 @@ function writeDb(db) {
 }
 
 const JWT_SECRET = process.env.JWT_SECRET || "walter-secret-key-change-in-prod";
+const VALID_ACCESS_SCOPES = new Set(['all', 'standard', 'projects']);
+
+const normalizeAccessScope = (value) => {
+  if (VALID_ACCESS_SCOPES.has(value)) {
+    return value;
+  }
+
+  return 'all';
+};
+
+const toAuthUser = (user) => ({
+  id: user.id,
+  username: user.username,
+  role: user.role,
+  accessScope: normalizeAccessScope(user.accessScope ?? user.access_scope),
+});
+
+const serializeManagedUser = (user) => ({
+  ...toAuthUser(user),
+  createdAt: user.createdAt ?? user.created_at ?? null,
+  updatedAt: user.updatedAt ?? user.updated_at ?? null,
+});
 
 // Middleware to authenticate token
 const authenticateToken = (req, res, next) => {
@@ -1097,6 +1193,21 @@ const requireRole = (...allowedRoles) => {
   };
 };
 
+const requireAccessScope = (...allowedScopes) => {
+  return (req, res, next) => {
+    if (!req.user) {
+      return res.status(401).json({ error: 'Authentication required' });
+    }
+
+    const accessScope = normalizeAccessScope(req.user.accessScope ?? req.user.access_scope);
+    if (!allowedScopes.includes(accessScope)) {
+      return res.status(403).json({ error: 'Insufficient scope permissions' });
+    }
+
+    next();
+  };
+};
+
 // Optional auth middleware - doesn't fail if no token, just sets req.user if valid
 const optionalAuth = (req, res, next) => {
   const authHeader = req.headers['authorization'];
@@ -1113,6 +1224,19 @@ const optionalAuth = (req, res, next) => {
     next();
   });
 };
+
+[
+  /^\/partners(\/|$)/,
+  /^\/clients(\/|$)/,
+  /^\/tipers(\/|$)/,
+  /^\/api\/partner-(entities|commissions)(\/|$)/,
+  /^\/api\/client-(entities|commissions)(\/|$)/,
+  /^\/api\/tiper-(entities|commissions)(\/|$)/,
+].forEach((pathPattern) => {
+  app.use(pathPattern, authenticateToken, requireAccessScope('all', 'standard'));
+});
+
+app.use(/^\/api\/projects(\/|$)/, authenticateToken, requireAccessScope('all', 'projects'));
 
 // AUTH ROUTES
 app.post("/auth/login", async (req, res) => {
@@ -1132,24 +1256,20 @@ app.post("/auth/login", async (req, res) => {
 
   // Generate Token
   const token = jwt.sign(
-    { id: user.id, username: user.username, role: user.role },
+    toAuthUser(user),
     JWT_SECRET,
     { expiresIn: "8h" }
   );
 
   res.json({
     token,
-    user: {
-      id: user.id,
-      username: user.username,
-      role: user.role
-    }
+    user: toAuthUser(user)
   });
 });
 
 // Registration requires admin role (except for initial setup)
 app.post("/auth/register", authenticateToken, requireRole('admin'), async (req, res) => {
-  const { username, password, role } = req.body;
+  const { username, password, role, accessScope } = req.body;
   const db = readDb();
   
   if (db.users.find(u => u.username === username)) {
@@ -1167,6 +1287,7 @@ app.post("/auth/register", authenticateToken, requireRole('admin'), async (req, 
     username,
     password_hash,
     role: role || 'employee',
+    accessScope: normalizeAccessScope(accessScope),
     created_at: new Date().toISOString()
   };
 
@@ -1181,17 +1302,13 @@ app.get("/health", (_req, res) => res.json({ ok: true }));
 
 // Auth validation endpoint
 app.get("/auth/me", authenticateToken, (req, res) => {
-  res.json({
-    id: req.user.id,
-    username: req.user.username,
-    role: req.user.role
-  });
+  res.json(toAuthUser(req.user));
 });
 
 // CRUD for users (admin only)
 app.get("/users", authenticateToken, requireRole('admin'), (_req, res) => {
   const db = readDb();
-  res.json(db.users);
+  res.json((db.users || []).map(serializeManagedUser));
 });
 
 app.post("/users", authenticateToken, requireRole('admin'), (req, res) => {
@@ -1200,10 +1317,10 @@ app.post("/users", authenticateToken, requireRole('admin'), (req, res) => {
   // Simple id assignment (max + 1)
   const maxId = db.users.reduce((m, u) => Math.max(m, Number(u.id) || 0), 0);
   const nextId = maxId + 1;
-  const newUser = { id: nextId, ...user };
+  const newUser = { id: nextId, ...user, accessScope: normalizeAccessScope(user.accessScope) };
   db.users.push(newUser);
   if (!writeDb(db)) return res.status(500).json({ error: "Failed to persist" });
-  res.status(201).json(newUser);
+  res.status(201).json(serializeManagedUser(newUser));
 });
 
 app.put("/users/:id", authenticateToken, requireRole('admin'), (req, res) => {
@@ -1211,10 +1328,10 @@ app.put("/users/:id", authenticateToken, requireRole('admin'), (req, res) => {
   const db = readDb();
   const idx = db.users.findIndex((u) => u.id === id);
   if (idx === -1) return res.status(404).json({ error: "Not found" });
-  const updated = { ...req.body, id };
+  const updated = { ...req.body, id, accessScope: normalizeAccessScope(req.body?.accessScope) };
   db.users[idx] = updated;
   if (!writeDb(db)) return res.status(500).json({ error: "Failed to persist" });
-  res.json(updated);
+  res.json(serializeManagedUser(updated));
 });
 
 app.patch("/users/:id", authenticateToken, requireRole('admin'), (req, res) => {
@@ -1222,9 +1339,14 @@ app.patch("/users/:id", authenticateToken, requireRole('admin'), (req, res) => {
   const db = readDb();
   const idx = db.users.findIndex((u) => u.id === id);
   if (idx === -1) return res.status(404).json({ error: "Not found" });
-  db.users[idx] = { ...db.users[idx], ...req.body, id };
+  db.users[idx] = {
+    ...db.users[idx],
+    ...req.body,
+    id,
+    accessScope: normalizeAccessScope(req.body?.accessScope ?? db.users[idx]?.accessScope),
+  };
   if (!writeDb(db)) return res.status(500).json({ error: "Failed to persist" });
-  res.json(db.users[idx]);
+  res.json(serializeManagedUser(db.users[idx]));
 });
 
 app.delete("/users/:id", authenticateToken, requireRole('admin'), (req, res) => {
@@ -1510,13 +1632,14 @@ app.post("/color-palettes/:id/activate", authenticateToken, (req, res) => {
   res.json(activated);
 });
 
-const respondUnsupportedEntity = (res) => res.status(400).json({ error: "Documents are only available for clients, partners, tipers, and future-functions" });
+const respondUnsupportedEntity = (res) => res.status(400).json({ error: "Documents are only available for clients, partners, tipers, future-functions, and Projects records" });
 
 const ensureParentRecord = (entity, entityId) => {
   const store = readDb();
-  const storeKey = getStoreKey(entity);
-  const collection = Array.isArray(store[storeKey]) ? store[storeKey] : [];
-  const exists = collection.some((record) => Number(record.id) === entityId);
+  const exists = getParentStoreKeys(entity).some((storeKey) => {
+    const collection = Array.isArray(store[storeKey]) ? store[storeKey] : [];
+    return collection.some((record) => Number(record.id) === entityId);
+  });
   return exists ? { ok: true, store } : { ok: false, status: 404, message: "Parent record not found" };
 };
 
@@ -3074,6 +3197,533 @@ app.post("/api/tiper-commissions/:id/restore", authenticateToken, (req, res) => 
     res.status(500).json({ error: "Failed to restore tiper commission" });
   }
 });
+
+const PROJECT_JSON_CONFIG = {
+  partner: {
+    entityCollection: 'project_partner_entities',
+    commissionCollection: 'project_partner_commissions',
+    counterKey: 'project_partner',
+    entityPrefix: 'PP',
+    entityDefaults: { company_name: 'Nová společnost' },
+    entityFields: ['status', 'company_name', 'field', 'location', 'info', 'category', 'first_name', 'last_name', 'email', 'phone', 'website'],
+    commissionFields: ['status', 'position', 'budget', 'state', 'assigned_to', 'field', 'service_position', 'location', 'info', 'category', 'deadline', 'priority', 'phone', 'commission_value', 'is_tipped', 'notes']
+  },
+  client: {
+    entityCollection: 'project_client_entities',
+    commissionCollection: 'project_client_commissions',
+    counterKey: 'project_client',
+    entityPrefix: 'PK',
+    entityDefaults: { company_name: 'Nová společnost' },
+    entityFields: ['status', 'company_name', 'field', 'service', 'location', 'info', 'category', 'budget', 'first_name', 'last_name', 'email', 'phone', 'website'],
+    commissionFields: ['status', 'position', 'budget', 'state', 'assigned_to', 'field', 'service_position', 'location', 'info', 'category', 'deadline', 'priority', 'phone', 'commission_value', 'is_tipped', 'notes']
+  },
+  tiper: {
+    entityCollection: 'project_tiper_entities',
+    commissionCollection: 'project_tiper_commissions',
+    counterKey: 'project_tiper',
+    entityPrefix: 'PT',
+    entityDefaults: {},
+    entityFields: ['status', 'company_name', 'field', 'location', 'info', 'category', 'first_name', 'last_name', 'email', 'phone', 'website'],
+    commissionFields: ['status', 'position', 'budget', 'state', 'assigned_to', 'field', 'service_position', 'location', 'info', 'category', 'deadline', 'priority', 'phone', 'linked_entity_type', 'linked_commission_id', 'commission_value', 'is_tipped', 'notes']
+  }
+};
+
+const ensureProjectCollections = (store) => {
+  if (!Array.isArray(store.project_partner_entities)) store.project_partner_entities = [];
+  if (!Array.isArray(store.project_partner_commissions)) store.project_partner_commissions = [];
+  if (!Array.isArray(store.project_client_entities)) store.project_client_entities = [];
+  if (!Array.isArray(store.project_client_commissions)) store.project_client_commissions = [];
+  if (!Array.isArray(store.project_tiper_entities)) store.project_tiper_entities = [];
+  if (!Array.isArray(store.project_tiper_commissions)) store.project_tiper_commissions = [];
+  if (!store.project_entity_counters || typeof store.project_entity_counters !== 'object') {
+    store.project_entity_counters = {
+      project_partner: 1,
+      project_client: 1,
+      project_tiper: 1
+    };
+  }
+};
+
+const pickDefinedFields = (source = {}, fields = []) => {
+  const picked = {};
+  for (const field of fields) {
+    if (source[field] !== undefined) {
+      picked[field] = source[field];
+    }
+  }
+  return picked;
+};
+
+const nextCollectionId = (collection) => collection.reduce((max, item) => Math.max(max, Number(item.id) || 0), 0) + 1;
+
+const nextProjectEntityCode = (store, counterKey, prefix) => {
+  ensureProjectCollections(store);
+  const current = Number(store.project_entity_counters[counterKey] || 1);
+  store.project_entity_counters[counterKey] = current + 1;
+  return `${prefix}${String(current).padStart(3, '0')}`;
+};
+
+const nextProjectCommissionCode = (commissions, entityCode) => {
+  const nextNumber = commissions.filter((item) => item.entity_code === entityCode).length + 1;
+  return `${entityCode}-${String(nextNumber).padStart(3, '0')}`;
+};
+
+const buildProjectCommissionResponse = (type, commission, entity) => {
+  const payload = {
+    ...commission,
+    entity_company_name: entity?.company_name ?? null,
+    entity_field: entity?.field ?? null,
+    entity_location: entity?.location ?? null,
+    entity_info: entity?.info ?? null,
+    entity_category: entity?.category ?? null,
+    entity_first_name: entity?.first_name ?? null,
+    entity_last_name: entity?.last_name ?? null,
+    entity_email: entity?.email ?? null,
+    entity_phone: entity?.phone ?? null,
+    entity_website: entity?.website ?? null
+  };
+
+  if (type === 'client') {
+    payload.entity_service = entity?.service ?? null;
+    payload.entity_budget = entity?.budget ?? null;
+  }
+
+  return payload;
+};
+
+const getProjectCommissionRows = (type, store, filters = {}) => {
+  ensureProjectCollections(store);
+  const config = PROJECT_JSON_CONFIG[type];
+  const entities = Array.isArray(store[config.entityCollection]) ? store[config.entityCollection] : [];
+  const entityMap = new Map(entities.map((entity) => [Number(entity.id), entity]));
+  const commissions = (Array.isArray(store[config.commissionCollection]) ? store[config.commissionCollection] : [])
+    .filter((commission) => !filters.status || commission.status === filters.status)
+    .map((commission) => buildProjectCommissionResponse(type, commission, entityMap.get(Number(commission.entity_id))))
+    .sort((left, right) => String(left.commission_id).localeCompare(String(right.commission_id)));
+
+  return commissions;
+};
+
+const getProjectCommissionRecord = (type, store, id) => {
+  ensureProjectCollections(store);
+  const config = PROJECT_JSON_CONFIG[type];
+  const commission = (store[config.commissionCollection] || []).find((item) => Number(item.id) === Number(id));
+  if (!commission) {
+    return null;
+  }
+  const entity = (store[config.entityCollection] || []).find((item) => Number(item.id) === Number(commission.entity_id)) || null;
+  return buildProjectCommissionResponse(type, commission, entity);
+};
+
+const createProjectEntity = (type, store, data = {}) => {
+  ensureProjectCollections(store);
+  const config = PROJECT_JSON_CONFIG[type];
+  const collection = store[config.entityCollection];
+  const now = new Date().toISOString();
+  const entity = {
+    id: nextCollectionId(collection),
+    entity_id: nextProjectEntityCode(store, config.counterKey, config.entityPrefix),
+    status: data.status || 'accepted',
+    ...config.entityDefaults,
+    ...pickDefinedFields(data, config.entityFields.filter((field) => field !== 'status')),
+    created_at: now,
+    updated_at: now
+  };
+  collection.push(entity);
+  return entity;
+};
+
+const updateProjectEntity = (type, store, id, data = {}) => {
+  ensureProjectCollections(store);
+  const config = PROJECT_JSON_CONFIG[type];
+  const collection = store[config.entityCollection];
+  const index = collection.findIndex((item) => Number(item.id) === Number(id));
+  if (index === -1) {
+    return null;
+  }
+  const updated = {
+    ...collection[index],
+    ...pickDefinedFields(data, config.entityFields),
+    id: collection[index].id,
+    entity_id: collection[index].entity_id,
+    updated_at: new Date().toISOString()
+  };
+  collection[index] = updated;
+  return updated;
+};
+
+const deleteProjectEntity = (type, store, id) => {
+  ensureProjectCollections(store);
+  const config = PROJECT_JSON_CONFIG[type];
+  const entities = store[config.entityCollection];
+  const entityIndex = entities.findIndex((item) => Number(item.id) === Number(id));
+  if (entityIndex === -1) {
+    return null;
+  }
+  const [removed] = entities.splice(entityIndex, 1);
+  store[config.commissionCollection] = (store[config.commissionCollection] || []).filter((item) => Number(item.entity_id) !== Number(id));
+  return removed;
+};
+
+const createProjectCommission = (type, store, entityInternalId, data = {}) => {
+  ensureProjectCollections(store);
+  const config = PROJECT_JSON_CONFIG[type];
+  const entities = store[config.entityCollection];
+  const commissions = store[config.commissionCollection];
+  const entity = entities.find((item) => Number(item.id) === Number(entityInternalId));
+  if (!entity) {
+    throw new Error('Entity not found');
+  }
+
+  const now = new Date().toISOString();
+  const commission = {
+    id: nextCollectionId(commissions),
+    commission_id: nextProjectCommissionCode(commissions, entity.entity_id),
+    entity_id: Number(entityInternalId),
+    entity_code: entity.entity_id,
+    status: data.status || 'pending',
+    ...pickDefinedFields(data, config.commissionFields.filter((field) => field !== 'status')),
+    created_at: now,
+    updated_at: now
+  };
+  commissions.push(commission);
+  return getProjectCommissionRecord(type, store, commission.id);
+};
+
+const updateProjectCommission = (type, store, id, data = {}) => {
+  ensureProjectCollections(store);
+  const config = PROJECT_JSON_CONFIG[type];
+  const commissions = store[config.commissionCollection];
+  const index = commissions.findIndex((item) => Number(item.id) === Number(id));
+  if (index === -1) {
+    return null;
+  }
+
+  const filteredUpdates = {};
+  for (const [key, value] of Object.entries(data)) {
+    if (!key.startsWith('entity_') && key !== 'id' && key !== 'commission_id' && key !== 'entity_id' && key !== 'entity_code' && config.commissionFields.includes(key)) {
+      filteredUpdates[key] = value;
+    }
+  }
+
+  commissions[index] = {
+    ...commissions[index],
+    ...filteredUpdates,
+    id: commissions[index].id,
+    commission_id: commissions[index].commission_id,
+    entity_id: commissions[index].entity_id,
+    entity_code: commissions[index].entity_code,
+    updated_at: new Date().toISOString()
+  };
+
+  return getProjectCommissionRecord(type, store, id);
+};
+
+const deleteProjectCommission = (type, store, id) => {
+  ensureProjectCollections(store);
+  const config = PROJECT_JSON_CONFIG[type];
+  const commissions = store[config.commissionCollection];
+  const index = commissions.findIndex((item) => Number(item.id) === Number(id));
+  if (index === -1) {
+    return null;
+  }
+  const [removed] = commissions.splice(index, 1);
+  return removed;
+};
+
+const createProjectRoutes = (entityTypes) => {
+  for (const type of entityTypes) {
+    const config = PROJECT_JSON_CONFIG[type];
+    const entitiesPath = `/api/projects/${type}-entities`;
+    const commissionsPath = `/api/projects/${type}-commissions`;
+
+    app.get(entitiesPath, authenticateToken, (req, res) => {
+      try {
+        const store = readDb();
+        ensureProjectCollections(store);
+        const records = (store[config.entityCollection] || [])
+          .filter((item) => !req.query.status || item.status === req.query.status)
+          .sort((left, right) => String(left.entity_id).localeCompare(String(right.entity_id)));
+        res.json(records);
+      } catch (error) {
+        console.error(`Error fetching projects ${type} entities:`, error);
+        res.status(500).json({ error: `Failed to fetch projects ${type} entities` });
+      }
+    });
+
+    app.get(`${entitiesPath}/:id`, authenticateToken, (req, res) => {
+      try {
+        const store = readDb();
+        ensureProjectCollections(store);
+        const record = (store[config.entityCollection] || []).find((item) => Number(item.id) === Number(req.params.id));
+        if (!record) {
+          return res.status(404).json({ error: 'Not found' });
+        }
+        res.json(record);
+      } catch (error) {
+        console.error(`Error fetching projects ${type} entity:`, error);
+        res.status(500).json({ error: `Failed to fetch projects ${type} entity` });
+      }
+    });
+
+    app.post(entitiesPath, authenticateToken, (req, res) => {
+      try {
+        const store = readDb();
+        const created = createProjectEntity(type, store, req.body || {});
+        if (!writeDb(store)) return res.status(500).json({ error: 'Failed to persist' });
+        res.status(201).json(created);
+      } catch (error) {
+        console.error(`Error creating projects ${type} entity:`, error);
+        res.status(500).json({ error: error.message || `Failed to create projects ${type} entity` });
+      }
+    });
+
+    app.put(`${entitiesPath}/:id`, authenticateToken, (req, res) => {
+      try {
+        const store = readDb();
+        const updated = updateProjectEntity(type, store, req.params.id, req.body || {});
+        if (!updated) {
+          return res.status(404).json({ error: 'Not found' });
+        }
+        if (!writeDb(store)) return res.status(500).json({ error: 'Failed to persist' });
+        res.json(updated);
+      } catch (error) {
+        console.error(`Error updating projects ${type} entity:`, error);
+        res.status(500).json({ error: `Failed to update projects ${type} entity` });
+      }
+    });
+
+    app.post(`${entitiesPath}/:id/approve`, authenticateToken, (req, res) => {
+      try {
+        const store = readDb();
+        const updated = updateProjectEntity(type, store, req.params.id, { status: 'accepted' });
+        if (!updated) {
+          return res.status(404).json({ error: 'Not found' });
+        }
+        if (!writeDb(store)) return res.status(500).json({ error: 'Failed to persist' });
+        res.json(updated);
+      } catch (error) {
+        console.error(`Error approving projects ${type} entity:`, error);
+        res.status(500).json({ error: `Failed to approve projects ${type} entity` });
+      }
+    });
+
+    app.post(`${entitiesPath}/:id/archive`, authenticateToken, (req, res) => {
+      try {
+        const store = readDb();
+        const updated = updateProjectEntity(type, store, req.params.id, { status: 'archived' });
+        if (!updated) {
+          return res.status(404).json({ error: 'Not found' });
+        }
+        if (!writeDb(store)) return res.status(500).json({ error: 'Failed to persist' });
+        res.json(updated);
+      } catch (error) {
+        console.error(`Error archiving projects ${type} entity:`, error);
+        res.status(500).json({ error: `Failed to archive projects ${type} entity` });
+      }
+    });
+
+    app.post(`${entitiesPath}/:id/restore`, authenticateToken, (req, res) => {
+      try {
+        const store = readDb();
+        const updated = updateProjectEntity(type, store, req.params.id, { status: 'accepted' });
+        if (!updated) {
+          return res.status(404).json({ error: 'Not found' });
+        }
+        if (!writeDb(store)) return res.status(500).json({ error: 'Failed to persist' });
+        res.json(updated);
+      } catch (error) {
+        console.error(`Error restoring projects ${type} entity:`, error);
+        res.status(500).json({ error: `Failed to restore projects ${type} entity` });
+      }
+    });
+
+    app.delete(`${entitiesPath}/:id`, authenticateToken, (req, res) => {
+      try {
+        const store = readDb();
+        const deleted = deleteProjectEntity(type, store, req.params.id);
+        if (!deleted) {
+          return res.status(404).json({ error: 'Not found' });
+        }
+        if (!writeDb(store)) return res.status(500).json({ error: 'Failed to persist' });
+        res.status(204).end();
+      } catch (error) {
+        console.error(`Error deleting projects ${type} entity:`, error);
+        res.status(500).json({ error: `Failed to delete projects ${type} entity` });
+      }
+    });
+
+    app.post(`${entitiesPath}/with-commission`, authenticateToken, (req, res) => {
+      try {
+        const store = readDb();
+        const { entity, commission } = req.body || {};
+        if (!entity) {
+          return res.status(400).json({ error: 'entity data is required' });
+        }
+        const createdEntity = createProjectEntity(type, store, {
+          ...entity,
+          status: entity?.status || commission?.status || 'accepted'
+        });
+        const createdCommission = createProjectCommission(type, store, createdEntity.id, commission || {});
+        if (!writeDb(store)) return res.status(500).json({ error: 'Failed to persist' });
+        res.status(201).json({ entity: createdEntity, commission: createdCommission });
+      } catch (error) {
+        console.error(`Error creating projects ${type} entity with commission:`, error);
+        res.status(500).json({ error: error.message || `Failed to create projects ${type} entity with commission` });
+      }
+    });
+
+    app.get(commissionsPath, authenticateToken, (req, res) => {
+      try {
+        const store = readDb();
+        const filters = typeof req.query.status === 'string' ? { status: req.query.status } : {};
+        res.json(getProjectCommissionRows(type, store, filters));
+      } catch (error) {
+        console.error(`Error fetching projects ${type} commissions:`, error);
+        res.status(500).json({ error: `Failed to fetch projects ${type} commissions` });
+      }
+    });
+
+    app.get(`${commissionsPath}/:id`, authenticateToken, (req, res) => {
+      try {
+        const store = readDb();
+        const record = getProjectCommissionRecord(type, store, req.params.id);
+        if (!record) {
+          return res.status(404).json({ error: 'Not found' });
+        }
+        res.json(record);
+      } catch (error) {
+        console.error(`Error fetching projects ${type} commission:`, error);
+        res.status(500).json({ error: `Failed to fetch projects ${type} commission` });
+      }
+    });
+
+    app.post(commissionsPath, authenticateToken, (req, res) => {
+      try {
+        const store = readDb();
+
+        if (req.body?.entity_data) {
+          const createdEntity = createProjectEntity(type, store, {
+            ...req.body.entity_data,
+            status: req.body.entity_data?.status || req.body.commission_data?.status || 'accepted'
+          });
+          const createdCommission = createProjectCommission(type, store, createdEntity.id, req.body.commission_data || {});
+          if (!writeDb(store)) return res.status(500).json({ error: 'Failed to persist' });
+          return res.status(201).json(createdCommission);
+        }
+
+        if (!req.body?.entity_id) {
+          return res.status(400).json({ error: 'Either entity_data or entity_id is required' });
+        }
+
+        const created = createProjectCommission(type, store, req.body.entity_id, req.body);
+        if (!writeDb(store)) return res.status(500).json({ error: 'Failed to persist' });
+        res.status(201).json(created);
+      } catch (error) {
+        console.error(`Error creating projects ${type} commission:`, error);
+        res.status(500).json({ error: error.message || `Failed to create projects ${type} commission` });
+      }
+    });
+
+    app.put(`${commissionsPath}/:id`, authenticateToken, (req, res) => {
+      try {
+        const store = readDb();
+        const updated = updateProjectCommission(type, store, req.params.id, req.body || {});
+        if (!updated) {
+          return res.status(404).json({ error: 'Not found' });
+        }
+        if (!writeDb(store)) return res.status(500).json({ error: 'Failed to persist' });
+        res.json(updated);
+      } catch (error) {
+        console.error(`Error updating projects ${type} commission:`, error);
+        res.status(500).json({ error: `Failed to update projects ${type} commission` });
+      }
+    });
+
+    app.patch(`${commissionsPath}/:id`, authenticateToken, (req, res) => {
+      try {
+        const store = readDb();
+        const updated = updateProjectCommission(type, store, req.params.id, req.body || {});
+        if (!updated) {
+          return res.status(404).json({ error: 'Not found' });
+        }
+        if (!writeDb(store)) return res.status(500).json({ error: 'Failed to persist' });
+        res.json(updated);
+      } catch (error) {
+        console.error(`Error patching projects ${type} commission:`, error);
+        res.status(500).json({ error: `Failed to update projects ${type} commission` });
+      }
+    });
+
+    app.delete(`${commissionsPath}/:id`, authenticateToken, (req, res) => {
+      try {
+        const store = readDb();
+        const deleted = deleteProjectCommission(type, store, req.params.id);
+        if (!deleted) {
+          return res.status(404).json({ error: 'Not found' });
+        }
+        if (!writeDb(store)) return res.status(500).json({ error: 'Failed to persist' });
+        res.status(204).end();
+      } catch (error) {
+        console.error(`Error deleting projects ${type} commission:`, error);
+        res.status(500).json({ error: `Failed to delete projects ${type} commission` });
+      }
+    });
+
+    app.post(`${commissionsPath}/:id/approve`, authenticateToken, (req, res) => {
+      try {
+        const store = readDb();
+        const updated = updateProjectCommission(type, store, req.params.id, { status: 'accepted' });
+        if (!updated) {
+          return res.status(404).json({ error: 'Not found' });
+        }
+        if (updated.entity_id) {
+          updateProjectEntity(type, store, updated.entity_id, { status: 'accepted' });
+        }
+        if (!writeDb(store)) return res.status(500).json({ error: 'Failed to persist' });
+        res.json(updated);
+      } catch (error) {
+        console.error(`Error approving projects ${type} commission:`, error);
+        res.status(500).json({ error: `Failed to approve projects ${type} commission` });
+      }
+    });
+
+    app.post(`${commissionsPath}/:id/archive`, authenticateToken, (req, res) => {
+      try {
+        const store = readDb();
+        const updated = updateProjectCommission(type, store, req.params.id, { status: 'archived' });
+        if (!updated) {
+          return res.status(404).json({ error: 'Not found' });
+        }
+        if (!writeDb(store)) return res.status(500).json({ error: 'Failed to persist' });
+        res.json(updated);
+      } catch (error) {
+        console.error(`Error archiving projects ${type} commission:`, error);
+        res.status(500).json({ error: `Failed to archive projects ${type} commission` });
+      }
+    });
+
+    app.post(`${commissionsPath}/:id/restore`, authenticateToken, (req, res) => {
+      try {
+        const store = readDb();
+        const updated = updateProjectCommission(type, store, req.params.id, { status: 'accepted' });
+        if (!updated) {
+          return res.status(404).json({ error: 'Not found' });
+        }
+        if (updated.entity_id) {
+          updateProjectEntity(type, store, updated.entity_id, { status: 'accepted' });
+        }
+        if (!writeDb(store)) return res.status(500).json({ error: 'Failed to persist' });
+        res.json(updated);
+      } catch (error) {
+        console.error(`Error restoring projects ${type} commission:`, error);
+        res.status(500).json({ error: `Failed to restore projects ${type} commission` });
+      }
+    });
+  }
+};
+
+createProjectRoutes(['partner', 'client', 'tiper']);
 
 app.post('/public-submissions/:type', (req, res) => {
   try {

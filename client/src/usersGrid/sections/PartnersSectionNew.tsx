@@ -327,7 +327,7 @@ const buildPartnerDraftCommissionData = (draft: PartnerCreateDraft, status: Part
   })!.groups
 });
 
-const PartnersSectionNew: React.FC<SectionProps> = ({ viewMode, isActive, onRegisterAddHandler, onLoadingChange }) => {
+const PartnersSectionNew: React.FC<SectionProps> = ({ viewMode, isActive, systemNamespace, onRegisterAddHandler, onLoadingChange }) => {
   const [entities, setEntities] = useState<PartnerEntity[]>([]);
   const [commissions, setCommissions] = useState<PartnerCommission[]>([]);
   const [gridData, setGridData] = useState<PartnerGridRow[]>([]);
@@ -341,15 +341,18 @@ const PartnersSectionNew: React.FC<SectionProps> = ({ viewMode, isActive, onRegi
 
   const gridRef = useRef<AgGridReact<PartnerGridRow>>(null);
   const status = useMemo(() => mapViewToStatus(viewMode), [viewMode]);
-  const documentManager = useProfileDocuments("partners", selectedEntityId);
-  const notesManager = useProfileNotes("partners", selectedEntityId);
+  const resourceKey = systemNamespace ? "project-partners" : "partners";
+  const entityApiBase = systemNamespace ? `/api/${systemNamespace}/partner-entities` : "/api/partner-entities";
+  const commissionApiBase = systemNamespace ? `/api/${systemNamespace}/partner-commissions` : "/api/partner-commissions";
+  const documentManager = useProfileDocuments(resourceKey, selectedEntityId);
+  const notesManager = useProfileNotes(resourceKey, selectedEntityId);
 
   const fetchData = useCallback(async () => {
     setIsLoading(true);
     try {
       const [entitiesData, commissionsData] = await Promise.all([
-        apiGet<PartnerEntityApi[]>(`/api/partner-entities?status=${status}`),
-        apiGet<PartnerCommissionApi[]>(`/api/partner-commissions?status=${status}`)
+        apiGet<PartnerEntityApi[]>(`${entityApiBase}?status=${status}`),
+        apiGet<PartnerCommissionApi[]>(`${commissionApiBase}?status=${status}`)
       ]);
 
       const normalizedEntities = (Array.isArray(entitiesData) ? entitiesData : []).map(normalizePartnerEntity);
@@ -472,7 +475,7 @@ const PartnersSectionNew: React.FC<SectionProps> = ({ viewMode, isActive, onRegi
     } finally {
       setIsLoading(false);
     }
-  }, [status]);
+  }, [commissionApiBase, entityApiBase, status]);
 
   const selectedEntity = useMemo(() => selectedEntityId === null ? null : entities.find((entity) => entity.id === selectedEntityId) || null, [entities, selectedEntityId]);
   const selectedCommission = useMemo(() => selectedCommissionId === null ? null : commissions.find((commission) => commission.id === selectedCommissionId) || null, [commissions, selectedCommissionId]);
@@ -517,40 +520,40 @@ const PartnersSectionNew: React.FC<SectionProps> = ({ viewMode, isActive, onRegi
   const handleUpdateEntity = useCallback(async (entityId: number, updates: Record<string, unknown>) => {
     const mappedUpdates = mapPartnerEntityUpdates(updates);
     if (Object.keys(mappedUpdates).length === 0) return;
-    await apiPut(`/api/partner-entities/${entityId}`, mappedUpdates);
+    await apiPut(`${entityApiBase}/${entityId}`, mappedUpdates);
     fetchData();
-  }, [fetchData]);
+  }, [entityApiBase, fetchData]);
 
   const handleUpdateCommission = useCallback(async (commissionId: number, updates: Record<string, unknown>) => {
-    await apiPut(`/api/partner-commissions/${commissionId}`, updates);
+    await apiPut(`${commissionApiBase}/${commissionId}`, updates);
     fetchData();
-  }, [fetchData]);
+  }, [commissionApiBase, fetchData]);
 
   const handleApprove = useCallback(async (id: number) => {
     try {
       const row = gridData.find((item) => item.id === id);
       if (!row) return;
-      if (row.entityOnly && row.entity) await apiPost(`/api/partner-entities/${row.entity.id}/approve`);
-      else await apiPost(`/api/partner-commissions/${id}/approve`);
+      if (row.entityOnly && row.entity) await apiPost(`${entityApiBase}/${row.entity.id}/approve`);
+      else await apiPost(`${commissionApiBase}/${id}/approve`);
       fetchData();
     } catch (error) {
       console.error("Error approving partner commission:", error);
       alert("Chyba při schvalování zakázky");
     }
-  }, [fetchData, gridData]);
+  }, [commissionApiBase, entityApiBase, fetchData, gridData]);
 
   const handleRestore = useCallback(async (id: number) => {
     try {
       const row = gridData.find((item) => item.id === id);
       if (!row) return;
-      if (row.entityOnly && row.entity) await apiPost(`/api/partner-entities/${row.entity.id}/restore`);
-      else await apiPost(`/api/partner-commissions/${id}/restore`);
+      if (row.entityOnly && row.entity) await apiPost(`${entityApiBase}/${row.entity.id}/restore`);
+      else await apiPost(`${commissionApiBase}/${id}/restore`);
       fetchData();
     } catch (error) {
       console.error("Error restoring partner commission:", error);
       alert("Chyba při obnovování zakázky");
     }
-  }, [fetchData, gridData]);
+  }, [commissionApiBase, entityApiBase, fetchData, gridData]);
 
   const handleDelete = useCallback(async (id: number) => {
     if (viewMode === "active") {
@@ -567,7 +570,7 @@ const PartnersSectionNew: React.FC<SectionProps> = ({ viewMode, isActive, onRegi
       if (!window.confirm(confirmMessage)) return;
 
       try {
-        await apiDelete(`/api/partner-entities/${entityId}`);
+        await apiDelete(`${entityApiBase}/${entityId}`);
         if (selectedEntityId === entityId) {
           closeProfile();
         }
@@ -590,7 +593,7 @@ const PartnersSectionNew: React.FC<SectionProps> = ({ viewMode, isActive, onRegi
       if (!window.confirm(confirmMessage)) return;
 
       try {
-        await apiDelete(`/api/partner-entities/${row.entity.id}`);
+        await apiDelete(`${entityApiBase}/${row.entity.id}`);
         if (selectedEntityId === row.entity.id) {
           closeProfile();
         }
@@ -615,19 +618,19 @@ const PartnersSectionNew: React.FC<SectionProps> = ({ viewMode, isActive, onRegi
     if (!window.confirm(confirmMessage)) return;
 
     try {
-      if (isArchived || isPending) await apiDelete(`/api/partner-commissions/${id}`);
-      else await apiPost(`/api/partner-commissions/${id}/archive`);
+      if (isArchived || isPending) await apiDelete(`${commissionApiBase}/${id}`);
+      else await apiPost(`${commissionApiBase}/${id}/archive`);
       fetchData();
     } catch (error) {
       console.error("Error deleting or archiving partner commission:", error);
       alert("Chyba při provádění akce");
     }
-  }, [closeProfile, commissions, fetchData, gridData, selectedEntityId, viewMode]);
+  }, [closeProfile, commissionApiBase, commissions, entityApiBase, fetchData, gridData, selectedEntityId, viewMode]);
 
   const handleCreateWithCommission = useCallback(async () => {
     setIsCreating(true);
     try {
-      const response = await apiPost<{ entity: { id: number }; commission: { id: number } }>("/api/partner-entities/with-commission", {
+      const response = await apiPost<{ entity: { id: number }; commission: { id: number } }>(`${entityApiBase}/with-commission`, {
         entity: {
           status,
           first_name: emptyToNull(createDraft.entity.name),
@@ -672,7 +675,7 @@ const PartnersSectionNew: React.FC<SectionProps> = ({ viewMode, isActive, onRegi
   const handleCreateEntityOnly = useCallback(async () => {
     setIsCreating(true);
     try {
-      const entity = await apiPost<PartnerEntityApi>("/api/partner-entities", {
+      const entity = await apiPost<PartnerEntityApi>(entityApiBase, {
         status,
         first_name: emptyToNull(createDraft.entity.name),
         company_name: emptyToNull(createDraft.entity.company),
@@ -698,7 +701,7 @@ const PartnersSectionNew: React.FC<SectionProps> = ({ viewMode, isActive, onRegi
     } finally {
       setIsCreating(false);
     }
-  }, [createDraft, fetchData, status]);
+  }, [createDraft, entityApiBase, fetchData, status]);
 
   const handleCreate = useCallback(async () => {
     if (includeCommission) {
@@ -740,7 +743,7 @@ const PartnersSectionNew: React.FC<SectionProps> = ({ viewMode, isActive, onRegi
     if (!selectedEntity || !selectedCommission) return;
 
     try {
-      const response = await apiPost<{ id: number }>("/api/partner-commissions", {
+      const response = await apiPost<{ id: number }>(commissionApiBase, {
         entity_id: selectedEntity.id,
         position: selectedCommission.position,
         service_position: selectedCommission.service_position,
@@ -764,13 +767,13 @@ const PartnersSectionNew: React.FC<SectionProps> = ({ viewMode, isActive, onRegi
       console.error("Error duplicating partner commission:", error);
       alert("Chyba při duplikaci zakázky");
     }
-  }, [fetchData, selectedCommission, selectedEntity]);
+  }, [commissionApiBase, fetchData, selectedCommission, selectedEntity]);
 
   const handleCreateFirstCommission = useCallback(async () => {
     if (!selectedEntity) return;
 
     try {
-      const response = await apiPost<{ id: number }>("/api/partner-commissions", {
+      const response = await apiPost<{ id: number }>(commissionApiBase, {
         entity_id: selectedEntity.id,
         status,
         position: null,
@@ -787,7 +790,7 @@ const PartnersSectionNew: React.FC<SectionProps> = ({ viewMode, isActive, onRegi
       console.error("Error creating first partner commission:", error);
       alert("Chyba při vytváření první zakázky");
     }
-  }, [fetchData, selectedEntity, status]);
+  }, [commissionApiBase, fetchData, selectedEntity, status]);
 
   const gridContext = useMemo(() => ({
     openProfile,

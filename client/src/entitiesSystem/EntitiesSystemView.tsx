@@ -33,10 +33,18 @@ const VIEW_MODE_CONFIG: Record<GridView, { label: string }> = {
 
 interface EntitiesSystemViewProps {
   viewMode: GridView;
+  systemNamespace?: string;
+  storageKey?: string;
+  title?: string;
 }
 
-const EntitiesSystemView: React.FC<EntitiesSystemViewProps> = ({ viewMode }) => {
-  const [activeTable, setActiveTable] = useState<TableType>(() => getStoredTableView(ENTITIES_SYSTEM_TABLE_STORAGE_KEY));
+const EntitiesSystemView: React.FC<EntitiesSystemViewProps> = ({
+  viewMode,
+  systemNamespace,
+  storageKey = ENTITIES_SYSTEM_TABLE_STORAGE_KEY,
+  title
+}) => {
+  const [activeTable, setActiveTable] = useState<TableType>(() => getStoredTableView(storageKey));
   const addHandlerRef = useRef<AddHandler | null>(null);
   const [isAddDisabled, setIsAddDisabled] = useState(false);
   const { canUndo, canRedo, isBusy, undo, redo } = useUndoRedo();
@@ -55,8 +63,8 @@ const EntitiesSystemView: React.FC<EntitiesSystemViewProps> = ({ viewMode }) => 
   }, [activeTable, viewMode]);
 
   useEffect(() => {
-    setStoredTableView(ENTITIES_SYSTEM_TABLE_STORAGE_KEY, activeTable);
-  }, [activeTable]);
+    setStoredTableView(storageKey, activeTable);
+  }, [activeTable, storageKey]);
 
   const handleAddClick = useCallback(() => {
     void addHandlerRef.current?.();
@@ -68,6 +76,7 @@ const EntitiesSystemView: React.FC<EntitiesSystemViewProps> = ({ viewMode }) => 
         <ClientsSectionNew
           viewMode={viewMode}
           isActive
+          systemNamespace={systemNamespace}
           onRegisterAddHandler={registerAddHandler}
           onLoadingChange={handleLoadingChange}
         />
@@ -79,6 +88,7 @@ const EntitiesSystemView: React.FC<EntitiesSystemViewProps> = ({ viewMode }) => 
         <PartnersSectionNew
           viewMode={viewMode}
           isActive
+          systemNamespace={systemNamespace}
           onRegisterAddHandler={registerAddHandler}
           onLoadingChange={handleLoadingChange}
         />
@@ -89,6 +99,7 @@ const EntitiesSystemView: React.FC<EntitiesSystemViewProps> = ({ viewMode }) => 
       <TipersSectionNew
         viewMode={viewMode}
         isActive
+        systemNamespace={systemNamespace}
         onRegisterAddHandler={registerAddHandler}
         onLoadingChange={handleLoadingChange}
       />
@@ -96,11 +107,12 @@ const EntitiesSystemView: React.FC<EntitiesSystemViewProps> = ({ viewMode }) => 
   };
 
   const { addLabel } = NAV_CONFIG[activeTable];
+  const resolvedTitle = title ?? `Subjekty & Komise - ${VIEW_MODE_CONFIG[viewMode].label}`;
 
   return (
     <div className="page-container">
       <div className="header-section">
-        <h1 className="page-title">Subjekty & Komise - {VIEW_MODE_CONFIG[viewMode].label}</h1>
+        <h1 className="page-title">{resolvedTitle}</h1>
         <div className="navigation-tabs">
           {(
             Object.entries(NAV_CONFIG) as Array<

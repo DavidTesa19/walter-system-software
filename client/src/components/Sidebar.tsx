@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { useAuth } from '../auth/AuthContext';
+import { canAccessProjectsSystem, canAccessStandardSystem, useAuth } from '../auth/AuthContext';
 import { trackEvent } from '../utils/analytics';
 import type { AppView } from '../types/appView';
 import type { GlobalSearchResult } from '../types/globalSearch';
@@ -110,6 +110,14 @@ const Icons = {
       <line x1="6" y1="20" x2="6" y2="14" />
     </svg>
   ),
+  Users: () => (
+    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"></path>
+      <circle cx="9" cy="7" r="4"></circle>
+      <path d="M23 21v-2a4 4 0 0 0-3-3.87"></path>
+      <path d="M16 3.13a4 4 0 0 1 0 7.75"></path>
+    </svg>
+  ),
   ChevronDown: () => (
     <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
       <polyline points="6 9 12 15 18 9"></polyline>
@@ -129,6 +137,10 @@ const Sidebar: React.FC<SidebarProps> = ({
   onSearchNavigate
 }) => {
   const { user, logout } = useAuth();
+  const accessScope = user?.accessScope;
+  const canAccessStandard = canAccessStandardSystem(accessScope);
+  const canAccessProjects = canAccessProjectsSystem(accessScope);
+  const isAdmin = user?.role === 'admin';
   const [searchQuery, setSearchQuery] = useState('');
   const [searchResults, setSearchResults] = useState<GlobalSearchResult[]>([]);
   const [isSearching, setIsSearching] = useState(false);
@@ -139,7 +151,9 @@ const Sidebar: React.FC<SidebarProps> = ({
   
   // State for expanded groups
   const [expandedGroups, setExpandedGroups] = useState<Record<string, boolean>>({
+    new_system: true,
     tables: true,
+    projects: true,
     calendar: true,
     teamchat: true,
     other: true
@@ -156,10 +170,11 @@ const Sidebar: React.FC<SidebarProps> = ({
   useEffect(() => {
     const groups = [
       { id: 'tables', views: ['active', 'pending', 'archived'] },
+      { id: 'projects', views: ['projects_active', 'projects_pending', 'projects_archived'] },
       { id: 'new_system', views: ['entities_active', 'entities_pending', 'entities_archived'] },
       { id: 'calendar', views: ['calendar'] },
       { id: 'teamchat', views: ['teamchat'] },
-      { id: 'other', views: ['future', 'chatbot', 'palettes', 'analytics'] }
+      { id: 'other', views: ['future', 'chatbot', 'palettes', 'analytics', 'admin_users'] }
     ];
 
     const activeGroup = groups.find(g => g.views.includes(activeView as string));
@@ -249,6 +264,16 @@ const Sidebar: React.FC<SidebarProps> = ({
       ]
     },
     {
+      id: 'projects',
+      label: 'Projects',
+      icon: <Icons.Tables />,
+      items: [
+        { id: 'projects_active', label: 'Aktivní', icon: <Icons.Active /> },
+        { id: 'projects_pending', label: 'Ke schválení', icon: <Icons.Pending /> },
+        { id: 'projects_archived', label: 'Archiv', icon: <Icons.Archived /> }
+      ]
+    },
+    {
       id: 'calendar',
       label: 'Kalendář',
       icon: <Icons.Calendar />,
@@ -272,10 +297,38 @@ const Sidebar: React.FC<SidebarProps> = ({
         { id: 'future', label: 'Budoucí funkce', icon: <Icons.Future /> },
         { id: 'chatbot', label: 'AI Asistent', icon: <Icons.Chatbot /> },
         { id: 'palettes', label: 'Motivy', icon: <Icons.Palettes /> },
-        { id: 'analytics', label: 'Analytika', icon: <Icons.Analytics /> }
+        { id: 'analytics', label: 'Analytika', icon: <Icons.Analytics /> },
+        { id: 'admin_users', label: 'Správa uživatelů', icon: <Icons.Users /> }
       ]
     }
   ];
+
+  const visibleSidebarGroups = sidebarGroups
+    .map((group) => ({
+      ...group,
+      items: group.items.filter((item) => {
+        if (item.id === 'admin_users') {
+          return isAdmin;
+        }
+
+        return true;
+      })
+    }))
+    .filter((group) => {
+      if (group.items.length === 0) {
+        return false;
+      }
+
+      if (group.id === 'tables' || group.id === 'new_system') {
+        return canAccessStandard;
+      }
+
+      if (group.id === 'projects') {
+        return canAccessProjects;
+      }
+
+      return true;
+    });
 
   return (
     <div className="sidebar">
@@ -398,7 +451,7 @@ const Sidebar: React.FC<SidebarProps> = ({
           )}
         </div>
 
-        {sidebarGroups.map(group => {
+        {visibleSidebarGroups.map(group => {
             const isSingleItem = group.items.length === 1 && group.items[0].id === group.id;
 
             if (isSingleItem) {
@@ -498,7 +551,7 @@ const Sidebar: React.FC<SidebarProps> = ({
         {user && (
           <div className="user-info">
             <span className="user-name">{user.username}</span>
-            <span className="user-role">{user.role}</span>
+            <span className="user-role">{`${user.role} • ${user.accessScope}`}</span>
           </div>
         )}
         <button

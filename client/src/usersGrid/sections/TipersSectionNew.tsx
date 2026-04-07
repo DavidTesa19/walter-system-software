@@ -338,6 +338,7 @@ const buildTiperDraftCommissionData = (draft: TiperCreateDraft, status: TiperCom
 const TipersSectionNew: React.FC<SectionProps> = ({
   viewMode,
   isActive,
+  systemNamespace,
   onRegisterAddHandler,
   onLoadingChange
 }) => {
@@ -359,10 +360,13 @@ const TipersSectionNew: React.FC<SectionProps> = ({
 
   // Get status from viewMode
   const status = useMemo(() => mapViewToStatus(viewMode), [viewMode]);
+  const resourceKey = systemNamespace ? "project-tipers" : "tipers";
+  const entityApiBase = systemNamespace ? `/api/${systemNamespace}/tiper-entities` : "/api/tiper-entities";
+  const commissionApiBase = systemNamespace ? `/api/${systemNamespace}/tiper-commissions` : "/api/tiper-commissions";
 
   // Document and notes managers
-  const documentManager = useProfileDocuments("tipers", selectedEntityId);
-  const notesManager = useProfileNotes("tipers", selectedEntityId);
+  const documentManager = useProfileDocuments(resourceKey, selectedEntityId);
+  const notesManager = useProfileNotes(resourceKey, selectedEntityId);
 
   // ==========================================================================
   // DATA FETCHING
@@ -372,8 +376,8 @@ const TipersSectionNew: React.FC<SectionProps> = ({
     setIsLoading(true);
     try {
       const [entitiesData, commissionsData] = await Promise.all([
-        apiGet<TiperEntityApi[]>(`/api/tiper-entities?status=${status}`),
-        apiGet<TiperCommissionApi[]>(`/api/tiper-commissions?status=${status}`)
+        apiGet<TiperEntityApi[]>(`${entityApiBase}?status=${status}`),
+        apiGet<TiperCommissionApi[]>(`${commissionApiBase}?status=${status}`)
       ]);
 
       const entitiesList = (Array.isArray(entitiesData) ? entitiesData : []).map(normalizeTiperEntity);
@@ -497,7 +501,7 @@ const TipersSectionNew: React.FC<SectionProps> = ({
     } finally {
       setIsLoading(false);
     }
-  }, [status]);
+  }, [commissionApiBase, entityApiBase, status]);
 
   // ==========================================================================
   // PROFILE PANEL LOGIC
@@ -563,23 +567,23 @@ const TipersSectionNew: React.FC<SectionProps> = ({
     try {
       const mappedUpdates = mapTiperEntityUpdates(updates);
       if (Object.keys(mappedUpdates).length === 0) return;
-      await apiPut(`/api/tiper-entities/${entityId}`, mappedUpdates);
+      await apiPut(`${entityApiBase}/${entityId}`, mappedUpdates);
       fetchData();
     } catch (error) {
       console.error("Error updating tiper entity:", error);
       throw error;
     }
-  }, [fetchData]);
+  }, [entityApiBase, fetchData]);
 
   const handleUpdateCommission = useCallback(async (commissionId: number, updates: Record<string, unknown>) => {
     try {
-      await apiPut(`/api/tiper-commissions/${commissionId}`, updates);
+      await apiPut(`${commissionApiBase}/${commissionId}`, updates);
       fetchData();
     } catch (error) {
       console.error("Error updating tiper commission:", error);
       throw error;
     }
-  }, [fetchData]);
+  }, [commissionApiBase, fetchData]);
 
   // ==========================================================================
   // ROW ACTIONS
@@ -589,27 +593,27 @@ const TipersSectionNew: React.FC<SectionProps> = ({
     try {
       const row = gridData.find((item) => item.id === id);
       if (!row) return;
-      if (row.entityOnly && row.entity) await apiPost(`/api/tiper-entities/${row.entity.id}/approve`);
-      else await apiPost(`/api/tiper-commissions/${id}/approve`);
+      if (row.entityOnly && row.entity) await apiPost(`${entityApiBase}/${row.entity.id}/approve`);
+      else await apiPost(`${commissionApiBase}/${id}/approve`);
       fetchData();
     } catch (error) {
       console.error("Error approving commission:", error);
       alert("Chyba při schvalování tipu");
     }
-  }, [fetchData, gridData]);
+  }, [commissionApiBase, entityApiBase, fetchData, gridData]);
 
   const handleRestore = useCallback(async (id: number) => {
     try {
       const row = gridData.find((item) => item.id === id);
       if (!row) return;
-      if (row.entityOnly && row.entity) await apiPost(`/api/tiper-entities/${row.entity.id}/restore`);
-      else await apiPost(`/api/tiper-commissions/${id}/restore`);
+      if (row.entityOnly && row.entity) await apiPost(`${entityApiBase}/${row.entity.id}/restore`);
+      else await apiPost(`${commissionApiBase}/${id}/restore`);
       fetchData();
     } catch (error) {
       console.error("Error restoring commission:", error);
       alert("Chyba při obnovování tipu");
     }
-  }, [fetchData, gridData]);
+  }, [commissionApiBase, entityApiBase, fetchData, gridData]);
 
   const handleDelete = useCallback(async (id: number) => {
     if (viewMode === "active") {
@@ -626,7 +630,7 @@ const TipersSectionNew: React.FC<SectionProps> = ({
       if (!confirm(confirmMessage)) return;
 
       try {
-        await apiDelete(`/api/tiper-entities/${entityId}`);
+        await apiDelete(`${entityApiBase}/${entityId}`);
         if (selectedEntityId === entityId) {
           closeProfile();
         }
@@ -649,7 +653,7 @@ const TipersSectionNew: React.FC<SectionProps> = ({
       if (!confirm(confirmMessage)) return;
 
       try {
-        await apiDelete(`/api/tiper-entities/${row.entity.id}`);
+        await apiDelete(`${entityApiBase}/${row.entity.id}`);
         if (selectedEntityId === row.entity.id) {
           closeProfile();
         }
@@ -676,21 +680,21 @@ const TipersSectionNew: React.FC<SectionProps> = ({
 
     try {
       if (isArchived || isPending) {
-        await apiDelete(`/api/tiper-commissions/${id}`);
+        await apiDelete(`${commissionApiBase}/${id}`);
       } else {
-        await apiPost(`/api/tiper-commissions/${id}/archive`);
+        await apiPost(`${commissionApiBase}/${id}/archive`);
       }
       fetchData();
     } catch (error) {
       console.error("Error performing action:", error);
       alert("Chyba při provádění akce");
     }
-  }, [closeProfile, commissions, fetchData, gridData, selectedEntityId, viewMode]);
+  }, [closeProfile, commissionApiBase, commissions, entityApiBase, fetchData, gridData, selectedEntityId, viewMode]);
 
   const handleCreateWithCommission = useCallback(async () => {
     setIsCreating(true);
     try {
-      const response = await apiPost<{ entity: TiperEntity; commission: TiperCommission }>("/api/tiper-entities/with-commission", {
+      const response = await apiPost<{ entity: TiperEntity; commission: TiperCommission }>(`${entityApiBase}/with-commission`, {
         entity: {
           status,
           first_name: emptyToNull(createDraft.entity.name),
@@ -735,7 +739,7 @@ const TipersSectionNew: React.FC<SectionProps> = ({
   const handleCreateEntityOnly = useCallback(async () => {
     setIsCreating(true);
     try {
-      const entity = await apiPost<TiperEntityApi>('/api/tiper-entities', {
+      const entity = await apiPost<TiperEntityApi>(entityApiBase, {
         status,
         first_name: emptyToNull(createDraft.entity.name),
         company_name: emptyToNull(createDraft.entity.company),
@@ -761,7 +765,7 @@ const TipersSectionNew: React.FC<SectionProps> = ({
     } finally {
       setIsCreating(false);
     }
-  }, [createDraft, fetchData, status]);
+  }, [createDraft, entityApiBase, fetchData, status]);
 
   const handleCreate = useCallback(async () => {
     if (includeCommission) {
@@ -803,7 +807,7 @@ const TipersSectionNew: React.FC<SectionProps> = ({
     if (!selectedEntity || !selectedCommission) return;
 
     try {
-      const response = await apiPost<{ id: number }>("/api/tiper-commissions", {
+      const response = await apiPost<{ id: number }>(commissionApiBase, {
         entity_id: selectedEntity.id,
         position: selectedCommission.position,
         service_position: selectedCommission.service_position,
@@ -827,13 +831,13 @@ const TipersSectionNew: React.FC<SectionProps> = ({
       console.error("Error duplicating tiper commission:", error);
       alert("Chyba při duplikaci tipu");
     }
-  }, [fetchData, selectedCommission, selectedEntity]);
+  }, [commissionApiBase, fetchData, selectedCommission, selectedEntity]);
 
   const handleCreateFirstCommission = useCallback(async () => {
     if (!selectedEntity) return;
 
     try {
-      const response = await apiPost<{ id: number }>('/api/tiper-commissions', {
+      const response = await apiPost<{ id: number }>(commissionApiBase, {
         entity_id: selectedEntity.id,
         status,
         position: null,
@@ -850,7 +854,7 @@ const TipersSectionNew: React.FC<SectionProps> = ({
       console.error('Error creating first tiper commission:', error);
       alert('Chyba při vytváření prvního tipu');
     }
-  }, [fetchData, selectedEntity, status]);
+  }, [commissionApiBase, fetchData, selectedEntity, status]);
 
   // ==========================================================================
   // GRID CONTEXT

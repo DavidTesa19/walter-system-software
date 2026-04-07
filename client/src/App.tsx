@@ -1,5 +1,12 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
-import { AuthProvider, useAuth } from './auth/AuthContext';
+import {
+  AuthProvider,
+  canAccessProjectsSystem,
+  canAccessStandardSystem,
+  getDefaultViewForScope,
+  isViewAllowedForScope,
+  useAuth,
+} from './auth/AuthContext';
 import { ThemeProvider } from './theme/ThemeContext';
 import { UndoRedoProvider } from './utils/undoRedo';
 import Login from './auth/Login';
@@ -15,6 +22,8 @@ import TeamChatView from './views/TeamChatView';
 import FullCalendarView from './views/FullCalendarView';
 import AnalyticsView from './views/AnalyticsView';
 import EntitiesSystemView from './views/EntitiesSystemView';
+import ProjectsView from './views/ProjectsView';
+import AdminUsersView from './views/AdminUsersView';
 import { trackEvent, trackSectionStart } from './utils/analytics';
 import type { AppView } from './types/appView';
 import type { GlobalSearchResult, GridSearchNavigationTarget, SearchTable } from './types/globalSearch';
@@ -29,7 +38,7 @@ type SearchStatus = 'accepted' | 'pending' | 'archived';
 
 type SearchableRecord = {
   table: SearchTable;
-  viewMode: 'active' | 'pending' | 'archived';
+  view: AppView;
   row: UserInterface;
 };
 
@@ -75,9 +84,13 @@ const VIEW_LABELS: Record<AppView, string> = {
   calendar: 'Kalendář',
   teamchat: 'Týmový chat',
   analytics: 'Analytika',
+  admin_users: 'Správa uživatelů',
   entities_active: 'Aktuální subjekty',
   entities_pending: 'Subjekty ke schválení',
-  entities_archived: 'Archiv subjektů'
+  entities_archived: 'Archiv subjektů',
+  projects_active: 'Projects - Aktivní',
+  projects_pending: 'Projects - Ke schválení',
+  projects_archived: 'Projects - Archiv'
 };
 
 const TABLE_LABELS: Record<SearchTable, string> = {
@@ -86,10 +99,31 @@ const TABLE_LABELS: Record<SearchTable, string> = {
   tipers: 'Tipaři'
 };
 
-const STATUS_TO_VIEW: Record<SearchStatus, 'active' | 'pending' | 'archived'> = {
+const STATUS_TO_STANDARD_VIEW: Record<SearchStatus, AppView> = {
   accepted: 'active',
   pending: 'pending',
   archived: 'archived'
+};
+
+const STATUS_TO_PROJECTS_VIEW: Record<SearchStatus, AppView> = {
+  accepted: 'projects_active',
+  pending: 'projects_pending',
+  archived: 'projects_archived'
+};
+
+const getGridViewFromAppView = (view: AppView): 'active' | 'pending' | 'archived' => {
+  switch (view) {
+    case 'pending':
+    case 'projects_pending':
+    case 'entities_pending':
+      return 'pending';
+    case 'archived':
+    case 'projects_archived':
+    case 'entities_archived':
+      return 'archived';
+    default:
+      return 'active';
+  }
 };
 
 const normalizeSearchText = (value: string): string =>
@@ -115,10 +149,19 @@ const getRowTitle = (row: UserInterface): string => {
 };
 
 const AppContent: React.FC = () => {
-  const { isAuthenticated } = useAuth();
+  const { isAuthenticated, user } = useAuth();
   const [viewMode, setViewMode] = useState<AppView>(() => getStoredAppView('active'));
   const [gridSearchTarget, setGridSearchTarget] = useState<GridSearchNavigationTarget | null>(null);
   const searchIndexCacheRef = useRef<{ records: SearchableRecord[]; futureFunctions: SearchableFutureFunction[]; fetchedAt: number } | null>(null);
+  const accessScope = user?.accessScope;
+  const isAdmin = user?.role === 'admin';
+  const isViewAllowed = useCallback((view: AppView) => {
+    if (view === 'admin_users') {
+      return isAdmin;
+    }
+
+    return isViewAllowedForScope(accessScope, view);
+  }, [accessScope, isAdmin]);
 
   useEffect(() => {
     if (!isAuthenticated) {
@@ -127,6 +170,23 @@ const AppContent: React.FC = () => {
 
     setStoredAppView(viewMode);
   }, [isAuthenticated, viewMode]);
+
+  useEffect(() => {
+    if (!isAuthenticated) {
+      return;
+    }
+
+    if (isViewAllowed(viewMode)) {
+      return;
+    }
+
+    setGridSearchTarget(null);
+    setViewMode(getDefaultViewForScope(accessScope));
+  }, [accessScope, isAuthenticated, isViewAllowed, viewMode]);
+
+  useEffect(() => {
+    searchIndexCacheRef.current = null;
+  }, [accessScope]);
 
   // Track section visits and time spent
   useEffect(() => {
@@ -142,14 +202,35 @@ const AppContent: React.FC = () => {
 
   const buildSearchIndex = useCallback(async (): Promise<{ records: SearchableRecord[]; futureFunctions: SearchableFutureFunction[] }> => {
     const statuses: SearchStatus[] = ['accepted', 'pending', 'archived'];
-    const tables: SearchTable[] = ['clients', 'partners', 'tipers'];
-    const requests = tables.flatMap((table) =>
+    const searchSources: Array<{
+      table: SearchTable;
+      endpoint: (status: SearchStatus) => string;
+      view: (status: SearchStatus) => AppView;
+    }> = [];
+
+    if (canAccessStandardSystem(accessScope)) {
+      searchSources.push(
+        { table: 'clients', endpoint: (status) => `/clients?status=${status}`, view: (status) => STATUS_TO_STANDARD_VIEW[status] },
+        { table: 'partners', endpoint: (status) => `/partners?status=${status}`, view: (status) => STATUS_TO_STANDARD_VIEW[status] },
+        { table: 'tipers', endpoint: (status) => `/tipers?status=${status}`, view: (status) => STATUS_TO_STANDARD_VIEW[status] }
+      );
+    }
+
+    if (canAccessProjectsSystem(accessScope)) {
+      searchSources.push(
+        { table: 'clients', endpoint: (status) => `/api/projects/client-commissions?status=${status}`, view: (status) => STATUS_TO_PROJECTS_VIEW[status] },
+        { table: 'partners', endpoint: (status) => `/api/projects/partner-commissions?status=${status}`, view: (status) => STATUS_TO_PROJECTS_VIEW[status] },
+        { table: 'tipers', endpoint: (status) => `/api/projects/tiper-commissions?status=${status}`, view: (status) => STATUS_TO_PROJECTS_VIEW[status] }
+      );
+    }
+
+    const requests = searchSources.flatMap((source) =>
       statuses.map(async (status) => {
-        const data = await apiGet<UserInterface[]>(`/${table}?status=${status}`);
+        const data = await apiGet<UserInterface[]>(source.endpoint(status));
         const rows = Array.isArray(data) ? data : [];
         return rows.map((row) => ({
-          table,
-          viewMode: STATUS_TO_VIEW[status],
+          table: source.table,
+          view: source.view(status),
           row
         }));
       })
@@ -168,7 +249,7 @@ const AppContent: React.FC = () => {
     }));
 
     return { records, futureFunctions };
-  }, []);
+  }, [accessScope]);
 
   const runGlobalSearch = useCallback(async (query: string): Promise<GlobalSearchResult[]> => {
     const normalizedQuery = normalizeSearchText(query);
@@ -194,6 +275,10 @@ const AppContent: React.FC = () => {
     const results: GlobalSearchResult[] = [];
 
     (Object.entries(VIEW_LABELS) as Array<[AppView, string]>).forEach(([view, label]) => {
+      if (!isViewAllowed(view)) {
+        return;
+      }
+
       const target = normalizeSearchText(`${label} ${view}`);
       if (tokens.every((token) => target.includes(token))) {
         results.push({
@@ -206,7 +291,7 @@ const AppContent: React.FC = () => {
       }
     });
 
-    records.forEach(({ table, viewMode, row }) => {
+    records.forEach(({ table, view, row }) => {
       if (typeof row.id !== 'number') {
         return;
       }
@@ -242,15 +327,15 @@ const AppContent: React.FC = () => {
         }
 
         const tableLabel = TABLE_LABELS[table];
-        const viewLabel = VIEW_LABELS[viewMode];
+        const viewLabel = VIEW_LABELS[view];
 
         results.push({
-          id: `${table}-${viewMode}-${row.id}-${String(key)}`,
+          id: `${table}-${view}-${row.id}-${String(key)}`,
           title: getRowTitle(row),
           subtitle: `${tableLabel} • ${label}`,
           matchText: asText,
           locationLabel: `${tableLabel} › ${viewLabel}`,
-          view: viewMode,
+          view,
           table,
           recordId: row.id
         });
@@ -300,7 +385,7 @@ const AppContent: React.FC = () => {
     });
 
     return results.slice(0, 120);
-  }, [buildSearchIndex]);
+  }, [accessScope, buildSearchIndex, isViewAllowed]);
 
   const handleSearchNavigate = useCallback((result: GlobalSearchResult) => {
     setViewMode(result.view);
@@ -310,7 +395,7 @@ const AppContent: React.FC = () => {
         table: result.table,
         recordId: result.recordId,
         requestKey: `${Date.now()}-${result.id}`,
-        viewMode: result.view as 'active' | 'pending' | 'archived'
+        viewMode: getGridViewFromAppView(result.view)
       });
       return;
     }
@@ -353,12 +438,20 @@ const AppContent: React.FC = () => {
               return <FullCalendarView />;
             case 'analytics':
                 return <AnalyticsView />;
+            case 'admin_users':
+              return <AdminUsersView />;
             case 'entities_active':
               return <EntitiesSystemView viewMode="active" />;
             case 'entities_pending':
               return <EntitiesSystemView viewMode="pending" />;
             case 'entities_archived':
               return <EntitiesSystemView viewMode="archived" />;
+            case 'projects_active':
+              return <ProjectsView viewMode="active" searchTarget={gridSearchTarget} />;
+            case 'projects_pending':
+              return <ProjectsView viewMode="pending" searchTarget={gridSearchTarget} />;
+            case 'projects_archived':
+              return <ProjectsView viewMode="archived" searchTarget={gridSearchTarget} />;
             default:
               return null;
           }

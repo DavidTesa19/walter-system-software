@@ -2,7 +2,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { API_BASE, apiGet, apiDelete, apiPost, apiUpload } from "../../utils/api";
 import type { ProfileDocument } from "../types/profile";
 
-type DocumentResource = "clients" | "partners" | "tipers";
+type DocumentResource = "clients" | "partners" | "tipers" | "project-clients" | "project-partners" | "project-tipers";
 
 type UseProfileDocumentsResult = {
   documents: ProfileDocument[];

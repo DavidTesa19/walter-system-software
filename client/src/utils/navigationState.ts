@@ -12,7 +12,11 @@ const VALID_APP_VIEWS: AppView[] = [
   "analytics",
   "entities_active",
   "entities_pending",
-  "entities_archived"
+  "entities_archived",
+  "projects_active",
+  "projects_pending",
+  "projects_archived",
+  "admin_users"
 ];
 
 type FutureFunctionsViewMode = "active" | "archive";

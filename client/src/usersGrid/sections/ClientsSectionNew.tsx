@@ -352,6 +352,7 @@ const buildClientDraftCommissionData = (draft: ClientCreateDraft, status: Client
 const ClientsSectionNew: React.FC<SectionProps> = ({
   viewMode,
   isActive,
+  systemNamespace,
   onRegisterAddHandler,
   onLoadingChange
 }) => {
@@ -373,10 +374,13 @@ const ClientsSectionNew: React.FC<SectionProps> = ({
 
   // Get status from viewMode
   const status = useMemo(() => mapViewToStatus(viewMode), [viewMode]);
+  const resourceKey = systemNamespace ? "project-clients" : "clients";
+  const entityApiBase = systemNamespace ? `/api/${systemNamespace}/client-entities` : "/api/client-entities";
+  const commissionApiBase = systemNamespace ? `/api/${systemNamespace}/client-commissions` : "/api/client-commissions";
 
   // Document and notes managers
-  const documentManager = useProfileDocuments("clients", selectedEntityId);
-  const notesManager = useProfileNotes("clients", selectedEntityId);
+  const documentManager = useProfileDocuments(resourceKey, selectedEntityId);
+  const notesManager = useProfileNotes(resourceKey, selectedEntityId);
 
   // ==========================================================================
   // DATA FETCHING
@@ -386,8 +390,8 @@ const ClientsSectionNew: React.FC<SectionProps> = ({
     setIsLoading(true);
     try {
       const [entitiesData, commissionsData] = await Promise.all([
-        apiGet<ClientEntityApi[]>(`/api/client-entities?status=${status}`),
-        apiGet<ClientCommissionApi[]>(`/api/client-commissions?status=${status}`)
+        apiGet<ClientEntityApi[]>(`${entityApiBase}?status=${status}`),
+        apiGet<ClientCommissionApi[]>(`${commissionApiBase}?status=${status}`)
       ]);
 
       const entitiesList = (Array.isArray(entitiesData) ? entitiesData : []).map(normalizeClientEntity);
@@ -511,7 +515,7 @@ const ClientsSectionNew: React.FC<SectionProps> = ({
     } finally {
       setIsLoading(false);
     }
-  }, [status]);
+  }, [commissionApiBase, entityApiBase, status]);
 
   // ==========================================================================
   // PROFILE PANEL LOGIC
@@ -577,23 +581,23 @@ const ClientsSectionNew: React.FC<SectionProps> = ({
     try {
       const mappedUpdates = mapClientEntityUpdates(updates);
       if (Object.keys(mappedUpdates).length === 0) return;
-      await apiPut(`/api/client-entities/${entityId}`, mappedUpdates);
+      await apiPut(`${entityApiBase}/${entityId}`, mappedUpdates);
       fetchData();
     } catch (error) {
       console.error("Error updating client entity:", error);
       throw error;
     }
-  }, [fetchData]);
+  }, [entityApiBase, fetchData]);
 
   const handleUpdateCommission = useCallback(async (commissionId: number, updates: Record<string, unknown>) => {
     try {
-      await apiPut(`/api/client-commissions/${commissionId}`, updates);
+      await apiPut(`${commissionApiBase}/${commissionId}`, updates);
       fetchData();
     } catch (error) {
       console.error("Error updating client commission:", error);
       throw error;
     }
-  }, [fetchData]);
+  }, [commissionApiBase, fetchData]);
 
   // ==========================================================================
   // ROW ACTIONS
@@ -603,27 +607,27 @@ const ClientsSectionNew: React.FC<SectionProps> = ({
     try {
       const row = gridData.find((item) => item.id === id);
       if (!row) return;
-      if (row.entityOnly && row.entity) await apiPost(`/api/client-entities/${row.entity.id}/approve`);
-      else await apiPost(`/api/client-commissions/${id}/approve`);
+      if (row.entityOnly && row.entity) await apiPost(`${entityApiBase}/${row.entity.id}/approve`);
+      else await apiPost(`${commissionApiBase}/${id}/approve`);
       fetchData();
     } catch (error) {
       console.error("Error approving commission:", error);
       alert("Chyba při schvalování zakázky");
     }
-  }, [fetchData, gridData]);
+  }, [commissionApiBase, entityApiBase, fetchData, gridData]);
 
   const handleRestore = useCallback(async (id: number) => {
     try {
       const row = gridData.find((item) => item.id === id);
       if (!row) return;
-      if (row.entityOnly && row.entity) await apiPost(`/api/client-entities/${row.entity.id}/restore`);
-      else await apiPost(`/api/client-commissions/${id}/restore`);
+      if (row.entityOnly && row.entity) await apiPost(`${entityApiBase}/${row.entity.id}/restore`);
+      else await apiPost(`${commissionApiBase}/${id}/restore`);
       fetchData();
     } catch (error) {
       console.error("Error restoring commission:", error);
       alert("Chyba při obnovování zakázky");
     }
-  }, [fetchData, gridData]);
+  }, [commissionApiBase, entityApiBase, fetchData, gridData]);
 
   const handleDelete = useCallback(async (id: number) => {
     if (viewMode === "active") {
@@ -640,7 +644,7 @@ const ClientsSectionNew: React.FC<SectionProps> = ({
       if (!confirm(confirmMessage)) return;
 
       try {
-        await apiDelete(`/api/client-entities/${entityId}`);
+        await apiDelete(`${entityApiBase}/${entityId}`);
         if (selectedEntityId === entityId) {
           closeProfile();
         }
@@ -663,7 +667,7 @@ const ClientsSectionNew: React.FC<SectionProps> = ({
       if (!confirm(confirmMessage)) return;
 
       try {
-        await apiDelete(`/api/client-entities/${row.entity.id}`);
+        await apiDelete(`${entityApiBase}/${row.entity.id}`);
         if (selectedEntityId === row.entity.id) {
           closeProfile();
         }
@@ -690,21 +694,21 @@ const ClientsSectionNew: React.FC<SectionProps> = ({
 
     try {
       if (isArchived || isPending) {
-        await apiDelete(`/api/client-commissions/${id}`);
+        await apiDelete(`${commissionApiBase}/${id}`);
       } else {
-        await apiPost(`/api/client-commissions/${id}/archive`);
+        await apiPost(`${commissionApiBase}/${id}/archive`);
       }
       fetchData();
     } catch (error) {
       console.error("Error performing action:", error);
       alert("Chyba při provádění akce");
     }
-  }, [closeProfile, commissions, fetchData, gridData, selectedEntityId, viewMode]);
+  }, [closeProfile, commissionApiBase, commissions, entityApiBase, fetchData, gridData, selectedEntityId, viewMode]);
 
   const handleCreateWithCommission = useCallback(async () => {
     setIsCreating(true);
     try {
-      const response = await apiPost<{ entity: ClientEntity; commission: ClientCommission }>("/api/client-entities/with-commission", {
+      const response = await apiPost<{ entity: ClientEntity; commission: ClientCommission }>(`${entityApiBase}/with-commission`, {
         entity: {
           status,
           first_name: emptyToNull(createDraft.entity.name),
@@ -751,7 +755,7 @@ const ClientsSectionNew: React.FC<SectionProps> = ({
   const handleCreateEntityOnly = useCallback(async () => {
     setIsCreating(true);
     try {
-      const entity = await apiPost<ClientEntityApi>('/api/client-entities', {
+      const entity = await apiPost<ClientEntityApi>(entityApiBase, {
         status,
         first_name: emptyToNull(createDraft.entity.name),
         company_name: emptyToNull(createDraft.entity.company),
@@ -779,7 +783,7 @@ const ClientsSectionNew: React.FC<SectionProps> = ({
     } finally {
       setIsCreating(false);
     }
-  }, [createDraft, fetchData, status]);
+  }, [createDraft, entityApiBase, fetchData, status]);
 
   const handleCreate = useCallback(async () => {
     if (includeCommission) {
@@ -823,7 +827,7 @@ const ClientsSectionNew: React.FC<SectionProps> = ({
     if (!selectedEntity || !selectedCommission) return;
 
     try {
-      const response = await apiPost<{ id: number }>("/api/client-commissions", {
+      const response = await apiPost<{ id: number }>(commissionApiBase, {
         entity_id: selectedEntity.id,
         position: selectedCommission.position,
         service_position: selectedCommission.service_position,
@@ -847,7 +851,7 @@ const ClientsSectionNew: React.FC<SectionProps> = ({
       console.error("Error duplicating client commission:", error);
       alert("Chyba při duplikaci zakázky");
     }
-  }, [fetchData, selectedCommission, selectedEntity]);
+  }, [commissionApiBase, fetchData, selectedCommission, selectedEntity]);
 
   const handleCreateFirstCommission = useCallback(async () => {
     if (!selectedEntity) return;

@@ -275,6 +275,7 @@ const buildClientMeta = (client: UserInterface | null): Array<{ label: string; v
 const ClientsSection: React.FC<SectionProps> = ({
   viewMode,
   isActive,
+  systemNamespace,
   onRegisterAddHandler,
   onLoadingChange,
   focusRecordId,
@@ -284,18 +285,21 @@ const ClientsSection: React.FC<SectionProps> = ({
   const [isLoading, setIsLoading] = useState(false);
   const gridRef = useRef<AgGridReact<UserInterface>>(null);
   const [selectedProfileId, setSelectedProfileId] = useState<number | null>(null);
-  const documentManager = useProfileDocuments("clients", selectedProfileId);
-  const notesManager = useProfileNotes("clients", selectedProfileId);
+  const resourceKey = systemNamespace ? "project-clients" : "clients";
+  const entityApiBase = systemNamespace ? `/api/${systemNamespace}/client-entities` : "/api/client-entities";
+  const commissionApiBase = systemNamespace ? `/api/${systemNamespace}/client-commissions` : "/api/client-commissions";
+  const documentManager = useProfileDocuments(resourceKey, selectedProfileId);
+  const notesManager = useProfileNotes(resourceKey, selectedProfileId);
   const { pushAction, signal } = useUndoRedo();
   const editSnapshotRef = useRef<Record<number, any>>({});
 
   // Refetch when other views mutate the same resource
   useEffect(() => {
-    if (signal?.resource === "clients") {
+    if (signal?.resource === resourceKey) {
       fetchClientsData();
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [signal]);
+  }, [resourceKey, signal]);
 
   const defaultColDef = useMemo(
     () => ({
@@ -312,7 +316,7 @@ const ClientsSection: React.FC<SectionProps> = ({
   const fetchClientsData = useCallback(async () => {
     setIsLoading(true);
     try {
-      const data = await apiGet<ClientCommissionApi[]>(`/api/client-commissions?status=${status}`);
+      const data = await apiGet<ClientCommissionApi[]>(`${commissionApiBase}?status=${status}`);
       setClientsData(Array.isArray(data) ? data.map(normalizeClientCommissionRow) : []);
     } catch (error) {
       console.error("Error fetching clients:", error);
@@ -320,7 +324,7 @@ const ClientsSection: React.FC<SectionProps> = ({
     } finally {
       setIsLoading(false);
     }
-  }, [status]);
+  }, [commissionApiBase, status]);
 
   const selectedProfile = useMemo(() => {
     if (selectedProfileId === null) {
@@ -364,16 +368,16 @@ const ClientsSection: React.FC<SectionProps> = ({
       const prev = cloneRecord(clientsData.find((c) => c.id === id));
       if (!prev) return;
       try {
-        await apiPost(`/api/client-commissions/${id}/approve`);
+        await apiPost(`${commissionApiBase}/${id}/approve`);
         fetchClientsData();
         pushAction({
           label: `Schválení zakázky #${id}`,
-          resource: "clients",
+          resource: resourceKey,
           undo: async () => {
-            await apiPut(`/api/client-commissions/${id}`, { status: prev.status ?? "pending" });
+            await apiPut(`${commissionApiBase}/${id}`, { status: prev.status ?? "pending" });
           },
           redo: async () => {
-            await apiPost(`/api/client-commissions/${id}/approve`);
+            await apiPost(`${commissionApiBase}/${id}/approve`);
           }
         });
       } catch (error) {
@@ -381,7 +385,7 @@ const ClientsSection: React.FC<SectionProps> = ({
         alert("Chyba při schvalování klienta");
       }
     },
-    [clientsData, fetchClientsData, pushAction]
+    [clientsData, commissionApiBase, fetchClientsData, pushAction, resourceKey]
   );
 
   const handleRestoreClient = useCallback(
@@ -389,16 +393,16 @@ const ClientsSection: React.FC<SectionProps> = ({
       const prev = cloneRecord(clientsData.find((c) => c.id === id));
       if (!prev) return;
       try {
-        await apiPost(`/api/client-commissions/${id}/restore`);
+        await apiPost(`${commissionApiBase}/${id}/restore`);
         fetchClientsData();
         pushAction({
           label: `Obnovení zakázky #${id}`,
-          resource: "clients",
+          resource: resourceKey,
           undo: async () => {
-            await apiPut(`/api/client-commissions/${id}`, { status: prev.status ?? "archived" });
+            await apiPut(`${commissionApiBase}/${id}`, { status: prev.status ?? "archived" });
           },
           redo: async () => {
-            await apiPost(`/api/client-commissions/${id}/restore`);
+            await apiPost(`${commissionApiBase}/${id}/restore`);
           }
         });
       } catch (error) {
@@ -406,7 +410,7 @@ const ClientsSection: React.FC<SectionProps> = ({
         alert("Chyba při obnovování klienta");
       }
     },
-    [clientsData, fetchClientsData, pushAction]
+    [clientsData, commissionApiBase, fetchClientsData, pushAction, resourceKey]
   );
 
   const handleDeleteClient = useCallback(
@@ -434,33 +438,33 @@ const ClientsSection: React.FC<SectionProps> = ({
 
       try {
         if (isArchived || isPending) {
-          await apiDelete(`/api/client-commissions/${id}`);
+          await apiDelete(`${commissionApiBase}/${id}`);
           let restoredId: number | null = null;
           pushAction({
             label: `Smazání zakázky #${id}`,
-            resource: "clients",
+            resource: resourceKey,
             undo: async () => {
               if (!client?.entity_internal_id) return;
-              const restored = await apiPost<{ id: number }>(`/api/client-commissions`, {
+              const restored = await apiPost<{ id: number }>(commissionApiBase, {
                 entity_id: client.entity_internal_id,
                 ...mapClientCommissionPayload(client)
               });
               restoredId = restored?.id ?? null;
             },
             redo: async () => {
-              await apiDelete(`/api/client-commissions/${restoredId ?? id}`);
+              await apiDelete(`${commissionApiBase}/${restoredId ?? id}`);
             }
           });
         } else {
-          await apiPost(`/api/client-commissions/${id}/archive`);
+          await apiPost(`${commissionApiBase}/${id}/archive`);
           pushAction({
             label: `Archivace zakázky #${id}`,
-            resource: "clients",
+            resource: resourceKey,
             undo: async () => {
-              await apiPost(`/api/client-commissions/${id}/restore`);
+              await apiPost(`${commissionApiBase}/${id}/restore`);
             },
             redo: async () => {
-              await apiPost(`/api/client-commissions/${id}/archive`);
+              await apiPost(`${commissionApiBase}/${id}/archive`);
             }
           });
         }
@@ -470,7 +474,7 @@ const ClientsSection: React.FC<SectionProps> = ({
         alert("Chyba při provádění akce");
       }
     },
-    [clientsData, fetchClientsData, pushAction]
+    [clientsData, commissionApiBase, fetchClientsData, pushAction, resourceKey]
   );
 
   const gridContext = useMemo(
@@ -503,31 +507,31 @@ const ClientsSection: React.FC<SectionProps> = ({
           if (!updatedClient.entity_internal_id) {
             throw new Error("Missing linked entity id for client row");
           }
-          await apiPut(`/api/client-entities/${updatedClient.entity_internal_id}`, mapClientEntityPayload(updatedClient));
+          await apiPut(`${entityApiBase}/${updatedClient.entity_internal_id}`, mapClientEntityPayload(updatedClient));
         } else {
-          await apiPut(`/api/client-commissions/${updatedClient.id}`, mapClientCommissionPayload(updatedClient));
+          await apiPut(`${commissionApiBase}/${updatedClient.id}`, mapClientCommissionPayload(updatedClient));
         }
 
         if (snapshot) {
           const after = cloneRecord(updatedClient);
           pushAction({
             label: `Úprava zakázky #${id}`,
-            resource: "clients",
+            resource: resourceKey,
             undo: async () => {
               if (isEntityField) {
                 if (!snapshot.entity_internal_id) return;
-                await apiPut(`/api/client-entities/${snapshot.entity_internal_id}`, mapClientEntityPayload(snapshot));
+                await apiPut(`${entityApiBase}/${snapshot.entity_internal_id}`, mapClientEntityPayload(snapshot));
                 return;
               }
-              await apiPut(`/api/client-commissions/${id}`, mapClientCommissionPayload(snapshot));
+              await apiPut(`${commissionApiBase}/${id}`, mapClientCommissionPayload(snapshot));
             },
             redo: async () => {
               if (isEntityField) {
                 if (!after.entity_internal_id) return;
-                await apiPut(`/api/client-entities/${after.entity_internal_id}`, mapClientEntityPayload(after));
+                await apiPut(`${entityApiBase}/${after.entity_internal_id}`, mapClientEntityPayload(after));
                 return;
               }
-              await apiPut(`/api/client-commissions/${id}`, mapClientCommissionPayload(after));
+              await apiPut(`${commissionApiBase}/${id}`, mapClientCommissionPayload(after));
             }
           });
           delete editSnapshotRef.current[id];
@@ -538,7 +542,7 @@ const ClientsSection: React.FC<SectionProps> = ({
         fetchClientsData();
       }
     },
-    [fetchClientsData, pushAction]
+    [commissionApiBase, entityApiBase, fetchClientsData, pushAction, resourceKey]
   );
 
   const handleAddClient = useCallback(async () => {
@@ -552,7 +556,7 @@ const ClientsSection: React.FC<SectionProps> = ({
 
     try {
       let createdId: number | null = null;
-      const created = await apiPost<ClientCommissionApi>(`/api/client-commissions`, {
+      const created = await apiPost<ClientCommissionApi>(commissionApiBase, {
         entity_data: mapClientEntityPayload(newClient),
         commission_data: mapClientCommissionPayload(newClient)
       });
@@ -561,12 +565,12 @@ const ClientsSection: React.FC<SectionProps> = ({
       if (createdId !== null) {
         pushAction({
           label: "Přidání zakázky",
-          resource: "clients",
+          resource: resourceKey,
           undo: async () => {
-            await apiDelete(`/api/client-commissions/${createdId}`);
+            await apiDelete(`${commissionApiBase}/${createdId}`);
           },
           redo: async () => {
-            const recreated = await apiPost<ClientCommissionApi>(`/api/client-commissions`, {
+            const recreated = await apiPost<ClientCommissionApi>(commissionApiBase, {
               entity_data: mapClientEntityPayload(newClient),
               commission_data: mapClientCommissionPayload(newClient)
             });
@@ -578,7 +582,7 @@ const ClientsSection: React.FC<SectionProps> = ({
       console.error("Error adding client:", error);
       alert("Chyba při přidávání klienta");
     }
-  }, [fetchClientsData, pushAction, status]);
+  }, [commissionApiBase, fetchClientsData, pushAction, resourceKey, status]);
 
   useEffect(() => {
     fetchClientsData();

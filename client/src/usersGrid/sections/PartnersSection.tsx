@@ -274,6 +274,7 @@ const buildPartnerMeta = (partner: UserInterface | null): Array<{ label: string;
 const PartnersSection: React.FC<SectionProps> = ({
   viewMode,
   isActive,
+  systemNamespace,
   onRegisterAddHandler,
   onLoadingChange,
   focusRecordId,
@@ -283,18 +284,21 @@ const PartnersSection: React.FC<SectionProps> = ({
   const [isLoading, setIsLoading] = useState(false);
   const gridRef = useRef<AgGridReact<UserInterface>>(null);
   const [selectedId, setSelectedId] = useState<number | null>(null);
-  const documentManager = useProfileDocuments("partners", selectedId);
-  const notesManager = useProfileNotes("partners", selectedId);
+  const resourceKey = systemNamespace ? "project-partners" : "partners";
+  const entityApiBase = systemNamespace ? `/api/${systemNamespace}/partner-entities` : "/api/partner-entities";
+  const commissionApiBase = systemNamespace ? `/api/${systemNamespace}/partner-commissions` : "/api/partner-commissions";
+  const documentManager = useProfileDocuments(resourceKey, selectedId);
+  const notesManager = useProfileNotes(resourceKey, selectedId);
   const { pushAction, signal } = useUndoRedo();
   const editSnapshotRef = useRef<Record<number, any>>({});
 
   // Refetch when other views mutate the same resource
   useEffect(() => {
-    if (signal?.resource === "partners") {
+    if (signal?.resource === resourceKey) {
       fetchPartnersData();
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [signal]);
+  }, [resourceKey, signal]);
 
   const defaultColDef = useMemo(
     () => ({
@@ -311,7 +315,7 @@ const PartnersSection: React.FC<SectionProps> = ({
   const fetchPartnersData = useCallback(async () => {
     setIsLoading(true);
     try {
-      const data = await apiGet<PartnerCommissionApi[]>(`/api/partner-commissions?status=${status}`);
+      const data = await apiGet<PartnerCommissionApi[]>(`${commissionApiBase}?status=${status}`);
       setPartnersData(Array.isArray(data) ? data.map(normalizePartnerCommissionRow) : []);
     } catch (error) {
       console.error("Error fetching partners:", error);
@@ -319,7 +323,7 @@ const PartnersSection: React.FC<SectionProps> = ({
     } finally {
       setIsLoading(false);
     }
-  }, [status]);
+  }, [commissionApiBase, status]);
 
   const selectedPartner = useMemo(() => {
     if (selectedId === null) {
@@ -360,16 +364,16 @@ const PartnersSection: React.FC<SectionProps> = ({
       const prev = cloneRecord(partnersData.find((p) => p.id === id));
       if (!prev) return;
       try {
-        await apiPost(`/api/partner-commissions/${id}/approve`);
+        await apiPost(`${commissionApiBase}/${id}/approve`);
         fetchPartnersData();
         pushAction({
           label: `Schválení zakázky #${id}`,
-          resource: "partners",
+          resource: resourceKey,
           undo: async () => {
-            await apiPut(`/api/partner-commissions/${id}`, { status: prev.status ?? "pending" });
+            await apiPut(`${commissionApiBase}/${id}`, { status: prev.status ?? "pending" });
           },
           redo: async () => {
-            await apiPost(`/api/partner-commissions/${id}/approve`);
+            await apiPost(`${commissionApiBase}/${id}/approve`);
           }
         });
       } catch (error) {
@@ -377,7 +381,7 @@ const PartnersSection: React.FC<SectionProps> = ({
         alert("Chyba při schvalování partnera");
       }
     },
-    [partnersData, fetchPartnersData, pushAction]
+    [commissionApiBase, fetchPartnersData, partnersData, pushAction, resourceKey]
   );
 
   const handleRestorePartner = useCallback(
@@ -385,16 +389,16 @@ const PartnersSection: React.FC<SectionProps> = ({
       const prev = cloneRecord(partnersData.find((p) => p.id === id));
       if (!prev) return;
       try {
-        await apiPost(`/api/partner-commissions/${id}/restore`);
+        await apiPost(`${commissionApiBase}/${id}/restore`);
         fetchPartnersData();
         pushAction({
           label: `Obnovení zakázky #${id}`,
-          resource: "partners",
+          resource: resourceKey,
           undo: async () => {
-            await apiPut(`/api/partner-commissions/${id}`, { status: prev.status ?? "archived" });
+            await apiPut(`${commissionApiBase}/${id}`, { status: prev.status ?? "archived" });
           },
           redo: async () => {
-            await apiPost(`/api/partner-commissions/${id}/restore`);
+            await apiPost(`${commissionApiBase}/${id}/restore`);
           }
         });
       } catch (error) {
@@ -402,7 +406,7 @@ const PartnersSection: React.FC<SectionProps> = ({
         alert("Chyba při obnovování partnera");
       }
     },
-    [partnersData, fetchPartnersData, pushAction]
+    [commissionApiBase, fetchPartnersData, partnersData, pushAction, resourceKey]
   );
 
   const handleDeletePartner = useCallback(
@@ -430,33 +434,33 @@ const PartnersSection: React.FC<SectionProps> = ({
 
       try {
         if (isArchived || isPending) {
-          await apiDelete(`/api/partner-commissions/${id}`);
+          await apiDelete(`${commissionApiBase}/${id}`);
           let restoredId: number | null = null;
           pushAction({
             label: `Smazání zakázky #${id}`,
-            resource: "partners",
+            resource: resourceKey,
             undo: async () => {
               if (!partner?.entity_internal_id) return;
-              const restored = await apiPost<{ id: number }>(`/api/partner-commissions`, {
+              const restored = await apiPost<{ id: number }>(commissionApiBase, {
                 entity_id: partner.entity_internal_id,
                 ...mapPartnerCommissionPayload(partner)
               });
               restoredId = restored?.id ?? null;
             },
             redo: async () => {
-              await apiDelete(`/api/partner-commissions/${restoredId ?? id}`);
+              await apiDelete(`${commissionApiBase}/${restoredId ?? id}`);
             }
           });
         } else {
-          await apiPost(`/api/partner-commissions/${id}/archive`);
+          await apiPost(`${commissionApiBase}/${id}/archive`);
           pushAction({
             label: `Archivace zakázky #${id}`,
-            resource: "partners",
+            resource: resourceKey,
             undo: async () => {
-              await apiPost(`/api/partner-commissions/${id}/restore`);
+              await apiPost(`${commissionApiBase}/${id}/restore`);
             },
             redo: async () => {
-              await apiPost(`/api/partner-commissions/${id}/archive`);
+              await apiPost(`${commissionApiBase}/${id}/archive`);
             }
           });
         }
@@ -466,7 +470,7 @@ const PartnersSection: React.FC<SectionProps> = ({
         alert("Chyba při provádění akce");
       }
     },
-    [fetchPartnersData, partnersData, pushAction]
+    [commissionApiBase, fetchPartnersData, partnersData, pushAction, resourceKey]
   );
 
   const gridContext = useMemo(
@@ -499,31 +503,31 @@ const PartnersSection: React.FC<SectionProps> = ({
           if (!updatedPartner.entity_internal_id) {
             throw new Error("Missing linked entity id for partner row");
           }
-          await apiPut(`/api/partner-entities/${updatedPartner.entity_internal_id}`, mapPartnerEntityPayload(updatedPartner));
+          await apiPut(`${entityApiBase}/${updatedPartner.entity_internal_id}`, mapPartnerEntityPayload(updatedPartner));
         } else {
-          await apiPut(`/api/partner-commissions/${updatedPartner.id}`, mapPartnerCommissionPayload(updatedPartner));
+          await apiPut(`${commissionApiBase}/${updatedPartner.id}`, mapPartnerCommissionPayload(updatedPartner));
         }
 
         if (snapshot) {
           const after = cloneRecord(updatedPartner);
           pushAction({
             label: `Úprava zakázky #${id}`,
-            resource: "partners",
+            resource: resourceKey,
             undo: async () => {
               if (isEntityField) {
                 if (!snapshot.entity_internal_id) return;
-                await apiPut(`/api/partner-entities/${snapshot.entity_internal_id}`, mapPartnerEntityPayload(snapshot));
+                await apiPut(`${entityApiBase}/${snapshot.entity_internal_id}`, mapPartnerEntityPayload(snapshot));
                 return;
               }
-              await apiPut(`/api/partner-commissions/${id}`, mapPartnerCommissionPayload(snapshot));
+              await apiPut(`${commissionApiBase}/${id}`, mapPartnerCommissionPayload(snapshot));
             },
             redo: async () => {
               if (isEntityField) {
                 if (!after.entity_internal_id) return;
-                await apiPut(`/api/partner-entities/${after.entity_internal_id}`, mapPartnerEntityPayload(after));
+                await apiPut(`${entityApiBase}/${after.entity_internal_id}`, mapPartnerEntityPayload(after));
                 return;
               }
-              await apiPut(`/api/partner-commissions/${id}`, mapPartnerCommissionPayload(after));
+              await apiPut(`${commissionApiBase}/${id}`, mapPartnerCommissionPayload(after));
             }
           });
           delete editSnapshotRef.current[id];
@@ -534,7 +538,7 @@ const PartnersSection: React.FC<SectionProps> = ({
         fetchPartnersData();
       }
     },
-    [fetchPartnersData, pushAction]
+    [commissionApiBase, entityApiBase, fetchPartnersData, pushAction, resourceKey]
   );
 
   const handleAddPartner = useCallback(async () => {
@@ -548,7 +552,7 @@ const PartnersSection: React.FC<SectionProps> = ({
 
     try {
       let createdId: number | null = null;
-      const created = await apiPost<PartnerCommissionApi>(`/api/partner-commissions`, {
+      const created = await apiPost<PartnerCommissionApi>(commissionApiBase, {
         entity_data: mapPartnerEntityPayload(newPartner),
         commission_data: mapPartnerCommissionPayload(newPartner)
       });
@@ -557,12 +561,12 @@ const PartnersSection: React.FC<SectionProps> = ({
       if (createdId !== null) {
         pushAction({
           label: "Přidání zakázky",
-          resource: "partners",
+          resource: resourceKey,
           undo: async () => {
-            await apiDelete(`/api/partner-commissions/${createdId}`);
+            await apiDelete(`${commissionApiBase}/${createdId}`);
           },
           redo: async () => {
-            const recreated = await apiPost<PartnerCommissionApi>(`/api/partner-commissions`, {
+            const recreated = await apiPost<PartnerCommissionApi>(commissionApiBase, {
               entity_data: mapPartnerEntityPayload(newPartner),
               commission_data: mapPartnerCommissionPayload(newPartner)
             });
@@ -574,7 +578,7 @@ const PartnersSection: React.FC<SectionProps> = ({
       console.error("Error adding partner:", error);
       alert("Chyba při přidávání partnera");
     }
-  }, [fetchPartnersData, pushAction, status]);
+  }, [commissionApiBase, fetchPartnersData, pushAction, resourceKey, status]);
 
   useEffect(() => {
     fetchPartnersData();

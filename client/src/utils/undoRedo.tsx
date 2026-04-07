@@ -12,6 +12,9 @@ export type UndoRedoResource =
   | "clients"
   | "partners"
   | "tipers"
+  | "project-clients"
+  | "project-partners"
+  | "project-tipers"
   | "future-functions"
   | "all";
 

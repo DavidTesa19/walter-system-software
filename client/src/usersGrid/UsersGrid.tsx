@@ -23,6 +23,9 @@ type TableType = SubjectTableType;
 interface UsersGridProps {
   viewMode: GridView;
   searchTarget?: GridSearchNavigationTarget | null;
+  systemNamespace?: string;
+  storageKey?: string;
+  title?: string;
 }
 
 const NAV_CONFIG: Record<TableType, { label: string; icon: string; addLabel: string }> = {
@@ -31,8 +34,14 @@ const NAV_CONFIG: Record<TableType, { label: string; icon: string; addLabel: str
   tipers: { label: "Tipaři", icon: "💡", addLabel: "Tipaře" }
 };
 
-const UsersGrid: React.FC<UsersGridProps> = ({ viewMode, searchTarget }) => {
-  const [activeTable, setActiveTable] = useState<TableType>(() => getStoredTableView(USERS_GRID_TABLE_STORAGE_KEY));
+const UsersGrid: React.FC<UsersGridProps> = ({
+  viewMode,
+  searchTarget,
+  systemNamespace,
+  storageKey = USERS_GRID_TABLE_STORAGE_KEY,
+  title = "Walter System"
+}) => {
+  const [activeTable, setActiveTable] = useState<TableType>(() => getStoredTableView(storageKey));
   const addHandlerRef = useRef<AddHandler | null>(null);
   const [isAddDisabled, setIsAddDisabled] = useState(false);
   const { canUndo, canRedo, isBusy, undo, redo } = useUndoRedo();
@@ -45,8 +54,8 @@ const UsersGrid: React.FC<UsersGridProps> = ({ viewMode, searchTarget }) => {
   }, [searchTarget, viewMode]);
 
   useEffect(() => {
-    setStoredTableView(USERS_GRID_TABLE_STORAGE_KEY, activeTable);
-  }, [activeTable]);
+    setStoredTableView(storageKey, activeTable);
+  }, [activeTable, storageKey]);
 
   const registerAddHandler = useCallback((handler: AddHandler) => {
     addHandlerRef.current = handler;
@@ -71,6 +80,7 @@ const UsersGrid: React.FC<UsersGridProps> = ({ viewMode, searchTarget }) => {
         <ClientsSection
           viewMode={viewMode}
           isActive
+          systemNamespace={systemNamespace}
           onRegisterAddHandler={registerAddHandler}
           onLoadingChange={handleLoadingChange}
           focusRecordId={
@@ -92,6 +102,7 @@ const UsersGrid: React.FC<UsersGridProps> = ({ viewMode, searchTarget }) => {
         <PartnersSection
           viewMode={viewMode}
           isActive
+          systemNamespace={systemNamespace}
           onRegisterAddHandler={registerAddHandler}
           onLoadingChange={handleLoadingChange}
           focusRecordId={
@@ -112,6 +123,7 @@ const UsersGrid: React.FC<UsersGridProps> = ({ viewMode, searchTarget }) => {
       <TipersSection
         viewMode={viewMode}
         isActive
+        systemNamespace={systemNamespace}
         onRegisterAddHandler={registerAddHandler}
         onLoadingChange={handleLoadingChange}
         focusRecordId={
@@ -133,7 +145,7 @@ const UsersGrid: React.FC<UsersGridProps> = ({ viewMode, searchTarget }) => {
   return (
     <div className="page-container">
       <div className="header-section">
-        <h1 className="page-title">Walter System</h1>
+        <h1 className="page-title">{title}</h1>
         <div className="navigation-tabs">
           {(
             Object.entries(NAV_CONFIG) as Array<
