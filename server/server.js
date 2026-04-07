@@ -201,6 +201,38 @@ const sanitizeStringSection = (sectionName, keys, source, errors) => {
   return Object.keys(sanitized).length === keys.length ? sanitized : null;
 };
 
+const normalizeAssignedUserIds = (value) => {
+  if (!Array.isArray(value)) {
+    return [];
+  }
+
+  return [...new Set(value
+    .map((item) => Number(item))
+    .filter((item) => Number.isInteger(item) && item > 0))];
+};
+
+const applyAssignmentPayload = (store, payload) => {
+  if (!payload || typeof payload !== 'object' || Array.isArray(payload)) {
+    return payload;
+  }
+
+  if (!Object.prototype.hasOwnProperty.call(payload, 'assigned_user_ids')) {
+    return payload;
+  }
+
+  const assignedUserIds = normalizeAssignedUserIds(payload.assigned_user_ids);
+  const usersById = new Map((store.users || []).map((user) => [Number(user.id), user]));
+  const users = assignedUserIds
+    .map((id) => usersById.get(id))
+    .filter(Boolean);
+
+  return {
+    ...payload,
+    assigned_user_ids: users.map((user) => user.id),
+    assigned_to: users.length > 0 ? users.map((user) => user.username).join(', ') : null,
+  };
+};
+
 const ensurePalettes = db => {
   let mutated = false;
   if (!Array.isArray(db.color_palettes)) {
@@ -2380,7 +2412,8 @@ app.put("/api/partner-entities/:id", authenticateToken, (req, res) => {
     const id = Number(req.params.id);
     const db = readDb();
     ensureMigrated(db);
-    const updated = entityCommissionJson.updatePartnerEntity(db, id, req.body);
+    const payload = applyAssignmentPayload(db, req.body || {});
+    const updated = entityCommissionJson.updatePartnerEntity(db, id, payload);
     if (!updated) return res.status(404).json({ error: "Not found" });
     if (!writeDb(db)) return res.status(500).json({ error: "Failed to persist" });
     res.json(updated);
@@ -2394,7 +2427,8 @@ app.post("/api/partner-entities", authenticateToken, (req, res) => {
   try {
     const db = readDb();
     ensureMigrated(db);
-    const entity = entityCommissionJson.createPartnerEntity(db, req.body || {});
+    const payload = applyAssignmentPayload(db, req.body || {});
+    const entity = entityCommissionJson.createPartnerEntity(db, payload);
     if (!writeDb(db)) return res.status(500).json({ error: "Failed to persist" });
     res.status(201).json(entity);
   } catch (error) {
@@ -2472,7 +2506,9 @@ app.post("/api/partner-entities/with-commission", authenticateToken, (req, res) 
     if (!entity) {
       return res.status(400).json({ error: "entity data is required" });
     }
-    const result = entityCommissionJson.createPartnerWithCommission(db, entity, commission || {});
+    const normalizedEntity = applyAssignmentPayload(db, entity);
+    const normalizedCommission = applyAssignmentPayload(db, commission || {});
+    const result = entityCommissionJson.createPartnerWithCommission(db, normalizedEntity, normalizedCommission);
     if (!writeDb(db)) return res.status(500).json({ error: "Failed to persist" });
     res.status(201).json(result);
   } catch (error) {
@@ -2521,13 +2557,16 @@ app.post("/api/partner-commissions", authenticateToken, (req, res) => {
     
     // If entity_data is provided, create new entity with commission
     if (entity_data) {
-      const result = entityCommissionJson.createPartnerWithCommission(db, entity_data, commission_data || {});
+      const normalizedEntity = applyAssignmentPayload(db, entity_data);
+      const normalizedCommission = applyAssignmentPayload(db, commission_data || {});
+      const result = entityCommissionJson.createPartnerWithCommission(db, normalizedEntity, normalizedCommission);
       if (!writeDb(db)) return res.status(500).json({ error: "Failed to persist" });
       res.status(201).json(result.commission);
     } 
     // Otherwise, add commission to existing entity
     else if (req.body.entity_id) {
-      const commission = entityCommissionJson.createPartnerCommission(db, req.body.entity_id, req.body);
+      const payload = applyAssignmentPayload(db, req.body);
+      const commission = entityCommissionJson.createPartnerCommission(db, req.body.entity_id, payload);
       if (!writeDb(db)) return res.status(500).json({ error: "Failed to persist" });
       res.status(201).json(commission);
     }
@@ -2545,7 +2584,8 @@ app.put("/api/partner-commissions/:id", authenticateToken, (req, res) => {
     const id = Number(req.params.id);
     const db = readDb();
     ensureMigrated(db);
-    const updated = entityCommissionJson.updatePartnerCommission(db, id, req.body);
+    const payload = applyAssignmentPayload(db, req.body || {});
+    const updated = entityCommissionJson.updatePartnerCommission(db, id, payload);
     if (!updated) return res.status(404).json({ error: "Not found" });
     if (!writeDb(db)) return res.status(500).json({ error: "Failed to persist" });
     res.json(updated);
@@ -2560,7 +2600,8 @@ app.patch("/api/partner-commissions/:id", authenticateToken, (req, res) => {
     const id = Number(req.params.id);
     const db = readDb();
     ensureMigrated(db);
-    const updated = entityCommissionJson.updatePartnerCommission(db, id, req.body);
+    const payload = applyAssignmentPayload(db, req.body || {});
+    const updated = entityCommissionJson.updatePartnerCommission(db, id, payload);
     if (!updated) return res.status(404).json({ error: "Not found" });
     if (!writeDb(db)) return res.status(500).json({ error: "Failed to persist" });
     res.json(updated);
@@ -2669,7 +2710,8 @@ app.put("/api/client-entities/:id", authenticateToken, (req, res) => {
     const id = Number(req.params.id);
     const db = readDb();
     ensureMigrated(db);
-    const updated = entityCommissionJson.updateClientEntity(db, id, req.body);
+    const payload = applyAssignmentPayload(db, req.body || {});
+    const updated = entityCommissionJson.updateClientEntity(db, id, payload);
     if (!updated) return res.status(404).json({ error: "Not found" });
     if (!writeDb(db)) return res.status(500).json({ error: "Failed to persist" });
     res.json(updated);
@@ -2683,7 +2725,8 @@ app.post("/api/client-entities", authenticateToken, (req, res) => {
   try {
     const db = readDb();
     ensureMigrated(db);
-    const entity = entityCommissionJson.createClientEntity(db, req.body || {});
+    const payload = applyAssignmentPayload(db, req.body || {});
+    const entity = entityCommissionJson.createClientEntity(db, payload);
     if (!writeDb(db)) return res.status(500).json({ error: "Failed to persist" });
     res.status(201).json(entity);
   } catch (error) {
@@ -2761,7 +2804,9 @@ app.post("/api/client-entities/with-commission", authenticateToken, (req, res) =
     if (!entity) {
       return res.status(400).json({ error: "entity data is required" });
     }
-    const result = entityCommissionJson.createClientWithCommission(db, entity, commission || {});
+    const normalizedEntity = applyAssignmentPayload(db, entity);
+    const normalizedCommission = applyAssignmentPayload(db, commission || {});
+    const result = entityCommissionJson.createClientWithCommission(db, normalizedEntity, normalizedCommission);
     if (!writeDb(db)) return res.status(500).json({ error: "Failed to persist" });
     res.status(201).json(result);
   } catch (error) {
@@ -2809,12 +2854,15 @@ app.post("/api/client-commissions", authenticateToken, (req, res) => {
     const { entity_data, commission_data } = req.body;
     
     if (entity_data) {
-      const result = entityCommissionJson.createClientWithCommission(db, entity_data, commission_data || {});
+      const normalizedEntity = applyAssignmentPayload(db, entity_data);
+      const normalizedCommission = applyAssignmentPayload(db, commission_data || {});
+      const result = entityCommissionJson.createClientWithCommission(db, normalizedEntity, normalizedCommission);
       if (!writeDb(db)) return res.status(500).json({ error: "Failed to persist" });
       res.status(201).json(result.commission);
     } 
     else if (req.body.entity_id) {
-      const commission = entityCommissionJson.createClientCommission(db, req.body.entity_id, req.body);
+      const payload = applyAssignmentPayload(db, req.body);
+      const commission = entityCommissionJson.createClientCommission(db, req.body.entity_id, payload);
       if (!writeDb(db)) return res.status(500).json({ error: "Failed to persist" });
       res.status(201).json(commission);
     }
@@ -2832,7 +2880,8 @@ app.put("/api/client-commissions/:id", authenticateToken, (req, res) => {
     const id = Number(req.params.id);
     const db = readDb();
     ensureMigrated(db);
-    const updated = entityCommissionJson.updateClientCommission(db, id, req.body);
+    const payload = applyAssignmentPayload(db, req.body || {});
+    const updated = entityCommissionJson.updateClientCommission(db, id, payload);
     if (!updated) return res.status(404).json({ error: "Not found" });
     if (!writeDb(db)) return res.status(500).json({ error: "Failed to persist" });
     res.json(updated);
@@ -2847,7 +2896,8 @@ app.patch("/api/client-commissions/:id", authenticateToken, (req, res) => {
     const id = Number(req.params.id);
     const db = readDb();
     ensureMigrated(db);
-    const updated = entityCommissionJson.updateClientCommission(db, id, req.body);
+    const payload = applyAssignmentPayload(db, req.body || {});
+    const updated = entityCommissionJson.updateClientCommission(db, id, payload);
     if (!updated) return res.status(404).json({ error: "Not found" });
     if (!writeDb(db)) return res.status(500).json({ error: "Failed to persist" });
     res.json(updated);
@@ -2956,7 +3006,8 @@ app.put("/api/tiper-entities/:id", authenticateToken, (req, res) => {
     const id = Number(req.params.id);
     const db = readDb();
     ensureMigrated(db);
-    const updated = entityCommissionJson.updateTiperEntity(db, id, req.body);
+    const payload = applyAssignmentPayload(db, req.body || {});
+    const updated = entityCommissionJson.updateTiperEntity(db, id, payload);
     if (!updated) return res.status(404).json({ error: "Not found" });
     if (!writeDb(db)) return res.status(500).json({ error: "Failed to persist" });
     res.json(updated);
@@ -2970,7 +3021,8 @@ app.post("/api/tiper-entities", authenticateToken, (req, res) => {
   try {
     const db = readDb();
     ensureMigrated(db);
-    const entity = entityCommissionJson.createTiperEntity(db, req.body || {});
+    const payload = applyAssignmentPayload(db, req.body || {});
+    const entity = entityCommissionJson.createTiperEntity(db, payload);
     if (!writeDb(db)) return res.status(500).json({ error: "Failed to persist" });
     res.status(201).json(entity);
   } catch (error) {
@@ -3048,7 +3100,9 @@ app.post("/api/tiper-entities/with-commission", authenticateToken, (req, res) =>
     if (!entity) {
       return res.status(400).json({ error: "entity data is required" });
     }
-    const result = entityCommissionJson.createTiperWithCommission(db, entity, commission || {});
+    const normalizedEntity = applyAssignmentPayload(db, entity);
+    const normalizedCommission = applyAssignmentPayload(db, commission || {});
+    const result = entityCommissionJson.createTiperWithCommission(db, normalizedEntity, normalizedCommission);
     if (!writeDb(db)) return res.status(500).json({ error: "Failed to persist" });
     res.status(201).json(result);
   } catch (error) {
@@ -3096,12 +3150,15 @@ app.post("/api/tiper-commissions", authenticateToken, (req, res) => {
     const { entity_data, commission_data } = req.body;
     
     if (entity_data) {
-      const result = entityCommissionJson.createTiperWithCommission(db, entity_data, commission_data || {});
+      const normalizedEntity = applyAssignmentPayload(db, entity_data);
+      const normalizedCommission = applyAssignmentPayload(db, commission_data || {});
+      const result = entityCommissionJson.createTiperWithCommission(db, normalizedEntity, normalizedCommission);
       if (!writeDb(db)) return res.status(500).json({ error: "Failed to persist" });
       res.status(201).json(result.commission);
     } 
     else if (req.body.entity_id) {
-      const commission = entityCommissionJson.createTiperCommission(db, req.body.entity_id, req.body);
+      const payload = applyAssignmentPayload(db, req.body);
+      const commission = entityCommissionJson.createTiperCommission(db, req.body.entity_id, payload);
       if (!writeDb(db)) return res.status(500).json({ error: "Failed to persist" });
       res.status(201).json(commission);
     }
@@ -3119,7 +3176,8 @@ app.put("/api/tiper-commissions/:id", authenticateToken, (req, res) => {
     const id = Number(req.params.id);
     const db = readDb();
     ensureMigrated(db);
-    const updated = entityCommissionJson.updateTiperCommission(db, id, req.body);
+    const payload = applyAssignmentPayload(db, req.body || {});
+    const updated = entityCommissionJson.updateTiperCommission(db, id, payload);
     if (!updated) return res.status(404).json({ error: "Not found" });
     if (!writeDb(db)) return res.status(500).json({ error: "Failed to persist" });
     res.json(updated);
@@ -3134,7 +3192,8 @@ app.patch("/api/tiper-commissions/:id", authenticateToken, (req, res) => {
     const id = Number(req.params.id);
     const db = readDb();
     ensureMigrated(db);
-    const updated = entityCommissionJson.updateTiperCommission(db, id, req.body);
+    const payload = applyAssignmentPayload(db, req.body || {});
+    const updated = entityCommissionJson.updateTiperCommission(db, id, payload);
     if (!updated) return res.status(404).json({ error: "Not found" });
     if (!writeDb(db)) return res.status(500).json({ error: "Failed to persist" });
     res.json(updated);
@@ -3217,8 +3276,8 @@ const PROJECT_JSON_CONFIG = {
     counterKey: 'project_partner',
     entityPrefix: 'PP',
     entityDefaults: { company_name: 'Nová společnost' },
-    entityFields: ['status', 'company_name', 'field', 'location', 'info', 'category', 'first_name', 'last_name', 'email', 'phone', 'website'],
-    commissionFields: ['status', 'position', 'budget', 'state', 'assigned_to', 'field', 'service_position', 'location', 'info', 'category', 'deadline', 'priority', 'phone', 'commission_value', 'is_tipped', 'notes']
+    entityFields: ['status', 'company_name', 'field', 'location', 'info', 'category', 'first_name', 'last_name', 'email', 'phone', 'website', 'assigned_to', 'assigned_user_ids'],
+    commissionFields: ['status', 'position', 'budget', 'state', 'assigned_to', 'assigned_user_ids', 'field', 'service_position', 'location', 'info', 'category', 'deadline', 'priority', 'phone', 'commission_value', 'is_tipped', 'notes']
   },
   client: {
     entityCollection: 'project_client_entities',
@@ -3226,8 +3285,8 @@ const PROJECT_JSON_CONFIG = {
     counterKey: 'project_client',
     entityPrefix: 'PK',
     entityDefaults: { company_name: 'Nová společnost' },
-    entityFields: ['status', 'company_name', 'field', 'service', 'location', 'info', 'category', 'budget', 'first_name', 'last_name', 'email', 'phone', 'website'],
-    commissionFields: ['status', 'position', 'budget', 'state', 'assigned_to', 'field', 'service_position', 'location', 'info', 'category', 'deadline', 'priority', 'phone', 'commission_value', 'is_tipped', 'notes']
+    entityFields: ['status', 'company_name', 'field', 'service', 'location', 'info', 'category', 'budget', 'first_name', 'last_name', 'email', 'phone', 'website', 'assigned_to', 'assigned_user_ids'],
+    commissionFields: ['status', 'position', 'budget', 'state', 'assigned_to', 'assigned_user_ids', 'field', 'service_position', 'location', 'info', 'category', 'deadline', 'priority', 'phone', 'commission_value', 'is_tipped', 'notes']
   },
   tiper: {
     entityCollection: 'project_tiper_entities',
@@ -3235,8 +3294,8 @@ const PROJECT_JSON_CONFIG = {
     counterKey: 'project_tiper',
     entityPrefix: 'PT',
     entityDefaults: {},
-    entityFields: ['status', 'company_name', 'field', 'location', 'info', 'category', 'first_name', 'last_name', 'email', 'phone', 'website'],
-    commissionFields: ['status', 'position', 'budget', 'state', 'assigned_to', 'field', 'service_position', 'location', 'info', 'category', 'deadline', 'priority', 'phone', 'linked_entity_type', 'linked_commission_id', 'commission_value', 'is_tipped', 'notes']
+    entityFields: ['status', 'company_name', 'field', 'location', 'info', 'category', 'first_name', 'last_name', 'email', 'phone', 'website', 'assigned_to', 'assigned_user_ids'],
+    commissionFields: ['status', 'position', 'budget', 'state', 'assigned_to', 'assigned_user_ids', 'field', 'service_position', 'location', 'info', 'category', 'deadline', 'priority', 'phone', 'linked_entity_type', 'linked_commission_id', 'commission_value', 'is_tipped', 'notes']
   }
 };
 
@@ -3481,7 +3540,8 @@ const createProjectRoutes = (entityTypes) => {
     app.post(entitiesPath, authenticateToken, (req, res) => {
       try {
         const store = readDb();
-        const created = createProjectEntity(type, store, req.body || {});
+        const payload = applyAssignmentPayload(store, req.body || {});
+        const created = createProjectEntity(type, store, payload);
         if (!writeDb(store)) return res.status(500).json({ error: 'Failed to persist' });
         res.status(201).json(created);
       } catch (error) {
@@ -3493,7 +3553,8 @@ const createProjectRoutes = (entityTypes) => {
     app.put(`${entitiesPath}/:id`, authenticateToken, (req, res) => {
       try {
         const store = readDb();
-        const updated = updateProjectEntity(type, store, req.params.id, req.body || {});
+        const payload = applyAssignmentPayload(store, req.body || {});
+        const updated = updateProjectEntity(type, store, req.params.id, payload);
         if (!updated) {
           return res.status(404).json({ error: 'Not found' });
         }
@@ -3572,11 +3633,13 @@ const createProjectRoutes = (entityTypes) => {
         if (!entity) {
           return res.status(400).json({ error: 'entity data is required' });
         }
+        const normalizedEntity = applyAssignmentPayload(store, entity);
+        const normalizedCommission = applyAssignmentPayload(store, commission || {});
         const createdEntity = createProjectEntity(type, store, {
-          ...entity,
-          status: entity?.status || commission?.status || 'accepted'
+          ...normalizedEntity,
+          status: normalizedEntity?.status || normalizedCommission?.status || 'accepted'
         });
-        const createdCommission = createProjectCommission(type, store, createdEntity.id, commission || {});
+        const createdCommission = createProjectCommission(type, store, createdEntity.id, normalizedCommission);
         if (!writeDb(store)) return res.status(500).json({ error: 'Failed to persist' });
         res.status(201).json({ entity: createdEntity, commission: createdCommission });
       } catch (error) {
@@ -3615,11 +3678,13 @@ const createProjectRoutes = (entityTypes) => {
         const store = readDb();
 
         if (req.body?.entity_data) {
+          const normalizedEntity = applyAssignmentPayload(store, req.body.entity_data);
+          const normalizedCommission = applyAssignmentPayload(store, req.body.commission_data || {});
           const createdEntity = createProjectEntity(type, store, {
-            ...req.body.entity_data,
-            status: req.body.entity_data?.status || req.body.commission_data?.status || 'accepted'
+            ...normalizedEntity,
+            status: normalizedEntity?.status || normalizedCommission?.status || 'accepted'
           });
-          const createdCommission = createProjectCommission(type, store, createdEntity.id, req.body.commission_data || {});
+          const createdCommission = createProjectCommission(type, store, createdEntity.id, normalizedCommission);
           if (!writeDb(store)) return res.status(500).json({ error: 'Failed to persist' });
           return res.status(201).json(createdCommission);
         }
@@ -3628,7 +3693,8 @@ const createProjectRoutes = (entityTypes) => {
           return res.status(400).json({ error: 'Either entity_data or entity_id is required' });
         }
 
-        const created = createProjectCommission(type, store, req.body.entity_id, req.body);
+        const payload = applyAssignmentPayload(store, req.body);
+        const created = createProjectCommission(type, store, req.body.entity_id, payload);
         if (!writeDb(store)) return res.status(500).json({ error: 'Failed to persist' });
         res.status(201).json(created);
       } catch (error) {
@@ -3640,7 +3706,8 @@ const createProjectRoutes = (entityTypes) => {
     app.put(`${commissionsPath}/:id`, authenticateToken, (req, res) => {
       try {
         const store = readDb();
-        const updated = updateProjectCommission(type, store, req.params.id, req.body || {});
+        const payload = applyAssignmentPayload(store, req.body || {});
+        const updated = updateProjectCommission(type, store, req.params.id, payload);
         if (!updated) {
           return res.status(404).json({ error: 'Not found' });
         }
@@ -3655,7 +3722,8 @@ const createProjectRoutes = (entityTypes) => {
     app.patch(`${commissionsPath}/:id`, authenticateToken, (req, res) => {
       try {
         const store = readDb();
-        const updated = updateProjectCommission(type, store, req.params.id, req.body || {});
+        const payload = applyAssignmentPayload(store, req.body || {});
+        const updated = updateProjectCommission(type, store, req.params.id, payload);
         if (!updated) {
           return res.status(404).json({ error: 'Not found' });
         }

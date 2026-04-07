@@ -2,6 +2,8 @@
 export interface EntityInterface {
   id: number;
   entity_id: string;
+  assigned_to?: string;
+  assigned_user_ids?: number[];
   company_name?: string;
   field?: string;
   location?: string;
@@ -26,6 +28,7 @@ export interface CommissionInterface {
   budget?: string;
   state?: string;
   assigned_to?: string;
+  assigned_user_ids?: number[];
   field?: string;
   service_position?: string;
   location?: string;

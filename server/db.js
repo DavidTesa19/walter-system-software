@@ -327,7 +327,31 @@ export async function initDatabase() {
       "ALTER TABLE documents ADD COLUMN IF NOT EXISTS note_id INTEGER DEFAULT NULL",
       "ALTER TABLE partner_entities ADD COLUMN IF NOT EXISTS status VARCHAR(50) DEFAULT 'accepted'",
       "ALTER TABLE client_entities ADD COLUMN IF NOT EXISTS status VARCHAR(50) DEFAULT 'accepted'",
-      "ALTER TABLE tiper_entities ADD COLUMN IF NOT EXISTS status VARCHAR(50) DEFAULT 'accepted'"
+      "ALTER TABLE tiper_entities ADD COLUMN IF NOT EXISTS status VARCHAR(50) DEFAULT 'accepted'",
+      "ALTER TABLE partner_entities ADD COLUMN IF NOT EXISTS assigned_to TEXT",
+      "ALTER TABLE partner_entities ADD COLUMN IF NOT EXISTS assigned_user_ids INTEGER[] DEFAULT '{}'",
+      "ALTER TABLE client_entities ADD COLUMN IF NOT EXISTS assigned_to TEXT",
+      "ALTER TABLE client_entities ADD COLUMN IF NOT EXISTS assigned_user_ids INTEGER[] DEFAULT '{}'",
+      "ALTER TABLE tiper_entities ADD COLUMN IF NOT EXISTS assigned_to TEXT",
+      "ALTER TABLE tiper_entities ADD COLUMN IF NOT EXISTS assigned_user_ids INTEGER[] DEFAULT '{}'",
+      "ALTER TABLE partner_commissions ADD COLUMN IF NOT EXISTS assigned_user_ids INTEGER[] DEFAULT '{}'",
+      "ALTER TABLE client_commissions ADD COLUMN IF NOT EXISTS assigned_user_ids INTEGER[] DEFAULT '{}'",
+      "ALTER TABLE tiper_commissions ADD COLUMN IF NOT EXISTS assigned_user_ids INTEGER[] DEFAULT '{}'",
+      "ALTER TABLE project_partner_entities ADD COLUMN IF NOT EXISTS assigned_to TEXT",
+      "ALTER TABLE project_partner_entities ADD COLUMN IF NOT EXISTS assigned_user_ids INTEGER[] DEFAULT '{}'",
+      "ALTER TABLE project_client_entities ADD COLUMN IF NOT EXISTS assigned_to TEXT",
+      "ALTER TABLE project_client_entities ADD COLUMN IF NOT EXISTS assigned_user_ids INTEGER[] DEFAULT '{}'",
+      "ALTER TABLE project_tiper_entities ADD COLUMN IF NOT EXISTS assigned_to TEXT",
+      "ALTER TABLE project_tiper_entities ADD COLUMN IF NOT EXISTS assigned_user_ids INTEGER[] DEFAULT '{}'",
+      "ALTER TABLE project_partner_commissions ADD COLUMN IF NOT EXISTS assigned_user_ids INTEGER[] DEFAULT '{}'",
+      "ALTER TABLE project_client_commissions ADD COLUMN IF NOT EXISTS assigned_user_ids INTEGER[] DEFAULT '{}'",
+      "ALTER TABLE project_tiper_commissions ADD COLUMN IF NOT EXISTS assigned_user_ids INTEGER[] DEFAULT '{}'",
+      "ALTER TABLE partner_commissions ALTER COLUMN assigned_to TYPE TEXT",
+      "ALTER TABLE client_commissions ALTER COLUMN assigned_to TYPE TEXT",
+      "ALTER TABLE tiper_commissions ALTER COLUMN assigned_to TYPE TEXT",
+      "ALTER TABLE project_partner_commissions ALTER COLUMN assigned_to TYPE TEXT",
+      "ALTER TABLE project_client_commissions ALTER COLUMN assigned_to TYPE TEXT",
+      "ALTER TABLE project_tiper_commissions ALTER COLUMN assigned_to TYPE TEXT"
     ];
 
     for (const sql of columnMigrations) {
@@ -409,6 +433,8 @@ export async function initDatabase() {
         email VARCHAR(255),
         phone VARCHAR(50),
         website VARCHAR(255),
+        assigned_to TEXT,
+        assigned_user_ids INTEGER[] DEFAULT '{}',
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
         updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
       )
@@ -424,7 +450,8 @@ export async function initDatabase() {
         position VARCHAR(255),
         budget VARCHAR(100),
         state VARCHAR(100),
-        assigned_to VARCHAR(255),
+        assigned_to TEXT,
+        assigned_user_ids INTEGER[] DEFAULT '{}',
         field VARCHAR(255),
         service_position VARCHAR(255),
         location VARCHAR(255),
@@ -459,6 +486,8 @@ export async function initDatabase() {
         email VARCHAR(255),
         phone VARCHAR(50),
         website VARCHAR(255),
+        assigned_to TEXT,
+        assigned_user_ids INTEGER[] DEFAULT '{}',
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
         updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
       )
@@ -478,7 +507,8 @@ export async function initDatabase() {
         position VARCHAR(255),
         budget VARCHAR(100),
         state VARCHAR(100),
-        assigned_to VARCHAR(255),
+        assigned_to TEXT,
+        assigned_user_ids INTEGER[] DEFAULT '{}',
         field VARCHAR(255),
         service_position VARCHAR(255),
         location VARCHAR(255),
@@ -511,6 +541,8 @@ export async function initDatabase() {
         email VARCHAR(255),
         phone VARCHAR(50),
         website VARCHAR(255),
+        assigned_to TEXT,
+        assigned_user_ids INTEGER[] DEFAULT '{}',
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
         updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
       )
@@ -526,7 +558,8 @@ export async function initDatabase() {
         position VARCHAR(255),
         budget VARCHAR(100),
         state VARCHAR(100),
-        assigned_to VARCHAR(255),
+        assigned_to TEXT,
+        assigned_user_ids INTEGER[] DEFAULT '{}',
         field VARCHAR(255),
         service_position VARCHAR(255),
         location VARCHAR(255),
@@ -559,6 +592,8 @@ export async function initDatabase() {
         email VARCHAR(255),
         phone VARCHAR(50),
         website VARCHAR(255),
+        assigned_to TEXT,
+        assigned_user_ids INTEGER[] DEFAULT '{}',
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
         updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
       )
@@ -574,7 +609,8 @@ export async function initDatabase() {
         position VARCHAR(255),
         budget VARCHAR(100),
         state VARCHAR(100),
-        assigned_to VARCHAR(255),
+        assigned_to TEXT,
+        assigned_user_ids INTEGER[] DEFAULT '{}',
         field VARCHAR(255),
         service_position VARCHAR(255),
         location VARCHAR(255),
@@ -609,6 +645,8 @@ export async function initDatabase() {
         email VARCHAR(255),
         phone VARCHAR(50),
         website VARCHAR(255),
+        assigned_to TEXT,
+        assigned_user_ids INTEGER[] DEFAULT '{}',
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
         updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
       )
@@ -624,7 +662,8 @@ export async function initDatabase() {
         position VARCHAR(255),
         budget VARCHAR(100),
         state VARCHAR(100),
-        assigned_to VARCHAR(255),
+        assigned_to TEXT,
+        assigned_user_ids INTEGER[] DEFAULT '{}',
         field VARCHAR(255),
         service_position VARCHAR(255),
         location VARCHAR(255),
@@ -657,6 +696,8 @@ export async function initDatabase() {
         email VARCHAR(255),
         phone VARCHAR(50),
         website VARCHAR(255),
+        assigned_to TEXT,
+        assigned_user_ids INTEGER[] DEFAULT '{}',
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
         updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
       )
@@ -672,7 +713,8 @@ export async function initDatabase() {
         position VARCHAR(255),
         budget VARCHAR(100),
         state VARCHAR(100),
-        assigned_to VARCHAR(255),
+        assigned_to TEXT,
+        assigned_user_ids INTEGER[] DEFAULT '{}',
         field VARCHAR(255),
         service_position VARCHAR(255),
         location VARCHAR(255),
@@ -1630,10 +1672,10 @@ export const db = {
 
     const entityId = await this.getNextEntityId('partner');
     const { rows } = await pool.query(
-      `INSERT INTO partner_entities (entity_id, status, company_name, field, location, info, category, first_name, last_name, email, phone, website)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
+      `INSERT INTO partner_entities (entity_id, status, company_name, field, location, info, category, first_name, last_name, email, phone, website, assigned_to, assigned_user_ids)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14)
        RETURNING *`,
-      [entityId, data.status || 'accepted', data.company_name, data.field, data.location, data.info, data.category, data.first_name, data.last_name, data.email, data.phone, data.website]
+      [entityId, data.status || 'accepted', data.company_name, data.field, data.location, data.info, data.category, data.first_name, data.last_name, data.email, data.phone, data.website, data.assigned_to ?? null, data.assigned_user_ids ?? []]
     );
     return rows[0];
   },
@@ -1704,6 +1746,7 @@ export const db = {
       budget: row.budget,
       state: row.state,
       assigned_to: row.assigned_to,
+      assigned_user_ids: row.assigned_user_ids ?? [],
       field: row.field,
       service_position: row.service_position,
       location: row.location,
@@ -1767,6 +1810,7 @@ export const db = {
       budget: row.budget,
       state: row.state,
       assigned_to: row.assigned_to,
+      assigned_user_ids: row.assigned_user_ids ?? [],
       field: row.field,
       service_position: row.service_position,
       location: row.location,
@@ -1805,10 +1849,10 @@ export const db = {
 
     const { rows } = await pool.query(
       `INSERT INTO partner_commissions 
-        (commission_id, entity_id, entity_code, status, position, budget, state, assigned_to, field, service_position, location, info, category, deadline, priority, phone, commission_value, is_tipped, notes)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19)
+        (commission_id, entity_id, entity_code, status, position, budget, state, assigned_to, assigned_user_ids, field, service_position, location, info, category, deadline, priority, phone, commission_value, is_tipped, notes)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20)
        RETURNING *`,
-      [commissionId, entityInternalId, entity.entity_id, data.status || 'pending', data.position, data.budget, data.state, data.assigned_to, data.field, data.service_position, data.location, data.info, data.category, data.deadline, data.priority, data.phone, data.commission_value, data.is_tipped || false, data.notes]
+      [commissionId, entityInternalId, entity.entity_id, data.status || 'pending', data.position, data.budget, data.state, data.assigned_to, data.assigned_user_ids ?? [], data.field, data.service_position, data.location, data.info, data.category, data.deadline, data.priority, data.phone, data.commission_value, data.is_tipped || false, data.notes]
     );
     return rows[0];
   },
@@ -1872,10 +1916,10 @@ export const db = {
 
     const entityId = await this.getNextEntityId('client');
     const { rows } = await pool.query(
-      `INSERT INTO client_entities (entity_id, status, company_name, field, service, location, info, category, budget, first_name, last_name, email, phone, website)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14)
+      `INSERT INTO client_entities (entity_id, status, company_name, field, service, location, info, category, budget, first_name, last_name, email, phone, website, assigned_to, assigned_user_ids)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16)
        RETURNING *`,
-      [entityId, data.status || 'accepted', data.company_name, data.field, data.service, data.location, data.info, data.category, data.budget, data.first_name, data.last_name, data.email, data.phone, data.website]
+      [entityId, data.status || 'accepted', data.company_name, data.field, data.service, data.location, data.info, data.category, data.budget, data.first_name, data.last_name, data.email, data.phone, data.website, data.assigned_to ?? null, data.assigned_user_ids ?? []]
     );
     return rows[0];
   },
@@ -1947,6 +1991,7 @@ export const db = {
       budget: row.budget,
       state: row.state,
       assigned_to: row.assigned_to,
+      assigned_user_ids: row.assigned_user_ids ?? [],
       field: row.field,
       service_position: row.service_position,
       location: row.location,
@@ -2013,6 +2058,7 @@ export const db = {
       budget: row.budget,
       state: row.state,
       assigned_to: row.assigned_to,
+      assigned_user_ids: row.assigned_user_ids ?? [],
       field: row.field,
       service_position: row.service_position,
       location: row.location,
@@ -2052,10 +2098,10 @@ export const db = {
 
     const { rows } = await pool.query(
       `INSERT INTO client_commissions 
-        (commission_id, entity_id, entity_code, status, position, budget, state, assigned_to, field, service_position, location, info, category, deadline, priority, phone, commission_value, is_tipped, notes)
-         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19)
+        (commission_id, entity_id, entity_code, status, position, budget, state, assigned_to, assigned_user_ids, field, service_position, location, info, category, deadline, priority, phone, commission_value, is_tipped, notes)
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20)
        RETURNING *`,
-      [commissionId, entityInternalId, entity.entity_id, data.status || 'pending', data.position, data.budget, data.state, data.assigned_to, data.field, data.service_position, data.location, data.info, data.category, data.deadline, data.priority, data.phone, data.commission_value, data.is_tipped || false, data.notes]
+      [commissionId, entityInternalId, entity.entity_id, data.status || 'pending', data.position, data.budget, data.state, data.assigned_to, data.assigned_user_ids ?? [], data.field, data.service_position, data.location, data.info, data.category, data.deadline, data.priority, data.phone, data.commission_value, data.is_tipped || false, data.notes]
     );
     return rows[0];
   },
@@ -2119,10 +2165,10 @@ export const db = {
 
     const entityId = await this.getNextEntityId('tiper');
     const { rows } = await pool.query(
-      `INSERT INTO tiper_entities (entity_id, status, company_name, first_name, last_name, field, location, info, category, email, phone, website)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
+      `INSERT INTO tiper_entities (entity_id, status, company_name, first_name, last_name, field, location, info, category, email, phone, website, assigned_to, assigned_user_ids)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14)
        RETURNING *`,
-      [entityId, data.status || 'accepted', data.company_name, data.first_name, data.last_name, data.field, data.location, data.info, data.category, data.email, data.phone, data.website]
+      [entityId, data.status || 'accepted', data.company_name, data.first_name, data.last_name, data.field, data.location, data.info, data.category, data.email, data.phone, data.website, data.assigned_to ?? null, data.assigned_user_ids ?? []]
     );
     return rows[0];
   },
@@ -2192,6 +2238,7 @@ export const db = {
       budget: row.budget,
       state: row.state,
       assigned_to: row.assigned_to,
+      assigned_user_ids: row.assigned_user_ids ?? [],
       field: row.field,
       service_position: row.service_position,
       location: row.location,
@@ -2254,6 +2301,7 @@ export const db = {
       budget: row.budget,
       state: row.state,
       assigned_to: row.assigned_to,
+      assigned_user_ids: row.assigned_user_ids ?? [],
       field: row.field,
       service_position: row.service_position,
       location: row.location,
@@ -2291,10 +2339,10 @@ export const db = {
 
     const { rows } = await pool.query(
       `INSERT INTO tiper_commissions 
-        (commission_id, entity_id, entity_code, status, position, budget, state, assigned_to, field, service_position, location, info, category, deadline, priority, phone, commission_value, is_tipped, notes)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19)
+        (commission_id, entity_id, entity_code, status, position, budget, state, assigned_to, assigned_user_ids, field, service_position, location, info, category, deadline, priority, phone, commission_value, is_tipped, notes)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20)
        RETURNING *`,
-      [commissionId, entityInternalId, entity.entity_id, data.status || 'pending', data.position, data.budget, data.state, data.assigned_to, data.field, data.service_position, data.location, data.info, data.category, data.deadline, data.priority, data.phone, data.commission_value, data.is_tipped || false, data.notes]
+      [commissionId, entityInternalId, entity.entity_id, data.status || 'pending', data.position, data.budget, data.state, data.assigned_to, data.assigned_user_ids ?? [], data.field, data.service_position, data.location, data.info, data.category, data.deadline, data.priority, data.phone, data.commission_value, data.is_tipped || false, data.notes]
     );
     return rows[0];
   },

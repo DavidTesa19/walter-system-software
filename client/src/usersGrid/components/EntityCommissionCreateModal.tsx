@@ -1,9 +1,9 @@
 import React, { useCallback, useEffect, useMemo, useRef } from "react";
 import ThemeToggleButton from "../../components/ThemeToggleButton";
-import type { FieldGroup } from "./EntityCommissionProfilePanel";
+import type { EditableField, FieldGroup } from "./EntityCommissionProfilePanel";
 import "./EntityCommissionProfilePanel.css";
 
-type FieldValues = Record<string, string>;
+type FieldValues = Record<string, string | string[]>;
 
 interface EntityCommissionCreateModalProps {
   open: boolean;
@@ -19,19 +19,26 @@ interface EntityCommissionCreateModalProps {
   includeCommission: boolean;
   includeCommissionLabel?: string;
   onClose: () => void;
-  onEntityChange: (key: string, value: string) => void;
-  onCommissionChange: (key: string, value: string) => void;
+  onEntityChange: (key: string, value: string | string[]) => void;
+  onCommissionChange: (key: string, value: string | string[]) => void;
   onIncludeCommissionChange: (checked: boolean) => void;
   onSubmit: () => void | Promise<void>;
 }
 
 interface DraftFieldProps {
   field: FieldGroup["fields"][number];
-  value: string;
-  onChange: (key: string, value: string) => void;
+  value: string | string[];
+  onChange: (key: string, value: string | string[]) => void;
   disabled?: boolean;
   onKeyDown?: (event: React.KeyboardEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>, fieldType: FieldGroup["fields"][number]["type"]) => void;
 }
+
+const normalizeFieldOptions = (options: EditableField['options']) =>
+  (options || []).map((option) => (
+    typeof option === 'string'
+      ? { value: option, label: option }
+      : option
+  ));
 
 const DraftField: React.FC<DraftFieldProps> = ({ field, value, onChange, disabled = false, onKeyDown }) => {
   if (field.type === "textarea") {
@@ -49,21 +56,60 @@ const DraftField: React.FC<DraftFieldProps> = ({ field, value, onChange, disable
   }
 
   if (field.type === "select") {
+    const options = normalizeFieldOptions(field.options);
+
     return (
       <select
         className="editable-input select"
-        value={value}
+        value={Array.isArray(value) ? "" : value}
         disabled={disabled}
         onChange={(event) => onChange(field.key, event.target.value)}
         onKeyDown={(event) => onKeyDown?.(event, field.type)}
       >
         <option value="">- Vyberte -</option>
-        {(field.options || []).map((option) => (
-          <option key={option} value={option}>
-            {option}
+        {options.map((option) => (
+          <option key={option.value} value={option.value}>
+            {option.label}
           </option>
         ))}
       </select>
+    );
+  }
+
+  if (field.type === "multi-select") {
+    const options = normalizeFieldOptions(field.options);
+    const selectedValues = Array.isArray(value) ? value : [];
+
+    return (
+      <div className="editable-field editing editable-field-multiselect ec-create-multiselect">
+        <div className="editable-multiselect-list">
+          {options.map((option) => {
+            const isSelected = selectedValues.includes(option.value);
+
+            return (
+              <label key={option.value} className={`editable-multiselect-option ${isSelected ? 'selected' : ''}`}>
+                <input
+                  type="checkbox"
+                  checked={isSelected}
+                  disabled={disabled}
+                  onChange={() => {
+                    onChange(
+                      field.key,
+                      isSelected
+                        ? selectedValues.filter((item) => item !== option.value)
+                        : [...selectedValues, option.value]
+                    );
+                  }}
+                />
+                <span className="editable-multiselect-copy">
+                  <span className="editable-multiselect-label">{option.label}</span>
+                  {option.description ? <span className="editable-multiselect-description">{option.description}</span> : null}
+                </span>
+              </label>
+            );
+          })}
+        </div>
+      </div>
     );
   }
 
@@ -72,7 +118,7 @@ const DraftField: React.FC<DraftFieldProps> = ({ field, value, onChange, disable
       <input
         type="date"
         className="editable-input date"
-        value={value}
+        value={Array.isArray(value) ? "" : value}
         disabled={disabled}
         onChange={(event) => onChange(field.key, event.target.value)}
         onKeyDown={(event) => onKeyDown?.(event, field.type)}
@@ -84,7 +130,7 @@ const DraftField: React.FC<DraftFieldProps> = ({ field, value, onChange, disable
     <input
       type="text"
       className="editable-input"
-      value={value}
+      value={Array.isArray(value) ? value.join(', ') : value}
       disabled={disabled}
       onChange={(event) => onChange(field.key, event.target.value)}
       onKeyDown={(event) => onKeyDown?.(event, field.type)}
@@ -96,7 +142,7 @@ const DraftField: React.FC<DraftFieldProps> = ({ field, value, onChange, disable
 interface DraftFieldGroupProps {
   group: FieldGroup;
   values: FieldValues;
-  onChange: (key: string, value: string) => void;
+  onChange: (key: string, value: string | string[]) => void;
   disabled?: boolean;
   onFieldKeyDown?: (event: React.KeyboardEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>, fieldType: FieldGroup["fields"][number]["type"]) => void;
 }

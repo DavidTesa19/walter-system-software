@@ -19,12 +19,16 @@ import useProfileNotes from "../hooks/useProfileNotes";
 import { ApproveRestoreCellRenderer, DeleteArchiveCellRenderer } from "../cells/RowActionCellRenderers";
 import { fieldOptions } from "../fieldOptions";
 import { formatProfileDate } from "../utils/profileUtils";
+import { formatAssignedUsernames, fromAssignmentDraftValue, toAssignmentDraftValue } from "../assignmentUtils";
 import { compareWorkflowStatuses, DEFAULT_WORKFLOW_STATUS, getNormalizedWorkflowStatus, WORKFLOW_STATUS_VALUES } from "../workflowStatus";
+import useAssignableUsers from "../hooks/useAssignableUsers";
 
 type PartnerEntityApi = {
   id: number;
   entity_id: string;
   status: "pending" | "accepted" | "archived";
+  assigned_to?: string | null;
+  assigned_user_ids?: number[] | null;
   company_name?: string | null;
   field?: string | null;
   location?: string | null;
@@ -47,6 +51,7 @@ type PartnerCommissionApi = {
   budget?: string | null;
   state?: string | null;
   assigned_to?: string | null;
+  assigned_user_ids?: number[] | null;
   field?: string | null;
   service_position?: string | null;
   location?: string | null;
@@ -72,8 +77,28 @@ type PartnerCommissionApi = {
 const FIELD_OPTIONS_ARRAY = fieldOptions.map((opt) => opt.value);
 
 type PartnerCreateDraft = {
-  entity: Record<string, string>;
-  commission: Record<string, string>;
+  entity: {
+    name: string;
+    company: string;
+    field: string;
+    mobile: string;
+    email: string;
+    website: string;
+    location: string;
+    info: string;
+    assigned_user_ids: string[];
+  };
+  commission: {
+    position: string;
+    service_position: string;
+    assigned_user_ids: string[];
+    budget: string;
+    commission_value: string;
+    priority: string;
+    state: string;
+    deadline: string;
+    notes: string;
+  };
 };
 
 const joinName = (...parts: Array<string | null | undefined>) =>
@@ -93,12 +118,13 @@ const createDefaultPartnerDraft = (): PartnerCreateDraft => ({
     email: "",
     website: "",
     location: "",
-    info: ""
+    info: "",
+    assigned_user_ids: []
   },
   commission: {
     position: "",
     service_position: "",
-    assigned_to: "",
+    assigned_user_ids: [],
     budget: "",
     commission_value: "",
     priority: "",
@@ -112,6 +138,8 @@ const normalizePartnerEntity = (entity: PartnerEntityApi): PartnerEntity => ({
   id: entity.id,
   entity_id: entity.entity_id,
   status: entity.status,
+  assigned_to: entity.assigned_to ?? null,
+  assigned_user_ids: entity.assigned_user_ids ?? [],
   name: joinName(entity.first_name, entity.last_name) || entity.company_name || entity.entity_id,
   company: entity.company_name ?? null,
   field: entity.field ?? null,
@@ -131,6 +159,7 @@ const normalizePartnerCommission = (commission: PartnerCommissionApi): PartnerCo
   partner_entity_id: Number(commission.entity_id),
   status: commission.status,
   assigned_to: commission.assigned_to ?? null,
+  assigned_user_ids: commission.assigned_user_ids ?? [],
   priority: commission.priority ?? null,
   notes: commission.notes ?? null,
   deadline: commission.deadline ?? null,
@@ -157,6 +186,7 @@ const mapPartnerEntityUpdates = (updates: Record<string, unknown>) => {
     if (key === "name") mapped.first_name = value;
     else if (key === "company") mapped.company_name = value;
     else if (key === "mobile") mapped.phone = value;
+    else if (key === "assigned_user_ids") mapped.assigned_user_ids = value;
     else if (["field", "location", "email", "website", "info"].includes(key)) mapped[key] = value;
   }
 
@@ -180,12 +210,14 @@ const derivePartnerEntityFromCommission = (commission: PartnerCommissionApi): Pa
     email: commission.entity_email ?? null,
     website: commission.entity_website ?? null,
     info: commission.entity_info ?? null,
+    assigned_to: null,
+    assigned_user_ids: [],
     created_at: undefined,
     updated_at: undefined
   };
 };
 
-const buildEntityData = (entity: PartnerEntity | null): EntityData | null => {
+const buildEntityData = (entity: PartnerEntity | null, assignmentOptions: Array<string | { value: string; label: string; description?: string }>): EntityData | null => {
   if (!entity) return null;
 
   const groups: FieldGroup[] = [
@@ -195,7 +227,8 @@ const buildEntityData = (entity: PartnerEntity | null): EntityData | null => {
       fields: [
         { key: "name", label: "Jméno / Název", value: entity.name, type: "text" },
         { key: "company", label: "Společnost", value: entity.company, type: "text" },
-        { key: "field", label: "Obor", value: entity.field, type: "select", options: FIELD_OPTIONS_ARRAY }
+        { key: "field", label: "Obor", value: entity.field, type: "select", options: FIELD_OPTIONS_ARRAY },
+        { key: "assigned_user_ids", label: "Přiřazení uživatelé", value: toAssignmentDraftValue(entity.assigned_user_ids), type: "multi-select", options: assignmentOptions }
       ]
     },
     {
@@ -226,7 +259,7 @@ const buildEntityData = (entity: PartnerEntity | null): EntityData | null => {
   };
 };
 
-const buildCommissionData = (commission: PartnerCommission | null): CommissionData | null => {
+const buildCommissionData = (commission: PartnerCommission | null, assignmentOptions: Array<string | { value: string; label: string; description?: string }>): CommissionData | null => {
   if (!commission) return null;
 
   const groups: FieldGroup[] = [
@@ -236,7 +269,7 @@ const buildCommissionData = (commission: PartnerCommission | null): CommissionDa
       fields: [
         { key: "position", label: "Pozice / Zakázka", value: commission.position, type: "text" },
         { key: "service_position", label: "Typ služby", value: commission.service_position, type: "text" },
-        { key: "assigned_to", label: "Přiřazeno", value: commission.assigned_to, type: "text" }
+        { key: "assigned_user_ids", label: "Přiřazení uživatelé", value: toAssignmentDraftValue(commission.assigned_user_ids), type: "multi-select", options: assignmentOptions }
       ]
     },
     {
@@ -271,17 +304,17 @@ const buildCommissionData = (commission: PartnerCommission | null): CommissionDa
 
 const formatAddedDate = (value?: string | null) => formatProfileDate(value) ?? "";
 
-const buildLinkedCommissionItems = (commissions: PartnerCommission[]): LinkedCommissionItem[] => commissions
+const buildLinkedCommissionItems = (commissions: PartnerCommission[], assignedUsers: Parameters<typeof formatAssignedUsernames>[1]): LinkedCommissionItem[] => commissions
   .map((commission) => ({
     id: commission.id,
     commission_id: commission.commission_id,
     status: commission.status,
     title: commission.position || 'Bez názvu zakázky',
-    subtitle: [commission.service_position, commission.assigned_to].filter(Boolean).join(' • ') || null
+    subtitle: [commission.service_position, formatAssignedUsernames(commission.assigned_user_ids, assignedUsers, commission.assigned_to)].filter(Boolean).join(' • ') || null
   }))
   .sort((left, right) => left.commission_id.localeCompare(right.commission_id));
 
-const buildPartnerDraftEntityData = (draft: PartnerCreateDraft): EntityData => ({
+const buildPartnerDraftEntityData = (draft: PartnerCreateDraft, assignmentOptions: Array<string | { value: string; label: string; description?: string }>): EntityData => ({
   id: 0,
   entity_id: "Nový partner",
   groups: buildEntityData({
@@ -297,12 +330,14 @@ const buildPartnerDraftEntityData = (draft: PartnerCreateDraft): EntityData => (
     email: draft.entity.email,
     website: draft.entity.website,
     info: draft.entity.info,
+    assigned_to: null,
+    assigned_user_ids: fromAssignmentDraftValue(draft.entity.assigned_user_ids),
     created_at: undefined,
     updated_at: undefined
-  })!.groups
+  }, assignmentOptions)!.groups
 });
 
-const buildPartnerDraftCommissionData = (draft: PartnerCreateDraft, status: PartnerCommissionApi["status"]): CommissionData => ({
+const buildPartnerDraftCommissionData = (draft: PartnerCreateDraft, status: PartnerCommissionApi["status"], assignmentOptions: Array<string | { value: string; label: string; description?: string }>): CommissionData => ({
   id: 0,
   commission_id: "Nová zakázka",
   status,
@@ -311,7 +346,8 @@ const buildPartnerDraftCommissionData = (draft: PartnerCreateDraft, status: Part
     commission_id: "Nová zakázka",
     partner_entity_id: 0,
     status,
-    assigned_to: draft.commission.assigned_to,
+    assigned_to: null,
+    assigned_user_ids: fromAssignmentDraftValue(draft.commission.assigned_user_ids),
     priority: draft.commission.priority,
     notes: draft.commission.notes,
     deadline: draft.commission.deadline,
@@ -326,10 +362,11 @@ const buildPartnerDraftCommissionData = (draft: PartnerCreateDraft, status: Part
     phone: null,
     created_at: undefined,
     updated_at: undefined
-  })!.groups
+  }, assignmentOptions)!.groups
 });
 
 const PartnersSectionNew: React.FC<SectionProps> = ({ viewMode, isActive, systemNamespace, onRegisterAddHandler, onLoadingChange }) => {
+  const { users: assignableUsers, options: assignmentOptions } = useAssignableUsers();
   const [entities, setEntities] = useState<PartnerEntity[]>([]);
   const [commissions, setCommissions] = useState<PartnerCommission[]>([]);
   const [gridData, setGridData] = useState<PartnerGridRow[]>([]);
@@ -380,7 +417,8 @@ const PartnersSectionNew: React.FC<SectionProps> = ({ viewMode, isActive, system
             commission_id: primaryCommission?.commission_id || `${entity.entity_id}-000`,
             partner_entity_id: entity.id,
             status: entity.status,
-            assigned_to: primaryCommission?.assigned_to ?? null,
+            assigned_to: primaryCommission?.assigned_to ?? entity.assigned_to ?? null,
+            assigned_user_ids: primaryCommission?.assigned_user_ids ?? entity.assigned_user_ids ?? [],
             priority: primaryCommission?.priority ?? null,
             notes: primaryCommission?.notes ?? null,
             deadline: primaryCommission?.deadline ?? null,
@@ -439,6 +477,7 @@ const PartnersSectionNew: React.FC<SectionProps> = ({ viewMode, isActive, system
           partner_entity_id: entity.id,
           status: entity.status,
           assigned_to: null,
+          assigned_user_ids: entity.assigned_user_ids ?? [],
           priority: null,
           notes: null,
           deadline: null,
@@ -481,11 +520,11 @@ const PartnersSectionNew: React.FC<SectionProps> = ({ viewMode, isActive, system
 
   const selectedEntity = useMemo(() => selectedEntityId === null ? null : entities.find((entity) => entity.id === selectedEntityId) || null, [entities, selectedEntityId]);
   const selectedCommission = useMemo(() => selectedCommissionId === null ? null : commissions.find((commission) => commission.id === selectedCommissionId) || null, [commissions, selectedCommissionId]);
-  const linkedCommissions = useMemo(() => selectedEntityId === null ? [] : buildLinkedCommissionItems(commissions.filter((commission) => commission.partner_entity_id === selectedEntityId)), [commissions, selectedEntityId]);
-  const entityData = useMemo(() => buildEntityData(selectedEntity), [selectedEntity]);
-  const commissionData = useMemo(() => buildCommissionData(selectedCommission), [selectedCommission]);
-  const draftEntityData = useMemo(() => buildPartnerDraftEntityData(createDraft), [createDraft]);
-  const draftCommissionData = useMemo(() => buildPartnerDraftCommissionData(createDraft, status), [createDraft, status]);
+  const linkedCommissions = useMemo(() => selectedEntityId === null ? [] : buildLinkedCommissionItems(commissions.filter((commission) => commission.partner_entity_id === selectedEntityId), assignableUsers), [assignableUsers, commissions, selectedEntityId]);
+  const entityData = useMemo(() => buildEntityData(selectedEntity, assignmentOptions), [assignmentOptions, selectedEntity]);
+  const commissionData = useMemo(() => buildCommissionData(selectedCommission, assignmentOptions), [assignmentOptions, selectedCommission]);
+  const draftEntityData = useMemo(() => buildPartnerDraftEntityData(createDraft, assignmentOptions), [assignmentOptions, createDraft]);
+  const draftCommissionData = useMemo(() => buildPartnerDraftCommissionData(createDraft, status, assignmentOptions), [assignmentOptions, createDraft, status]);
 
   const openProfile = useCallback((row: PartnerGridRow) => {
     const entityId = row.entity?.id ?? row.partner_entity_id ?? null;
@@ -511,11 +550,11 @@ const PartnersSectionNew: React.FC<SectionProps> = ({ viewMode, isActive, system
     setCreateDraft(createDefaultPartnerDraft());
   }, [isCreating]);
 
-  const handleDraftEntityChange = useCallback((key: string, value: string) => {
+  const handleDraftEntityChange = useCallback((key: string, value: string | string[]) => {
     setCreateDraft((current) => ({ ...current, entity: { ...current.entity, [key]: value } }));
   }, []);
 
-  const handleDraftCommissionChange = useCallback((key: string, value: string) => {
+  const handleDraftCommissionChange = useCallback((key: string, value: string | string[]) => {
     setCreateDraft((current) => ({ ...current, commission: { ...current.commission, [key]: value } }));
   }, []);
 
@@ -642,12 +681,13 @@ const PartnersSectionNew: React.FC<SectionProps> = ({ viewMode, isActive, system
           email: emptyToNull(createDraft.entity.email),
           website: emptyToNull(createDraft.entity.website),
           location: emptyToNull(createDraft.entity.location),
-          info: emptyToNull(createDraft.entity.info)
+          info: emptyToNull(createDraft.entity.info),
+          assigned_user_ids: fromAssignmentDraftValue(createDraft.entity.assigned_user_ids)
         },
         commission: {
           position: emptyToNull(createDraft.commission.position),
           service_position: emptyToNull(createDraft.commission.service_position),
-          assigned_to: emptyToNull(createDraft.commission.assigned_to),
+          assigned_user_ids: fromAssignmentDraftValue(createDraft.commission.assigned_user_ids),
           budget: emptyToNull(createDraft.commission.budget),
           commission_value: emptyToNull(createDraft.commission.commission_value),
           priority: emptyToNull(createDraft.commission.priority),
@@ -686,7 +726,8 @@ const PartnersSectionNew: React.FC<SectionProps> = ({ viewMode, isActive, system
         email: emptyToNull(createDraft.entity.email),
         website: emptyToNull(createDraft.entity.website),
         location: emptyToNull(createDraft.entity.location),
-        info: emptyToNull(createDraft.entity.info)
+        info: emptyToNull(createDraft.entity.info),
+        assigned_user_ids: fromAssignmentDraftValue(createDraft.entity.assigned_user_ids)
       });
 
       setCreateModalOpen(false);
@@ -725,12 +766,13 @@ const PartnersSectionNew: React.FC<SectionProps> = ({ viewMode, isActive, system
         email: selectedEntity.email ?? "",
         website: selectedEntity.website ?? "",
         location: selectedEntity.location ?? "",
-        info: selectedEntity.info ?? ""
+        info: selectedEntity.info ?? "",
+        assigned_user_ids: toAssignmentDraftValue(selectedEntity.assigned_user_ids)
       },
       commission: {
         position: selectedCommission.position ?? "",
         service_position: selectedCommission.service_position ?? "",
-        assigned_to: selectedCommission.assigned_to ?? "",
+        assigned_user_ids: toAssignmentDraftValue(selectedCommission.assigned_user_ids),
         budget: selectedCommission.budget ?? "",
         commission_value: selectedCommission.commission_value ?? "",
         priority: selectedCommission.priority ?? "",
@@ -749,7 +791,7 @@ const PartnersSectionNew: React.FC<SectionProps> = ({ viewMode, isActive, system
         entity_id: selectedEntity.id,
         position: selectedCommission.position,
         service_position: selectedCommission.service_position,
-        assigned_to: selectedCommission.assigned_to,
+        assigned_user_ids: selectedCommission.assigned_user_ids ?? [],
         budget: selectedCommission.budget,
         commission_value: selectedCommission.commission_value,
         priority: selectedCommission.priority,
@@ -780,7 +822,8 @@ const PartnersSectionNew: React.FC<SectionProps> = ({ viewMode, isActive, system
         status,
         position: null,
         budget: null,
-        commission_value: null
+        commission_value: null,
+        assigned_user_ids: []
       });
 
       await fetchData();

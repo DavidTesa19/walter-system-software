@@ -120,6 +120,8 @@ export function createPartnerEntity(db, data) {
     email: data.email || null,
     phone: data.phone || null,
     website: data.website || null,
+    assigned_to: data.assigned_to || null,
+    assigned_user_ids: Array.isArray(data.assigned_user_ids) ? data.assigned_user_ids : [],
     created_at: new Date().toISOString(),
     updated_at: new Date().toISOString()
   };
@@ -228,6 +230,7 @@ export function createPartnerCommission(db, entityInternalId, data) {
     budget: data.budget || null,
     state: data.state || null,
     assigned_to: data.assigned_to || null,
+    assigned_user_ids: Array.isArray(data.assigned_user_ids) ? data.assigned_user_ids : [],
     field: data.field || null,
     service_position: data.service_position || null,
     location: data.location || null,
@@ -328,6 +331,8 @@ export function createClientEntity(db, data) {
     email: data.email || null,
     phone: data.phone || null,
     website: data.website || null,
+    assigned_to: data.assigned_to || null,
+    assigned_user_ids: Array.isArray(data.assigned_user_ids) ? data.assigned_user_ids : [],
     created_at: new Date().toISOString(),
     updated_at: new Date().toISOString()
   };
@@ -443,6 +448,7 @@ export function createClientCommission(db, entityInternalId, data) {
     budget: data.budget || null,
     state: data.state || null,
     assigned_to: data.assigned_to || null,
+    assigned_user_ids: Array.isArray(data.assigned_user_ids) ? data.assigned_user_ids : [],
     field: data.field || null,
     service_position: data.service_position || data.service || null,
     location: data.location || null,
@@ -540,6 +546,8 @@ export function createTiperEntity(db, data) {
     email: data.email || null,
     phone: data.phone || null,
     website: data.website || null,
+    assigned_to: data.assigned_to || null,
+    assigned_user_ids: Array.isArray(data.assigned_user_ids) ? data.assigned_user_ids : [],
     created_at: new Date().toISOString(),
     updated_at: new Date().toISOString()
   };
@@ -647,6 +655,7 @@ export function createTiperCommission(db, entityInternalId, data) {
     budget: data.budget || null,
     state: data.state || null,
     assigned_to: data.assigned_to || null,
+    assigned_user_ids: Array.isArray(data.assigned_user_ids) ? data.assigned_user_ids : [],
     field: data.field || null,
     service_position: data.service_position || null,
     location: data.location || null,

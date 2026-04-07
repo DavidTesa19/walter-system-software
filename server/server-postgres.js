@@ -51,6 +51,47 @@ const serializeManagedUser = (user) => ({
   updatedAt: user.updatedAt ?? user.updated_at ?? null,
 });
 
+const normalizeAssignedUserIds = (value) => {
+  if (!Array.isArray(value)) {
+    return [];
+  }
+
+  return [...new Set(value
+    .map((item) => Number(item))
+    .filter((item) => Number.isInteger(item) && item > 0))];
+};
+
+const applyAssignmentPayload = async (payload) => {
+  if (!payload || typeof payload !== 'object' || Array.isArray(payload)) {
+    return payload;
+  }
+
+  if (!Object.prototype.hasOwnProperty.call(payload, 'assigned_user_ids')) {
+    return payload;
+  }
+
+  const assignedUserIds = normalizeAssignedUserIds(payload.assigned_user_ids);
+  if (assignedUserIds.length === 0) {
+    return {
+      ...payload,
+      assigned_user_ids: [],
+      assigned_to: null,
+    };
+  }
+
+  const result = await db.query(
+    'SELECT id, username FROM users WHERE id = ANY($1::int[]) ORDER BY username',
+    [assignedUserIds]
+  );
+  const usernames = result.rows.map((row) => row.username).filter(Boolean);
+
+  return {
+    ...payload,
+    assigned_user_ids: result.rows.map((row) => row.id),
+    assigned_to: usernames.length > 0 ? usernames.join(', ') : null,
+  };
+};
+
 // Middleware to authenticate token
 const authenticateToken = (req, res, next) => {
   if (req.method === 'OPTIONS') {
@@ -3272,7 +3313,8 @@ const createEntityCommissionRoutes = (entityTypes) => {
       try {
         const id = Number(req.params.id);
         const updateEntity = db[`update${Type}Entity`].bind(db);
-        const updated = await updateEntity(id, req.body);
+        const payload = await applyAssignmentPayload(req.body || {});
+        const updated = await updateEntity(id, payload);
         if (!updated) return res.status(404).json({ error: "Not found" });
         res.json(updated);
       } catch (error) {
@@ -3284,7 +3326,8 @@ const createEntityCommissionRoutes = (entityTypes) => {
     app.post(entitiesPath, authenticateToken, async (req, res) => {
       try {
         const createEntity = db[`create${Type}Entity`].bind(db);
-        const entity = await createEntity(req.body || {});
+        const payload = await applyAssignmentPayload(req.body || {});
+        const entity = await createEntity(payload);
         res.status(201).json(entity);
       } catch (error) {
         console.error(`Error creating ${type} entity:`, error);
@@ -3352,7 +3395,9 @@ const createEntityCommissionRoutes = (entityTypes) => {
           return res.status(400).json({ error: "entity data is required" });
         }
         const createWithCommission = db[`create${Type}WithCommission`].bind(db);
-        const result = await createWithCommission(entity, commission || {});
+        const normalizedEntity = await applyAssignmentPayload(entity);
+        const normalizedCommission = await applyAssignmentPayload(commission || {});
+        const result = await createWithCommission(normalizedEntity, normalizedCommission);
         res.status(201).json(result);
       } catch (error) {
         console.error(`Error creating ${type} with commission:`, error);
@@ -3392,12 +3437,15 @@ const createEntityCommissionRoutes = (entityTypes) => {
 
         if (req.body?.entity_data) {
           const createWithCommission = db[`create${Type}WithCommission`].bind(db);
-          const result = await createWithCommission(req.body.entity_data, req.body.commission_data || {});
+          const normalizedEntity = await applyAssignmentPayload(req.body.entity_data);
+          const normalizedCommission = await applyAssignmentPayload(req.body.commission_data || {});
+          const result = await createWithCommission(normalizedEntity, normalizedCommission);
           return res.status(201).json(result.commission);
         }
 
         if (req.body?.entity_id) {
-          const newCommission = await createCommission(req.body.entity_id, req.body);
+          const payload = await applyAssignmentPayload(req.body);
+          const newCommission = await createCommission(req.body.entity_id, payload);
           return res.status(201).json(newCommission);
         }
 
@@ -3412,7 +3460,8 @@ const createEntityCommissionRoutes = (entityTypes) => {
       try {
         const id = Number(req.params.id);
         const updateCommission = db[`update${Type}Commission`].bind(db);
-        const updated = await updateCommission(id, req.body);
+        const payload = await applyAssignmentPayload(req.body || {});
+        const updated = await updateCommission(id, payload);
         if (!updated) return res.status(404).json({ error: "Not found" });
         res.json(updated);
       } catch (error) {
@@ -3425,7 +3474,8 @@ const createEntityCommissionRoutes = (entityTypes) => {
       try {
         const id = Number(req.params.id);
         const updateCommission = db[`update${Type}Commission`].bind(db);
-        const updated = await updateCommission(id, req.body);
+        const payload = await applyAssignmentPayload(req.body || {});
+        const updated = await updateCommission(id, payload);
         if (!updated) return res.status(404).json({ error: "Not found" });
         res.json(updated);
       } catch (error) {
@@ -3505,8 +3555,8 @@ const PROJECT_ROUTE_CONFIG = {
     counterKey: 'project_partner',
     commissionKey: 'project_partner',
     entityDefaults: { company_name: 'Nová společnost' },
-    entityFields: ['status', 'company_name', 'field', 'location', 'info', 'category', 'first_name', 'last_name', 'email', 'phone', 'website'],
-    commissionFields: ['status', 'position', 'budget', 'state', 'assigned_to', 'field', 'service_position', 'location', 'info', 'category', 'deadline', 'priority', 'phone', 'commission_value', 'is_tipped', 'notes']
+    entityFields: ['status', 'company_name', 'field', 'location', 'info', 'category', 'first_name', 'last_name', 'email', 'phone', 'website', 'assigned_to', 'assigned_user_ids'],
+    commissionFields: ['status', 'position', 'budget', 'state', 'assigned_to', 'assigned_user_ids', 'field', 'service_position', 'location', 'info', 'category', 'deadline', 'priority', 'phone', 'commission_value', 'is_tipped', 'notes']
   },
   client: {
     entityTable: 'project_client_entities',
@@ -3514,8 +3564,8 @@ const PROJECT_ROUTE_CONFIG = {
     counterKey: 'project_client',
     commissionKey: 'project_client',
     entityDefaults: { company_name: 'Nová společnost' },
-    entityFields: ['status', 'company_name', 'field', 'service', 'location', 'info', 'category', 'budget', 'first_name', 'last_name', 'email', 'phone', 'website'],
-    commissionFields: ['status', 'position', 'budget', 'state', 'assigned_to', 'field', 'service_position', 'location', 'info', 'category', 'deadline', 'priority', 'phone', 'commission_value', 'is_tipped', 'notes']
+    entityFields: ['status', 'company_name', 'field', 'service', 'location', 'info', 'category', 'budget', 'first_name', 'last_name', 'email', 'phone', 'website', 'assigned_to', 'assigned_user_ids'],
+    commissionFields: ['status', 'position', 'budget', 'state', 'assigned_to', 'assigned_user_ids', 'field', 'service_position', 'location', 'info', 'category', 'deadline', 'priority', 'phone', 'commission_value', 'is_tipped', 'notes']
   },
   tiper: {
     entityTable: 'project_tiper_entities',
@@ -3523,8 +3573,8 @@ const PROJECT_ROUTE_CONFIG = {
     counterKey: 'project_tiper',
     commissionKey: 'project_tiper',
     entityDefaults: {},
-    entityFields: ['status', 'company_name', 'field', 'location', 'info', 'category', 'first_name', 'last_name', 'email', 'phone', 'website'],
-    commissionFields: ['status', 'position', 'budget', 'state', 'assigned_to', 'field', 'service_position', 'location', 'info', 'category', 'deadline', 'priority', 'phone', 'linked_entity_type', 'linked_commission_id', 'commission_value', 'is_tipped', 'notes']
+    entityFields: ['status', 'company_name', 'field', 'location', 'info', 'category', 'first_name', 'last_name', 'email', 'phone', 'website', 'assigned_to', 'assigned_user_ids'],
+    commissionFields: ['status', 'position', 'budget', 'state', 'assigned_to', 'assigned_user_ids', 'field', 'service_position', 'location', 'info', 'category', 'deadline', 'priority', 'phone', 'linked_entity_type', 'linked_commission_id', 'commission_value', 'is_tipped', 'notes']
   }
 };
 
@@ -3549,6 +3599,7 @@ const buildProjectCommissionResponse = (type, commission, entity) => {
     budget: commission.budget,
     state: commission.state,
     assigned_to: commission.assigned_to,
+    assigned_user_ids: commission.assigned_user_ids ?? [],
     field: commission.field,
     service_position: commission.service_position,
     location: commission.location,
@@ -3671,7 +3722,8 @@ const createProjectEntityCommissionRoutes = (entityTypes) => {
 
     app.post(entitiesPath, authenticateToken, async (req, res) => {
       try {
-        const created = await createProjectEntityRecord(type, req.body || {});
+        const payload = await applyAssignmentPayload(req.body || {});
+        const created = await createProjectEntityRecord(type, payload);
         res.status(201).json(created);
       } catch (error) {
         console.error(`Error creating projects ${type} entity:`, error);
@@ -3682,7 +3734,8 @@ const createProjectEntityCommissionRoutes = (entityTypes) => {
     app.put(`${entitiesPath}/:id`, authenticateToken, async (req, res) => {
       try {
         const id = Number(req.params.id);
-        const updated = await db.update(config.entityTable, id, pickDefinedFields(req.body || {}, config.entityFields));
+        const payload = await applyAssignmentPayload(req.body || {});
+        const updated = await db.update(config.entityTable, id, pickDefinedFields(payload || {}, config.entityFields));
         if (!updated) {
           return res.status(404).json({ error: 'Not found' });
         }
@@ -3755,11 +3808,13 @@ const createProjectEntityCommissionRoutes = (entityTypes) => {
         if (!entity) {
           return res.status(400).json({ error: 'entity data is required' });
         }
+        const normalizedEntity = await applyAssignmentPayload(entity);
+        const normalizedCommission = await applyAssignmentPayload(commission || {});
         const createdEntity = await createProjectEntityRecord(type, {
-          ...entity,
-          status: entity?.status || commission?.status || 'accepted'
+          ...normalizedEntity,
+          status: normalizedEntity?.status || normalizedCommission?.status || 'accepted'
         });
-        const createdCommission = await createProjectCommissionRecord(type, createdEntity.id, commission || {});
+        const createdCommission = await createProjectCommissionRecord(type, createdEntity.id, normalizedCommission);
         res.status(201).json({ entity: createdEntity, commission: createdCommission });
       } catch (error) {
         console.error(`Error creating projects ${type} entity with commission:`, error);
@@ -3795,11 +3850,13 @@ const createProjectEntityCommissionRoutes = (entityTypes) => {
     app.post(commissionsPath, authenticateToken, async (req, res) => {
       try {
         if (req.body?.entity_data) {
+          const normalizedEntity = await applyAssignmentPayload(req.body.entity_data);
+          const normalizedCommission = await applyAssignmentPayload(req.body.commission_data || {});
           const createdEntity = await createProjectEntityRecord(type, {
-            ...req.body.entity_data,
-            status: req.body.entity_data?.status || req.body.commission_data?.status || 'accepted'
+            ...normalizedEntity,
+            status: normalizedEntity?.status || normalizedCommission?.status || 'accepted'
           });
-          const createdCommission = await createProjectCommissionRecord(type, createdEntity.id, req.body.commission_data || {});
+          const createdCommission = await createProjectCommissionRecord(type, createdEntity.id, normalizedCommission);
           return res.status(201).json(createdCommission);
         }
 
@@ -3807,7 +3864,8 @@ const createProjectEntityCommissionRoutes = (entityTypes) => {
           return res.status(400).json({ error: 'Either entity_data or entity_id is required' });
         }
 
-        const created = await createProjectCommissionRecord(type, req.body.entity_id, req.body);
+        const payload = await applyAssignmentPayload(req.body);
+        const created = await createProjectCommissionRecord(type, req.body.entity_id, payload);
         res.status(201).json(created);
       } catch (error) {
         console.error(`Error creating projects ${type} commission:`, error);
@@ -3818,7 +3876,8 @@ const createProjectEntityCommissionRoutes = (entityTypes) => {
     app.put(`${commissionsPath}/:id`, authenticateToken, async (req, res) => {
       try {
         const id = Number(req.params.id);
-        const updated = await db.update(config.commissionTable, id, pickDefinedFields(req.body || {}, config.commissionFields));
+        const payload = await applyAssignmentPayload(req.body || {});
+        const updated = await db.update(config.commissionTable, id, pickDefinedFields(payload || {}, config.commissionFields));
         if (!updated) {
           return res.status(404).json({ error: 'Not found' });
         }
@@ -3832,7 +3891,8 @@ const createProjectEntityCommissionRoutes = (entityTypes) => {
     app.patch(`${commissionsPath}/:id`, authenticateToken, async (req, res) => {
       try {
         const id = Number(req.params.id);
-        const updated = await db.update(config.commissionTable, id, pickDefinedFields(req.body || {}, config.commissionFields));
+        const payload = await applyAssignmentPayload(req.body || {});
+        const updated = await db.update(config.commissionTable, id, pickDefinedFields(payload || {}, config.commissionFields));
         if (!updated) {
           return res.status(404).json({ error: 'Not found' });
         }

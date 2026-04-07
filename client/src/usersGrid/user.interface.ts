@@ -18,6 +18,7 @@ export interface UserInterface {
   address?: string;
   notes?: string;
   assigned_to?: string;
+  assigned_user_ids?: number[];
   last_contact?: string;
   next_step?: string;
   priority?: string;

@@ -9,6 +9,8 @@ export interface BaseEntity {
   id: number;
   entity_id: string;  // P001, K001, T001
   status: 'pending' | 'accepted' | 'archived';
+  assigned_to?: string | null;
+  assigned_user_ids?: number[];
   created_at?: string;
   updated_at?: string;
 }
@@ -75,6 +77,7 @@ export interface BaseCommission {
   updated_at?: string;
 
   assigned_to: string | null;
+  assigned_user_ids?: number[];
   priority: string | null;
   notes: string | null;
   deadline: string | null;

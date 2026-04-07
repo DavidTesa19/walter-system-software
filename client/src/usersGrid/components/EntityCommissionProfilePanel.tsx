@@ -14,9 +14,9 @@ import "./EntityCommissionProfilePanel.css";
 export interface EditableField {
   key: string;
   label: string;
-  value: string | boolean | null;
-  type: 'text' | 'textarea' | 'select' | 'boolean' | 'date';
-  options?: string[];  // For select type
+  value: string | boolean | string[] | null;
+  type: 'text' | 'textarea' | 'select' | 'multi-select' | 'boolean' | 'date';
+  options?: Array<string | { value: string; label: string; description?: string }>;
   isMultiline?: boolean;
   placeholder?: string;
 }
@@ -96,19 +96,52 @@ interface EntityCommissionProfilePanelProps {
 
 interface EditableFieldCellProps {
   field: EditableField;
-  onSave: (key: string, value: string | boolean | null) => void;
+  onSave: (key: string, value: string | boolean | string[] | null) => void;
 }
+
+const normalizeFieldOptions = (options: EditableField['options']) =>
+  (options || []).map((option) => (
+    typeof option === 'string'
+      ? { value: option, label: option }
+      : option
+  ));
+
+const areEditableValuesEqual = (
+  left: string | boolean | string[] | null,
+  right: string | boolean | string[] | null
+) => {
+  if (Array.isArray(left) || Array.isArray(right)) {
+    if (!Array.isArray(left) || !Array.isArray(right)) {
+      return false;
+    }
+
+    if (left.length !== right.length) {
+      return false;
+    }
+
+    return left.every((value, index) => value === right[index]);
+  }
+
+  return left === right;
+};
+
+const getInitialEditValue = (field: EditableField): string | boolean | string[] => {
+  if (field.type === 'multi-select') {
+    return Array.isArray(field.value) ? field.value : [];
+  }
+
+  if (field.type === 'boolean') {
+    return field.value === true ? 'true' : 'false';
+  }
+
+  return field.value === null || field.value === undefined ? '' : String(field.value);
+};
 
 const EditableFieldCell: React.FC<EditableFieldCellProps> = ({ field, onSave }) => {
   const [isEditing, setIsEditing] = useState(false);
-  const [editValue, setEditValue] = useState<string>(
-    field.value === null || field.value === undefined 
-      ? '' 
-      : field.type === 'boolean' 
-        ? (field.value ? 'true' : 'false')
-        : String(field.value)
-  );
+  const [editValue, setEditValue] = useState<string | boolean | string[]>(() => getInitialEditValue(field));
   const inputRef = useRef<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>(null);
+  const normalizedOptions = useMemo(() => normalizeFieldOptions(field.options), [field.options]);
 
   useEffect(() => {
     if (isEditing && inputRef.current) {
@@ -118,35 +151,30 @@ const EditableFieldCell: React.FC<EditableFieldCellProps> = ({ field, onSave }) 
 
   const handleStartEdit = () => {
     setIsEditing(true);
-    setEditValue(
-      field.value === null || field.value === undefined 
-        ? '' 
-        : field.type === 'boolean' 
-          ? (field.value ? 'true' : 'false')
-          : String(field.value)
-    );
+    setEditValue(getInitialEditValue(field));
   };
 
   const handleSave = () => {
     setIsEditing(false);
-    let finalValue: string | boolean | null = editValue.trim() || null;
+    let finalValue: string | boolean | string[] | null;
     
-    if (field.type === 'boolean') {
+    if (field.type === 'multi-select') {
+      finalValue = Array.isArray(editValue) ? editValue : [];
+    } else if (field.type === 'boolean') {
       finalValue = editValue === 'true';
+    } else {
+      const stringValue = String(editValue).trim();
+      finalValue = stringValue || null;
     }
     
-    if (finalValue !== field.value) {
+    if (!areEditableValuesEqual(finalValue, field.value)) {
       onSave(field.key, finalValue);
     }
   };
 
   const handleCancel = () => {
     setIsEditing(false);
-    setEditValue(
-      field.value === null || field.value === undefined 
-        ? '' 
-        : String(field.value)
-    );
+    setEditValue(getInitialEditValue(field));
   };
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
@@ -159,6 +187,18 @@ const EditableFieldCell: React.FC<EditableFieldCellProps> = ({ field, onSave }) 
   };
 
   const displayValue = useMemo(() => {
+    if (Array.isArray(field.value)) {
+      if (field.value.length === 0) {
+        return <span className="field-empty">—</span>;
+      }
+
+      const labels = field.value.map((value) => (
+        normalizedOptions.find((option) => option.value === value)?.label ?? value
+      ));
+
+      return labels.join(', ');
+    }
+
     if (field.value === null || field.value === undefined || field.value === '') {
       return <span className="field-empty">—</span>;
     }
@@ -166,7 +206,7 @@ const EditableFieldCell: React.FC<EditableFieldCellProps> = ({ field, onSave }) 
       return field.value ? 'Ano' : 'Ne';
     }
     return String(field.value);
-  }, [field.value, field.type]);
+  }, [field.type, field.value, normalizedOptions]);
 
   if (isEditing) {
     if (field.type === 'textarea') {
@@ -175,7 +215,7 @@ const EditableFieldCell: React.FC<EditableFieldCellProps> = ({ field, onSave }) 
           <textarea
             ref={inputRef as React.RefObject<HTMLTextAreaElement>}
             className="editable-input textarea"
-            value={editValue}
+            value={typeof editValue === 'string' ? editValue : ''}
             onChange={(e) => setEditValue(e.target.value)}
             onBlur={handleSave}
             onKeyDown={handleKeyDown}
@@ -186,13 +226,13 @@ const EditableFieldCell: React.FC<EditableFieldCellProps> = ({ field, onSave }) 
       );
     }
 
-    if (field.type === 'select' && field.options) {
+    if (field.type === 'select' && normalizedOptions.length > 0) {
       return (
         <div className="editable-field editing">
           <select
             ref={inputRef as React.RefObject<HTMLSelectElement>}
             className="editable-input select"
-            value={editValue}
+            value={String(editValue)}
             onChange={(e) => {
               setEditValue(e.target.value);
               // Auto-save on select change
@@ -202,10 +242,48 @@ const EditableFieldCell: React.FC<EditableFieldCellProps> = ({ field, onSave }) 
             onKeyDown={handleKeyDown}
           >
             <option value="">— Vyberte —</option>
-            {field.options.map(opt => (
-              <option key={opt} value={opt}>{opt}</option>
+            {normalizedOptions.map((opt) => (
+              <option key={opt.value} value={opt.value}>{opt.label}</option>
             ))}
           </select>
+        </div>
+      );
+    }
+
+    if (field.type === 'multi-select' && normalizedOptions.length > 0) {
+      const selectedValues = Array.isArray(editValue) ? editValue : [];
+
+      return (
+        <div className="editable-field editing editable-field-multiselect">
+          <div className="editable-multiselect-list">
+            {normalizedOptions.map((option) => {
+              const isSelected = selectedValues.includes(option.value);
+
+              return (
+                <label key={option.value} className={`editable-multiselect-option ${isSelected ? 'selected' : ''}`}>
+                  <input
+                    type="checkbox"
+                    checked={isSelected}
+                    onChange={() => {
+                      setEditValue(
+                        isSelected
+                          ? selectedValues.filter((value) => value !== option.value)
+                          : [...selectedValues, option.value]
+                      );
+                    }}
+                  />
+                  <span className="editable-multiselect-copy">
+                    <span className="editable-multiselect-label">{option.label}</span>
+                    {option.description ? <span className="editable-multiselect-description">{option.description}</span> : null}
+                  </span>
+                </label>
+              );
+            })}
+          </div>
+          <div className="editable-multiselect-actions">
+            <button type="button" className="editable-multiselect-action secondary" onClick={handleCancel}>Zrušit</button>
+            <button type="button" className="editable-multiselect-action primary" onClick={handleSave}>Uložit</button>
+          </div>
         </div>
       );
     }
@@ -216,7 +294,7 @@ const EditableFieldCell: React.FC<EditableFieldCellProps> = ({ field, onSave }) 
           <select
             ref={inputRef as React.RefObject<HTMLSelectElement>}
             className="editable-input select"
-            value={editValue}
+            value={String(editValue)}
             onChange={(e) => {
               setEditValue(e.target.value);
               setTimeout(() => handleSave(), 0);
@@ -238,7 +316,7 @@ const EditableFieldCell: React.FC<EditableFieldCellProps> = ({ field, onSave }) 
             ref={inputRef as React.RefObject<HTMLInputElement>}
             type="date"
             className="editable-input date"
-            value={editValue}
+            value={String(editValue)}
             onChange={(e) => setEditValue(e.target.value)}
             onBlur={handleSave}
             onKeyDown={handleKeyDown}
@@ -253,7 +331,7 @@ const EditableFieldCell: React.FC<EditableFieldCellProps> = ({ field, onSave }) 
           ref={inputRef as React.RefObject<HTMLInputElement>}
           type="text"
           className="editable-input"
-          value={editValue}
+          value={String(editValue)}
           onChange={(e) => setEditValue(e.target.value)}
           onBlur={handleSave}
           onKeyDown={handleKeyDown}
@@ -281,7 +359,7 @@ const EditableFieldCell: React.FC<EditableFieldCellProps> = ({ field, onSave }) 
 
 interface FieldGroupComponentProps {
   group: FieldGroup;
-  onSave: (key: string, value: string | boolean | null) => void;
+  onSave: (key: string, value: string | boolean | string[] | null) => void;
 }
 
 const FieldGroupComponent: React.FC<FieldGroupComponentProps> = ({ group, onSave }) => {
@@ -362,13 +440,13 @@ const EntityCommissionProfilePanel: React.FC<EntityCommissionProfilePanelProps> 
   const commissionLabel = entityType === 'tiper' ? 'Tip / Zakázka' : 'Zakázka';
   const hasLinkedCommissions = linkedCommissions.length > 0;
 
-  const handleEntityFieldSave = useCallback((key: string, value: string | boolean | null) => {
+  const handleEntityFieldSave = useCallback((key: string, value: string | boolean | string[] | null) => {
     if (entity && onUpdateEntity) {
       onUpdateEntity(entity.id, { [key]: value });
     }
   }, [entity, onUpdateEntity]);
 
-  const handleCommissionFieldSave = useCallback((key: string, value: string | boolean | null) => {
+  const handleCommissionFieldSave = useCallback((key: string, value: string | boolean | string[] | null) => {
     if (commission && onUpdateCommission) {
       onUpdateCommission(commission.id, { [key]: value });
     }
