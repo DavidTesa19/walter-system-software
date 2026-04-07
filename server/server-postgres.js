@@ -53,6 +53,10 @@ const serializeManagedUser = (user) => ({
 
 // Middleware to authenticate token
 const authenticateToken = (req, res, next) => {
+  if (req.method === 'OPTIONS') {
+    return next();
+  }
+
   const authHeader = req.headers['authorization'];
   const token = authHeader && authHeader.split(' ')[1];
 
@@ -68,6 +72,10 @@ const authenticateToken = (req, res, next) => {
 // Middleware to require specific roles
 const requireRole = (...allowedRoles) => {
   return (req, res, next) => {
+    if (req.method === 'OPTIONS') {
+      return next();
+    }
+
     if (!req.user) {
       return res.status(401).json({ error: 'Authentication required' });
     }
@@ -80,6 +88,10 @@ const requireRole = (...allowedRoles) => {
 
 const requireAccessScope = (...allowedScopes) => {
   return (req, res, next) => {
+    if (req.method === 'OPTIONS') {
+      return next();
+    }
+
     if (!req.user) {
       return res.status(401).json({ error: 'Authentication required' });
     }
