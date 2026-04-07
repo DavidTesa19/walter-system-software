@@ -46,6 +46,10 @@ export const isViewAllowedForScope = (
     return canAccessProjectsSystem(scope);
   }
 
+  if (view === 'projects_subjects_active' || view === 'projects_subjects_pending' || view === 'projects_subjects_archived') {
+    return canAccessProjectsSystem(scope);
+  }
+
   return true;
 };
 
@@ -55,7 +59,7 @@ export const getDefaultViewForScope = (scope: UserAccessScope | null | undefined
   }
 
   if (canAccessProjectsSystem(scope)) {
-    return 'projects_active';
+    return 'projects_subjects_active';
   }
 
   return 'future';

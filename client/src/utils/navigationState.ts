@@ -16,6 +16,9 @@ const VALID_APP_VIEWS: AppView[] = [
   "projects_active",
   "projects_pending",
   "projects_archived",
+  "projects_subjects_active",
+  "projects_subjects_pending",
+  "projects_subjects_archived",
   "admin_users"
 ];
 

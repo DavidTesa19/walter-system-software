@@ -170,7 +170,7 @@ const Sidebar: React.FC<SidebarProps> = ({
   useEffect(() => {
     const groups = [
       { id: 'tables', views: ['active', 'pending', 'archived'] },
-      { id: 'projects', views: ['projects_active', 'projects_pending', 'projects_archived'] },
+      { id: 'projects', views: ['projects_active', 'projects_pending', 'projects_archived', 'projects_subjects_active', 'projects_subjects_pending', 'projects_subjects_archived'] },
       { id: 'new_system', views: ['entities_active', 'entities_pending', 'entities_archived'] },
       { id: 'calendar', views: ['calendar'] },
       { id: 'teamchat', views: ['teamchat'] },
@@ -268,9 +268,12 @@ const Sidebar: React.FC<SidebarProps> = ({
       label: 'Projects',
       icon: <Icons.Tables />,
       items: [
-        { id: 'projects_active', label: 'Aktivní', icon: <Icons.Active /> },
-        { id: 'projects_pending', label: 'Ke schválení', icon: <Icons.Pending /> },
-        { id: 'projects_archived', label: 'Archiv', icon: <Icons.Archived /> }
+        { id: 'projects_subjects_active', label: 'Subjekty - Aktivní', icon: <Icons.Active /> },
+        { id: 'projects_subjects_pending', label: 'Subjekty - Ke schválení', icon: <Icons.Pending /> },
+        { id: 'projects_subjects_archived', label: 'Subjekty - Archiv', icon: <Icons.Archived /> },
+        { id: 'projects_active', label: 'Komise - Aktivní', icon: <Icons.Active /> },
+        { id: 'projects_pending', label: 'Komise - Ke schválení', icon: <Icons.Pending /> },
+        { id: 'projects_archived', label: 'Komise - Archiv', icon: <Icons.Archived /> }
       ]
     },
     {

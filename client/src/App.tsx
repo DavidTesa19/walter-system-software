@@ -22,15 +22,19 @@ import TeamChatView from './views/TeamChatView';
 import FullCalendarView from './views/FullCalendarView';
 import AnalyticsView from './views/AnalyticsView';
 import EntitiesSystemView from './views/EntitiesSystemView';
-import ProjectsView from './views/ProjectsView';
 import AdminUsersView from './views/AdminUsersView';
 import { trackEvent, trackSectionStart } from './utils/analytics';
 import type { AppView } from './types/appView';
 import type { GlobalSearchResult, GridSearchNavigationTarget, SearchTable } from './types/globalSearch';
 import type { UserInterface } from './usersGrid/user.interface';
+import UsersGrid from './usersGrid/UsersGrid';
 import type { FutureFunction } from './futureFunctions/futureFunction.interface';
 import { apiGet } from './utils/api';
 import { getStoredAppView, setStoredAppView } from './utils/navigationState';
+import {
+  PROJECTS_COMMISSIONS_TABLE_STORAGE_KEY,
+  PROJECTS_SUBJECTS_TABLE_STORAGE_KEY,
+} from './utils/tableViewState';
 import './components/Sidebar.css';
 
 type SearchField = keyof UserInterface;
@@ -88,9 +92,12 @@ const VIEW_LABELS: Record<AppView, string> = {
   entities_active: 'Aktuální subjekty',
   entities_pending: 'Subjekty ke schválení',
   entities_archived: 'Archiv subjektů',
-  projects_active: 'Projects - Aktivní',
-  projects_pending: 'Projects - Ke schválení',
-  projects_archived: 'Projects - Archiv'
+  projects_active: 'Projects - Komise - Aktivní',
+  projects_pending: 'Projects - Komise - Ke schválení',
+  projects_archived: 'Projects - Komise - Archiv',
+  projects_subjects_active: 'Projects - Subjekty - Aktivní',
+  projects_subjects_pending: 'Projects - Subjekty - Ke schválení',
+  projects_subjects_archived: 'Projects - Subjekty - Archiv'
 };
 
 const TABLE_LABELS: Record<SearchTable, string> = {
@@ -115,10 +122,12 @@ const getGridViewFromAppView = (view: AppView): 'active' | 'pending' | 'archived
   switch (view) {
     case 'pending':
     case 'projects_pending':
+    case 'projects_subjects_pending':
     case 'entities_pending':
       return 'pending';
     case 'archived':
     case 'projects_archived':
+    case 'projects_subjects_archived':
     case 'entities_archived':
       return 'archived';
     default:
@@ -447,11 +456,17 @@ const AppContent: React.FC = () => {
             case 'entities_archived':
               return <EntitiesSystemView viewMode="archived" />;
             case 'projects_active':
-              return <ProjectsView viewMode="active" searchTarget={gridSearchTarget} />;
+              return <UsersGrid viewMode="active" searchTarget={gridSearchTarget} systemNamespace="projects" storageKey={PROJECTS_COMMISSIONS_TABLE_STORAGE_KEY} title="Projects - Komise - Aktivní" />;
             case 'projects_pending':
-              return <ProjectsView viewMode="pending" searchTarget={gridSearchTarget} />;
+              return <UsersGrid viewMode="pending" searchTarget={gridSearchTarget} systemNamespace="projects" storageKey={PROJECTS_COMMISSIONS_TABLE_STORAGE_KEY} title="Projects - Komise - Ke schválení" />;
             case 'projects_archived':
-              return <ProjectsView viewMode="archived" searchTarget={gridSearchTarget} />;
+              return <UsersGrid viewMode="archived" searchTarget={gridSearchTarget} systemNamespace="projects" storageKey={PROJECTS_COMMISSIONS_TABLE_STORAGE_KEY} title="Projects - Komise - Archiv" />;
+            case 'projects_subjects_active':
+              return <EntitiesSystemView viewMode="active" systemNamespace="projects" storageKey={PROJECTS_SUBJECTS_TABLE_STORAGE_KEY} title="Projects - Subjekty - Aktivní" />;
+            case 'projects_subjects_pending':
+              return <EntitiesSystemView viewMode="pending" systemNamespace="projects" storageKey={PROJECTS_SUBJECTS_TABLE_STORAGE_KEY} title="Projects - Subjekty - Ke schválení" />;
+            case 'projects_subjects_archived':
+              return <EntitiesSystemView viewMode="archived" systemNamespace="projects" storageKey={PROJECTS_SUBJECTS_TABLE_STORAGE_KEY} title="Projects - Subjekty - Archiv" />;
             default:
               return null;
           }
