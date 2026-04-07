@@ -301,7 +301,7 @@ const Sidebar: React.FC<SidebarProps> = ({
         },
         {
           id: 'general_commissions',
-          label: 'Komise',
+          label: 'Zakázky',
           icon: <Icons.Tables />,
           items: [
             { id: 'active', label: 'Aktivní', icon: <Icons.Active /> },
@@ -328,7 +328,7 @@ const Sidebar: React.FC<SidebarProps> = ({
         },
         {
           id: 'projects_commissions',
-          label: 'Komise',
+          label: 'Zakázky',
           icon: <Icons.Tables />,
           items: [
             { id: 'projects_active', label: 'Aktivní', icon: <Icons.Active /> },

@@ -32,8 +32,8 @@ const ROLE_OPTIONS: Array<{ value: UserRole; label: string; description: string 
 
 const ACCESS_SCOPE_OPTIONS: Array<{ value: AccessScope; label: string; description: string }> = [
   { value: 'all', label: 'Obojí', description: 'Normální systém i Projects' },
-  { value: 'standard', label: 'Standard', description: 'Jen normální komise a subjekty' },
-  { value: 'projects', label: 'Projects', description: 'Jen Projects komise a subjekty' },
+  { value: 'standard', label: 'Standard', description: 'Jen normální zakázky a subjekty' },
+  { value: 'projects', label: 'Projects', description: 'Jen Projects zakázky a subjekty' },
 ];
 
 const formatDateTime = (value?: string | null): string => {

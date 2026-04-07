@@ -71,7 +71,7 @@ const ProjectsView: React.FC<ProjectsViewProps> = ({ viewMode, searchTarget }) =
           className={`projects-view__subsection-btn ${activeSubsection === 'commissions' ? 'active' : ''}`}
           onClick={() => setActiveSubsection('commissions')}
         >
-          Komise
+          Zakázky
         </button>
       </div>
 
@@ -88,7 +88,7 @@ const ProjectsView: React.FC<ProjectsViewProps> = ({ viewMode, searchTarget }) =
           searchTarget={searchTarget}
           systemNamespace="projects"
           storageKey={PROJECTS_COMMISSIONS_TABLE_STORAGE_KEY}
-          title={`Projects - Komise - ${titleSuffix}`}
+          title={`Projects - Zakázky - ${titleSuffix}`}
         />
       )}
     </div>

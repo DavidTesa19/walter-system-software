@@ -692,6 +692,7 @@ export async function initDatabase() {
     `);
 
     await ensureDefaultPalettes(client);
+    await ensureLegacyEntityCommissionMigration();
 
     console.log('✓ Database tables initialized');
   } catch (error) {
@@ -699,6 +700,112 @@ export async function initDatabase() {
     throw error;
   } finally {
     client.release();
+  }
+}
+
+async function ensureLegacyEntityCommissionMigration() {
+  if (!USE_POSTGRES) return;
+
+  const migrationConfigs = [
+    {
+      type: 'partner',
+      legacyTable: 'partners',
+      entityTable: 'partner_entities',
+      commissionTable: 'partner_commissions',
+      migrateRow: async (row) => {
+        await db.createPartnerWithCommission(
+          {
+            status: row.status || 'accepted',
+            company_name: row.company || row.name || 'Bez nazvu',
+            field: row.field,
+            location: row.location,
+            info: row.info,
+            first_name: row.name,
+            phone: row.mobile,
+          },
+          {
+            status: row.status || 'accepted',
+            commission_value: row.commission,
+          }
+        );
+      },
+    },
+    {
+      type: 'client',
+      legacyTable: 'clients',
+      entityTable: 'client_entities',
+      commissionTable: 'client_commissions',
+      migrateRow: async (row) => {
+        await db.createClientWithCommission(
+          {
+            status: row.status || 'accepted',
+            company_name: row.company || row.name || 'Bez nazvu',
+            field: row.field,
+            location: row.location,
+            info: row.info,
+            first_name: row.name,
+            phone: row.mobile,
+          },
+          {
+            status: row.status || 'accepted',
+            deadline: row.date,
+          }
+        );
+      },
+    },
+    {
+      type: 'tiper',
+      legacyTable: 'tipers',
+      entityTable: 'tiper_entities',
+      commissionTable: 'tiper_commissions',
+      migrateRow: async (row) => {
+        const nameParts = String(row.name || 'Bez jmena').trim().split(/\s+/).filter(Boolean);
+        const firstName = nameParts[0] || 'Bez';
+        const lastName = nameParts.slice(1).join(' ') || null;
+
+        await db.createTiperWithCommission(
+          {
+            status: row.status || 'accepted',
+            company_name: row.company || null,
+            first_name: firstName,
+            last_name: lastName,
+            field: row.field,
+            location: row.location,
+            info: row.info,
+            phone: row.mobile,
+          },
+          {
+            status: row.status || 'accepted',
+            commission_value: row.commission,
+          }
+        );
+      },
+    },
+  ];
+
+  for (const config of migrationConfigs) {
+    const [{ rows: legacyCountRows }, { rows: entityCountRows }, { rows: commissionCountRows }] = await Promise.all([
+      pool.query(`SELECT COUNT(*)::INT AS count FROM ${config.legacyTable}`),
+      pool.query(`SELECT COUNT(*)::INT AS count FROM ${config.entityTable}`),
+      pool.query(`SELECT COUNT(*)::INT AS count FROM ${config.commissionTable}`),
+    ]);
+
+    const legacyCount = legacyCountRows[0]?.count ?? 0;
+    const entityCount = entityCountRows[0]?.count ?? 0;
+    const commissionCount = commissionCountRows[0]?.count ?? 0;
+
+    if (legacyCount === 0 || entityCount > 0 || commissionCount > 0) {
+      continue;
+    }
+
+    const { rows: legacyRows } = await pool.query(`SELECT * FROM ${config.legacyTable} ORDER BY id ASC`);
+    console.log(`↺ Migrating ${legacyRows.length} legacy ${config.type} records into ${config.entityTable}/${config.commissionTable}`);
+
+    for (const row of legacyRows) {
+      await config.migrateRow(row);
+    }
+
+    console.log(`✓ Migrated legacy ${config.type} records`);
   }
 }
 

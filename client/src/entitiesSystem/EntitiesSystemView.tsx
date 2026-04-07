@@ -107,7 +107,7 @@ const EntitiesSystemView: React.FC<EntitiesSystemViewProps> = ({
   };
 
   const { addLabel } = NAV_CONFIG[activeTable];
-  const resolvedTitle = title ?? `Subjekty & Komise - ${VIEW_MODE_CONFIG[viewMode].label}`;
+  const resolvedTitle = title ?? `Subjekty & Zakázky - ${VIEW_MODE_CONFIG[viewMode].label}`;
 
   return (
     <div className="page-container">
