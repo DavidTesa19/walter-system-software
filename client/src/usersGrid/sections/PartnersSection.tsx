@@ -4,6 +4,7 @@ import type { ColDef } from "ag-grid-community";
 import type { UserInterface } from "../user.interface";
 import FieldCellRenderer from "../cells/FieldCellRenderer";
 import ProfileCellRenderer from "../cells/ProfileCellRenderer";
+import AssignedUsersCellRenderer from "../cells/AssignedUsersCellRenderer";
 import ProfilePanel from "../components/ProfilePanel";
 import { mapViewToStatus } from "../constants";
 import { apiGet, apiPost, apiPut, apiDelete } from "../../utils/api";
@@ -16,6 +17,7 @@ import useProfileNotes from "../hooks/useProfileNotes";
 import { ApproveRestoreCellRenderer, DeleteArchiveCellRenderer } from "../cells/RowActionCellRenderers";
 import { useUndoRedo } from "../../utils/undoRedo";
 import { compareWorkflowStatuses, getNormalizedWorkflowStatus } from "../workflowStatus";
+import useAssignableUsers from "../hooks/useAssignableUsers";
 
 const cloneRecord = (r: any) => JSON.parse(JSON.stringify(r));
 
@@ -29,6 +31,7 @@ type PartnerCommissionApi = {
   budget?: string | null;
   state?: string | null;
   assigned_to?: string | null;
+  assigned_user_ids?: number[] | null;
   field?: string | null;
   service_position?: string | null;
   location?: string | null;
@@ -98,6 +101,7 @@ const normalizePartnerCommissionRow = (commission: PartnerCommissionApi): UserIn
   website: commission.entity_website ?? "",
   notes: commission.notes ?? undefined,
   assigned_to: commission.assigned_to ?? undefined,
+  assigned_user_ids: commission.assigned_user_ids ?? undefined,
   priority: commission.priority ?? undefined,
   next_step: commission.position ?? commission.service_position ?? undefined
 });
@@ -282,6 +286,7 @@ const PartnersSection: React.FC<SectionProps> = ({
   focusRecordId,
   focusRequestKey
 }) => {
+  const { users: assignableUsers } = useAssignableUsers();
   const [partnersData, setPartnersData] = useState<UserInterface[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const gridRef = useRef<AgGridReact<UserInterface>>(null);
@@ -636,6 +641,22 @@ const PartnersSection: React.FC<SectionProps> = ({
   const partnersColDefs = useMemo<ColDef<UserInterface>[]>(
     () => {
       const cols: ColDef<UserInterface>[] = [];
+      const assignedUsersColumn: ColDef<UserInterface> = {
+        field: "assigned_user_ids",
+        headerName: "Přiřazení",
+        editable: false,
+        sortable: false,
+        filter: true,
+        minWidth: 120,
+        maxWidth: 140,
+        cellRenderer: AssignedUsersCellRenderer,
+        cellRendererParams: {
+          users: assignableUsers,
+          maxVisible: 3
+        },
+        filterValueGetter: (params) => params.data?.assigned_to ?? "",
+        tooltipValueGetter: (params) => params.data?.assigned_to ?? ""
+      };
 
       if (viewMode === "pending" || viewMode === "archived") {
         cols.push({
@@ -754,6 +775,7 @@ const PartnersSection: React.FC<SectionProps> = ({
         flex: 1,
         minWidth: 120
       },
+      assignedUsersColumn,
       {
         field: "stage",
         headerName: "Stav",
@@ -776,7 +798,7 @@ const PartnersSection: React.FC<SectionProps> = ({
 
       return cols;
     },
-    [viewMode]
+    [assignableUsers, viewMode]
   );
 
   return (

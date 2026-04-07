@@ -19,8 +19,8 @@
 
 .assigned-users-avatar {
   position: relative;
-  width: 30px;
-  height: 30px;
+  width: 26px;
+  height: 26px;
   margin-left: -8px;
   border-radius: 999px;
   border: 2px solid var(--color-surface, #ffffff);
@@ -28,7 +28,7 @@
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  font-size: 0.72rem;
+  font-size: 0.66rem;
   font-weight: 800;
   letter-spacing: 0.06em;
   color: var(--avatar-fg, #0f172a);

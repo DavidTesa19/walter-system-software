@@ -172,7 +172,25 @@ th,
 
 .ag-theme-quartz {
   --ag-font-family: var(--font-body);
+  --ag-font-size: 12.5px;
+  --ag-grid-size: 5px;
+  --ag-list-item-height: 30px;
+  --ag-row-height: 36px;
+  --ag-header-height: 38px;
+  --ag-icon-size: 14px;
   font-family: var(--font-body);
+}
+
+.ag-theme-quartz .ag-header-cell-text {
+  font-size: 0.76rem;
+  font-weight: 700;
+}
+
+.ag-theme-quartz .ag-cell,
+.ag-theme-quartz .ag-floating-filter-input,
+.ag-theme-quartz .ag-input-field-input,
+.ag-theme-quartz .ag-picker-field-wrapper {
+  font-size: 0.8rem;
 }
 
 button:hover:not(:disabled) {
