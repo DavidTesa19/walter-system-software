@@ -18,10 +18,24 @@ type SidebarGroupItem = {
   icon: React.ReactNode;
 };
 
+type SidebarSection = {
+  id: string;
+  label: string;
+  icon: React.ReactNode;
+  items: SidebarGroupItem[];
+};
+
 type SidebarGroup = {
   id: string;
   label: string;
-  icon?: React.ReactNode;
+  icon: React.ReactNode;
+  sections: SidebarSection[];
+};
+
+type SidebarSingleItem = {
+  id: string;
+  label: string;
+  icon: React.ReactNode;
   items: SidebarGroupItem[];
 };
 
@@ -151,9 +165,12 @@ const Sidebar: React.FC<SidebarProps> = ({
   
   // State for expanded groups
   const [expandedGroups, setExpandedGroups] = useState<Record<string, boolean>>({
-    new_system: true,
-    tables: true,
+    general: true,
     projects: true,
+    general_subjects: true,
+    general_commissions: true,
+    projects_subjects: true,
+    projects_commissions: true,
     calendar: true,
     teamchat: true,
     other: true
@@ -169,9 +186,22 @@ const Sidebar: React.FC<SidebarProps> = ({
   // Ensure the group containing the active view is expanded
   useEffect(() => {
     const groups = [
-      { id: 'tables', views: ['active', 'pending', 'archived'] },
-      { id: 'projects', views: ['projects_active', 'projects_pending', 'projects_archived', 'projects_subjects_active', 'projects_subjects_pending', 'projects_subjects_archived'] },
-      { id: 'new_system', views: ['entities_active', 'entities_pending', 'entities_archived'] },
+      {
+        id: 'general',
+        views: ['active', 'pending', 'archived', 'entities_active', 'entities_pending', 'entities_archived'],
+        sections: [
+          { id: 'general_subjects', views: ['entities_active', 'entities_pending', 'entities_archived'] },
+          { id: 'general_commissions', views: ['active', 'pending', 'archived'] }
+        ]
+      },
+      {
+        id: 'projects',
+        views: ['projects_active', 'projects_pending', 'projects_archived', 'projects_subjects_active', 'projects_subjects_pending', 'projects_subjects_archived'],
+        sections: [
+          { id: 'projects_subjects', views: ['projects_subjects_active', 'projects_subjects_pending', 'projects_subjects_archived'] },
+          { id: 'projects_commissions', views: ['projects_active', 'projects_pending', 'projects_archived'] }
+        ]
+      },
       { id: 'calendar', views: ['calendar'] },
       { id: 'teamchat', views: ['teamchat'] },
       { id: 'other', views: ['future', 'chatbot', 'palettes', 'analytics', 'admin_users'] }
@@ -179,10 +209,21 @@ const Sidebar: React.FC<SidebarProps> = ({
 
     const activeGroup = groups.find(g => g.views.includes(activeView as string));
     if (activeGroup && !expandedGroups[activeGroup.id]) {
-        setExpandedGroups(prev => ({
-            ...prev,
-            [activeGroup.id]: true
-        }));
+      setExpandedGroups(prev => ({
+        ...prev,
+        [activeGroup.id]: true
+      }));
+    }
+
+    const activeSection = groups
+      .flatMap(group => group.sections ?? [])
+      .find(section => section.views.includes(activeView as string));
+
+    if (activeSection && !expandedGroups[activeSection.id]) {
+      setExpandedGroups(prev => ({
+        ...prev,
+        [activeSection.id]: true
+      }));
     }
   }, [activeView]);
 
@@ -244,53 +285,73 @@ const Sidebar: React.FC<SidebarProps> = ({
 
   const sidebarGroups: SidebarGroup[] = [
     {
-        id: 'new_system',
-        label: 'Nový Systém',
-        icon: <Icons.Tables />,
-        items: [
-          { id: 'entities_active', label: 'Aktuální subjekty', icon: <Icons.Active /> },
-          { id: 'entities_pending', label: 'Ke schválení', icon: <Icons.Pending /> },
-          { id: 'entities_archived', label: 'Archiv', icon: <Icons.Archived /> }
-        ]
-      },
-      {
-        id: 'tables',
-        label: 'Tabulky',
+      id: 'general',
+      label: 'Obecné',
       icon: <Icons.Tables />,
-      items: [
-        { id: 'active', label: 'Aktuální přehled', icon: <Icons.Active /> },
-        { id: 'pending', label: 'Ke schválení', icon: <Icons.Pending /> },
-        { id: 'archived', label: 'Archiv', icon: <Icons.Archived /> }
+      sections: [
+        {
+          id: 'general_subjects',
+          label: 'Subjekty',
+          icon: <Icons.Tables />,
+          items: [
+            { id: 'entities_active', label: 'Aktivní', icon: <Icons.Active /> },
+            { id: 'entities_pending', label: 'Ke schválení', icon: <Icons.Pending /> },
+            { id: 'entities_archived', label: 'Archiv', icon: <Icons.Archived /> }
+          ]
+        },
+        {
+          id: 'general_commissions',
+          label: 'Komise',
+          icon: <Icons.Tables />,
+          items: [
+            { id: 'active', label: 'Aktivní', icon: <Icons.Active /> },
+            { id: 'pending', label: 'Ke schválení', icon: <Icons.Pending /> },
+            { id: 'archived', label: 'Archiv', icon: <Icons.Archived /> }
+          ]
+        }
       ]
     },
     {
       id: 'projects',
       label: 'Projects',
       icon: <Icons.Tables />,
-      items: [
-        { id: 'projects_subjects_active', label: 'Subjekty - Aktivní', icon: <Icons.Active /> },
-        { id: 'projects_subjects_pending', label: 'Subjekty - Ke schválení', icon: <Icons.Pending /> },
-        { id: 'projects_subjects_archived', label: 'Subjekty - Archiv', icon: <Icons.Archived /> },
-        { id: 'projects_active', label: 'Komise - Aktivní', icon: <Icons.Active /> },
-        { id: 'projects_pending', label: 'Komise - Ke schválení', icon: <Icons.Pending /> },
-        { id: 'projects_archived', label: 'Komise - Archiv', icon: <Icons.Archived /> }
+      sections: [
+        {
+          id: 'projects_subjects',
+          label: 'Subjekty',
+          icon: <Icons.Tables />,
+          items: [
+            { id: 'projects_subjects_active', label: 'Aktivní', icon: <Icons.Active /> },
+            { id: 'projects_subjects_pending', label: 'Ke schválení', icon: <Icons.Pending /> },
+            { id: 'projects_subjects_archived', label: 'Archiv', icon: <Icons.Archived /> }
+          ]
+        },
+        {
+          id: 'projects_commissions',
+          label: 'Komise',
+          icon: <Icons.Tables />,
+          items: [
+            { id: 'projects_active', label: 'Aktivní', icon: <Icons.Active /> },
+            { id: 'projects_pending', label: 'Ke schválení', icon: <Icons.Pending /> },
+            { id: 'projects_archived', label: 'Archiv', icon: <Icons.Archived /> }
+          ]
+        }
       ]
-    },
+    }
+  ];
+
+  const sidebarSingleItems: SidebarSingleItem[] = [
     {
       id: 'calendar',
       label: 'Kalendář',
       icon: <Icons.Calendar />,
-      items: [
-        { id: 'calendar', label: 'Kalendář', icon: <Icons.Calendar /> }
-      ]
+      items: [{ id: 'calendar', label: 'Kalendář', icon: <Icons.Calendar /> }]
     },
     {
       id: 'teamchat',
       label: 'Týmový chat',
       icon: <Icons.TeamChat />,
-      items: [
-        { id: 'teamchat', label: 'Týmový chat', icon: <Icons.TeamChat /> }
-      ]
+      items: [{ id: 'teamchat', label: 'Týmový chat', icon: <Icons.TeamChat /> }]
     },
     {
       id: 'other',
@@ -309,20 +370,14 @@ const Sidebar: React.FC<SidebarProps> = ({
   const visibleSidebarGroups = sidebarGroups
     .map((group) => ({
       ...group,
-      items: group.items.filter((item) => {
-        if (item.id === 'admin_users') {
-          return isAdmin;
-        }
-
-        return true;
-      })
+      sections: group.sections.filter((section) => section.items.length > 0)
     }))
     .filter((group) => {
-      if (group.items.length === 0) {
+      if (group.sections.length === 0) {
         return false;
       }
 
-      if (group.id === 'tables' || group.id === 'new_system') {
+      if (group.id === 'general') {
         return canAccessStandard;
       }
 
@@ -332,6 +387,19 @@ const Sidebar: React.FC<SidebarProps> = ({
 
       return true;
     });
+
+  const visibleSidebarSingleItems = sidebarSingleItems
+    .map((group) => ({
+      ...group,
+      items: group.items.filter((item) => {
+        if (item.id === 'admin_users') {
+          return isAdmin;
+        }
+
+        return true;
+      })
+    }))
+    .filter((group) => group.items.length > 0);
 
   return (
     <div className="sidebar">
@@ -454,54 +522,107 @@ const Sidebar: React.FC<SidebarProps> = ({
           )}
         </div>
 
-        {visibleSidebarGroups.map(group => {
-            const isSingleItem = group.items.length === 1 && group.items[0].id === group.id;
+        {visibleSidebarGroups.map(group => (
+          <div key={group.id} className="sidebar-group sidebar-group--major">
+            <button
+              className={`sidebar-group-header ${expandedGroups[group.id] ? 'expanded' : ''}`}
+              onClick={() => toggleGroup(group.id)}
+            >
+              <div className="group-header-content">
+                {group.icon}
+                <span className="group-label">{group.label}</span>
+              </div>
+              <span className="group-chevron">
+                {expandedGroups[group.id] ? <Icons.ChevronDown /> : <Icons.ChevronRight />}
+              </span>
+            </button>
 
-            if (isSingleItem) {
-                const item = group.items[0];
-                return (
+            {expandedGroups[group.id] && (
+              <div className="sidebar-group-content sidebar-group-content--sections">
+                {group.sections.map(section => (
+                  <div key={section.id} className="sidebar-section">
                     <button
-                        key={item.id}
-                        className={`sidebar-button ${activeView === item.id ? 'active' : ''}`}
-                        onClick={() => onViewChange(item.id)}
+                      className={`sidebar-section-header ${expandedGroups[section.id] ? 'expanded' : ''}`}
+                      onClick={() => toggleGroup(section.id)}
                     >
-                        {item.icon}
-                        <span>{item.label}</span>
+                      <div className="group-header-content">
+                        {section.icon}
+                        <span className="group-label">{section.label}</span>
+                      </div>
+                      <span className="group-chevron">
+                        {expandedGroups[section.id] ? <Icons.ChevronDown /> : <Icons.ChevronRight />}
+                      </span>
                     </button>
-                );
-            }
 
-            return (
-                <div key={group.id} className="sidebar-group">
-                    <button 
-                        className={`sidebar-group-header ${expandedGroups[group.id] ? 'expanded' : ''}`}
-                        onClick={() => toggleGroup(group.id)}
-                    >
-                        <div className="group-header-content">
-                            {group.icon}
-                            <span className="group-label">{group.label}</span>
-                        </div>
-                        <span className="group-chevron">
-                            {expandedGroups[group.id] ? <Icons.ChevronDown /> : <Icons.ChevronRight />}
-                        </span>
-                    </button>
-                    
-                    {expandedGroups[group.id] && (
-                        <div className="sidebar-group-content">
-                            {group.items.map(item => (
-                                <button
-                                    key={item.id}
-                                    className={`sidebar-button sub-item ${activeView === item.id ? 'active' : ''}`}
-                                    onClick={() => onViewChange(item.id)}
-                                >
-                                    {item.icon}
-                                    <span>{item.label}</span>
-                                </button>
-                            ))}
-                        </div>
+                    {expandedGroups[section.id] && (
+                      <div className="sidebar-section-content">
+                        {section.items.map(item => (
+                          <button
+                            key={item.id}
+                            className={`sidebar-button sidebar-button--leaf ${activeView === item.id ? 'active' : ''}`}
+                            onClick={() => onViewChange(item.id)}
+                          >
+                            {item.icon}
+                            <span>{item.label}</span>
+                          </button>
+                        ))}
+                      </div>
                     )}
-                </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        ))}
+
+        {visibleSidebarSingleItems.map(group => {
+          const isSingleItem = group.items.length === 1 && group.items[0].id === group.id;
+
+          if (isSingleItem) {
+            const item = group.items[0];
+            return (
+              <button
+                key={item.id}
+                className={`sidebar-button ${activeView === item.id ? 'active' : ''}`}
+                onClick={() => onViewChange(item.id)}
+              >
+                {item.icon}
+                <span>{item.label}</span>
+              </button>
             );
+          }
+
+          return (
+            <div key={group.id} className="sidebar-group">
+              <button
+                className={`sidebar-group-header ${expandedGroups[group.id] ? 'expanded' : ''}`}
+                onClick={() => toggleGroup(group.id)}
+              >
+                <div className="group-header-content">
+                  {group.icon}
+                  <span className="group-label">{group.label}</span>
+                </div>
+                <span className="group-chevron">
+                  {expandedGroups[group.id] ? <Icons.ChevronDown /> : <Icons.ChevronRight />}
+                </span>
+              </button>
+
+              {expandedGroups[group.id] && (
+                <div className="sidebar-group-content">
+                  {group.items.map(item => (
+                    <button
+                      key={item.id}
+                      className={`sidebar-button sub-item ${activeView === item.id ? 'active' : ''}`}
+                      onClick={() => onViewChange(item.id)}
+                    >
+                      {item.icon}
+                      <span>{item.label}</span>
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
+          );
         })}
 
         <div className="sidebar-separator"></div>

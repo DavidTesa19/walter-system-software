@@ -229,6 +229,80 @@
   padding-left: 0.5rem;
 }
 
+.sidebar-group--major {
+  margin-bottom: 0.35rem;
+}
+
+.sidebar-group-content--sections {
+  gap: 0.35rem;
+  padding-left: 0.6rem;
+}
+
+.sidebar-section {
+  display: flex;
+  flex-direction: column;
+  gap: 0.15rem;
+}
+
+.sidebar-section-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  width: 100%;
+  padding: 0.55rem 0.85rem 0.55rem 1.2rem;
+  border: 1px solid transparent;
+  border-radius: 0.45rem;
+  background: transparent;
+  color: var(--color-text-muted);
+  cursor: pointer;
+  font-size: 0.84rem;
+  font-weight: 600;
+  font-family: var(--font-subheading);
+  transition: all 0.2s ease;
+  text-align: left;
+}
+
+.sidebar-section-header:hover {
+  background: var(--color-surface-hover);
+  color: var(--color-text);
+}
+
+.sidebar-section-header svg {
+  flex-shrink: 0;
+  opacity: 0.8;
+}
+
+.sidebar-section-content {
+  display: flex;
+  flex-direction: column;
+  gap: 0.15rem;
+  padding-left: 1.1rem;
+}
+
+.sidebar-button--leaf {
+  padding: 0.55rem 0.9rem 0.55rem 3.2rem;
+  font-size: 0.83rem;
+  position: relative;
+}
+
+.sidebar-button--leaf::before {
+  content: '';
+  position: absolute;
+  left: 1.95rem;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+  background-color: var(--color-border);
+  transition: background-color 0.2s ease;
+}
+
+.sidebar-button--leaf.active::before,
+.sidebar-button--leaf:hover::before {
+  background-color: var(--color-primary);
+}
+
 /* Indented sub-items */
 .sidebar-button.sub-item {
   padding: 0.6rem 1rem 0.6rem 2.75rem; /* Increased left padding for indentation */
