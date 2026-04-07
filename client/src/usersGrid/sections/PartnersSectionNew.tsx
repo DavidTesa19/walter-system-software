@@ -19,7 +19,7 @@ import useProfileNotes from "../hooks/useProfileNotes";
 import { ApproveRestoreCellRenderer, DeleteArchiveCellRenderer } from "../cells/RowActionCellRenderers";
 import { fieldOptions } from "../fieldOptions";
 import { formatProfileDate } from "../utils/profileUtils";
-import { DEFAULT_WORKFLOW_STATUS, getNormalizedWorkflowStatus, WORKFLOW_STATUS_VALUES } from "../workflowStatus";
+import { compareWorkflowStatuses, DEFAULT_WORKFLOW_STATUS, getNormalizedWorkflowStatus, WORKFLOW_STATUS_VALUES } from "../workflowStatus";
 
 type PartnerEntityApi = {
   id: number;
@@ -865,7 +865,7 @@ const PartnersSectionNew: React.FC<SectionProps> = ({ viewMode, isActive, system
       { field: "position", headerName: "Zakázka", filter: true, editable: (params) => !params.data?.entityOnly, flex: 1.5, minWidth: 150 },
       { field: "budget", headerName: "Rozpočet", filter: true, editable: (params) => !params.data?.entityOnly, flex: 1, minWidth: 110 },
       { field: "commission_value", headerName: "Provize", filter: true, editable: (params) => !params.data?.entityOnly, flex: 1, minWidth: 110 },
-      { field: "state", headerName: "Stav", filter: true, editable: false, flex: 1.1, minWidth: 140, cellRenderer: StatusCellRenderer },
+      { field: "state", headerName: "Stav", filter: true, editable: false, flex: 1.1, minWidth: 140, comparator: (left, right) => compareWorkflowStatuses(left, right), cellRenderer: StatusCellRenderer },
       { field: "priority", headerName: "Priorita", filter: true, editable: (params) => !params.data?.entityOnly, flex: 0.9, minWidth: 90, cellEditor: "agSelectCellEditor", cellEditorParams: { values: ["Nízká", "Střední", "Vysoká", "Urgentní"] } }
     ];
 

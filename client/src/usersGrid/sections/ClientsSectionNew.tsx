@@ -19,7 +19,7 @@ import useProfileNotes from "../hooks/useProfileNotes";
 import { ApproveRestoreCellRenderer, DeleteArchiveCellRenderer } from "../cells/RowActionCellRenderers";
 import { fieldOptions } from "../fieldOptions";
 import { formatProfileDate } from "../utils/profileUtils";
-import { DEFAULT_WORKFLOW_STATUS, getNormalizedWorkflowStatus, WORKFLOW_STATUS_VALUES } from "../workflowStatus";
+import { compareWorkflowStatuses, DEFAULT_WORKFLOW_STATUS, getNormalizedWorkflowStatus, WORKFLOW_STATUS_VALUES } from "../workflowStatus";
 
 type ClientEntityApi = {
   id: number;
@@ -1156,6 +1156,7 @@ const ClientsSectionNew: React.FC<SectionProps> = ({
           editable: false,
           flex: 1,
           minWidth: 140,
+          comparator: (left, right) => compareWorkflowStatuses(left, right),
           cellRenderer: StatusCellRenderer
         },
         {

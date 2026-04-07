@@ -15,7 +15,7 @@ import useProfileDocuments from "../hooks/useProfileDocuments";
 import useProfileNotes from "../hooks/useProfileNotes";
 import { ApproveRestoreCellRenderer, DeleteArchiveCellRenderer } from "../cells/RowActionCellRenderers";
 import { useUndoRedo } from "../../utils/undoRedo";
-import { getNormalizedWorkflowStatus } from "../workflowStatus";
+import { compareWorkflowStatuses, getNormalizedWorkflowStatus } from "../workflowStatus";
 
 const cloneRecord = (r: any) => JSON.parse(JSON.stringify(r));
 
@@ -733,6 +733,7 @@ const TipersSection: React.FC<SectionProps> = ({
         filter: true,
         flex: 1,
         minWidth: 120,
+        comparator: (left, right) => compareWorkflowStatuses(left, right),
         cellRenderer: StatusCellRenderer
       },
       {

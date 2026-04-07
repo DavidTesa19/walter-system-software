@@ -16,7 +16,7 @@ import { formatProfileDate, normalizeText, toStatusBadge } from "../utils/profil
 import type { SectionProps } from "./SectionTypes";
 import { ApproveRestoreCellRenderer, DeleteArchiveCellRenderer } from "../cells/RowActionCellRenderers";
 import { useUndoRedo } from "../../utils/undoRedo";
-import { getNormalizedWorkflowStatus } from "../workflowStatus";
+import { compareWorkflowStatuses, getNormalizedWorkflowStatus } from "../workflowStatus";
 
 const cloneRecord = (r: any) => JSON.parse(JSON.stringify(r));
 
@@ -766,6 +766,7 @@ const ClientsSection: React.FC<SectionProps> = ({
         filter: true,
         flex: 1,
         minWidth: 120,
+        comparator: (left, right) => compareWorkflowStatuses(left, right),
         cellRenderer: StatusCellRenderer
       }
       );

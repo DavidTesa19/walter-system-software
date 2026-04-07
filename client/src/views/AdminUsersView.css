@@ -1,112 +1,158 @@
 .admin-users-view {
+  --admin-surface: color-mix(in srgb, var(--color-surface, #ffffff) 94%, var(--color-background, #f8fafc) 6%);
+  --admin-surface-strong: color-mix(in srgb, var(--color-surface, #ffffff) 88%, var(--color-accent, #0ea5e9) 12%);
+  --admin-border: color-mix(in srgb, var(--color-border, rgba(15, 23, 42, 0.14)) 88%, transparent);
+  --admin-shadow: 0 22px 50px rgba(15, 23, 42, 0.08);
   display: flex;
   flex-direction: column;
-  gap: 20px;
-  padding: 28px;
+  gap: 22px;
+  padding: 32px;
+  font-family: var(--font-body, "Sora", "Inter", "Segoe UI", sans-serif);
+  background:
+    radial-gradient(circle at top right, color-mix(in srgb, var(--color-accent, #0ea5e9) 10%, transparent) 0, transparent 32%),
+    linear-gradient(180deg, color-mix(in srgb, var(--color-background, #f8fafc) 96%, white 4%) 0%, var(--color-background, #f8fafc) 100%);
 }
 
 .admin-users-header {
   display: flex;
   align-items: flex-start;
   justify-content: space-between;
-  gap: 16px;
+  gap: 24px;
+  padding: 4px 2px;
 }
 
 .admin-users-eyebrow {
   display: inline-block;
-  margin-bottom: 8px;
-  color: var(--color-accent, #1e6b52);
-  font-size: 0.78rem;
+  margin-bottom: 10px;
+  color: var(--color-accent, #0ea5e9);
+  font-size: 0.76rem;
   font-weight: 700;
-  letter-spacing: 0.12em;
+  letter-spacing: 0.18em;
   text-transform: uppercase;
 }
 
 .admin-users-header h1 {
   margin: 0;
-  font-size: clamp(1.8rem, 3vw, 2.6rem);
+  font-size: clamp(2rem, 3vw, 3rem);
+  line-height: 0.98;
+  font-family: var(--font-subheading, "Sora", "Inter", "Segoe UI", sans-serif);
+  font-weight: 800;
+  letter-spacing: -0.04em;
 }
 
 .admin-users-header p {
-  margin: 8px 0 0;
-  max-width: 720px;
+  margin: 12px 0 0;
+  max-width: 760px;
   color: var(--color-text-muted, #5f6b76);
+  font-size: 0.98rem;
+  line-height: 1.6;
 }
 
 .admin-users-refresh,
 .admin-users-save {
-  border: 1px solid color-mix(in srgb, var(--color-accent, #1e6b52) 30%, transparent);
-  background: color-mix(in srgb, var(--color-accent, #1e6b52) 12%, white);
-  color: var(--color-text, #1e293b);
-  border-radius: 12px;
-  padding: 10px 14px;
-  font-weight: 600;
+  border: 1px solid color-mix(in srgb, var(--color-accent, #0ea5e9) 30%, transparent);
+  background: linear-gradient(180deg, color-mix(in srgb, var(--color-accent, #0ea5e9) 14%, white) 0%, color-mix(in srgb, var(--color-accent, #0ea5e9) 8%, white) 100%);
+  color: var(--color-text, #0f172a);
+  border-radius: 14px;
+  padding: 11px 16px;
+  font-weight: 700;
+  font-family: var(--font-body, "Sora", "Inter", "Segoe UI", sans-serif);
   cursor: pointer;
+  transition: transform 0.18s ease, box-shadow 0.18s ease, border-color 0.18s ease;
+}
+
+.admin-users-refresh:hover,
+.admin-users-save:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 12px 22px rgba(14, 165, 233, 0.12);
 }
 
 .admin-users-refresh:disabled,
 .admin-users-save:disabled {
   cursor: not-allowed;
   opacity: 0.6;
+  transform: none;
+  box-shadow: none;
 }
 
 .admin-users-metrics {
   display: grid;
   grid-template-columns: repeat(4, minmax(0, 1fr));
-  gap: 14px;
+  gap: 16px;
 }
 
 .admin-users-metric,
 .admin-users-card {
-  border: 1px solid var(--color-border, rgba(15, 23, 42, 0.12));
-  background: color-mix(in srgb, var(--color-surface, #ffffff) 92%, var(--color-accent, #1e6b52) 8%);
-  border-radius: 18px;
-  box-shadow: 0 18px 40px rgba(15, 23, 42, 0.08);
+  border: 1px solid var(--admin-border);
+  background: var(--admin-surface);
+  border-radius: 24px;
+  box-shadow: var(--admin-shadow);
+  backdrop-filter: blur(10px);
 }
 
 .admin-users-metric {
-  padding: 18px;
+  padding: 22px 22px 20px;
+  position: relative;
+  overflow: hidden;
+}
+
+.admin-users-metric::before {
+  content: "";
+  position: absolute;
+  inset: 0 auto auto 0;
+  width: 100%;
+  height: 3px;
+  background: linear-gradient(90deg, var(--color-accent, #0ea5e9), color-mix(in srgb, var(--color-primary, #2563eb) 55%, white 45%));
+  opacity: 0.6;
 }
 
 .admin-users-metric-value {
   display: block;
-  font-size: 1.8rem;
-  font-weight: 700;
+  font-size: 2rem;
+  font-weight: 800;
+  font-family: var(--font-subheading, "Sora", "Inter", "Segoe UI", sans-serif);
 }
 
 .admin-users-metric-label {
   display: block;
-  margin-top: 6px;
+  margin-top: 8px;
   color: var(--color-text-muted, #5f6b76);
+  font-size: 0.92rem;
 }
 
 .admin-users-card {
-  padding: 18px;
+  padding: 24px;
 }
 
 .admin-users-create-header h2 {
   margin: 0;
-  font-size: 1.2rem;
+  font-size: 1.28rem;
+  font-family: var(--font-subheading, "Sora", "Inter", "Segoe UI", sans-serif);
+  font-weight: 750;
 }
 
-.admin-users-create-header p {
+.admin-users-create-header p,
+.admin-users-list-header p {
   margin: 6px 0 0;
   color: var(--color-text-muted, #5f6b76);
+  line-height: 1.55;
 }
 
 .admin-users-create-grid {
   display: grid;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
-  gap: 14px;
-  margin-top: 18px;
+  grid-template-columns: minmax(220px, 1.3fr) minmax(220px, 1.3fr) minmax(180px, 1fr) minmax(180px, 1fr);
+  gap: 16px;
+  margin-top: 22px;
 }
 
 .admin-users-create-actions {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 14px;
-  margin-top: 16px;
+  gap: 18px;
+  margin-top: 20px;
+  padding-top: 18px;
+  border-top: 1px solid var(--admin-border);
 }
 
 .admin-users-card--narrow {
@@ -130,8 +176,37 @@
 }
 
 .admin-users-state {
-  padding: 18px 4px;
+  padding: 22px 4px 8px;
   color: var(--color-text-muted, #5f6b76);
+}
+
+.admin-users-list-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+  margin-bottom: 18px;
+}
+
+.admin-users-list-header h2 {
+  margin: 0;
+  font-size: 1.28rem;
+  font-family: var(--font-subheading, "Sora", "Inter", "Segoe UI", sans-serif);
+  font-weight: 750;
+}
+
+.admin-users-list-count {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 44px;
+  height: 44px;
+  padding: 0 14px;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--color-accent, #0ea5e9) 12%, white);
+  border: 1px solid color-mix(in srgb, var(--color-accent, #0ea5e9) 24%, transparent);
+  font-weight: 800;
+  font-family: var(--font-subheading, "Sora", "Inter", "Segoe UI", sans-serif);
 }
 
 .admin-users-table-wrap {
@@ -140,27 +215,52 @@
 
 .admin-users-table {
   width: 100%;
-  border-collapse: collapse;
+  border-collapse: separate;
+  border-spacing: 0 12px;
 }
 
 .admin-users-table th,
 .admin-users-table td {
-  padding: 14px 12px;
-  border-bottom: 1px solid var(--color-border, rgba(15, 23, 42, 0.12));
+  padding: 16px 14px;
+  border-bottom: none;
   text-align: left;
   vertical-align: top;
+  background: color-mix(in srgb, var(--color-surface, #ffffff) 96%, var(--color-accent, #0ea5e9) 4%);
 }
 
 .admin-users-table th {
   color: var(--color-text-muted, #5f6b76);
-  font-size: 0.86rem;
+  font-size: 0.8rem;
   font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  background: transparent;
+  padding: 0 14px 6px;
+}
+
+.admin-users-table tbody tr {
+  filter: drop-shadow(0 10px 22px rgba(15, 23, 42, 0.06));
+}
+
+.admin-users-table tbody td:first-child {
+  border-top-left-radius: 18px;
+  border-bottom-left-radius: 18px;
+}
+
+.admin-users-table tbody td:last-child {
+  border-top-right-radius: 18px;
+  border-bottom-right-radius: 18px;
+}
+
+.admin-users-table tbody tr:hover td {
+  background: color-mix(in srgb, var(--color-surface, #ffffff) 90%, var(--color-accent, #0ea5e9) 10%);
 }
 
 .admin-users-identity {
   display: flex;
   align-items: center;
   gap: 8px;
+  flex-wrap: wrap;
 }
 
 .admin-users-self-badge,
@@ -174,12 +274,12 @@
 }
 
 .admin-users-self-badge {
-  background: rgba(30, 107, 82, 0.12);
-  color: #1e6b52;
+  background: color-mix(in srgb, var(--color-accent, #0ea5e9) 16%, white);
+  color: color-mix(in srgb, var(--color-accent, #0ea5e9) 82%, black 18%);
 }
 
 .admin-users-role {
-  background: rgba(15, 23, 42, 0.08);
+  background: rgba(15, 23, 42, 0.07);
   color: var(--color-text, #1e293b);
   text-transform: capitalize;
 }
@@ -192,30 +292,40 @@
 .admin-users-scope-field {
   display: flex;
   flex-direction: column;
-  gap: 6px;
+  gap: 8px;
 }
 
 .admin-users-scope-field input,
 .admin-users-scope-field select {
-  min-width: 180px;
-  border: 1px solid var(--color-border, rgba(15, 23, 42, 0.16));
-  border-radius: 10px;
-  padding: 10px 12px;
-  background: var(--color-surface, #ffffff);
+  min-width: 160px;
+  border: 1px solid color-mix(in srgb, var(--color-border, rgba(15, 23, 42, 0.16)) 86%, transparent);
+  border-radius: 14px;
+  padding: 11px 13px;
+  background: color-mix(in srgb, var(--color-surface, #ffffff) 96%, var(--color-background, #f8fafc) 4%);
   color: var(--color-text, #1e293b);
+  font-family: var(--font-body, "Sora", "Inter", "Segoe UI", sans-serif);
+  transition: border-color 0.18s ease, box-shadow 0.18s ease, background 0.18s ease;
+}
+
+.admin-users-scope-field input:focus,
+.admin-users-scope-field select:focus,
+.admin-users-password-field input:focus {
+  outline: none;
+  border-color: color-mix(in srgb, var(--color-accent, #0ea5e9) 56%, transparent);
+  box-shadow: 0 0 0 4px color-mix(in srgb, var(--color-accent, #0ea5e9) 12%, transparent);
 }
 
 .admin-users-actions-cell {
   display: flex;
   flex-direction: column;
-  gap: 10px;
-  min-width: 190px;
+  gap: 12px;
+  min-width: 220px;
 }
 
 .admin-users-password-field {
   display: flex;
   flex-direction: column;
-  gap: 6px;
+  gap: 8px;
 }
 
 .admin-users-password-field span {
@@ -225,15 +335,16 @@
 }
 
 .admin-users-password-field input {
-  border: 1px solid var(--color-border, rgba(15, 23, 42, 0.16));
-  border-radius: 10px;
-  padding: 10px 12px;
-  background: var(--color-surface, #ffffff);
+  border: 1px solid color-mix(in srgb, var(--color-border, rgba(15, 23, 42, 0.16)) 86%, transparent);
+  border-radius: 14px;
+  padding: 11px 13px;
+  background: color-mix(in srgb, var(--color-surface, #ffffff) 96%, var(--color-background, #f8fafc) 4%);
   color: var(--color-text, #1e293b);
+  font-family: var(--font-body, "Sora", "Inter", "Segoe UI", sans-serif);
 }
 
 .admin-users-save--secondary {
-  background: color-mix(in srgb, var(--color-surface, #ffffff) 70%, var(--color-accent, #1e6b52) 30%);
+  background: linear-gradient(180deg, color-mix(in srgb, var(--color-surface, #ffffff) 88%, var(--color-accent, #0ea5e9) 12%) 0%, color-mix(in srgb, var(--color-surface, #ffffff) 76%, var(--color-accent, #0ea5e9) 24%) 100%);
 }
 
 .admin-users-scope-field span,
@@ -243,9 +354,14 @@
   line-height: 1.35;
 }
 
+.admin-users-identity strong {
+  font-size: 0.98rem;
+  font-family: var(--font-subheading, "Sora", "Inter", "Segoe UI", sans-serif);
+}
+
 @media (max-width: 960px) {
   .admin-users-view {
-    padding: 18px;
+    padding: 22px 18px;
   }
 
   .admin-users-header {
@@ -264,9 +380,18 @@
     flex-direction: column;
     align-items: flex-start;
   }
+
+  .admin-users-list-header {
+    flex-direction: column;
+    align-items: flex-start;
+  }
 }
 
 @media (max-width: 640px) {
+  .admin-users-view {
+    padding: 18px 14px;
+  }
+
   .admin-users-metrics {
     grid-template-columns: 1fr;
   }
@@ -275,9 +400,18 @@
     grid-template-columns: 1fr;
   }
 
+  .admin-users-card {
+    padding: 18px;
+    border-radius: 20px;
+  }
+
   .admin-users-table th,
   .admin-users-table td {
-    padding: 12px 8px;
+    padding: 12px 10px;
     font-size: 0.92rem;
+  }
+
+  .admin-users-actions-cell {
+    min-width: 180px;
   }
 }

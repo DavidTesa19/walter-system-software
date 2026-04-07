@@ -377,6 +377,13 @@ export default function AdminUsersView() {
       </div>
 
       <div className="admin-users-card">
+        <div className="admin-users-list-header">
+          <div>
+            <h2>Existující uživatelé</h2>
+            <p>Upravujte role, přístup a přihlašovací hesla na jednom místě.</p>
+          </div>
+          <div className="admin-users-list-count">{users.length}</div>
+        </div>
         {isLoading ? (
           <div className="admin-users-state">Načítání uživatelů…</div>
         ) : users.length === 0 ? (
