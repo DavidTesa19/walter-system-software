@@ -355,6 +355,26 @@
   min-height: var(--grid-min-height);
 }
 
+.grid-wrapper .ag-theme-quartz {
+  --ag-background-color: var(--color-surface);
+  --ag-foreground-color: var(--color-text);
+  --ag-border-color: var(--color-border);
+  --ag-header-background-color: var(--color-primary);
+  --ag-header-foreground-color: var(--color-primary-contrast);
+  --ag-odd-row-background-color: color-mix(in srgb, var(--color-surface-alt) 70%, var(--color-surface));
+  --ag-row-hover-color: color-mix(in srgb, var(--color-primary) 12%, var(--color-surface));
+  --ag-selected-row-background-color: color-mix(in srgb, var(--color-primary) 20%, var(--color-surface));
+  --ag-range-selection-border-color: var(--color-primary);
+  --ag-input-focus-border-color: var(--color-primary);
+  --ag-font-family: var(--font-body);
+  --ag-font-size: 11.5px;
+  --ag-grid-size: 4px;
+  --ag-list-item-height: 26px;
+  --ag-row-height: 32px;
+  --ag-header-height: 34px;
+  --ag-icon-size: 12px;
+}
+
 .grid-wrapper .ag-root,
 .grid-wrapper .ag-root-wrapper,
 .grid-wrapper .ag-root-wrapper-body {
@@ -590,9 +610,13 @@
   --ag-selected-row-background-color: color-mix(in srgb, var(--color-primary) 20%, var(--color-surface));
   --ag-range-selection-border-color: var(--color-primary);
   --ag-input-focus-border-color: var(--color-primary);
-  --ag-row-height: 36px;
-  --ag-header-height: 40px;
-  --ag-font-size: 13px;
+  --ag-font-family: var(--font-body);
+  --ag-font-size: 11.5px;
+  --ag-grid-size: 4px;
+  --ag-list-item-height: 26px;
+  --ag-row-height: 32px;
+  --ag-header-height: 34px;
+  --ag-icon-size: 12px;
 }
 
 .ag-theme-quartz .ag-cell,
@@ -601,6 +625,29 @@
 .ag-theme-quartz .ag-full-width-row .ag-cell {
   font-family: var(--font-body);
   color: var(--color-text);
+}
+
+.grid-wrapper .ag-theme-quartz .ag-header-cell-text {
+  font-size: 0.7rem;
+  font-weight: 700;
+}
+
+.grid-wrapper .ag-theme-quartz .ag-cell,
+.grid-wrapper .ag-theme-quartz .ag-floating-filter-input,
+.grid-wrapper .ag-theme-quartz .ag-input-field-input,
+.grid-wrapper .ag-theme-quartz .ag-picker-field-wrapper {
+  font-size: 0.74rem;
+}
+
+.grid-wrapper .ag-theme-quartz .ag-cell-wrapper,
+.grid-wrapper .ag-theme-quartz .ag-header-cell-comp-wrapper {
+  gap: 4px;
+}
+
+.grid-wrapper .ag-theme-quartz .ag-header-cell,
+.grid-wrapper .ag-theme-quartz .ag-cell {
+  padding-left: 6px;
+  padding-right: 6px;
 }
 
 /* Style for editable cells */
