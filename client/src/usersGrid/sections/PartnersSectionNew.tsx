@@ -3,6 +3,7 @@ import { AgGridReact } from "ag-grid-react";
 import type { ColDef } from "ag-grid-community";
 import type { PartnerEntity, PartnerCommission, PartnerGridRow } from "../types/entities";
 import ProfileCellRenderer from "../cells/ProfileCellRenderer";
+import AssignedUsersCellRenderer from "../cells/AssignedUsersCellRenderer";
 import EntityCommissionCreateModal from "../components/EntityCommissionCreateModal";
 import EntityCommissionProfilePanel, {
   type EntityData,
@@ -899,15 +900,33 @@ const PartnersSectionNew: React.FC<SectionProps> = ({ viewMode, isActive, system
 
   const columnDefs = useMemo<ColDef<PartnerGridRow>[]>(() => {
     const cols: ColDef<PartnerGridRow>[] = [];
+    const assignedUsersColumn: ColDef<PartnerGridRow> = {
+      field: "assigned_user_ids",
+      headerName: "Přiřazení",
+      editable: false,
+      sortable: false,
+      filter: true,
+      minWidth: 128,
+      maxWidth: 148,
+      cellRenderer: AssignedUsersCellRenderer,
+      cellRendererParams: {
+        users: assignableUsers,
+        maxVisible: 3
+      },
+      filterValueGetter: (params) => formatAssignedUsernames(params.data?.assigned_user_ids, assignableUsers, params.data?.assigned_to) ?? "",
+      tooltipValueGetter: (params) => formatAssignedUsernames(params.data?.assigned_user_ids, assignableUsers, params.data?.assigned_to) ?? ""
+    };
     const activeSubjectCols: ColDef<PartnerGridRow>[] = [
       { field: "mobile", headerName: "Telefon", filter: true, editable: true, flex: 1, minWidth: 120 },
       { field: "email", headerName: "E-mail", filter: true, editable: true, flex: 1.2, minWidth: 170 },
+      assignedUsersColumn,
       { field: "commission_count", headerName: "Počet zakázek", filter: true, editable: false, flex: 0.9, minWidth: 120 }
     ];
     const commissionCols: ColDef<PartnerGridRow>[] = [
       { field: "position", headerName: "Zakázka", filter: true, editable: (params) => !params.data?.entityOnly, flex: 1.5, minWidth: 150 },
       { field: "budget", headerName: "Rozpočet", filter: true, editable: (params) => !params.data?.entityOnly, flex: 1, minWidth: 110 },
       { field: "commission_value", headerName: "Provize", filter: true, editable: (params) => !params.data?.entityOnly, flex: 1, minWidth: 110 },
+      assignedUsersColumn,
       { field: "state", headerName: "Stav", filter: true, editable: false, flex: 1.1, minWidth: 140, comparator: (left, right) => compareWorkflowStatuses(left, right), cellRenderer: StatusCellRenderer },
       { field: "priority", headerName: "Priorita", filter: true, editable: (params) => !params.data?.entityOnly, flex: 0.9, minWidth: 90, cellEditor: "agSelectCellEditor", cellEditorParams: { values: ["Nízká", "Střední", "Vysoká", "Urgentní"] } }
     ];
@@ -942,7 +961,7 @@ const PartnersSectionNew: React.FC<SectionProps> = ({ viewMode, isActive, system
     );
 
     return cols;
-  }, [viewMode]);
+  }, [assignableUsers, viewMode]);
 
   return (
     <>

@@ -3,6 +3,7 @@ import { AgGridReact } from "ag-grid-react";
 import type { ColDef } from "ag-grid-community";
 import type { TiperEntity, TiperCommission, TiperGridRow } from "../types/entities";
 import ProfileCellRenderer from "../cells/ProfileCellRenderer";
+import AssignedUsersCellRenderer from "../cells/AssignedUsersCellRenderer";
 import EntityCommissionCreateModal from "../components/EntityCommissionCreateModal";
 import EntityCommissionProfilePanel, {
   type EntityData,
@@ -992,6 +993,22 @@ const TipersSectionNew: React.FC<SectionProps> = ({
 
   const columnDefs = useMemo<ColDef<TiperGridRow>[]>(() => {
     const cols: ColDef<TiperGridRow>[] = [];
+    const assignedUsersColumn: ColDef<TiperGridRow> = {
+      field: "assigned_user_ids",
+      headerName: "Přiřazení",
+      editable: false,
+      sortable: false,
+      filter: true,
+      minWidth: 128,
+      maxWidth: 148,
+      cellRenderer: AssignedUsersCellRenderer,
+      cellRendererParams: {
+        users: assignableUsers,
+        maxVisible: 3
+      },
+      filterValueGetter: (params) => formatAssignedUsernames(params.data?.assigned_user_ids, assignableUsers, params.data?.assigned_to) ?? "",
+      tooltipValueGetter: (params) => formatAssignedUsernames(params.data?.assigned_user_ids, assignableUsers, params.data?.assigned_to) ?? ""
+    };
 
     if (viewMode === "pending" || viewMode === "archived") {
       cols.push({
@@ -1115,7 +1132,8 @@ const TipersSectionNew: React.FC<SectionProps> = ({
         editable: true,
         flex: 1,
         minWidth: 100
-      }
+      },
+      assignedUsersColumn
     );
 
     if (viewMode === "active") {
@@ -1171,6 +1189,7 @@ const TipersSectionNew: React.FC<SectionProps> = ({
           flex: 0.8,
           minWidth: 80
         },
+        assignedUsersColumn,
         {
           field: "state",
           headerName: "Stav",
@@ -1197,7 +1216,7 @@ const TipersSectionNew: React.FC<SectionProps> = ({
     }
 
     return cols;
-  }, [viewMode]);
+  }, [assignableUsers, viewMode]);
 
   // ==========================================================================
   // RENDER
