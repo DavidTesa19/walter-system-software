@@ -42,12 +42,12 @@ const StatusCellRenderer: React.FC<any> = (params) => {
       row.style.cssText = `
         display: flex;
         align-items: center;
-        gap: 8px;
-        padding: 8px 14px;
+        gap: 7px;
+        padding: 6px 12px;
         cursor: pointer;
         font-family: inherit;
         font-weight: 500;
-        font-size: 13px;
+        font-size: 12px;
         color: ${isDark ? "#e2e8f0" : "#1e293b"};
         transition: background 0.15s;
       `;
@@ -102,9 +102,9 @@ const StatusCellRenderer: React.FC<any> = (params) => {
       style={{
         display: "inline-flex",
         alignItems: "center",
-        gap: "6px",
+        gap: "5px",
         fontWeight: 500,
-        fontSize: "13px",
+        fontSize: "12px",
         cursor: "pointer",
         userSelect: "none",
         height: "100%",
@@ -112,8 +112,8 @@ const StatusCellRenderer: React.FC<any> = (params) => {
     >
       <span
         style={{
-          width: "8px",
-          height: "8px",
+          width: "7px",
+          height: "7px",
           borderRadius: "50%",
           backgroundColor: current.dotColor,
           flexShrink: 0,

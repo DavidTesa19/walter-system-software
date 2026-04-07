@@ -5,7 +5,7 @@
 }
 
 .assigned-users-empty {
-  font-size: 0.76rem;
+  font-size: 0.68rem;
   font-weight: 600;
   letter-spacing: 0.01em;
   color: color-mix(in srgb, var(--color-text, #0f172a) 48%, transparent);
@@ -14,21 +14,21 @@
 .assigned-users-stack {
   display: inline-flex;
   align-items: center;
-  padding: 2px 6px 2px 0;
+  padding: 1px 4px 1px 0;
 }
 
 .assigned-users-avatar {
   position: relative;
-  width: 26px;
-  height: 26px;
-  margin-left: -8px;
+  width: 22px;
+  height: 22px;
+  margin-left: -6px;
   border-radius: 999px;
-  border: 2px solid var(--color-surface, #ffffff);
-  box-shadow: 0 10px 22px rgba(15, 23, 42, 0.14);
+  border: 1.5px solid var(--color-surface, #ffffff);
+  box-shadow: 0 6px 16px rgba(15, 23, 42, 0.12);
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  font-size: 0.66rem;
+  font-size: 0.56rem;
   font-weight: 800;
   letter-spacing: 0.06em;
   color: var(--avatar-fg, #0f172a);

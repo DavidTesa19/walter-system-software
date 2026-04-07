@@ -172,17 +172,17 @@ th,
 
 .ag-theme-quartz {
   --ag-font-family: var(--font-body);
-  --ag-font-size: 12.5px;
-  --ag-grid-size: 5px;
-  --ag-list-item-height: 30px;
-  --ag-row-height: 36px;
-  --ag-header-height: 38px;
-  --ag-icon-size: 14px;
+  --ag-font-size: 11.5px;
+  --ag-grid-size: 4px;
+  --ag-list-item-height: 26px;
+  --ag-row-height: 32px;
+  --ag-header-height: 34px;
+  --ag-icon-size: 12px;
   font-family: var(--font-body);
 }
 
 .ag-theme-quartz .ag-header-cell-text {
-  font-size: 0.76rem;
+  font-size: 0.7rem;
   font-weight: 700;
 }
 
@@ -190,7 +190,18 @@ th,
 .ag-theme-quartz .ag-floating-filter-input,
 .ag-theme-quartz .ag-input-field-input,
 .ag-theme-quartz .ag-picker-field-wrapper {
-  font-size: 0.8rem;
+  font-size: 0.74rem;
+}
+
+.ag-theme-quartz .ag-cell-wrapper,
+.ag-theme-quartz .ag-header-cell-comp-wrapper {
+  gap: 4px;
+}
+
+.ag-theme-quartz .ag-header-cell,
+.ag-theme-quartz .ag-cell {
+  padding-left: 6px;
+  padding-right: 6px;
 }
 
 button:hover:not(:disabled) {
