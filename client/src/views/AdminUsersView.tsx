@@ -2,6 +2,9 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import type { UserRole } from '../auth/AuthContext';
 import { useAuth } from '../auth/AuthContext';
 import { apiGet, apiPatch, apiPost } from '../utils/api';
+import ActivityIndicator from '../activity/ActivityIndicator';
+import { useActivity } from '../activity/ActivityContext';
+import { ADMIN_USERS_RECORD_SCOPE } from '../activity/activityKeys';
 import './AdminUsersView.css';
 
 type AccessScope = 'all' | 'standard' | 'projects';
@@ -61,6 +64,7 @@ const INITIAL_CREATE_FORM: CreateUserFormState = {
 
 export default function AdminUsersView() {
   const { user } = useAuth();
+  const { getItemActivity, markItemSeen } = useActivity();
   const [users, setUsers] = useState<ManagedUser[]>([]);
   const [draftRoles, setDraftRoles] = useState<Record<number, UserRole>>({});
   const [draftScopes, setDraftScopes] = useState<Record<number, AccessScope>>({});
@@ -185,6 +189,7 @@ export default function AdminUsersView() {
         ...current,
         [managedUser.id]: updatedUser.accessScope,
       }));
+      markItemSeen(ADMIN_USERS_RECORD_SCOPE, updatedUser.id, updatedUser.updatedAt ?? updatedUser.createdAt ?? null);
       setSuccessMessage(`Uživatel ${managedUser.username} byl upraven.`);
     } catch (saveError) {
       console.error('Failed to update user settings:', saveError);
@@ -220,6 +225,7 @@ export default function AdminUsersView() {
       setDraftScopes((current) => ({ ...current, [createdUser.id]: createdUser.accessScope }));
       setPasswordDrafts((current) => ({ ...current, [createdUser.id]: '' }));
       setCreateForm(INITIAL_CREATE_FORM);
+      markItemSeen(ADMIN_USERS_RECORD_SCOPE, createdUser.id, createdUser.updatedAt ?? createdUser.createdAt ?? null);
       setSuccessMessage(`Uživatel ${createdUser.username} byl vytvořen.`);
     } catch (createError) {
       console.error('Failed to create user:', createError);
@@ -241,11 +247,13 @@ export default function AdminUsersView() {
     setSuccessMessage(null);
 
     try {
-      await apiPatch<ManagedUser>(`/users/${managedUser.id}`, { password: nextPassword });
+      const updatedUser = await apiPatch<ManagedUser>(`/users/${managedUser.id}`, { password: nextPassword });
+      setUsers((current) => current.map((entry) => (entry.id === managedUser.id ? updatedUser : entry)));
       setPasswordDrafts((current) => ({
         ...current,
         [managedUser.id]: '',
       }));
+      markItemSeen(ADMIN_USERS_RECORD_SCOPE, updatedUser.id, updatedUser.updatedAt ?? updatedUser.createdAt ?? null);
       setSuccessMessage(`Heslo uživatele ${managedUser.username} bylo změněno.`);
     } catch (saveError) {
       console.error('Failed to reset password:', saveError);
@@ -409,11 +417,24 @@ export default function AdminUsersView() {
                   const isDirty = draftRole !== managedUser.role || draftScope !== managedUser.accessScope;
                   const isSaving = savingById[managedUser.id] === true;
                   const isCurrentUser = managedUser.id === user.id;
+                  const activityState = getItemActivity(
+                    ADMIN_USERS_RECORD_SCOPE,
+                    managedUser.id,
+                    managedUser.updatedAt ?? null,
+                    managedUser.createdAt ?? null,
+                  );
 
                   return (
-                    <tr key={managedUser.id}>
+                    <tr
+                      key={managedUser.id}
+                      onClick={() => markItemSeen(ADMIN_USERS_RECORD_SCOPE, managedUser.id, managedUser.updatedAt ?? managedUser.createdAt ?? null)}
+                    >
                       <td>
                         <div className="admin-users-identity">
+                          <ActivityIndicator
+                            state={activityState}
+                            title={activityState === 'new' ? 'Nový uživatel' : activityState === 'updated' ? 'Nedávno upravený uživatel' : undefined}
+                          />
                           <strong>{managedUser.username}</strong>
                           {isCurrentUser && <span className="admin-users-self-badge">Vy</span>}
                         </div>

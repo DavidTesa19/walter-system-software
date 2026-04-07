@@ -19,6 +19,9 @@ import { ApproveRestoreCellRenderer, DeleteArchiveCellRenderer } from "../cells/
 import { useUndoRedo } from "../../utils/undoRedo";
 import { compareWorkflowStatuses, getNormalizedWorkflowStatus } from "../workflowStatus";
 import useAssignableUsers from "../hooks/useAssignableUsers";
+import ActivityCellRenderer from "../../activity/ActivityCellRenderer";
+import { useActivity } from "../../activity/ActivityContext";
+import { buildCommissionsRecordScope, getActivitySystem } from "../../activity/activityKeys";
 
 const cloneRecord = (r: any) => JSON.parse(JSON.stringify(r));
 
@@ -86,6 +89,8 @@ const normalizeClientCommissionRow = (commission: ClientCommissionApi): UserInte
   commission_id: commission.commission_id,
   entity_internal_id: commission.entity_id,
   entity_code: commission.entity_code ?? undefined,
+  created_at: commission.created_at,
+  updated_at: commission.updated_at,
   name:
     joinName(commission.entity_first_name, commission.entity_last_name) ||
     commission.entity_company_name ||
@@ -106,7 +111,10 @@ const normalizeClientCommissionRow = (commission: ClientCommissionApi): UserInte
   assigned_to: commission.assigned_to ?? undefined,
   assigned_user_ids: commission.assigned_user_ids ?? undefined,
   priority: commission.priority ?? undefined,
-  next_step: commission.service_position ?? undefined
+  next_step: commission.service_position ?? undefined,
+  activity_item_id: commission.id,
+  activity_latest_at: commission.updated_at ?? commission.created_at,
+  activity_created_at: commission.created_at
 });
 
 const mapClientEntityPayload = (client: Partial<UserInterface>) => ({
@@ -287,6 +295,7 @@ const ClientsSection: React.FC<SectionProps> = ({
   focusRequestKey
 }) => {
   const { users: assignableUsers } = useAssignableUsers();
+  const { markItemSeen } = useActivity();
   const [clientsData, setClientsData] = useState<UserInterface[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const gridRef = useRef<AgGridReact<UserInterface>>(null);
@@ -318,19 +327,30 @@ const ClientsSection: React.FC<SectionProps> = ({
   const getRowId = useCallback((params: any) => String(params.data.id), []);
 
   const status = useMemo(() => mapViewToStatus(viewMode), [viewMode]);
+  const activityScope = useMemo(
+    () => buildCommissionsRecordScope(getActivitySystem(systemNamespace), "clients"),
+    [systemNamespace]
+  );
 
   const fetchClientsData = useCallback(async () => {
     setIsLoading(true);
     try {
       const data = await apiGet<ClientCommissionApi[]>(`${commissionApiBase}?status=${status}`);
-      setClientsData(Array.isArray(data) ? data.map(normalizeClientCommissionRow) : []);
+      setClientsData(
+        Array.isArray(data)
+          ? data.map((row) => ({
+              ...normalizeClientCommissionRow(row),
+              activity_scope: activityScope
+            }))
+          : []
+      );
     } catch (error) {
       console.error("Error fetching clients:", error);
       setClientsData([]);
     } finally {
       setIsLoading(false);
     }
-  }, [commissionApiBase, status]);
+  }, [activityScope, commissionApiBase, status]);
 
   const selectedProfile = useMemo(() => {
     if (selectedProfileId === null) {
@@ -359,6 +379,14 @@ const ClientsSection: React.FC<SectionProps> = ({
       setSelectedProfileId(null);
     }
   }, [clientsData, selectedProfileId]);
+
+  useEffect(() => {
+    if (!selectedProfile) {
+      return;
+    }
+
+    markItemSeen(activityScope, selectedProfile.id, selectedProfile.updated_at ?? selectedProfile.created_at ?? null);
+  }, [activityScope, markItemSeen, selectedProfile]);
 
   const profileSections = useMemo(
     () => buildClientProfileSections(selectedProfile),
@@ -699,6 +727,25 @@ const ClientsSection: React.FC<SectionProps> = ({
         cellClass: "action-cell",
         headerClass: "action-cell",
         cellRenderer: DeleteArchiveCellRenderer
+      });
+
+      cols.push({
+        headerName: "",
+        colId: "activity",
+        pinned: "left",
+        width: 30,
+        minWidth: 30,
+        maxWidth: 30,
+        suppressMovable: true,
+        lockPosition: true,
+        sortable: false,
+        filter: false,
+        resizable: false,
+        editable: false,
+        menuTabs: [],
+        cellClass: "activity-cell",
+        headerClass: "activity-cell",
+        cellRenderer: ActivityCellRenderer
       });
 
       cols.push({

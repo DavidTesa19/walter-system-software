@@ -142,6 +142,10 @@ export interface PartnerGridRow extends PartnerCommission {
   subjectRow?: boolean;
   commission_count?: number;
   primaryCommissionId?: number | null;
+  activity_scope?: string;
+  activity_item_id?: string | number;
+  activity_latest_at?: string;
+  activity_created_at?: string;
   // Entity info (from join)
   entity_id: string;
   name: string;
@@ -161,6 +165,10 @@ export interface ClientGridRow extends ClientCommission {
   subjectRow?: boolean;
   commission_count?: number;
   primaryCommissionId?: number | null;
+  activity_scope?: string;
+  activity_item_id?: string | number;
+  activity_latest_at?: string;
+  activity_created_at?: string;
   // Entity info (from join)
   entity_id: string;
   name: string;
@@ -180,6 +188,10 @@ export interface TiperGridRow extends TiperCommission {
   subjectRow?: boolean;
   commission_count?: number;
   primaryCommissionId?: number | null;
+  activity_scope?: string;
+  activity_item_id?: string | number;
+  activity_latest_at?: string;
+  activity_created_at?: string;
   // Entity info (from join)
   entity_id: string;
   name: string;

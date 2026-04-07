@@ -35,6 +35,7 @@ import {
   PROJECTS_COMMISSIONS_TABLE_STORAGE_KEY,
   PROJECTS_SUBJECTS_TABLE_STORAGE_KEY,
 } from './utils/tableViewState';
+import { ActivityProvider } from './activity/ActivityContext';
 import './components/Sidebar.css';
 
 type SearchField = keyof UserInterface;
@@ -419,61 +420,63 @@ const AppContent: React.FC = () => {
   const isFullscreenView = viewMode === 'chatbot' || viewMode === 'teamchat' || viewMode === 'calendar';
 
   return (
-    <div style={{ display: 'flex' }}>
-      <Sidebar
-        activeView={viewMode}
-        onViewChange={handleViewChange}
-        onGlobalSearch={runGlobalSearch}
-        onSearchNavigate={handleSearchNavigate}
-      />
-      <div className={`main-content ${isFullscreenView ? 'main-content--fullscreen' : ''}`}>
-        {(() => {
-          switch (viewMode) {
-            case 'active':
-              return <ActiveCommissionsView searchTarget={gridSearchTarget} />;
-            case 'pending':
-              return <PendingApprovalsView searchTarget={gridSearchTarget} />;
-            case 'archived':
-              return <ArchivedCommissionsView searchTarget={gridSearchTarget} />;
-            case 'future':
-              return <FutureFunctionsView />;
-            case 'palettes':
-              return <PaletteManager />;
-            case 'chatbot':
-              return <ChatbotView />;
-            case 'teamchat':
-              return <TeamChatView />;
-            case 'calendar':
-              return <FullCalendarView />;
-            case 'analytics':
-                return <AnalyticsView />;
-            case 'admin_users':
-              return <AdminUsersView />;
-            case 'entities_active':
-              return <EntitiesSystemView viewMode="active" />;
-            case 'entities_pending':
-              return <EntitiesSystemView viewMode="pending" />;
-            case 'entities_archived':
-              return <EntitiesSystemView viewMode="archived" />;
-            case 'projects_active':
-              return <UsersGrid viewMode="active" searchTarget={gridSearchTarget} systemNamespace="projects" storageKey={PROJECTS_COMMISSIONS_TABLE_STORAGE_KEY} title="Projekty - Zakázky - Aktivní" />;
-            case 'projects_pending':
-              return <UsersGrid viewMode="pending" searchTarget={gridSearchTarget} systemNamespace="projects" storageKey={PROJECTS_COMMISSIONS_TABLE_STORAGE_KEY} title="Projekty - Zakázky - Ke schválení" />;
-            case 'projects_archived':
-              return <UsersGrid viewMode="archived" searchTarget={gridSearchTarget} systemNamespace="projects" storageKey={PROJECTS_COMMISSIONS_TABLE_STORAGE_KEY} title="Projekty - Zakázky - Archiv" />;
-            case 'projects_subjects_active':
-              return <EntitiesSystemView viewMode="active" systemNamespace="projects" storageKey={PROJECTS_SUBJECTS_TABLE_STORAGE_KEY} title="Projekty - Subjekty - Aktivní" />;
-            case 'projects_subjects_pending':
-              return <EntitiesSystemView viewMode="pending" systemNamespace="projects" storageKey={PROJECTS_SUBJECTS_TABLE_STORAGE_KEY} title="Projekty - Subjekty - Ke schválení" />;
-            case 'projects_subjects_archived':
-              return <EntitiesSystemView viewMode="archived" systemNamespace="projects" storageKey={PROJECTS_SUBJECTS_TABLE_STORAGE_KEY} title="Projekty - Subjekty - Archiv" />;
-            default:
-              return null;
-          }
-        })()}
+    <ActivityProvider userId={user?.id} accessScope={accessScope} isAdmin={isAdmin} activeView={viewMode}>
+      <div style={{ display: 'flex' }}>
+        <Sidebar
+          activeView={viewMode}
+          onViewChange={handleViewChange}
+          onGlobalSearch={runGlobalSearch}
+          onSearchNavigate={handleSearchNavigate}
+        />
+        <div className={`main-content ${isFullscreenView ? 'main-content--fullscreen' : ''}`}>
+          {(() => {
+            switch (viewMode) {
+              case 'active':
+                return <ActiveCommissionsView searchTarget={gridSearchTarget} />;
+              case 'pending':
+                return <PendingApprovalsView searchTarget={gridSearchTarget} />;
+              case 'archived':
+                return <ArchivedCommissionsView searchTarget={gridSearchTarget} />;
+              case 'future':
+                return <FutureFunctionsView />;
+              case 'palettes':
+                return <PaletteManager />;
+              case 'chatbot':
+                return <ChatbotView />;
+              case 'teamchat':
+                return <TeamChatView />;
+              case 'calendar':
+                return <FullCalendarView />;
+              case 'analytics':
+                  return <AnalyticsView />;
+              case 'admin_users':
+                return <AdminUsersView />;
+              case 'entities_active':
+                return <EntitiesSystemView viewMode="active" />;
+              case 'entities_pending':
+                return <EntitiesSystemView viewMode="pending" />;
+              case 'entities_archived':
+                return <EntitiesSystemView viewMode="archived" />;
+              case 'projects_active':
+                return <UsersGrid viewMode="active" searchTarget={gridSearchTarget} systemNamespace="projects" storageKey={PROJECTS_COMMISSIONS_TABLE_STORAGE_KEY} title="Projekty - Zakázky - Aktivní" />;
+              case 'projects_pending':
+                return <UsersGrid viewMode="pending" searchTarget={gridSearchTarget} systemNamespace="projects" storageKey={PROJECTS_COMMISSIONS_TABLE_STORAGE_KEY} title="Projekty - Zakázky - Ke schválení" />;
+              case 'projects_archived':
+                return <UsersGrid viewMode="archived" searchTarget={gridSearchTarget} systemNamespace="projects" storageKey={PROJECTS_COMMISSIONS_TABLE_STORAGE_KEY} title="Projekty - Zakázky - Archiv" />;
+              case 'projects_subjects_active':
+                return <EntitiesSystemView viewMode="active" systemNamespace="projects" storageKey={PROJECTS_SUBJECTS_TABLE_STORAGE_KEY} title="Projekty - Subjekty - Aktivní" />;
+              case 'projects_subjects_pending':
+                return <EntitiesSystemView viewMode="pending" systemNamespace="projects" storageKey={PROJECTS_SUBJECTS_TABLE_STORAGE_KEY} title="Projekty - Subjekty - Ke schválení" />;
+              case 'projects_subjects_archived':
+                return <EntitiesSystemView viewMode="archived" systemNamespace="projects" storageKey={PROJECTS_SUBJECTS_TABLE_STORAGE_KEY} title="Projekty - Subjekty - Archiv" />;
+              default:
+                return null;
+            }
+          })()}
+        </div>
+        {!isFullscreenView && <Footer />}
       </div>
-      {!isFullscreenView && <Footer />}
-    </div>
+    </ActivityProvider>
   );
 };
 

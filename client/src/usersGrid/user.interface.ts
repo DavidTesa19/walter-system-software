@@ -3,6 +3,8 @@ export interface UserInterface {
   commission_id?: string;
   entity_internal_id?: number;
   entity_code?: string;
+  created_at?: string;
+  updated_at?: string;
   name: string;
   company: string;
   location: string;
@@ -23,4 +25,8 @@ export interface UserInterface {
   next_step?: string;
   priority?: string;
   tags?: string[];
+  activity_scope?: string;
+  activity_item_id?: string | number;
+  activity_latest_at?: string;
+  activity_created_at?: string;
 }

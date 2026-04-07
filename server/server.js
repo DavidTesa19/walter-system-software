@@ -176,6 +176,42 @@ const removeDocumentFromStore = (store, id) => {
   return removed ?? null;
 };
 
+const touchStoreRecordTimestamp = (record, timestamp) => {
+  if (!record || typeof record !== 'object') {
+    return;
+  }
+
+  if (Object.prototype.hasOwnProperty.call(record, 'updated_at') || Object.prototype.hasOwnProperty.call(record, 'created_at')) {
+    record.updated_at = timestamp;
+  }
+
+  if (Object.prototype.hasOwnProperty.call(record, 'updatedAt') || Object.prototype.hasOwnProperty.call(record, 'createdAt')) {
+    record.updatedAt = timestamp;
+  }
+};
+
+const touchEntityParentsInStore = (store, entity, entityId, timestamp = new Date().toISOString()) => {
+  let touched = false;
+
+  for (const storeKey of getParentStoreKeys(entity)) {
+    const collection = store?.[storeKey];
+    if (!Array.isArray(collection)) {
+      continue;
+    }
+
+    for (const record of collection) {
+      if (Number(record?.id) !== Number(entityId)) {
+        continue;
+      }
+
+      touchStoreRecordTimestamp(record, timestamp);
+      touched = true;
+    }
+  }
+
+  return touched;
+};
+
 const isDocumentEntity = (value = "") => DOCUMENT_ENTITY_TYPES.has(value);
 
 const toTrimmedString = value => (typeof value === "string" ? value.trim() : "");
@@ -1332,7 +1368,8 @@ app.post("/auth/register", authenticateToken, requireRole('admin'), async (req, 
     password_hash,
     role: role || 'employee',
     accessScope: normalizeAccessScope(accessScope),
-    created_at: new Date().toISOString()
+    created_at: new Date().toISOString(),
+    updated_at: new Date().toISOString()
   };
 
   db.users.push(newUser);
@@ -1361,7 +1398,8 @@ app.post("/users", authenticateToken, requireRole('admin'), (req, res) => {
   // Simple id assignment (max + 1)
   const maxId = db.users.reduce((m, u) => Math.max(m, Number(u.id) || 0), 0);
   const nextId = maxId + 1;
-  const newUser = { id: nextId, ...user, accessScope: normalizeAccessScope(user.accessScope) };
+  const now = new Date().toISOString();
+  const newUser = { id: nextId, ...user, accessScope: normalizeAccessScope(user.accessScope), created_at: now, updated_at: now };
   db.users.push(newUser);
   if (!writeDb(db)) return res.status(500).json({ error: "Failed to persist" });
   res.status(201).json(serializeManagedUser(newUser));
@@ -1372,7 +1410,13 @@ app.put("/users/:id", authenticateToken, requireRole('admin'), (req, res) => {
   const db = readDb();
   const idx = db.users.findIndex((u) => u.id === id);
   if (idx === -1) return res.status(404).json({ error: "Not found" });
-  const updated = { ...req.body, id, accessScope: normalizeAccessScope(req.body?.accessScope) };
+  const updated = {
+    ...db.users[idx],
+    ...req.body,
+    id,
+    accessScope: normalizeAccessScope(req.body?.accessScope),
+    updated_at: new Date().toISOString()
+  };
   db.users[idx] = updated;
   if (!writeDb(db)) return res.status(500).json({ error: "Failed to persist" });
   res.json(serializeManagedUser(updated));
@@ -1388,6 +1432,7 @@ app.patch("/users/:id", authenticateToken, requireRole('admin'), (req, res) => {
     ...req.body,
     id,
     accessScope: normalizeAccessScope(req.body?.accessScope ?? db.users[idx]?.accessScope),
+    updated_at: new Date().toISOString(),
   };
   if (!writeDb(db)) return res.status(500).json({ error: "Failed to persist" });
   res.json(serializeManagedUser(db.users[idx]));
@@ -1752,6 +1797,8 @@ app.post("/:entity/:id/documents", authenticateToken, upload.single("file"), (re
     ensureDocumentsCollection(store);
     store.documents.push(entry);
 
+    touchEntityParentsInStore(store, entity, entityId, entry.createdAt);
+
     if (!writeDb(store)) {
       return res.status(500).json({ error: "Failed to persist document" });
     }
@@ -1775,6 +1822,8 @@ app.delete("/documents/:documentId", authenticateToken, (req, res) => {
     if (!removed) {
       return res.status(404).json({ error: "Document not found" });
     }
+
+    touchEntityParentsInStore(store, removed.entityType, removed.entityId);
 
     if (!writeDb(store)) {
       return res.status(500).json({ error: "Failed to persist document removal" });
@@ -1805,6 +1854,7 @@ app.post("/documents/:documentId/archive", authenticateToken, (req, res) => {
     }
 
     doc.archivedAt = new Date().toISOString();
+    touchEntityParentsInStore(store, doc.entityType, doc.entityId, doc.archivedAt);
 
     if (!writeDb(store)) {
       return res.status(500).json({ error: "Failed to persist document archive" });
@@ -1835,6 +1885,7 @@ app.post("/documents/:documentId/unarchive", authenticateToken, (req, res) => {
     }
 
     doc.archivedAt = null;
+    touchEntityParentsInStore(store, doc.entityType, doc.entityId);
 
     if (!writeDb(store)) {
       return res.status(500).json({ error: "Failed to persist document unarchive" });
@@ -1993,6 +2044,8 @@ app.post("/:entity/:id/notes", authenticateToken, (req, res) => {
     }
     store.notes.push(newNote);
 
+    touchEntityParentsInStore(store, entity, entityId, newNote.createdAt);
+
     if (!writeDb(store)) {
       return res.status(500).json({ error: "Failed to save note" });
     }
@@ -2039,6 +2092,7 @@ app.put("/notes/:noteId", authenticateToken, (req, res) => {
     };
 
     store.notes[idx] = updatedNote;
+    touchEntityParentsInStore(store, updatedNote.entityType, updatedNote.entityId, updatedNote.updatedAt);
 
     if (!writeDb(store)) {
       return res.status(500).json({ error: "Failed to update note" });
@@ -2074,6 +2128,7 @@ app.delete("/notes/:noteId", authenticateToken, (req, res) => {
     }
 
     const removed = store.notes.splice(idx, 1)[0];
+    touchEntityParentsInStore(store, removed.entityType, removed.entityId);
 
     if (!writeDb(store)) {
       return res.status(500).json({ error: "Failed to delete note" });

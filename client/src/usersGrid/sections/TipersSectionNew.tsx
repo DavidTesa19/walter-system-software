@@ -23,6 +23,9 @@ import { formatProfileDate } from "../utils/profileUtils";
 import { formatAssignedUsernames, fromAssignmentDraftValue, toAssignmentDraftValue } from "../assignmentUtils";
 import { compareWorkflowStatuses, DEFAULT_WORKFLOW_STATUS, getNormalizedWorkflowStatus, WORKFLOW_STATUS_VALUES } from "../workflowStatus";
 import useAssignableUsers from "../hooks/useAssignableUsers";
+import ActivityCellRenderer from "../../activity/ActivityCellRenderer";
+import { useActivity } from "../../activity/ActivityContext";
+import { buildCommissionsRecordScope, buildSubjectsRecordScope, getActivitySystem } from "../../activity/activityKeys";
 
 type TiperEntityApi = {
   id: number;
@@ -382,6 +385,7 @@ const TipersSectionNew: React.FC<SectionProps> = ({
   onLoadingChange
 }) => {
   const { users: assignableUsers, options: assignmentOptions } = useAssignableUsers();
+  const { markItemSeen } = useActivity();
   // State for entities and commissions
   const [entities, setEntities] = useState<TiperEntity[]>([]);
   const [commissions, setCommissions] = useState<TiperCommission[]>([]);
@@ -401,6 +405,9 @@ const TipersSectionNew: React.FC<SectionProps> = ({
   // Get status from viewMode
   const status = useMemo(() => mapViewToStatus(viewMode), [viewMode]);
   const resourceKey = systemNamespace ? "project-tipers" : "tipers";
+  const activitySystem = useMemo(() => getActivitySystem(systemNamespace), [systemNamespace]);
+  const subjectActivityScope = useMemo(() => buildSubjectsRecordScope(activitySystem, "tipers"), [activitySystem]);
+  const commissionActivityScope = useMemo(() => buildCommissionsRecordScope(activitySystem, "tipers"), [activitySystem]);
   const entityApiBase = systemNamespace ? `/api/${systemNamespace}/tiper-entities` : "/api/tiper-entities";
   const commissionApiBase = systemNamespace ? `/api/${systemNamespace}/tiper-commissions` : "/api/tiper-commissions";
 
@@ -467,6 +474,10 @@ const TipersSectionNew: React.FC<SectionProps> = ({
             email: entity.email || '',
             commission_count: entityCommissions.length,
             primaryCommissionId: primaryCommission?.id ?? null,
+            activity_scope: subjectActivityScope,
+            activity_item_id: entity.id,
+            activity_latest_at: entity.updated_at ?? entity.created_at,
+            activity_created_at: entity.created_at,
             entity
           };
         });
@@ -492,6 +503,10 @@ const TipersSectionNew: React.FC<SectionProps> = ({
           location: entity?.location || rawCommission?.entity_location || commission.location || '',
           mobile: entity?.mobile || rawCommission?.entity_phone || commission.phone || '',
           email: entity?.email || rawCommission?.entity_email || '',
+          activity_scope: commissionActivityScope,
+          activity_item_id: commission.id,
+          activity_latest_at: commission.updated_at ?? commission.created_at,
+          activity_created_at: commission.created_at,
           entity: entity || null
         };
       });
@@ -527,6 +542,10 @@ const TipersSectionNew: React.FC<SectionProps> = ({
           email: entity.email || '',
           commission_count: 0,
           primaryCommissionId: null,
+          activity_scope: subjectActivityScope,
+          activity_item_id: entity.id,
+          activity_latest_at: entity.updated_at ?? entity.created_at,
+          activity_created_at: entity.created_at,
           entity: entity || null
         }));
 
@@ -543,7 +562,7 @@ const TipersSectionNew: React.FC<SectionProps> = ({
     } finally {
       setIsLoading(false);
     }
-  }, [commissionApiBase, entityApiBase, status]);
+  }, [commissionActivityScope, commissionApiBase, entityApiBase, status, subjectActivityScope]);
 
   // ==========================================================================
   // PROFILE PANEL LOGIC
@@ -568,6 +587,22 @@ const TipersSectionNew: React.FC<SectionProps> = ({
   const commissionData = useMemo(() => buildCommissionData(selectedCommission, assignmentOptions), [assignmentOptions, selectedCommission]);
   const draftEntityData = useMemo(() => buildTiperDraftEntityData(createDraft, assignmentOptions), [assignmentOptions, createDraft]);
   const draftCommissionData = useMemo(() => buildTiperDraftCommissionData(createDraft, status, assignmentOptions), [assignmentOptions, createDraft, status]);
+
+  useEffect(() => {
+    if (!selectedEntity) {
+      return;
+    }
+
+    markItemSeen(subjectActivityScope, selectedEntity.id, selectedEntity.updated_at ?? selectedEntity.created_at ?? null);
+  }, [markItemSeen, selectedEntity, subjectActivityScope]);
+
+  useEffect(() => {
+    if (!selectedCommission) {
+      return;
+    }
+
+    markItemSeen(commissionActivityScope, selectedCommission.id, selectedCommission.updated_at ?? selectedCommission.created_at ?? null);
+  }, [commissionActivityScope, markItemSeen, selectedCommission]);
 
   const openProfile = useCallback((row: TiperGridRow) => {
     const entityId = row.entity?.id ?? row.tiper_entity_id ?? null;
@@ -1048,6 +1083,25 @@ const TipersSectionNew: React.FC<SectionProps> = ({
       cellClass: "action-cell",
       headerClass: "action-cell",
       cellRenderer: DeleteArchiveCellRenderer
+    });
+
+    cols.push({
+      headerName: "",
+      colId: "activity",
+      pinned: "left",
+      width: 30,
+      minWidth: 30,
+      maxWidth: 30,
+      suppressMovable: true,
+      lockPosition: true,
+      sortable: false,
+      filter: false,
+      resizable: false,
+      editable: false,
+      menuTabs: [],
+      cellClass: "activity-cell",
+      headerClass: "activity-cell",
+      cellRenderer: ActivityCellRenderer
     });
 
     cols.push({

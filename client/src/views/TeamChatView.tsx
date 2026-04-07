@@ -1,5 +1,8 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { useAuth } from '../auth/AuthContext';
+import ActivityIndicator from '../activity/ActivityIndicator';
+import { useActivity } from '../activity/ActivityContext';
+import { TEAMCHAT_RECORD_SCOPE } from '../activity/activityKeys';
 import ThemeToggleButton from '../components/ThemeToggleButton';
 import './TeamChatView.css';
 
@@ -45,6 +48,7 @@ const EMOJI_LIST = [
 
 export default function TeamChatView() {
   const { user } = useAuth();
+  const { getItemActivity, markItemSeen } = useActivity();
   const token = user?.token;
   const [rooms, setRooms] = useState<ChatRoom[]>([]);
   const [selectedRoom, setSelectedRoom] = useState<ChatRoom | null>(null);
@@ -209,6 +213,7 @@ export default function TeamChatView() {
       // Add new room at the top (it's the most recent)
       setRooms(prev => [newRoom, ...prev]);
       setSelectedRoom(newRoom);
+      markItemSeen(TEAMCHAT_RECORD_SCOPE, newRoom.id, getRoomLatestActivity(newRoom));
       setShowNewRoomModal(false);
       setNewRoomName('');
       setNewRoomDescription('');
@@ -384,10 +389,20 @@ export default function TeamChatView() {
 
   const getCreator = (room: ChatRoom) => room.created_by || room.createdBy || 'Unknown';
   const getMessageTime = (msg: ChatMessage) => msg.created_at || msg.createdAt;
+  const getRoomLatestActivity = (room: ChatRoom | null | undefined) => room?.lastActivity || room?.last_activity || room?.createdAt || room?.created_at || null;
+  const selectedRoomSnapshot = selectedRoom ? rooms.find((room) => room.id === selectedRoom.id) ?? selectedRoom : null;
 
   const canDeleteRoom = (room: ChatRoom) => {
     return user?.role === 'admin' || getCreator(room) === user?.username;
   };
+
+  useEffect(() => {
+    if (!selectedRoomSnapshot) {
+      return;
+    }
+
+    markItemSeen(TEAMCHAT_RECORD_SCOPE, selectedRoomSnapshot.id, getRoomLatestActivity(selectedRoomSnapshot));
+  }, [markItemSeen, selectedRoomSnapshot]);
 
   return (
     <div className="team-chat-view">
@@ -413,37 +428,52 @@ export default function TeamChatView() {
               </button>
             </div>
           ) : (
-            rooms.map(room => (
-              <div
-                key={room.id}
-                className={`room-item ${selectedRoom?.id === room.id ? 'active' : ''} ${room.unreadCount && room.unreadCount > 0 ? 'has-unread' : ''}`}
-                onClick={() => setSelectedRoom(room)}
-              >
-                <div className="room-info">
-                  <span className="room-name"># {room.name}</span>
-                  {room.description && (
-                    <span className="room-description">{room.description}</span>
-                  )}
+            rooms.map(room => {
+              const activityState = getItemActivity(
+                TEAMCHAT_RECORD_SCOPE,
+                room.id,
+                getRoomLatestActivity(room),
+                room.createdAt || room.created_at || null,
+              );
+
+              return (
+                <div
+                  key={room.id}
+                  className={`room-item ${selectedRoom?.id === room.id ? 'active' : ''} ${room.unreadCount && room.unreadCount > 0 ? 'has-unread' : ''}`}
+                  onClick={() => setSelectedRoom(room)}
+                >
+                  <div className="room-info">
+                    <span className="room-name-row">
+                      <ActivityIndicator
+                        state={activityState}
+                        title={activityState === 'new' ? 'Nová místnost' : activityState === 'updated' ? 'Nová aktivita v místnosti' : undefined}
+                      />
+                      <span className="room-name"># {room.name}</span>
+                    </span>
+                    {room.description && (
+                      <span className="room-description">{room.description}</span>
+                    )}
+                  </div>
+                  <div className="room-actions">
+                    {room.unreadCount && room.unreadCount > 0 && selectedRoom?.id !== room.id && (
+                      <span className="unread-badge">{room.unreadCount > 99 ? '99+' : room.unreadCount}</span>
+                    )}
+                    {canDeleteRoom(room) && (
+                      <button
+                        className="delete-room-btn"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          handleDeleteRoom(room.id);
+                        }}
+                        title="Smazat místnost"
+                      >
+                        🗑️
+                      </button>
+                    )}
+                  </div>
                 </div>
-                <div className="room-actions">
-                  {room.unreadCount && room.unreadCount > 0 && selectedRoom?.id !== room.id && (
-                    <span className="unread-badge">{room.unreadCount > 99 ? '99+' : room.unreadCount}</span>
-                  )}
-                  {canDeleteRoom(room) && (
-                    <button
-                      className="delete-room-btn"
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        handleDeleteRoom(room.id);
-                      }}
-                      title="Smazat místnost"
-                    >
-                      🗑️
-                    </button>
-                  )}
-                </div>
-              </div>
-            ))
+              );
+            })
           )}
         </div>
 

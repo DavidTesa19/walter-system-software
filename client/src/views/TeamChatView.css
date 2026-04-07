@@ -138,6 +138,13 @@
   text-overflow: ellipsis;
 }
 
+.room-name-row {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  min-width: 0;
+}
+
 .room-description {
   font-size: 0.75rem;
   opacity: 0.7;

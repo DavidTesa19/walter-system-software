@@ -1,5 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { canAccessProjectsSystem, canAccessStandardSystem, useAuth } from '../auth/AuthContext';
+import ActivityIndicator from '../activity/ActivityIndicator';
+import { useActivity } from '../activity/ActivityContext';
 import { trackEvent } from '../utils/analytics';
 import type { AppView } from '../types/appView';
 import type { GlobalSearchResult } from '../types/globalSearch';
@@ -151,6 +153,7 @@ const Sidebar: React.FC<SidebarProps> = ({
   onSearchNavigate
 }) => {
   const { user, logout } = useAuth();
+  const { getViewCount } = useActivity();
   const accessScope = user?.accessScope;
   const canAccessStandard = canAccessStandardSystem(accessScope);
   const canAccessProjects = canAccessProjectsSystem(accessScope);
@@ -401,6 +404,11 @@ const Sidebar: React.FC<SidebarProps> = ({
     }))
     .filter((group) => group.items.length > 0);
 
+  const getItemCount = (view: AppView) => getViewCount(view);
+  const getSectionCount = (section: SidebarSection) => section.items.reduce((sum, item) => sum + getItemCount(item.id), 0);
+  const getGroupCount = (group: SidebarGroup) => group.sections.reduce((sum, section) => sum + getSectionCount(section), 0);
+  const getSingleGroupCount = (group: SidebarSingleItem) => group.items.reduce((sum, item) => sum + getItemCount(item.id), 0);
+
   return (
     <div className="sidebar">
       <div className="sidebar-header">
@@ -531,6 +539,7 @@ const Sidebar: React.FC<SidebarProps> = ({
               <div className="group-header-content">
                 {group.icon}
                 <span className="group-label">{group.label}</span>
+                <ActivityIndicator count={getGroupCount(group)} muted={expandedGroups[group.id]} title="Nepřečtené změny" />
               </div>
               <span className="group-chevron">
                 {expandedGroups[group.id] ? <Icons.ChevronDown /> : <Icons.ChevronRight />}
@@ -548,6 +557,7 @@ const Sidebar: React.FC<SidebarProps> = ({
                       <div className="group-header-content">
                         {section.icon}
                         <span className="group-label">{section.label}</span>
+                        <ActivityIndicator count={getSectionCount(section)} muted={expandedGroups[section.id]} title="Nepřečtené změny" />
                       </div>
                       <span className="group-chevron">
                         {expandedGroups[section.id] ? <Icons.ChevronDown /> : <Icons.ChevronRight />}
@@ -564,6 +574,7 @@ const Sidebar: React.FC<SidebarProps> = ({
                           >
                             {item.icon}
                             <span>{item.label}</span>
+                            <ActivityIndicator count={getItemCount(item.id)} muted={activeView === item.id} title="Nepřečtené změny" />
                           </button>
                         ))}
                       </div>
@@ -588,6 +599,7 @@ const Sidebar: React.FC<SidebarProps> = ({
               >
                 {item.icon}
                 <span>{item.label}</span>
+                <ActivityIndicator count={getItemCount(item.id)} muted={activeView === item.id} title="Nepřečtené změny" />
               </button>
             );
           }
@@ -601,6 +613,7 @@ const Sidebar: React.FC<SidebarProps> = ({
                 <div className="group-header-content">
                   {group.icon}
                   <span className="group-label">{group.label}</span>
+                  <ActivityIndicator count={getSingleGroupCount(group)} muted={expandedGroups[group.id]} title="Nepřečtené změny" />
                 </div>
                 <span className="group-chevron">
                   {expandedGroups[group.id] ? <Icons.ChevronDown /> : <Icons.ChevronRight />}
@@ -617,6 +630,7 @@ const Sidebar: React.FC<SidebarProps> = ({
                     >
                       {item.icon}
                       <span>{item.label}</span>
+                      <ActivityIndicator count={getItemCount(item.id)} muted={activeView === item.id} title="Nepřečtené změny" />
                     </button>
                   ))}
                 </div>

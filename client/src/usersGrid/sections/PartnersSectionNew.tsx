@@ -23,6 +23,9 @@ import { formatProfileDate } from "../utils/profileUtils";
 import { formatAssignedUsernames, fromAssignmentDraftValue, toAssignmentDraftValue } from "../assignmentUtils";
 import { compareWorkflowStatuses, DEFAULT_WORKFLOW_STATUS, getNormalizedWorkflowStatus, WORKFLOW_STATUS_VALUES } from "../workflowStatus";
 import useAssignableUsers from "../hooks/useAssignableUsers";
+import ActivityCellRenderer from "../../activity/ActivityCellRenderer";
+import { useActivity } from "../../activity/ActivityContext";
+import { buildCommissionsRecordScope, buildSubjectsRecordScope, getActivitySystem } from "../../activity/activityKeys";
 
 type PartnerEntityApi = {
   id: number;
@@ -368,6 +371,7 @@ const buildPartnerDraftCommissionData = (draft: PartnerCreateDraft, status: Part
 
 const PartnersSectionNew: React.FC<SectionProps> = ({ viewMode, isActive, systemNamespace, onRegisterAddHandler, onLoadingChange }) => {
   const { users: assignableUsers, options: assignmentOptions } = useAssignableUsers();
+  const { markItemSeen } = useActivity();
   const [entities, setEntities] = useState<PartnerEntity[]>([]);
   const [commissions, setCommissions] = useState<PartnerCommission[]>([]);
   const [gridData, setGridData] = useState<PartnerGridRow[]>([]);
@@ -382,6 +386,9 @@ const PartnersSectionNew: React.FC<SectionProps> = ({ viewMode, isActive, system
   const gridRef = useRef<AgGridReact<PartnerGridRow>>(null);
   const status = useMemo(() => mapViewToStatus(viewMode), [viewMode]);
   const resourceKey = systemNamespace ? "project-partners" : "partners";
+  const activitySystem = useMemo(() => getActivitySystem(systemNamespace), [systemNamespace]);
+  const subjectActivityScope = useMemo(() => buildSubjectsRecordScope(activitySystem, "partners"), [activitySystem]);
+  const commissionActivityScope = useMemo(() => buildCommissionsRecordScope(activitySystem, "partners"), [activitySystem]);
   const entityApiBase = systemNamespace ? `/api/${systemNamespace}/partner-entities` : "/api/partner-entities";
   const commissionApiBase = systemNamespace ? `/api/${systemNamespace}/partner-commissions` : "/api/partner-commissions";
   const documentManager = useProfileDocuments(resourceKey, selectedEntityId);
@@ -442,6 +449,10 @@ const PartnersSectionNew: React.FC<SectionProps> = ({ viewMode, isActive, system
             email: entity.email || "",
             commission_count: entityCommissions.length,
             primaryCommissionId: primaryCommission?.id ?? null,
+            activity_scope: subjectActivityScope,
+            activity_item_id: entity.id,
+            activity_latest_at: entity.updated_at ?? entity.created_at,
+            activity_created_at: entity.created_at,
             entity
           };
         });
@@ -466,6 +477,10 @@ const PartnersSectionNew: React.FC<SectionProps> = ({ viewMode, isActive, system
           location: entity?.location || rawCommission?.entity_location || commission.location || "",
           mobile: entity?.mobile || rawCommission?.entity_phone || commission.phone || "",
           email: entity?.email || rawCommission?.entity_email || "",
+          activity_scope: commissionActivityScope,
+          activity_item_id: commission.id,
+          activity_latest_at: commission.updated_at ?? commission.created_at,
+          activity_created_at: commission.created_at,
           entity
         };
       });
@@ -501,6 +516,10 @@ const PartnersSectionNew: React.FC<SectionProps> = ({ viewMode, isActive, system
           email: entity.email || "",
           commission_count: 0,
           primaryCommissionId: null,
+          activity_scope: subjectActivityScope,
+          activity_item_id: entity.id,
+          activity_latest_at: entity.updated_at ?? entity.created_at,
+          activity_created_at: entity.created_at,
           entity
         }));
 
@@ -517,7 +536,7 @@ const PartnersSectionNew: React.FC<SectionProps> = ({ viewMode, isActive, system
     } finally {
       setIsLoading(false);
     }
-  }, [commissionApiBase, entityApiBase, status]);
+  }, [commissionActivityScope, commissionApiBase, entityApiBase, status, subjectActivityScope]);
 
   const selectedEntity = useMemo(() => selectedEntityId === null ? null : entities.find((entity) => entity.id === selectedEntityId) || null, [entities, selectedEntityId]);
   const selectedCommission = useMemo(() => selectedCommissionId === null ? null : commissions.find((commission) => commission.id === selectedCommissionId) || null, [commissions, selectedCommissionId]);
@@ -526,6 +545,22 @@ const PartnersSectionNew: React.FC<SectionProps> = ({ viewMode, isActive, system
   const commissionData = useMemo(() => buildCommissionData(selectedCommission, assignmentOptions), [assignmentOptions, selectedCommission]);
   const draftEntityData = useMemo(() => buildPartnerDraftEntityData(createDraft, assignmentOptions), [assignmentOptions, createDraft]);
   const draftCommissionData = useMemo(() => buildPartnerDraftCommissionData(createDraft, status, assignmentOptions), [assignmentOptions, createDraft, status]);
+
+  useEffect(() => {
+    if (!selectedEntity) {
+      return;
+    }
+
+    markItemSeen(subjectActivityScope, selectedEntity.id, selectedEntity.updated_at ?? selectedEntity.created_at ?? null);
+  }, [markItemSeen, selectedEntity, subjectActivityScope]);
+
+  useEffect(() => {
+    if (!selectedCommission) {
+      return;
+    }
+
+    markItemSeen(commissionActivityScope, selectedCommission.id, selectedCommission.updated_at ?? selectedCommission.created_at ?? null);
+  }, [commissionActivityScope, markItemSeen, selectedCommission]);
 
   const openProfile = useCallback((row: PartnerGridRow) => {
     const entityId = row.entity?.id ?? row.partner_entity_id ?? null;
@@ -937,6 +972,7 @@ const PartnersSectionNew: React.FC<SectionProps> = ({ viewMode, isActive, system
 
     cols.push(
       { headerName: "", colId: "delete", pinned: "left", width: 36, minWidth: 36, maxWidth: 36, suppressMovable: true, lockPosition: true, sortable: false, filter: false, resizable: false, editable: false, menuTabs: [], cellClass: "action-cell", headerClass: "action-cell", cellRenderer: DeleteArchiveCellRenderer },
+      { headerName: "", colId: "activity", pinned: "left", width: 30, minWidth: 30, maxWidth: 30, suppressMovable: true, lockPosition: true, sortable: false, filter: false, resizable: false, editable: false, menuTabs: [], cellClass: "activity-cell", headerClass: "activity-cell", cellRenderer: ActivityCellRenderer },
       { headerName: "", colId: "profile", pinned: "left", width: 60, minWidth: 60, maxWidth: 68, suppressMovable: true, lockPosition: true, sortable: false, filter: false, resizable: false, editable: false, menuTabs: [], cellClass: "profile-cell", headerClass: "profile-cell", cellRenderer: ProfileCellRenderer },
       {
         headerName: "ID",

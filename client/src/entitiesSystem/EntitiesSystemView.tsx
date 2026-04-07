@@ -2,6 +2,9 @@ import "ag-grid-community/styles/ag-theme-quartz.css";
 import "../usersGrid/UsersGrid.css";
 import React, { useCallback, useEffect, useRef, useState } from "react";
 import { ModuleRegistry, AllCommunityModule } from "ag-grid-community";
+import ActivityIndicator from "../activity/ActivityIndicator";
+import { useActivity } from "../activity/ActivityContext";
+import { buildSubjectsCollectionKey, getActivitySystem } from "../activity/activityKeys";
 import type { GridView } from "../types/appView";
 import PartnersSectionNew from "../usersGrid/sections/PartnersSectionNew";
 import ClientsSectionNew from "../usersGrid/sections/ClientsSectionNew";
@@ -45,6 +48,7 @@ const EntitiesSystemView: React.FC<EntitiesSystemViewProps> = ({
   title
 }) => {
   const [activeTable, setActiveTable] = useState<TableType>(() => getStoredTableView(storageKey));
+  const { getCollectionCount, markCollectionSeen } = useActivity();
   const addHandlerRef = useRef<AddHandler | null>(null);
   const [isAddDisabled, setIsAddDisabled] = useState(false);
   const { canUndo, canRedo, isBusy, undo, redo } = useUndoRedo();
@@ -65,6 +69,10 @@ const EntitiesSystemView: React.FC<EntitiesSystemViewProps> = ({
   useEffect(() => {
     setStoredTableView(storageKey, activeTable);
   }, [activeTable, storageKey]);
+
+  useEffect(() => {
+    markCollectionSeen(buildSubjectsCollectionKey(getActivitySystem(systemNamespace), viewMode, activeTable));
+  }, [activeTable, markCollectionSeen, systemNamespace, viewMode]);
 
   const handleAddClick = useCallback(() => {
     void addHandlerRef.current?.();
@@ -124,7 +132,14 @@ const EntitiesSystemView: React.FC<EntitiesSystemViewProps> = ({
               onClick={() => setActiveTable(key)}
               className={`nav-tab ${activeTable === key ? "active" : ""}`}
             >
-              {icon} {label}
+              <span className="nav-tab__content">
+                <span>{icon} {label}</span>
+                <ActivityIndicator
+                  count={getCollectionCount(buildSubjectsCollectionKey(getActivitySystem(systemNamespace), viewMode, key))}
+                  muted={activeTable === key}
+                  title="Nepřečtené změny"
+                />
+              </span>
             </button>
           ))}
         </div>

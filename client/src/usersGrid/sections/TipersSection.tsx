@@ -18,6 +18,9 @@ import { ApproveRestoreCellRenderer, DeleteArchiveCellRenderer } from "../cells/
 import { useUndoRedo } from "../../utils/undoRedo";
 import { compareWorkflowStatuses, getNormalizedWorkflowStatus } from "../workflowStatus";
 import useAssignableUsers from "../hooks/useAssignableUsers";
+import ActivityCellRenderer from "../../activity/ActivityCellRenderer";
+import { useActivity } from "../../activity/ActivityContext";
+import { buildCommissionsRecordScope, getActivitySystem } from "../../activity/activityKeys";
 
 const cloneRecord = (r: any) => JSON.parse(JSON.stringify(r));
 
@@ -83,6 +86,8 @@ const normalizeTiperCommissionRow = (commission: TiperCommissionApi): UserInterf
   commission_id: commission.commission_id,
   entity_internal_id: commission.entity_id,
   entity_code: commission.entity_code ?? undefined,
+  created_at: commission.created_at,
+  updated_at: commission.updated_at,
   name:
     joinName(commission.entity_first_name, commission.entity_last_name) ||
     commission.entity_company_name ||
@@ -103,7 +108,10 @@ const normalizeTiperCommissionRow = (commission: TiperCommissionApi): UserInterf
   assigned_to: commission.assigned_to ?? undefined,
   assigned_user_ids: commission.assigned_user_ids ?? undefined,
   priority: commission.priority ?? undefined,
-  next_step: commission.position ?? commission.service_position ?? undefined
+  next_step: commission.position ?? commission.service_position ?? undefined,
+  activity_item_id: commission.id,
+  activity_latest_at: commission.updated_at ?? commission.created_at,
+  activity_created_at: commission.created_at
 });
 
 const mapTiperEntityPayload = (tiper: Partial<UserInterface>) => ({
@@ -287,6 +295,7 @@ const TipersSection: React.FC<SectionProps> = ({
   focusRequestKey
 }) => {
   const { users: assignableUsers } = useAssignableUsers();
+  const { markItemSeen } = useActivity();
   const [tipersData, setTipersData] = useState<UserInterface[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const gridRef = useRef<AgGridReact<UserInterface>>(null);
@@ -308,19 +317,30 @@ const TipersSection: React.FC<SectionProps> = ({
   }, [resourceKey, signal]);
 
   const status = useMemo(() => mapViewToStatus(viewMode), [viewMode]);
+  const activityScope = useMemo(
+    () => buildCommissionsRecordScope(getActivitySystem(systemNamespace), "tipers"),
+    [systemNamespace]
+  );
 
   const fetchTipersData = useCallback(async () => {
     setIsLoading(true);
     try {
       const data = await apiGet<TiperCommissionApi[]>(`${commissionApiBase}?status=${status}`);
-      setTipersData(Array.isArray(data) ? data.map(normalizeTiperCommissionRow) : []);
+      setTipersData(
+        Array.isArray(data)
+          ? data.map((row) => ({
+              ...normalizeTiperCommissionRow(row),
+              activity_scope: activityScope
+            }))
+          : []
+      );
     } catch (error) {
       console.error("Error fetching tipers:", error);
       setTipersData([]);
     } finally {
       setIsLoading(false);
     }
-  }, [commissionApiBase, status]);
+  }, [activityScope, commissionApiBase, status]);
 
   const selectedTiper = useMemo(() => {
     if (selectedId === null) {
@@ -349,6 +369,14 @@ const TipersSection: React.FC<SectionProps> = ({
       setSelectedId(null);
     }
   }, [selectedId, tipersData]);
+
+  useEffect(() => {
+    if (!selectedTiper) {
+      return;
+    }
+
+    markItemSeen(activityScope, selectedTiper.id, selectedTiper.updated_at ?? selectedTiper.created_at ?? null);
+  }, [activityScope, markItemSeen, selectedTiper]);
 
   const profileSections = useMemo(() => buildTiperSections(selectedTiper), [selectedTiper]);
   const profileBadge = useMemo(() => toStatusBadge(selectedTiper?.status), [selectedTiper]);
@@ -676,6 +704,25 @@ const TipersSection: React.FC<SectionProps> = ({
         cellClass: "action-cell",
         headerClass: "action-cell",
         cellRenderer: DeleteArchiveCellRenderer
+      });
+
+      cols.push({
+        headerName: "",
+        colId: "activity",
+        pinned: "left",
+        width: 30,
+        minWidth: 30,
+        maxWidth: 30,
+        suppressMovable: true,
+        lockPosition: true,
+        sortable: false,
+        filter: false,
+        resizable: false,
+        editable: false,
+        menuTabs: [],
+        cellClass: "activity-cell",
+        headerClass: "activity-cell",
+        cellRenderer: ActivityCellRenderer
       });
 
       cols.push({

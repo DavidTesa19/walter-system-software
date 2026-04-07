@@ -970,6 +970,33 @@ function toDocumentResponse(row, { includeData = false } = {}) {
   return base;
 }
 
+const ENTITY_ACTIVITY_TABLES = {
+  clients: ['client_entities', 'client_commissions'],
+  partners: ['partner_entities', 'partner_commissions'],
+  tipers: ['tiper_entities', 'tiper_commissions'],
+  'project-clients': ['project_client_entities', 'project_client_commissions'],
+  'project-partners': ['project_partner_entities', 'project_partner_commissions'],
+  'project-tipers': ['project_tiper_entities', 'project_tiper_commissions'],
+  'future-functions': ['future_functions']
+};
+
+async function touchEntityActivityRecords(entityType, entityId) {
+  if (!USE_POSTGRES || Number.isNaN(Number(entityId))) {
+    return;
+  }
+
+  const tables = ENTITY_ACTIVITY_TABLES[entityType] ?? [];
+  if (tables.length === 0) {
+    return;
+  }
+
+  await Promise.all(
+    tables.map((table) =>
+      pool.query(`UPDATE ${table} SET updated_at = CURRENT_TIMESTAMP WHERE id = $1`, [entityId])
+    )
+  );
+}
+
 // Generic database operations
 export const db = {
   // Execute raw query
@@ -1341,6 +1368,8 @@ export const db = {
       [entityType, entityId, filename, mimeType, sizeBytes, buffer, noteId || null]
     );
 
+    await touchEntityActivityRecords(entityType, entityId);
+
     return toDocumentResponse(result.rows[0]);
   },
 
@@ -1354,7 +1383,12 @@ export const db = {
       [id]
     );
 
-    return toDocumentResponse(result.rows[0]);
+    const deleted = result.rows[0];
+    if (deleted) {
+      await touchEntityActivityRecords(deleted.entity_type, deleted.entity_id);
+    }
+
+    return toDocumentResponse(deleted);
   },
 
   async archiveDocument(id) {
@@ -1368,7 +1402,12 @@ export const db = {
       [id]
     );
 
-    return toDocumentResponse(result.rows[0]);
+    const archived = result.rows[0];
+    if (archived) {
+      await touchEntityActivityRecords(archived.entity_type, archived.entity_id);
+    }
+
+    return toDocumentResponse(archived);
   },
 
   async unarchiveDocument(id) {
@@ -1382,7 +1421,12 @@ export const db = {
       [id]
     );
 
-    return toDocumentResponse(result.rows[0]);
+    const unarchived = result.rows[0];
+    if (unarchived) {
+      await touchEntityActivityRecords(unarchived.entity_type, unarchived.entity_id);
+    }
+
+    return toDocumentResponse(unarchived);
   },
 
   async getNotes(entityType, entityId) {
@@ -1445,6 +1489,8 @@ export const db = {
       [entityType, entityId, content, author]
     );
 
+    await touchEntityActivityRecords(entityType, entityId);
+
     const row = result.rows[0];
     return {
       id: row.id,
@@ -1472,6 +1518,8 @@ export const db = {
 
     const row = result.rows[0];
     if (!row) return null;
+
+    await touchEntityActivityRecords(row.entity_type, row.entity_id);
 
     const docsResult = await pool.query(
       `SELECT id, entity_type, entity_id, filename, mime_type, size_bytes, created_at, archived_at, note_id
@@ -1530,11 +1578,16 @@ export const db = {
     if (!USE_POSTGRES) return null;
 
     const result = await pool.query(
-      `DELETE FROM notes WHERE id = $1 RETURNING id`,
+      `DELETE FROM notes WHERE id = $1 RETURNING id, entity_type, entity_id`,
       [id]
     );
 
-    return result.rows[0] || null;
+    const deleted = result.rows[0] || null;
+    if (deleted) {
+      await touchEntityActivityRecords(deleted.entity_type, deleted.entity_id);
+    }
+
+    return deleted;
   },
 
   // Approve a pending record (change status to accepted)

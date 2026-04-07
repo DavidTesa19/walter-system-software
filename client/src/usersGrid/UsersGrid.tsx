@@ -2,6 +2,9 @@ import "ag-grid-community/styles/ag-theme-quartz.css";
 import "./UsersGrid.css";
 import React, { useCallback, useEffect, useRef, useState } from "react";
 import { ModuleRegistry, AllCommunityModule } from "ag-grid-community";
+import ActivityIndicator from "../activity/ActivityIndicator";
+import { useActivity } from "../activity/ActivityContext";
+import { buildCommissionsCollectionKey, getActivitySystem } from "../activity/activityKeys";
 import type { GridView } from "../types/appView";
 import type { GridSearchNavigationTarget } from "../types/globalSearch";
 import ClientsSection from "./sections/ClientsSection";
@@ -42,6 +45,7 @@ const UsersGrid: React.FC<UsersGridProps> = ({
   title = "Walter System"
 }) => {
   const [activeTable, setActiveTable] = useState<TableType>(() => getStoredTableView(storageKey));
+  const { getCollectionCount, markCollectionSeen } = useActivity();
   const addHandlerRef = useRef<AddHandler | null>(null);
   const [isAddDisabled, setIsAddDisabled] = useState(false);
   const { canUndo, canRedo, isBusy, undo, redo } = useUndoRedo();
@@ -56,6 +60,10 @@ const UsersGrid: React.FC<UsersGridProps> = ({
   useEffect(() => {
     setStoredTableView(storageKey, activeTable);
   }, [activeTable, storageKey]);
+
+  useEffect(() => {
+    markCollectionSeen(buildCommissionsCollectionKey(getActivitySystem(systemNamespace), viewMode, activeTable));
+  }, [activeTable, markCollectionSeen, systemNamespace, viewMode]);
 
   const registerAddHandler = useCallback((handler: AddHandler) => {
     addHandlerRef.current = handler;
@@ -157,7 +165,14 @@ const UsersGrid: React.FC<UsersGridProps> = ({
               onClick={() => setActiveTable(key)}
               className={`nav-tab ${activeTable === key ? "active" : ""}`}
             >
-              {icon} {label}
+              <span className="nav-tab__content">
+                <span>{icon} {label}</span>
+                <ActivityIndicator
+                  count={getCollectionCount(buildCommissionsCollectionKey(getActivitySystem(systemNamespace), viewMode, key))}
+                  muted={activeTable === key}
+                  title="Nepřečtené změny"
+                />
+              </span>
             </button>
           ))}
         </div>

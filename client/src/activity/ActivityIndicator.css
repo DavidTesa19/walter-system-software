@@ -1,0 +1,38 @@
+.activity-indicator {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+.activity-indicator--dot {
+  width: 10px;
+  height: 10px;
+  border-radius: 999px;
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--color-surface) 88%, transparent);
+}
+
+.activity-indicator--new {
+  background: linear-gradient(135deg, #14b8a6, #2dd4bf);
+}
+
+.activity-indicator--updated {
+  background: linear-gradient(135deg, #f59e0b, #fbbf24);
+}
+
+.activity-indicator--count {
+  min-width: 1.15rem;
+  height: 1.15rem;
+  padding: 0 0.35rem;
+  border-radius: 999px;
+  background: linear-gradient(135deg, color-mix(in srgb, var(--color-primary) 90%, white), var(--color-primary));
+  color: var(--color-primary-contrast);
+  font-size: 0.66rem;
+  font-weight: 700;
+  letter-spacing: 0.01em;
+  box-shadow: 0 10px 24px -18px color-mix(in srgb, var(--color-primary) 60%, transparent);
+}
+
+.activity-indicator--muted {
+  opacity: 0.88;
+}
