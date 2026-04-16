@@ -8,6 +8,7 @@ import {
   PROJECTS_SUBJECTS_TABLE_STORAGE_KEY,
 } from "../utils/tableViewState";
 import UsersGrid from "../usersGrid/UsersGrid";
+import { APPROVAL_STATUS_META } from "../usersGrid/utils/approvalStatus";
 import { useUndoRedo } from "../utils/undoRedo";
 import "./ProjectsSectionView.css";
 
@@ -36,12 +37,6 @@ const PROJECT_TABLES: SearchTable[] = ["clients", "partners", "tipers"];
 const SECTION_STORAGE_KEYS: Record<ProjectsSectionKind, string> = {
   subjects: "walterProjectsSubjects.lastActiveStatusView",
   commissions: "walterProjectsCommissions.lastActiveStatusView",
-};
-
-const STATUS_META: Record<ProjectStatus, { label: string; color: string }> = {
-  accepted: { label: "Schváleno", color: "#84cc16" },
-  pending: { label: "Ke schválení", color: "#f59e0b" },
-  archived: { label: "Archiv", color: "#64748b" },
 };
 
 const getStoredLastActiveStatus = (kind: ProjectsSectionKind): ProjectActiveStatusView => {
@@ -213,17 +208,17 @@ const ProjectsSectionView: React.FC<ProjectsSectionViewProps> = ({
         entries: [
           {
             key: "accepted" as const,
-            label: STATUS_META.accepted.label,
+            label: APPROVAL_STATUS_META.accepted.label,
             count: summaryCounts.accepted,
-            color: STATUS_META.accepted.color,
+            color: APPROVAL_STATUS_META.accepted.color,
             viewMode: "active" as const,
             interactive: true,
           },
           {
             key: "pending" as const,
-            label: STATUS_META.pending.label,
+            label: APPROVAL_STATUS_META.pending.label,
             count: summaryCounts.pending,
-            color: STATUS_META.pending.color,
+            color: APPROVAL_STATUS_META.pending.color,
             viewMode: "pending" as const,
             interactive: isCommissionsSection,
           },
@@ -236,9 +231,9 @@ const ProjectsSectionView: React.FC<ProjectsSectionViewProps> = ({
           ? [
               {
                 key: "archived" as const,
-                label: STATUS_META.archived.label,
+                label: APPROVAL_STATUS_META.archived.label,
                 count: summaryCounts.archived,
-                color: STATUS_META.archived.color,
+                color: APPROVAL_STATUS_META.archived.color,
                 viewMode: "archived" as const,
                 interactive: true,
               },

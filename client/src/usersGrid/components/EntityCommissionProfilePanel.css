@@ -94,26 +94,25 @@
 }
 
 .ec-status-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.38rem;
   font-size: 0.75rem;
-  font-weight: 500;
-  padding: 0.25rem 0.75rem;
+  font-weight: 600;
+  padding: 0.26rem 0.72rem;
   border-radius: 9999px;
   margin-left: 0.5rem;
-}
-
-.ec-status-badge.accepted {
-  background: var(--color-success, #10b981);
-  color: var(--color-success-contrast, #f8fafc);
-}
-
-.ec-status-badge.pending {
-  background: var(--color-warning, #f59e0b);
-  color: var(--color-warning-contrast, #0f172a);
-}
-
-.ec-status-badge.archived {
-  background: var(--color-surface-hover, #f3f4f6);
+  border: 1px solid color-mix(in srgb, var(--ec-status-color, #64748b) 26%, var(--color-border, rgba(148, 163, 184, 0.24)));
+  background: color-mix(in srgb, var(--ec-status-color, #64748b) 10%, var(--color-surface, #ffffff));
   color: var(--color-text, #1f2937);
+}
+
+.ec-status-badge__dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 999px;
+  background: var(--ec-status-color, #64748b);
+  flex-shrink: 0;
 }
 
 .ec-standalone-badge {
@@ -768,25 +767,24 @@
 }
 
 .ec-mini-status-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.32rem;
   font-size: 0.68rem;
   font-weight: 700;
   border-radius: 999px;
-  padding: 0.18rem 0.45rem;
+  padding: 0.18rem 0.48rem;
+  border: 1px solid color-mix(in srgb, var(--ec-status-color, #64748b) 24%, var(--color-border, rgba(148, 163, 184, 0.24)));
+  background: color-mix(in srgb, var(--ec-status-color, #64748b) 10%, var(--color-surface, #ffffff));
+  color: var(--color-text, #334155);
 }
 
-.ec-mini-status-badge.accepted {
-  background: var(--color-success, #10b981);
-  color: var(--color-success-contrast, #f8fafc);
-}
-
-.ec-mini-status-badge.pending {
-  background: var(--color-warning, #f59e0b);
-  color: var(--color-warning-contrast, #0f172a);
-}
-
-.ec-mini-status-badge.archived {
-  background: var(--color-surface-hover, #e5e7eb);
-  color: var(--color-text, #4b5563);
+.ec-mini-status-badge__dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 999px;
+  background: var(--ec-status-color, #64748b);
+  flex-shrink: 0;
 }
 
 .ec-linked-commission-detail {

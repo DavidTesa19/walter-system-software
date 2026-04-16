@@ -3,6 +3,7 @@ import type { ProfileDocument, ProfileNote } from "../types/profile";
 import { apiDownload } from "../../utils/api";
 import { useAuth } from "../../auth/AuthContext";
 import { isDocumentViewable } from "../../utils/documentUtils";
+import { getApprovalStatusMeta } from "../utils/approvalStatus";
 import DocumentViewerModal from "../../components/DocumentViewerModal";
 import ThemeToggleButton from "../../components/ThemeToggleButton";
 import "./EntityCommissionProfilePanel.css";
@@ -123,6 +124,25 @@ const areEditableValuesEqual = (
   }
 
   return left === right;
+};
+
+const renderApprovalStatusBadge = (status: string, compact = false) => {
+  const meta = getApprovalStatusMeta(status);
+  if (!meta) {
+    return null;
+  }
+
+  const className = compact ? "ec-mini-status-badge" : "ec-status-badge";
+
+  return (
+    <span
+      className={className}
+      style={{ "--ec-status-color": meta.color } as React.CSSProperties}
+    >
+      <span className={`${className}__dot`} aria-hidden="true" />
+      {meta.label}
+    </span>
+  );
 };
 
 const getInitialEditValue = (field: EditableField): string | boolean | string[] => {
@@ -582,10 +602,7 @@ const EntityCommissionProfilePanel: React.FC<EntityCommissionProfilePanelProps> 
                 <>
                   <span className="ec-id-separator">→</span>
                   <span className="ec-id-badge commission">{commission.commission_id}</span>
-                  <span className={`ec-status-badge ${commission.status}`}>
-                    {commission.status === 'accepted' ? 'Schváleno' : 
-                     commission.status === 'pending' ? 'Čeká na schválení' : 'Archivováno'}
-                  </span>
+                  {renderApprovalStatusBadge(commission.status)}
                 </>
               ) : hasLinkedCommissions ? (
                 <span className="ec-linked-count-badge">
@@ -692,7 +709,7 @@ const EntityCommissionProfilePanel: React.FC<EntityCommissionProfilePanelProps> 
                             <div className="ec-linked-commission-main">
                               <div className="ec-linked-commission-topline">
                                 <span className="ec-linked-commission-id">{linkedCommission.commission_id}</span>
-                                <span className={`ec-mini-status-badge ${linkedCommission.status}`}>{linkedCommission.status === 'accepted' ? 'Schváleno' : linkedCommission.status === 'pending' ? 'Pending' : 'Archiv'}</span>
+                                {renderApprovalStatusBadge(linkedCommission.status, true)}
                               </div>
                               <div className="ec-linked-commission-title">{linkedCommission.title}</div>
                               {linkedCommission.subtitle ? (
