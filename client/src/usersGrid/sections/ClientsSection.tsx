@@ -845,14 +845,17 @@ const ClientsSection: React.FC<SectionProps> = ({
     [assignableUsers, viewMode]
   );
 
+  const useContentHeightLayout = clientsData.length <= 8;
+
   return (
     <>
-      <div className="grid-container">
-        <div className="grid-wrapper ag-theme-quartz">
+      <div className={`grid-container${useContentHeightLayout ? ' grid-container--content-height' : ''}`}>
+        <div className={`grid-wrapper ag-theme-quartz${useContentHeightLayout ? ' grid-wrapper--content-height' : ''}`}>
           <AgGridReact<UserInterface>
             ref={gridRef}
             rowData={clientsData}
             columnDefs={clientsColDefs}
+            domLayout={useContentHeightLayout ? 'autoHeight' : 'normal'}
             onCellEditingStarted={(e: any) => {
               if (e.data?.id != null) {
                 editSnapshotRef.current[e.data.id] = cloneRecord(e.data);

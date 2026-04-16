@@ -1,0 +1,97 @@
+.projects-section-view {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.projects-section-view__mode-bar {
+  display: flex;
+  justify-content: center;
+}
+
+.projects-section-view__mode-tabs {
+  justify-self: center;
+}
+
+.projects-section-view__summary {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 10px 14px;
+  border-radius: 12px;
+  border: 1px solid var(--color-border, rgba(148, 163, 184, 0.24));
+  background:
+    radial-gradient(circle at top right, color-mix(in srgb, var(--color-primary, #2563eb) 12%, transparent) 0%, transparent 30%),
+    linear-gradient(180deg, color-mix(in srgb, var(--color-surface-alt, #f8fafc) 94%, var(--color-surface, #ffffff)) 0%, var(--color-surface, #ffffff) 100%);
+  box-shadow: var(--color-shadow-sm, 0 8px 18px rgba(15, 23, 42, 0.08));
+}
+
+.projects-section-view__summary-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+
+.projects-section-view__summary-label {
+  min-width: 90px;
+  font-family: var(--font-subheading);
+  font-weight: 700;
+  color: var(--color-text);
+}
+
+.projects-section-view__status-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 10px;
+  border: 1px solid var(--color-border, rgba(148, 163, 184, 0.24));
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--color-surface-hover, #eef2ff) 82%, transparent);
+  color: var(--color-text, #0f172a);
+  font-family: var(--font-subheading);
+  font-size: 0.85rem;
+  cursor: pointer;
+  transition: border-color 0.18s ease, background-color 0.18s ease, color 0.18s ease,
+    transform 0.18s ease;
+}
+
+.projects-section-view__status-chip:hover:not(:disabled) {
+  transform: translateY(-1px);
+  border-color: color-mix(in srgb, var(--color-primary, #2563eb) 28%, var(--color-border, rgba(148, 163, 184, 0.24)));
+}
+
+.projects-section-view__status-chip:disabled {
+  cursor: default;
+}
+
+.projects-section-view__status-chip--active {
+  border-color: color-mix(in srgb, var(--color-primary, #2563eb) 42%, var(--color-border, rgba(148, 163, 184, 0.24)));
+  background: color-mix(in srgb, var(--color-primary, #2563eb) 12%, var(--color-surface, #ffffff));
+  color: var(--color-primary, #2563eb);
+}
+
+.projects-section-view__status-chip--disabled {
+  opacity: 0.76;
+}
+
+.projects-section-view__status-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+
+@media (max-width: 900px) {
+  .projects-section-view__mode-bar {
+    justify-content: flex-start;
+  }
+
+  .projects-section-view__summary {
+    padding: 10px 12px;
+  }
+
+  .projects-section-view__summary-label {
+    min-width: auto;
+  }
+}

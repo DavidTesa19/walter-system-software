@@ -154,6 +154,11 @@
   align-items: stretch;
 }
 
+.grid-container--content-height {
+  flex: 0 0 auto;
+  min-height: 0;
+}
+
 .profile-cell {
   display: flex;
   align-items: center;
@@ -368,6 +373,11 @@
   min-height: var(--grid-min-height);
 }
 
+.grid-wrapper--content-height {
+  flex: 0 0 auto;
+  min-height: 0;
+}
+
 .grid-wrapper .ag-theme-quartz {
   --ag-background-color: var(--color-surface);
   --ag-foreground-color: var(--color-text);
@@ -406,6 +416,40 @@
 .grid-wrapper .ag-overlay-no-rows-wrapper,
 .grid-wrapper .ag-overlay-loading-wrapper {
   min-height: 100%;
+}
+
+.grid-wrapper:has(.ag-overlay-no-rows-wrapper) {
+  flex: 0 0 auto;
+  min-height: 170px;
+}
+
+.grid-wrapper:has(.ag-overlay-no-rows-wrapper) .ag-root,
+.grid-wrapper:has(.ag-overlay-no-rows-wrapper) .ag-root-wrapper,
+.grid-wrapper:has(.ag-overlay-no-rows-wrapper) .ag-root-wrapper-body {
+  flex: 0 0 auto;
+  height: auto;
+}
+
+.grid-wrapper:has(.ag-overlay-no-rows-wrapper) .ag-layout-normal,
+.grid-wrapper:has(.ag-overlay-no-rows-wrapper) .ag-body,
+.grid-wrapper:has(.ag-overlay-no-rows-wrapper) .ag-body-viewport,
+.grid-wrapper:has(.ag-overlay-no-rows-wrapper) .ag-center-cols-viewport,
+.grid-wrapper:has(.ag-overlay-no-rows-wrapper) .ag-center-cols-container,
+.grid-wrapper:has(.ag-overlay-no-rows-wrapper) .ag-overlay,
+.grid-wrapper:has(.ag-overlay-no-rows-wrapper) .ag-overlay-wrapper,
+.grid-wrapper:has(.ag-overlay-no-rows-wrapper) .ag-overlay-no-rows-wrapper,
+.grid-wrapper:has(.ag-overlay-no-rows-wrapper) .ag-overlay-loading-wrapper {
+  min-height: 0;
+}
+
+.grid-wrapper .ag-overlay-no-rows-wrapper {
+  min-height: 120px;
+}
+
+.grid-wrapper .ag-overlay-no-rows-center {
+  color: var(--color-text-muted);
+  font-family: var(--font-subheading);
+  font-size: 0.92rem;
 }
 
 /* In-row delete button styles (pinned column) */

@@ -999,14 +999,17 @@ const PartnersSectionNew: React.FC<SectionProps> = ({ viewMode, isActive, system
     return cols;
   }, [assignableUsers, viewMode]);
 
+  const useContentHeightLayout = gridData.length <= 8;
+
   return (
     <>
-      <div className="grid-container">
-        <div className="grid-wrapper ag-theme-quartz">
+      <div className={`grid-container${useContentHeightLayout ? ' grid-container--content-height' : ''}`}>
+        <div className={`grid-wrapper ag-theme-quartz${useContentHeightLayout ? ' grid-wrapper--content-height' : ''}`}>
           <AgGridReact<PartnerGridRow>
             ref={gridRef}
             rowData={gridData}
             columnDefs={columnDefs}
+            domLayout={useContentHeightLayout ? 'autoHeight' : 'normal'}
             onCellValueChanged={onCellValueChanged}
             defaultColDef={{ resizable: true, sortable: true }}
             suppressRowClickSelection={true}

@@ -18,6 +18,8 @@ type SidebarGroupItem = {
   id: AppView;
   label: string;
   icon: React.ReactNode;
+  activeViews?: AppView[];
+  countViews?: AppView[];
 };
 
 type SidebarSection = {
@@ -324,9 +326,13 @@ const Sidebar: React.FC<SidebarProps> = ({
           label: 'Subjekty',
           icon: <Icons.Tables />,
           items: [
-            { id: 'projects_subjects_active', label: 'Aktivní', icon: <Icons.Active /> },
-            { id: 'projects_subjects_pending', label: 'Ke schválení', icon: <Icons.Pending /> },
-            { id: 'projects_subjects_archived', label: 'Archiv', icon: <Icons.Archived /> }
+            {
+              id: 'projects_subjects_active',
+              label: 'Subjekty',
+              icon: <Icons.Tables />,
+              activeViews: ['projects_subjects_active', 'projects_subjects_pending', 'projects_subjects_archived'],
+              countViews: ['projects_subjects_active', 'projects_subjects_pending', 'projects_subjects_archived']
+            }
           ]
         },
         {
@@ -334,9 +340,13 @@ const Sidebar: React.FC<SidebarProps> = ({
           label: 'Zakázky',
           icon: <Icons.Tables />,
           items: [
-            { id: 'projects_active', label: 'Aktivní', icon: <Icons.Active /> },
-            { id: 'projects_pending', label: 'Ke schválení', icon: <Icons.Pending /> },
-            { id: 'projects_archived', label: 'Archiv', icon: <Icons.Archived /> }
+            {
+              id: 'projects_active',
+              label: 'Zakázky',
+              icon: <Icons.Tables />,
+              activeViews: ['projects_active', 'projects_pending', 'projects_archived'],
+              countViews: ['projects_active', 'projects_pending', 'projects_archived']
+            }
           ]
         }
       ]
@@ -404,10 +414,11 @@ const Sidebar: React.FC<SidebarProps> = ({
     }))
     .filter((group) => group.items.length > 0);
 
-  const getItemCount = (view: AppView) => getViewCount(view);
-  const getSectionCount = (section: SidebarSection) => section.items.reduce((sum, item) => sum + getItemCount(item.id), 0);
+  const isItemActive = (item: SidebarGroupItem) => (item.activeViews ?? [item.id]).includes(activeView);
+  const getItemCount = (item: SidebarGroupItem) => (item.countViews ?? [item.id]).reduce((sum, view) => sum + getViewCount(view), 0);
+  const getSectionCount = (section: SidebarSection) => section.items.reduce((sum, item) => sum + getItemCount(item), 0);
   const getGroupCount = (group: SidebarGroup) => group.sections.reduce((sum, section) => sum + getSectionCount(section), 0);
-  const getSingleGroupCount = (group: SidebarSingleItem) => group.items.reduce((sum, item) => sum + getItemCount(item.id), 0);
+  const getSingleGroupCount = (group: SidebarSingleItem) => group.items.reduce((sum, item) => sum + getItemCount(item), 0);
 
   return (
     <div className="sidebar">
@@ -548,39 +559,59 @@ const Sidebar: React.FC<SidebarProps> = ({
 
             {expandedGroups[group.id] && (
               <div className="sidebar-group-content sidebar-group-content--sections">
-                {group.sections.map(section => (
-                  <div key={section.id} className="sidebar-section">
-                    <button
-                      className={`sidebar-section-header ${expandedGroups[section.id] ? 'expanded' : ''}`}
-                      onClick={() => toggleGroup(section.id)}
-                    >
-                      <div className="group-header-content">
-                        {section.icon}
-                        <span className="group-label">{section.label}</span>
-                        <ActivityIndicator count={getSectionCount(section)} muted={expandedGroups[section.id]} title="Nepřečtené změny" />
-                      </div>
-                      <span className="group-chevron">
-                        {expandedGroups[section.id] ? <Icons.ChevronDown /> : <Icons.ChevronRight />}
-                      </span>
-                    </button>
+                {group.sections.map(section => {
+                  const isSingleSectionItem =
+                    section.items.length === 1 && section.items[0].label === section.label;
 
-                    {expandedGroups[section.id] && (
-                      <div className="sidebar-section-content">
-                        {section.items.map(item => (
-                          <button
-                            key={item.id}
-                            className={`sidebar-button sidebar-button--leaf ${activeView === item.id ? 'active' : ''}`}
-                            onClick={() => onViewChange(item.id)}
-                          >
-                            {item.icon}
-                            <span>{item.label}</span>
-                            <ActivityIndicator count={getItemCount(item.id)} muted={activeView === item.id} title="Nepřečtené změny" />
-                          </button>
-                        ))}
-                      </div>
-                    )}
-                  </div>
-                ))}
+                  if (isSingleSectionItem) {
+                    const item = section.items[0];
+                    return (
+                      <button
+                        key={section.id}
+                        className={`sidebar-button sidebar-button--leaf ${isItemActive(item) ? 'active' : ''}`}
+                        onClick={() => onViewChange(item.id)}
+                      >
+                        {section.icon}
+                        <span>{section.label}</span>
+                        <ActivityIndicator count={getItemCount(item)} muted={isItemActive(item)} title="Nepřečtené změny" />
+                      </button>
+                    );
+                  }
+
+                  return (
+                    <div key={section.id} className="sidebar-section">
+                      <button
+                        className={`sidebar-section-header ${expandedGroups[section.id] ? 'expanded' : ''}`}
+                        onClick={() => toggleGroup(section.id)}
+                      >
+                        <div className="group-header-content">
+                          {section.icon}
+                          <span className="group-label">{section.label}</span>
+                          <ActivityIndicator count={getSectionCount(section)} muted={expandedGroups[section.id]} title="Nepřečtené změny" />
+                        </div>
+                        <span className="group-chevron">
+                          {expandedGroups[section.id] ? <Icons.ChevronDown /> : <Icons.ChevronRight />}
+                        </span>
+                      </button>
+
+                      {expandedGroups[section.id] && (
+                        <div className="sidebar-section-content">
+                          {section.items.map(item => (
+                            <button
+                              key={item.id}
+                              className={`sidebar-button sidebar-button--leaf ${isItemActive(item) ? 'active' : ''}`}
+                              onClick={() => onViewChange(item.id)}
+                            >
+                              {item.icon}
+                              <span>{item.label}</span>
+                              <ActivityIndicator count={getItemCount(item)} muted={isItemActive(item)} title="Nepřečtené změny" />
+                            </button>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  );
+                })}
               </div>
             )}
           </div>
@@ -594,12 +625,12 @@ const Sidebar: React.FC<SidebarProps> = ({
             return (
               <button
                 key={item.id}
-                className={`sidebar-button ${activeView === item.id ? 'active' : ''}`}
+                className={`sidebar-button ${isItemActive(item) ? 'active' : ''}`}
                 onClick={() => onViewChange(item.id)}
               >
                 {item.icon}
                 <span>{item.label}</span>
-                <ActivityIndicator count={getItemCount(item.id)} muted={activeView === item.id} title="Nepřečtené změny" />
+                <ActivityIndicator count={getItemCount(item)} muted={isItemActive(item)} title="Nepřečtené změny" />
               </button>
             );
           }
@@ -625,12 +656,12 @@ const Sidebar: React.FC<SidebarProps> = ({
                   {group.items.map(item => (
                     <button
                       key={item.id}
-                      className={`sidebar-button sub-item ${activeView === item.id ? 'active' : ''}`}
+                      className={`sidebar-button sub-item ${isItemActive(item) ? 'active' : ''}`}
                       onClick={() => onViewChange(item.id)}
                     >
                       {item.icon}
                       <span>{item.label}</span>
-                      <ActivityIndicator count={getItemCount(item.id)} muted={activeView === item.id} title="Nepřečtené změny" />
+                      <ActivityIndicator count={getItemCount(item)} muted={isItemActive(item)} title="Nepřečtené změny" />
                     </button>
                   ))}
                 </div>
