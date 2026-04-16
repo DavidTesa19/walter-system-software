@@ -12,6 +12,7 @@ import EntityCommissionProfilePanel, {
   type LinkedCommissionItem
 } from "../components/EntityCommissionProfilePanel";
 import StatusCellRenderer from "../cells/StatusCellRenderer";
+import ApprovalStatusCellRenderer from "../cells/ApprovalStatusCellRenderer";
 import { mapViewToStatus } from "../constants";
 import { apiGet, apiPost, apiPut, apiDelete } from "../../utils/api";
 import type { SectionProps } from "./SectionTypes";
@@ -25,6 +26,7 @@ import {
   fromAssignmentDraftValue,
   toAssignmentDraftValue,
 } from "../assignmentUtils";
+import { compareApprovalStatuses } from "../utils/approvalStatus";
 import { compareWorkflowStatuses, DEFAULT_WORKFLOW_STATUS, getNormalizedWorkflowStatus, WORKFLOW_STATUS_VALUES } from "../workflowStatus";
 import useAssignableUsers from "../hooks/useAssignableUsers";
 import ActivityCellRenderer from "../../activity/ActivityCellRenderer";
@@ -1057,6 +1059,7 @@ const ClientsSectionNew: React.FC<SectionProps> = ({
 
   const columnDefs = useMemo<ColDef<ClientGridRow>[]>(() => {
     const cols: ColDef<ClientGridRow>[] = [];
+    const showApprovalStatusColumn = Boolean(systemNamespace);
     const assignedUsersColumn: ColDef<ClientGridRow> = {
       field: "assigned_user_ids",
       headerName: "Přiřazení",
@@ -1221,6 +1224,20 @@ const ClientsSectionNew: React.FC<SectionProps> = ({
 
     if (viewMode === "active") {
       cols.push(
+        ...(showApprovalStatusColumn
+          ? [
+              {
+                field: "status",
+                headerName: "Schválení",
+                filter: true,
+                editable: false,
+                flex: 1,
+                minWidth: 130,
+                comparator: (left, right) => compareApprovalStatuses(left, right),
+                cellRenderer: ApprovalStatusCellRenderer,
+              } satisfies ColDef<ClientGridRow>,
+            ]
+          : []),
         {
           field: "mobile",
           headerName: "Telefon",
@@ -1274,6 +1291,20 @@ const ClientsSectionNew: React.FC<SectionProps> = ({
           cellEditor: 'agTextCellEditor'
         },
         assignedUsersColumn,
+        ...(showApprovalStatusColumn
+          ? [
+              {
+                field: "status",
+                headerName: "Schválení",
+                filter: true,
+                editable: false,
+                flex: 1,
+                minWidth: 130,
+                comparator: (left, right) => compareApprovalStatuses(left, right),
+                cellRenderer: ApprovalStatusCellRenderer,
+              } satisfies ColDef<ClientGridRow>,
+            ]
+          : []),
         {
           field: "state",
           headerName: "Stav",
@@ -1300,7 +1331,7 @@ const ClientsSectionNew: React.FC<SectionProps> = ({
     }
 
     return cols;
-  }, [assignableUsers, viewMode]);
+  }, [assignableUsers, systemNamespace, viewMode]);
 
   const useContentHeightLayout = gridData.length <= 8;
 

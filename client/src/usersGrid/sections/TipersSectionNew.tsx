@@ -12,6 +12,7 @@ import EntityCommissionProfilePanel, {
   type LinkedCommissionItem
 } from "../components/EntityCommissionProfilePanel";
 import StatusCellRenderer from "../cells/StatusCellRenderer";
+import ApprovalStatusCellRenderer from "../cells/ApprovalStatusCellRenderer";
 import { mapViewToStatus } from "../constants";
 import { apiGet, apiPost, apiPut, apiDelete } from "../../utils/api";
 import type { SectionProps } from "./SectionTypes";
@@ -20,6 +21,7 @@ import useProfileNotes from "../hooks/useProfileNotes";
 import { ApproveRestoreCellRenderer, DeleteArchiveCellRenderer } from "../cells/RowActionCellRenderers";
 import { fieldOptions } from "../fieldOptions";
 import { formatProfileDate } from "../utils/profileUtils";
+import { compareApprovalStatuses } from "../utils/approvalStatus";
 import { formatAssignedUsernames, fromAssignmentDraftValue, toAssignmentDraftValue } from "../assignmentUtils";
 import { compareWorkflowStatuses, DEFAULT_WORKFLOW_STATUS, getNormalizedWorkflowStatus, WORKFLOW_STATUS_VALUES } from "../workflowStatus";
 import useAssignableUsers from "../hooks/useAssignableUsers";
@@ -1028,6 +1030,7 @@ const TipersSectionNew: React.FC<SectionProps> = ({
 
   const columnDefs = useMemo<ColDef<TiperGridRow>[]>(() => {
     const cols: ColDef<TiperGridRow>[] = [];
+    const showApprovalStatusColumn = Boolean(systemNamespace);
     const assignedUsersColumn: ColDef<TiperGridRow> = {
       field: "assigned_user_ids",
       headerName: "Přiřazení",
@@ -1192,6 +1195,20 @@ const TipersSectionNew: React.FC<SectionProps> = ({
 
     if (viewMode === "active") {
       cols.push(
+        ...(showApprovalStatusColumn
+          ? [
+              {
+                field: "status",
+                headerName: "Schválení",
+                filter: true,
+                editable: false,
+                flex: 1,
+                minWidth: 130,
+                comparator: (left, right) => compareApprovalStatuses(left, right),
+                cellRenderer: ApprovalStatusCellRenderer,
+              } satisfies ColDef<TiperGridRow>,
+            ]
+          : []),
         {
           field: "company",
           headerName: "Společnost",
@@ -1244,6 +1261,20 @@ const TipersSectionNew: React.FC<SectionProps> = ({
           minWidth: 80
         },
         assignedUsersColumn,
+        ...(showApprovalStatusColumn
+          ? [
+              {
+                field: "status",
+                headerName: "Schválení",
+                filter: true,
+                editable: false,
+                flex: 1,
+                minWidth: 130,
+                comparator: (left, right) => compareApprovalStatuses(left, right),
+                cellRenderer: ApprovalStatusCellRenderer,
+              } satisfies ColDef<TiperGridRow>,
+            ]
+          : []),
         {
           field: "state",
           headerName: "Stav",
@@ -1270,7 +1301,7 @@ const TipersSectionNew: React.FC<SectionProps> = ({
     }
 
     return cols;
-  }, [assignableUsers, viewMode]);
+  }, [assignableUsers, systemNamespace, viewMode]);
 
   const useContentHeightLayout = gridData.length <= 8;
 

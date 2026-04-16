@@ -12,6 +12,7 @@ import EntityCommissionProfilePanel, {
   type LinkedCommissionItem
 } from "../components/EntityCommissionProfilePanel";
 import StatusCellRenderer from "../cells/StatusCellRenderer";
+import ApprovalStatusCellRenderer from "../cells/ApprovalStatusCellRenderer";
 import { mapViewToStatus } from "../constants";
 import { apiDelete, apiGet, apiPost, apiPut } from "../../utils/api";
 import type { SectionProps } from "./SectionTypes";
@@ -20,6 +21,7 @@ import useProfileNotes from "../hooks/useProfileNotes";
 import { ApproveRestoreCellRenderer, DeleteArchiveCellRenderer } from "../cells/RowActionCellRenderers";
 import { fieldOptions } from "../fieldOptions";
 import { formatProfileDate } from "../utils/profileUtils";
+import { compareApprovalStatuses } from "../utils/approvalStatus";
 import { formatAssignedUsernames, fromAssignmentDraftValue, toAssignmentDraftValue } from "../assignmentUtils";
 import { compareWorkflowStatuses, DEFAULT_WORKFLOW_STATUS, getNormalizedWorkflowStatus, WORKFLOW_STATUS_VALUES } from "../workflowStatus";
 import useAssignableUsers from "../hooks/useAssignableUsers";
@@ -935,6 +937,17 @@ const PartnersSectionNew: React.FC<SectionProps> = ({ viewMode, isActive, system
 
   const columnDefs = useMemo<ColDef<PartnerGridRow>[]>(() => {
     const cols: ColDef<PartnerGridRow>[] = [];
+    const showApprovalStatusColumn = Boolean(systemNamespace);
+    const approvalStatusCol: ColDef<PartnerGridRow> = {
+      field: "status",
+      headerName: "Schválení",
+      filter: true,
+      editable: false,
+      flex: 1,
+      minWidth: 130,
+      comparator: (left: string | null | undefined, right: string | null | undefined) => compareApprovalStatuses(left, right),
+      cellRenderer: ApprovalStatusCellRenderer,
+    };
     const assignedUsersColumn: ColDef<PartnerGridRow> = {
       field: "assigned_user_ids",
       headerName: "Přiřazení",
@@ -952,6 +965,7 @@ const PartnersSectionNew: React.FC<SectionProps> = ({ viewMode, isActive, system
       tooltipValueGetter: (params) => formatAssignedUsernames(params.data?.assigned_user_ids, assignableUsers, params.data?.assigned_to) ?? ""
     };
     const activeSubjectCols: ColDef<PartnerGridRow>[] = [
+      ...(showApprovalStatusColumn ? [approvalStatusCol] : []),
       { field: "mobile", headerName: "Telefon", filter: true, editable: true, flex: 1, minWidth: 120 },
       { field: "email", headerName: "E-mail", filter: true, editable: true, flex: 1.2, minWidth: 170 },
       assignedUsersColumn,
@@ -962,6 +976,7 @@ const PartnersSectionNew: React.FC<SectionProps> = ({ viewMode, isActive, system
       { field: "budget", headerName: "Rozpočet", filter: true, editable: (params) => !params.data?.entityOnly, flex: 1, minWidth: 110 },
       { field: "commission_value", headerName: "Provize", filter: true, editable: (params) => !params.data?.entityOnly, flex: 1, minWidth: 110 },
       assignedUsersColumn,
+      ...(showApprovalStatusColumn ? [approvalStatusCol] : []),
       { field: "state", headerName: "Stav", filter: true, editable: false, flex: 1.1, minWidth: 140, comparator: (left, right) => compareWorkflowStatuses(left, right), cellRenderer: StatusCellRenderer },
       { field: "priority", headerName: "Priorita", filter: true, editable: (params) => !params.data?.entityOnly, flex: 0.9, minWidth: 90, cellEditor: "agSelectCellEditor", cellEditorParams: { values: ["Nízká", "Střední", "Vysoká", "Urgentní"] } }
     ];
@@ -997,7 +1012,7 @@ const PartnersSectionNew: React.FC<SectionProps> = ({ viewMode, isActive, system
     );
 
     return cols;
-  }, [assignableUsers, viewMode]);
+  }, [assignableUsers, systemNamespace, viewMode]);
 
   const useContentHeightLayout = gridData.length <= 8;
 

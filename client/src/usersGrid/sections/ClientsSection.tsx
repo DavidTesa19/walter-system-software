@@ -14,10 +14,12 @@ import useProfileNotes from "../hooks/useProfileNotes";
 import { mapViewToStatus } from "../constants";
 import { apiGet, apiPost, apiPut, apiDelete } from "../../utils/api";
 import { formatProfileDate, normalizeText, toStatusBadge } from "../utils/profileUtils";
+import { compareApprovalStatuses } from "../utils/approvalStatus";
 import type { SectionProps } from "./SectionTypes";
 import { ApproveRestoreCellRenderer, DeleteArchiveCellRenderer } from "../cells/RowActionCellRenderers";
 import { useUndoRedo } from "../../utils/undoRedo";
 import { compareWorkflowStatuses, getNormalizedWorkflowStatus } from "../workflowStatus";
+import ApprovalStatusCellRenderer from "../cells/ApprovalStatusCellRenderer";
 import useAssignableUsers from "../hooks/useAssignableUsers";
 import ActivityCellRenderer from "../../activity/ActivityCellRenderer";
 import { useActivity } from "../../activity/ActivityContext";
@@ -801,6 +803,16 @@ const ClientsSection: React.FC<SectionProps> = ({
         minWidth: 120
       },
       assignedUsersColumn,
+      ...(systemNamespace ? [{
+        field: "status",
+        headerName: "Schválení",
+        editable: false,
+        filter: true,
+        flex: 1,
+        minWidth: 130,
+        comparator: (left: string | null | undefined, right: string | null | undefined) => compareApprovalStatuses(left, right),
+        cellRenderer: ApprovalStatusCellRenderer
+      } as ColDef<UserInterface>] : []),
       {
         field: "field",
         headerName: "Obor",

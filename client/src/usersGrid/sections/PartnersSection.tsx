@@ -9,9 +9,11 @@ import ProfilePanel from "../components/ProfilePanel";
 import { mapViewToStatus } from "../constants";
 import { apiGet, apiPost, apiPut, apiDelete } from "../../utils/api";
 import { formatProfileDate, normalizeText, toStatusBadge } from "../utils/profileUtils";
+import { compareApprovalStatuses } from "../utils/approvalStatus";
 import type { ProfileSection } from "../types/profile";
 import type { SectionProps } from "./SectionTypes";
 import StatusCellRenderer from "../cells/StatusCellRenderer";
+import ApprovalStatusCellRenderer from "../cells/ApprovalStatusCellRenderer";
 import useProfileDocuments from "../hooks/useProfileDocuments";
 import useProfileNotes from "../hooks/useProfileNotes";
 import { ApproveRestoreCellRenderer, DeleteArchiveCellRenderer } from "../cells/RowActionCellRenderers";
@@ -823,6 +825,16 @@ const PartnersSection: React.FC<SectionProps> = ({
         minWidth: 120
       },
       assignedUsersColumn,
+      ...(systemNamespace ? [{
+        field: "status",
+        headerName: "Schválení",
+        editable: false,
+        filter: true,
+        flex: 1,
+        minWidth: 130,
+        comparator: (left: string | null | undefined, right: string | null | undefined) => compareApprovalStatuses(left, right),
+        cellRenderer: ApprovalStatusCellRenderer
+      } as ColDef<UserInterface>] : []),
       {
         field: "stage",
         headerName: "Stav",
