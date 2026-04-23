@@ -11,6 +11,7 @@ import EntityCommissionProfilePanel, {
   type FieldGroup,
   type LinkedCommissionItem
 } from "../components/EntityCommissionProfilePanel";
+import FieldCellRenderer from "../cells/FieldCellRenderer";
 import StatusCellRenderer from "../cells/StatusCellRenderer";
 import ApprovalStatusCellRenderer from "../cells/ApprovalStatusCellRenderer";
 import { mapViewToStatus } from "../constants";
@@ -20,7 +21,7 @@ import type { SectionProps } from "./SectionTypes";
 import useProfileDocuments from "../hooks/useProfileDocuments";
 import useProfileNotes from "../hooks/useProfileNotes";
 import { ApproveRestoreCellRenderer, DeleteArchiveCellRenderer } from "../cells/RowActionCellRenderers";
-import { fieldOptions } from "../fieldOptions";
+import { fieldOptions, groupedFieldOptions, projectsFieldOptions, projectsGroupedFieldOptions } from "../fieldOptions";
 import { formatProfileDate } from "../utils/profileUtils";
 import {
   formatAssignedUsernames,
@@ -90,6 +91,7 @@ type ClientCommissionApi = {
 };
 
 const FIELD_OPTIONS_ARRAY = fieldOptions.map((opt) => opt.value);
+const PROJECTS_FIELD_OPTIONS_ARRAY = projectsFieldOptions.map((opt) => opt.value);
 const joinName = (...parts: Array<string | null | undefined>) => parts.filter((part): part is string => Boolean(part && part.trim())).join(" ").trim();
 
 type ClientCreateDraft = {
@@ -240,7 +242,7 @@ const deriveClientEntityFromCommission = (commission: ClientCommissionApi): Clie
 // BUILD ENTITY DATA FOR PROFILE PANEL
 // =============================================================================
 
-const buildEntityData = (entity: ClientEntity | null, assignmentOptions: Array<string | { value: string; label: string; description?: string }>): EntityData | null => {
+const buildEntityData = (entity: ClientEntity | null, assignmentOptions: Array<string | { value: string; label: string; description?: string }>, fieldOptionsArray: string[] = FIELD_OPTIONS_ARRAY): EntityData | null => {
   if (!entity) return null;
 
   const groups: FieldGroup[] = [
@@ -250,7 +252,7 @@ const buildEntityData = (entity: ClientEntity | null, assignmentOptions: Array<s
       fields: [
         { key: "name", label: "Jméno / Název", value: entity.name, type: "text" },
         { key: "company", label: "Společnost", value: entity.company, type: "text" },
-        { key: "field", label: "Obor činnosti", value: entity.field, type: "select", options: FIELD_OPTIONS_ARRAY },
+        { key: "field", label: "Obor činnosti", value: entity.field, type: "select", options: fieldOptionsArray },
         { key: "service", label: "Požadovaná služba", value: entity.service, type: "text" },
         { key: "budget", label: "Rozpočet subjektu", value: entity.budget, type: "text" },
         { key: "assigned_user_ids", label: "Přiřazení uživatelé", value: toAssignmentDraftValue(entity.assigned_user_ids), type: "multi-select", options: assignmentOptions },
@@ -343,7 +345,7 @@ const buildLinkedCommissionItems = (commissions: ClientCommission[], assignedUse
   }))
   .sort((left, right) => left.commission_id.localeCompare(right.commission_id));
 
-const buildClientDraftEntityData = (draft: ClientCreateDraft, assignmentOptions: Array<string | { value: string; label: string; description?: string }>): EntityData => ({
+const buildClientDraftEntityData = (draft: ClientCreateDraft, assignmentOptions: Array<string | { value: string; label: string; description?: string }>, fieldOptionsArray: string[] = FIELD_OPTIONS_ARRAY): EntityData => ({
   id: 0,
   entity_id: "Nový klient",
   groups: buildEntityData({
@@ -365,7 +367,7 @@ const buildClientDraftEntityData = (draft: ClientCreateDraft, assignmentOptions:
     assigned_user_ids: fromAssignmentDraftValue(draft.entity.assigned_user_ids),
     created_at: undefined,
     updated_at: undefined
-  }, assignmentOptions)!.groups
+  }, assignmentOptions, fieldOptionsArray)!.groups
 });
 
 const buildClientDraftCommissionData = (draft: ClientCreateDraft, status: ClientCommissionApi["status"], assignmentOptions: Array<string | { value: string; label: string; description?: string }>): CommissionData => ({
@@ -429,6 +431,9 @@ const ClientsSectionNew: React.FC<SectionProps> = ({
   // Get status from viewMode
   const status = useMemo(() => mapViewToStatus(viewMode), [viewMode]);
   const resourceKey = systemNamespace ? "project-clients" : "clients";
+  const fieldOptionsArray = systemNamespace ? PROJECTS_FIELD_OPTIONS_ARRAY : FIELD_OPTIONS_ARRAY;
+  const fieldOptionChoices = systemNamespace ? projectsFieldOptions : fieldOptions;
+  const groupedFieldOptionChoices = systemNamespace ? projectsGroupedFieldOptions : groupedFieldOptions;
   const activitySystem = useMemo(() => getActivitySystem(systemNamespace), [systemNamespace]);
   const subjectActivityScope = useMemo(() => buildSubjectsRecordScope(activitySystem, "clients"), [activitySystem]);
   const commissionActivityScope = useMemo(() => buildCommissionsRecordScope(activitySystem, "clients"), [activitySystem]);
@@ -610,9 +615,9 @@ const ClientsSectionNew: React.FC<SectionProps> = ({
     );
   }, [assignableUsers, commissions, selectedEntityId]);
 
-  const entityData = useMemo(() => buildEntityData(selectedEntity, assignmentOptions), [assignmentOptions, selectedEntity]);
+  const entityData = useMemo(() => buildEntityData(selectedEntity, assignmentOptions, fieldOptionsArray), [assignmentOptions, fieldOptionsArray, selectedEntity]);
   const commissionData = useMemo(() => buildCommissionData(selectedCommission, assignmentOptions), [assignmentOptions, selectedCommission]);
-  const draftEntityData = useMemo(() => buildClientDraftEntityData(createDraft, assignmentOptions), [assignmentOptions, createDraft]);
+  const draftEntityData = useMemo(() => buildClientDraftEntityData(createDraft, assignmentOptions, fieldOptionsArray), [assignmentOptions, createDraft, fieldOptionsArray]);
   const draftCommissionData = useMemo(() => buildClientDraftCommissionData(createDraft, status, assignmentOptions), [assignmentOptions, createDraft, status]);
 
   useEffect(() => {
@@ -1232,12 +1237,13 @@ const ClientsSectionNew: React.FC<SectionProps> = ({
         field: "field",
         headerName: "Obor",
         filter: true,
-        editable: true,
+        editable: false,
         flex: 1,
         minWidth: 100,
-        cellEditor: 'agSelectCellEditor',
-        cellEditorParams: {
-          values: FIELD_OPTIONS_ARRAY
+        cellRenderer: FieldCellRenderer,
+        cellRendererParams: {
+          fieldOptions: fieldOptionChoices,
+          groupedFieldOptions: groupedFieldOptionChoices
         }
       },
       {
@@ -1360,7 +1366,7 @@ const ClientsSectionNew: React.FC<SectionProps> = ({
     }
 
     return cols;
-  }, [assignableUsers, systemNamespace, viewMode]);
+  }, [assignableUsers, fieldOptionChoices, groupedFieldOptionChoices, systemNamespace, viewMode]);
 
   const useContentHeightLayout = gridData.length <= 8;
 

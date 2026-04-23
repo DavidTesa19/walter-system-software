@@ -1,10 +1,15 @@
 import React from "react";
-import { fieldOptions, groupedFieldOptions } from "../fieldOptions";
-import type { FieldCategory } from "../fieldOptions";
+import {
+  fieldOptions as defaultFieldOptions,
+  groupedFieldOptions as defaultGroupedFieldOptions,
+} from "../fieldOptions";
+import type { FieldCategory, FieldOption } from "../fieldOptions";
 
 interface FieldCellParams {
   value: string;
-  setValue: (value: string) => void;
+  setValue?: (value: string) => void;
+  fieldOptions?: FieldOption[];
+  groupedFieldOptions?: FieldCategory[];
   // Ag-grid params
   colDef: any;
   data: any;
@@ -12,9 +17,17 @@ interface FieldCellParams {
 }
 
 const FieldCellRenderer: React.FC<FieldCellParams> = (params) => {
+  const availableFieldOptions = params.fieldOptions ?? defaultFieldOptions;
+  const availableGroupedFieldOptions = params.groupedFieldOptions ?? defaultGroupedFieldOptions;
+  const flatFieldOptions = availableFieldOptions.length > 0
+    ? availableFieldOptions
+    : availableGroupedFieldOptions.flatMap((group) => group.options);
+  const menuGroups = availableGroupedFieldOptions.filter((group) => group.options.length > 0);
+  const showCategories = menuGroups.length > 1;
+
   const getCurrentField = () => {
     return (
-      fieldOptions.find((option) => option.value === params.value) || {
+      flatFieldOptions.find((option) => option.value === params.value) || {
         value: params.value || "",
         label: params.value || "Vyberte obor"
       }
@@ -93,7 +106,7 @@ const FieldCellRenderer: React.FC<FieldCellParams> = (params) => {
       if (searchTerm.trim().length > 0) {
         currentView = 'search';
         
-        const filteredOptions = fieldOptions.filter(opt => 
+        const filteredOptions = flatFieldOptions.filter(opt => 
           opt.label.toLowerCase().includes(searchTerm.toLowerCase())
         );
 
@@ -155,13 +168,22 @@ const FieldCellRenderer: React.FC<FieldCellParams> = (params) => {
       // 3. Categories Mode (Top level)
       else {
         currentView = 'categories';
-        groupedFieldOptions.forEach(group => {
-          const item = createItem(group.label, true, false, () => {
-            activeCategory = group;
-            currentView = 'suboptions';
-            render();
-            // Scroll to top when entering category
-            listContainer.scrollTop = 0; 
+        const rootOptions = showCategories
+          ? menuGroups
+          : (menuGroups[0]?.options ?? flatFieldOptions);
+
+        rootOptions.forEach((entry) => {
+          const isGroup = showCategories;
+          const item = createItem(isGroup ? entry.label : entry.label, isGroup, false, () => {
+            if (showCategories) {
+              activeCategory = entry as FieldCategory;
+              currentView = 'suboptions';
+              render();
+              listContainer.scrollTop = 0;
+              return;
+            }
+
+            selectValue((entry as FieldOption).value);
           });
           listContainer.appendChild(item);
         });
@@ -213,7 +235,12 @@ const FieldCellRenderer: React.FC<FieldCellParams> = (params) => {
     };
 
     const selectValue = (val: string) => {
-      params.setValue(val);
+      if (typeof params.setValue === "function") {
+        params.setValue(val);
+      } else if (params.colDef?.field && typeof params.node?.setDataValue === "function") {
+        params.node.setDataValue(params.colDef.field, val);
+      }
+
       cleanup();
     };
 

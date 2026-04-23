@@ -37,3 +37,20 @@ groupedFieldOptions.forEach(group => {
 export const fieldOptions: FieldOption[] = Array.from(uniqueOptions.values()).sort((a, b) =>
   a.label.localeCompare(b.label, 'cs', { sensitivity: 'base' })
 );
+
+export const projectsFieldOptions: FieldOption[] = [
+  { value: 'Banky', label: 'Banky' },
+  { value: 'Developeři', label: 'Developeři' },
+  { value: 'Firmy', label: 'Firmy' },
+  { value: 'Fondy', label: 'Fondy' },
+  { value: 'Instituce', label: 'Instituce' },
+  { value: 'Investoři', label: 'Investoři' },
+  { value: 'Ostatní', label: 'Ostatní' },
+];
+
+export const projectsGroupedFieldOptions: FieldCategory[] = [
+  {
+    label: 'Projektové obory',
+    options: projectsFieldOptions,
+  },
+];

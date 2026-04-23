@@ -11,6 +11,7 @@ import EntityCommissionProfilePanel, {
   type FieldGroup,
   type LinkedCommissionItem
 } from "../components/EntityCommissionProfilePanel";
+import FieldCellRenderer from "../cells/FieldCellRenderer";
 import StatusCellRenderer from "../cells/StatusCellRenderer";
 import ApprovalStatusCellRenderer from "../cells/ApprovalStatusCellRenderer";
 import { mapViewToStatus } from "../constants";
@@ -20,7 +21,7 @@ import type { SectionProps } from "./SectionTypes";
 import useProfileDocuments from "../hooks/useProfileDocuments";
 import useProfileNotes from "../hooks/useProfileNotes";
 import { ApproveRestoreCellRenderer, DeleteArchiveCellRenderer } from "../cells/RowActionCellRenderers";
-import { fieldOptions } from "../fieldOptions";
+import { fieldOptions, groupedFieldOptions, projectsFieldOptions, projectsGroupedFieldOptions } from "../fieldOptions";
 import { formatProfileDate } from "../utils/profileUtils";
 import { compareApprovalStatuses } from "../utils/approvalStatus";
 import { formatAssignedUsernames, fromAssignmentDraftValue, toAssignmentDraftValue } from "../assignmentUtils";
@@ -82,6 +83,7 @@ type PartnerCommissionApi = {
 };
 
 const FIELD_OPTIONS_ARRAY = fieldOptions.map((opt) => opt.value);
+const PROJECTS_FIELD_OPTIONS_ARRAY = projectsFieldOptions.map((opt) => opt.value);
 
 type PartnerCreateDraft = {
   entity: {
@@ -224,7 +226,7 @@ const derivePartnerEntityFromCommission = (commission: PartnerCommissionApi): Pa
   };
 };
 
-const buildEntityData = (entity: PartnerEntity | null, assignmentOptions: Array<string | { value: string; label: string; description?: string }>): EntityData | null => {
+const buildEntityData = (entity: PartnerEntity | null, assignmentOptions: Array<string | { value: string; label: string; description?: string }>, fieldOptionsArray: string[] = FIELD_OPTIONS_ARRAY): EntityData | null => {
   if (!entity) return null;
 
   const groups: FieldGroup[] = [
@@ -234,7 +236,7 @@ const buildEntityData = (entity: PartnerEntity | null, assignmentOptions: Array<
       fields: [
         { key: "name", label: "Jméno / Název", value: entity.name, type: "text" },
         { key: "company", label: "Společnost", value: entity.company, type: "text" },
-        { key: "field", label: "Obor", value: entity.field, type: "select", options: FIELD_OPTIONS_ARRAY },
+        { key: "field", label: "Obor", value: entity.field, type: "select", options: fieldOptionsArray },
         { key: "assigned_user_ids", label: "Přiřazení uživatelé", value: toAssignmentDraftValue(entity.assigned_user_ids), type: "multi-select", options: assignmentOptions }
       ]
     },
@@ -321,7 +323,7 @@ const buildLinkedCommissionItems = (commissions: PartnerCommission[], assignedUs
   }))
   .sort((left, right) => left.commission_id.localeCompare(right.commission_id));
 
-const buildPartnerDraftEntityData = (draft: PartnerCreateDraft, assignmentOptions: Array<string | { value: string; label: string; description?: string }>): EntityData => ({
+const buildPartnerDraftEntityData = (draft: PartnerCreateDraft, assignmentOptions: Array<string | { value: string; label: string; description?: string }>, fieldOptionsArray: string[] = FIELD_OPTIONS_ARRAY): EntityData => ({
   id: 0,
   entity_id: "Nový partner",
   groups: buildEntityData({
@@ -341,7 +343,7 @@ const buildPartnerDraftEntityData = (draft: PartnerCreateDraft, assignmentOption
     assigned_user_ids: fromAssignmentDraftValue(draft.entity.assigned_user_ids),
     created_at: undefined,
     updated_at: undefined
-  }, assignmentOptions)!.groups
+  }, assignmentOptions, fieldOptionsArray)!.groups
 });
 
 const buildPartnerDraftCommissionData = (draft: PartnerCreateDraft, status: PartnerCommissionApi["status"], assignmentOptions: Array<string | { value: string; label: string; description?: string }>): CommissionData => ({
@@ -390,6 +392,9 @@ const PartnersSectionNew: React.FC<SectionProps> = ({ viewMode, isActive, system
   const gridRef = useRef<AgGridReact<PartnerGridRow>>(null);
   const status = useMemo(() => mapViewToStatus(viewMode), [viewMode]);
   const resourceKey = systemNamespace ? "project-partners" : "partners";
+  const fieldOptionsArray = systemNamespace ? PROJECTS_FIELD_OPTIONS_ARRAY : FIELD_OPTIONS_ARRAY;
+  const fieldOptionChoices = systemNamespace ? projectsFieldOptions : fieldOptions;
+  const groupedFieldOptionChoices = systemNamespace ? projectsGroupedFieldOptions : groupedFieldOptions;
   const activitySystem = useMemo(() => getActivitySystem(systemNamespace), [systemNamespace]);
   const subjectActivityScope = useMemo(() => buildSubjectsRecordScope(activitySystem, "partners"), [activitySystem]);
   const commissionActivityScope = useMemo(() => buildCommissionsRecordScope(activitySystem, "partners"), [activitySystem]);
@@ -545,9 +550,9 @@ const PartnersSectionNew: React.FC<SectionProps> = ({ viewMode, isActive, system
   const selectedEntity = useMemo(() => selectedEntityId === null ? null : entities.find((entity) => entity.id === selectedEntityId) || null, [entities, selectedEntityId]);
   const selectedCommission = useMemo(() => selectedCommissionId === null ? null : commissions.find((commission) => commission.id === selectedCommissionId) || null, [commissions, selectedCommissionId]);
   const linkedCommissions = useMemo(() => selectedEntityId === null ? [] : buildLinkedCommissionItems(commissions.filter((commission) => commission.partner_entity_id === selectedEntityId), assignableUsers), [assignableUsers, commissions, selectedEntityId]);
-  const entityData = useMemo(() => buildEntityData(selectedEntity, assignmentOptions), [assignmentOptions, selectedEntity]);
+  const entityData = useMemo(() => buildEntityData(selectedEntity, assignmentOptions, fieldOptionsArray), [assignmentOptions, fieldOptionsArray, selectedEntity]);
   const commissionData = useMemo(() => buildCommissionData(selectedCommission, assignmentOptions), [assignmentOptions, selectedCommission]);
-  const draftEntityData = useMemo(() => buildPartnerDraftEntityData(createDraft, assignmentOptions), [assignmentOptions, createDraft]);
+  const draftEntityData = useMemo(() => buildPartnerDraftEntityData(createDraft, assignmentOptions, fieldOptionsArray), [assignmentOptions, createDraft, fieldOptionsArray]);
   const draftCommissionData = useMemo(() => buildPartnerDraftCommissionData(createDraft, status, assignmentOptions), [assignmentOptions, createDraft, status]);
 
   useEffect(() => {
@@ -1034,14 +1039,14 @@ const PartnersSectionNew: React.FC<SectionProps> = ({ viewMode, isActive, system
       },
       { field: "name", headerName: "Jméno / Název", filter: true, editable: true, flex: 1.5, minWidth: 160 },
       { field: "company", headerName: "Společnost", filter: true, editable: true, flex: 1.5, minWidth: 160 },
-      { field: "field", headerName: "Obor", filter: true, editable: true, flex: 1, minWidth: 110, cellEditor: "agSelectCellEditor", cellEditorParams: { values: FIELD_OPTIONS_ARRAY } },
+      { field: "field", headerName: "Obor", filter: true, editable: false, flex: 1, minWidth: 110, cellRenderer: FieldCellRenderer, cellRendererParams: { fieldOptions: fieldOptionChoices, groupedFieldOptions: groupedFieldOptionChoices } },
       { field: "location", headerName: "Lokalita", filter: true, editable: true, flex: 1, minWidth: 110 },
       { field: "created_at", headerName: "Datum přidání", filter: true, editable: false, flex: 0.95, minWidth: 130, valueFormatter: (params) => formatAddedDate(params.value) },
       ...(viewMode === "active" ? activeSubjectCols : commissionCols)
     );
 
     return cols;
-  }, [assignableUsers, systemNamespace, viewMode]);
+  }, [assignableUsers, fieldOptionChoices, groupedFieldOptionChoices, systemNamespace, viewMode]);
 
   const useContentHeightLayout = gridData.length <= 8;
 

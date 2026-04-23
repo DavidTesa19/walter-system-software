@@ -11,6 +11,7 @@ import EntityCommissionProfilePanel, {
   type FieldGroup,
   type LinkedCommissionItem
 } from "../components/EntityCommissionProfilePanel";
+import FieldCellRenderer from "../cells/FieldCellRenderer";
 import StatusCellRenderer from "../cells/StatusCellRenderer";
 import ApprovalStatusCellRenderer from "../cells/ApprovalStatusCellRenderer";
 import { mapViewToStatus } from "../constants";
@@ -20,7 +21,7 @@ import type { SectionProps } from "./SectionTypes";
 import useProfileDocuments from "../hooks/useProfileDocuments";
 import useProfileNotes from "../hooks/useProfileNotes";
 import { ApproveRestoreCellRenderer, DeleteArchiveCellRenderer } from "../cells/RowActionCellRenderers";
-import { fieldOptions } from "../fieldOptions";
+import { fieldOptions, groupedFieldOptions, projectsFieldOptions, projectsGroupedFieldOptions } from "../fieldOptions";
 import { formatProfileDate } from "../utils/profileUtils";
 import { compareApprovalStatuses } from "../utils/approvalStatus";
 import { formatAssignedUsernames, fromAssignmentDraftValue, toAssignmentDraftValue } from "../assignmentUtils";
@@ -82,6 +83,7 @@ type TiperCommissionApi = {
 };
 
 const FIELD_OPTIONS_ARRAY = fieldOptions.map((opt) => opt.value);
+const PROJECTS_FIELD_OPTIONS_ARRAY = projectsFieldOptions.map((opt) => opt.value);
 const joinName = (...parts: Array<string | null | undefined>) => parts.filter((part): part is string => Boolean(part && part.trim())).join(" ").trim();
 
 type TiperCreateDraft = {
@@ -224,7 +226,7 @@ const deriveTiperEntityFromCommission = (commission: TiperCommissionApi): TiperE
 // BUILD ENTITY DATA FOR PROFILE PANEL
 // =============================================================================
 
-const buildEntityData = (entity: TiperEntity | null, assignmentOptions: Array<string | { value: string; label: string; description?: string }>): EntityData | null => {
+const buildEntityData = (entity: TiperEntity | null, assignmentOptions: Array<string | { value: string; label: string; description?: string }>, fieldOptionsArray: string[] = FIELD_OPTIONS_ARRAY): EntityData | null => {
   if (!entity) return null;
 
   const groups: FieldGroup[] = [
@@ -234,7 +236,7 @@ const buildEntityData = (entity: TiperEntity | null, assignmentOptions: Array<st
       fields: [
         { key: "name", label: "Jméno", value: entity.name, type: "text" },
         { key: "company", label: "Organizace", value: entity.company, type: "text" },
-        { key: "field", label: "Oblast působení", value: entity.field, type: "select", options: FIELD_OPTIONS_ARRAY },
+        { key: "field", label: "Oblast působení", value: entity.field, type: "select", options: fieldOptionsArray },
         { key: "assigned_user_ids", label: "Přiřazení uživatelé", value: toAssignmentDraftValue(entity.assigned_user_ids), type: "multi-select", options: assignmentOptions }
       ]
     },
@@ -325,7 +327,7 @@ const buildLinkedCommissionItems = (commissions: TiperCommission[], assignedUser
   }))
   .sort((left, right) => left.commission_id.localeCompare(right.commission_id));
 
-const buildTiperDraftEntityData = (draft: TiperCreateDraft, assignmentOptions: Array<string | { value: string; label: string; description?: string }>): EntityData => ({
+const buildTiperDraftEntityData = (draft: TiperCreateDraft, assignmentOptions: Array<string | { value: string; label: string; description?: string }>, fieldOptionsArray: string[] = FIELD_OPTIONS_ARRAY): EntityData => ({
   id: 0,
   entity_id: "Nový tipař",
   groups: buildEntityData({
@@ -345,7 +347,7 @@ const buildTiperDraftEntityData = (draft: TiperCreateDraft, assignmentOptions: A
     assigned_user_ids: fromAssignmentDraftValue(draft.entity.assigned_user_ids),
     created_at: undefined,
     updated_at: undefined
-  }, assignmentOptions)!.groups
+  }, assignmentOptions, fieldOptionsArray)!.groups
 });
 
 const buildTiperDraftCommissionData = (draft: TiperCreateDraft, status: TiperCommissionApi["status"], assignmentOptions: Array<string | { value: string; label: string; description?: string }>): CommissionData => ({
@@ -409,6 +411,9 @@ const TipersSectionNew: React.FC<SectionProps> = ({
   // Get status from viewMode
   const status = useMemo(() => mapViewToStatus(viewMode), [viewMode]);
   const resourceKey = systemNamespace ? "project-tipers" : "tipers";
+  const fieldOptionsArray = systemNamespace ? PROJECTS_FIELD_OPTIONS_ARRAY : FIELD_OPTIONS_ARRAY;
+  const fieldOptionChoices = systemNamespace ? projectsFieldOptions : fieldOptions;
+  const groupedFieldOptionChoices = systemNamespace ? projectsGroupedFieldOptions : groupedFieldOptions;
   const activitySystem = useMemo(() => getActivitySystem(systemNamespace), [systemNamespace]);
   const subjectActivityScope = useMemo(() => buildSubjectsRecordScope(activitySystem, "tipers"), [activitySystem]);
   const commissionActivityScope = useMemo(() => buildCommissionsRecordScope(activitySystem, "tipers"), [activitySystem]);
@@ -587,9 +592,9 @@ const TipersSectionNew: React.FC<SectionProps> = ({
     return buildLinkedCommissionItems(commissions.filter((commission) => commission.tiper_entity_id === selectedEntityId), assignableUsers);
   }, [assignableUsers, commissions, selectedEntityId]);
 
-  const entityData = useMemo(() => buildEntityData(selectedEntity, assignmentOptions), [assignmentOptions, selectedEntity]);
+  const entityData = useMemo(() => buildEntityData(selectedEntity, assignmentOptions, fieldOptionsArray), [assignmentOptions, fieldOptionsArray, selectedEntity]);
   const commissionData = useMemo(() => buildCommissionData(selectedCommission, assignmentOptions), [assignmentOptions, selectedCommission]);
-  const draftEntityData = useMemo(() => buildTiperDraftEntityData(createDraft, assignmentOptions), [assignmentOptions, createDraft]);
+  const draftEntityData = useMemo(() => buildTiperDraftEntityData(createDraft, assignmentOptions, fieldOptionsArray), [assignmentOptions, createDraft, fieldOptionsArray]);
   const draftCommissionData = useMemo(() => buildTiperDraftCommissionData(createDraft, status, assignmentOptions), [assignmentOptions, createDraft, status]);
 
   useEffect(() => {
@@ -1195,12 +1200,13 @@ const TipersSectionNew: React.FC<SectionProps> = ({
         field: "field",
         headerName: "Oblast",
         filter: true,
-        editable: true,
+        editable: false,
         flex: 1,
         minWidth: 100,
-        cellEditor: 'agSelectCellEditor',
-        cellEditorParams: {
-          values: FIELD_OPTIONS_ARRAY
+        cellRenderer: FieldCellRenderer,
+        cellRendererParams: {
+          fieldOptions: fieldOptionChoices,
+          groupedFieldOptions: groupedFieldOptionChoices
         }
       },
       {
@@ -1330,7 +1336,7 @@ const TipersSectionNew: React.FC<SectionProps> = ({
     }
 
     return cols;
-  }, [assignableUsers, systemNamespace, viewMode]);
+  }, [assignableUsers, fieldOptionChoices, groupedFieldOptionChoices, systemNamespace, viewMode]);
 
   const useContentHeightLayout = gridData.length <= 8;
 
