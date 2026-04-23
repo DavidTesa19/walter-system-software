@@ -6,24 +6,28 @@ import "./FutureFunctionCreateModal.css";
 interface FutureFunctionCreateModalProps {
   open: boolean;
   initialValues: FutureFunctionDraft;
+  files?: File[];
   priorityOptions: readonly string[];
   complexityOptions: readonly string[];
   phaseOptions: readonly string[];
   statusOptions: readonly string[];
   isSubmitting?: boolean;
   onClose: () => void;
+  onFilesChange?: (files: File[]) => void;
   onSubmit: (values: FutureFunctionDraft) => Promise<void> | void;
 }
 
 const FutureFunctionCreateModal: React.FC<FutureFunctionCreateModalProps> = ({
   open,
   initialValues,
+  files,
   priorityOptions,
   complexityOptions,
   phaseOptions,
   statusOptions,
   isSubmitting = false,
   onClose,
+  onFilesChange,
   onSubmit
 }) => {
   const [draft, setDraft] = useState<FutureFunctionDraft>(initialValues);
@@ -208,6 +212,23 @@ const FutureFunctionCreateModal: React.FC<FutureFunctionCreateModalProps> = ({
     });
   }, [draft, onSubmit]);
 
+  const handleFileInputChange = useCallback((event: React.ChangeEvent<HTMLInputElement>) => {
+    if (!onFilesChange || !event.target.files?.length) {
+      return;
+    }
+
+    onFilesChange([...(files ?? []), ...Array.from(event.target.files)]);
+    event.target.value = "";
+  }, [files, onFilesChange]);
+
+  const handleRemoveFile = useCallback((index: number) => {
+    if (!onFilesChange || !files) {
+      return;
+    }
+
+    onFilesChange(files.filter((_, fileIndex) => fileIndex !== index));
+  }, [files, onFilesChange]);
+
   if (!open) {
     return null;
   }
@@ -336,6 +357,44 @@ const FutureFunctionCreateModal: React.FC<FutureFunctionCreateModalProps> = ({
                 disabled={isSubmitting}
               />
             </label>
+
+            <section className="ff-create-documents ff-create-field-wide" aria-label="Dokumenty k funkci">
+              <div className="ff-create-documents-header">
+                <div>
+                  <span className="ff-create-documents-title">Dokumenty</span>
+                  <p className="ff-create-documents-subtitle">Přiložte podklady už při vytváření funkce.</p>
+                </div>
+                <label className="ff-create-documents-picker">
+                  <input
+                    type="file"
+                    multiple
+                    onChange={handleFileInputChange}
+                    disabled={isSubmitting}
+                  />
+                  <span>Přidat dokumenty</span>
+                </label>
+              </div>
+
+              {files && files.length > 0 ? (
+                <ul className="ff-create-documents-list">
+                  {files.map((file, index) => (
+                    <li key={`${file.name}-${index}`} className="ff-create-documents-item">
+                      <span className="ff-create-documents-name">{file.name}</span>
+                      <button
+                        type="button"
+                        className="ff-create-documents-remove"
+                        onClick={() => handleRemoveFile(index)}
+                        disabled={isSubmitting}
+                      >
+                        Odebrat
+                      </button>
+                    </li>
+                  ))}
+                </ul>
+              ) : (
+                <p className="ff-create-documents-empty">Zatím nejsou vybrány žádné dokumenty.</p>
+              )}
+            </section>
           </div>
 
           <div className="ff-create-actions">

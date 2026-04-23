@@ -7,9 +7,9 @@ import { useActivity } from "../activity/ActivityContext";
 import { buildCommissionsCollectionKey, getActivitySystem } from "../activity/activityKeys";
 import type { GridView } from "../types/appView";
 import type { GridSearchNavigationTarget } from "../types/globalSearch";
-import ClientsSection from "./sections/ClientsSection";
-import PartnersSection from "./sections/PartnersSection";
-import TipersSection from "./sections/TipersSection";
+import ClientsSectionNew from "./sections/ClientsSectionNew";
+import PartnersSectionNew from "./sections/PartnersSectionNew";
+import TipersSectionNew from "./sections/TipersSectionNew";
 import type { AddHandler } from "./sections/SectionTypes";
 import { useUndoRedo } from "../utils/undoRedo";
 import {
@@ -85,7 +85,7 @@ const UsersGrid: React.FC<UsersGridProps> = ({
   const renderActiveSection = () => {
     if (activeTable === "clients") {
       return (
-        <ClientsSection
+        <ClientsSectionNew
           viewMode={viewMode}
           isActive
           systemNamespace={systemNamespace}
@@ -107,7 +107,7 @@ const UsersGrid: React.FC<UsersGridProps> = ({
 
     if (activeTable === "partners") {
       return (
-        <PartnersSection
+        <PartnersSectionNew
           viewMode={viewMode}
           isActive
           systemNamespace={systemNamespace}
@@ -128,7 +128,7 @@ const UsersGrid: React.FC<UsersGridProps> = ({
     }
 
     return (
-      <TipersSection
+      <TipersSectionNew
         viewMode={viewMode}
         isActive
         systemNamespace={systemNamespace}

@@ -12,6 +12,7 @@ import InfoPopupEditor from "./cells/InfoPopupEditor";
 import OptionSelectEditor from "./cells/OptionSelectEditor";
 import FutureFunctionDetail from "./FutureFunctionDetail";
 import FutureFunctionCreateModal from "./FutureFunctionCreateModal";
+import { uploadDocuments } from "../utils/uploadDocuments";
 import type { FutureFunction, FutureFunctionDraft } from "./futureFunction.interface";
 import type { ICellRendererParams } from "ag-grid-community";
 import { formatProfileDate } from "../usersGrid/utils/profileUtils";
@@ -88,6 +89,7 @@ const FutureFunctionsGrid: React.FC = () => {
   const [isArchiveView, setIsArchiveView] = useState(() => getStoredFutureFunctionsView("active") === "archive");
   const [selectedFunction, setSelectedFunction] = useState<FutureFunction | null>(null);
   const [createModalOpen, setCreateModalOpen] = useState(false);
+  const [createFiles, setCreateFiles] = useState<File[]>([]);
   const [createDraft, setCreateDraft] = useState<FutureFunctionDraft>(createInitialDraft("active"));
   const activeWrapperRef = useRef<HTMLDivElement | null>(null);
   const { pushAction, signal, canUndo, canRedo, isBusy, undo, redo } = useUndoRedo();
@@ -151,6 +153,7 @@ const FutureFunctionsGrid: React.FC = () => {
 
   const openCreateModal = useCallback((mode: "active" | "archive") => {
     setCreateDraft(createInitialDraft(mode));
+    setCreateFiles([]);
     setCreateModalOpen(true);
   }, []);
 
@@ -159,8 +162,22 @@ const FutureFunctionsGrid: React.FC = () => {
       return;
     }
 
+    setCreateFiles([]);
     setCreateModalOpen(false);
   }, [isLoading]);
+
+  const uploadCreateDocuments = useCallback(async (functionId: number) => {
+    if (!createFiles.length) {
+      return;
+    }
+
+    try {
+      await uploadDocuments(`/future-functions/${functionId}/documents`, createFiles);
+    } catch (error) {
+      console.error("Error uploading future function documents:", error);
+      alert("Funkce byla vytvořena, ale nepodařilo se nahrát některé dokumenty.");
+    }
+  }, [createFiles]);
 
   const handleCreateFunction = useCallback(
     async (draft: FutureFunctionDraft) => {
@@ -174,6 +191,9 @@ const FutureFunctionsGrid: React.FC = () => {
       try {
         setIsLoading(true);
         const created = await apiPost<FutureFunction>(`/future-functions`, newFunction);
+        if (created?.id) {
+          await uploadCreateDocuments(created.id);
+        }
         await fetchFutureFunctions();
         if (created?.id) {
           pushAction({
@@ -184,6 +204,7 @@ const FutureFunctionsGrid: React.FC = () => {
           });
           setSelectedFunction(created);
         }
+        setCreateFiles([]);
         setCreateModalOpen(false);
       } catch (error) {
         console.error("Error adding future function:", error);
@@ -192,7 +213,7 @@ const FutureFunctionsGrid: React.FC = () => {
         setIsLoading(false);
       }
     },
-    [fetchFutureFunctions, pushAction]
+    [fetchFutureFunctions, pushAction, uploadCreateDocuments]
   );
 
   const handleDeleteFunction = useCallback(
@@ -984,12 +1005,14 @@ const FutureFunctionsGrid: React.FC = () => {
       <FutureFunctionCreateModal
         open={createModalOpen}
         initialValues={createDraft}
+        files={createFiles}
         priorityOptions={PRIORITY_OPTIONS}
         complexityOptions={COMPLEXITY_OPTIONS}
         phaseOptions={PHASE_OPTIONS}
         statusOptions={ALL_STATUS_OPTIONS}
         isSubmitting={isLoading}
         onClose={closeCreateModal}
+        onFilesChange={setCreateFiles}
         onSubmit={handleCreateFunction}
       />
 

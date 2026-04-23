@@ -15,6 +15,7 @@ import StatusCellRenderer from "../cells/StatusCellRenderer";
 import ApprovalStatusCellRenderer from "../cells/ApprovalStatusCellRenderer";
 import { mapViewToStatus } from "../constants";
 import { apiGet, apiPost, apiPut, apiDelete } from "../../utils/api";
+import { uploadDocuments } from "../../utils/uploadDocuments";
 import type { SectionProps } from "./SectionTypes";
 import useProfileDocuments from "../hooks/useProfileDocuments";
 import useProfileNotes from "../hooks/useProfileNotes";
@@ -396,6 +397,7 @@ const TipersSectionNew: React.FC<SectionProps> = ({
   const [createModalOpen, setCreateModalOpen] = useState(false);
   const [isCreating, setIsCreating] = useState(false);
   const [includeCommission, setIncludeCommission] = useState(false);
+  const [createFiles, setCreateFiles] = useState<File[]>([]);
   const [createDraft, setCreateDraft] = useState<TiperCreateDraft>(createDefaultTiperDraft);
   
   // Selected entity/commission for profile panel
@@ -620,6 +622,7 @@ const TipersSectionNew: React.FC<SectionProps> = ({
   const openCreateModal = useCallback((draft?: TiperCreateDraft) => {
     setCreateDraft(draft ?? createDefaultTiperDraft());
     setIncludeCommission(Boolean(draft));
+    setCreateFiles([]);
     setCreateModalOpen(true);
   }, []);
 
@@ -627,8 +630,22 @@ const TipersSectionNew: React.FC<SectionProps> = ({
     if (isCreating) return;
     setCreateModalOpen(false);
     setIncludeCommission(false);
+    setCreateFiles([]);
     setCreateDraft(createDefaultTiperDraft());
   }, [isCreating]);
+
+  const uploadCreateDocuments = useCallback(async (entityId: number) => {
+    if (!createFiles.length) {
+      return;
+    }
+
+    try {
+      await uploadDocuments(`/${resourceKey}/${entityId}/documents`, createFiles);
+    } catch (error) {
+      console.error("Error uploading tiper create documents:", error);
+      alert("Záznam byl vytvořen, ale nepodařilo se nahrát některé dokumenty.");
+    }
+  }, [createFiles, resourceKey]);
 
   const handleDraftEntityChange = useCallback((key: string, value: string | string[]) => {
     setCreateDraft((current) => ({ ...current, entity: { ...current.entity, [key]: value } }));
@@ -800,7 +817,13 @@ const TipersSectionNew: React.FC<SectionProps> = ({
         }
       });
 
+      if (response?.entity?.id) {
+        await uploadCreateDocuments(response.entity.id);
+      }
+
       setCreateModalOpen(false);
+      setIncludeCommission(false);
+      setCreateFiles([]);
       setCreateDraft(createDefaultTiperDraft());
       await fetchData();
 
@@ -814,7 +837,7 @@ const TipersSectionNew: React.FC<SectionProps> = ({
     } finally {
       setIsCreating(false);
     }
-  }, [createDraft, fetchData, status]);
+  }, [createDraft, fetchData, status, uploadCreateDocuments]);
 
   const handleCreateEntityOnly = useCallback(async () => {
     setIsCreating(true);
@@ -832,7 +855,13 @@ const TipersSectionNew: React.FC<SectionProps> = ({
         assigned_user_ids: fromAssignmentDraftValue(createDraft.entity.assigned_user_ids)
       });
 
+      if (entity?.id) {
+        await uploadCreateDocuments(entity.id);
+      }
+
       setCreateModalOpen(false);
+      setIncludeCommission(false);
+      setCreateFiles([]);
       setCreateDraft(createDefaultTiperDraft());
       await fetchData();
 
@@ -846,7 +875,7 @@ const TipersSectionNew: React.FC<SectionProps> = ({
     } finally {
       setIsCreating(false);
     }
-  }, [createDraft, entityApiBase, fetchData, status]);
+  }, [createDraft, entityApiBase, fetchData, status, uploadCreateDocuments]);
 
   const handleCreate = useCallback(async () => {
     if (includeCommission) {
@@ -1379,6 +1408,8 @@ const TipersSectionNew: React.FC<SectionProps> = ({
         onEntityChange={handleDraftEntityChange}
         onCommissionChange={handleDraftCommissionChange}
         onIncludeCommissionChange={setIncludeCommission}
+        files={createFiles}
+        onFilesChange={setCreateFiles}
         onSubmit={handleCreate}
       />
     </>

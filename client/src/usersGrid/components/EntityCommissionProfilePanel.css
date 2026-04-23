@@ -649,6 +649,104 @@
   cursor: not-allowed;
 }
 
+.ec-create-documents {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+  margin-top: 1.5rem;
+  padding: 1.25rem;
+  border: 1px dashed var(--color-border-strong, rgba(100, 116, 139, 0.28));
+  border-radius: 18px;
+  background: color-mix(in srgb, var(--color-surface-alt, rgba(248, 250, 252, 0.8)) 88%, transparent);
+}
+
+.ec-create-documents-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 1rem;
+}
+
+.ec-create-documents-title {
+  margin: 0;
+  font-size: 0.95rem;
+  font-weight: 700;
+  color: var(--color-text, #0f172a);
+}
+
+.ec-create-documents-subtitle {
+  margin: 0.3rem 0 0;
+  font-size: 0.85rem;
+  color: var(--color-text-muted, #475569);
+}
+
+.ec-create-documents-picker {
+  position: relative;
+  overflow: hidden;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 2.5rem;
+  padding: 0.7rem 1rem;
+  border-radius: 999px;
+  border: 1px solid var(--color-border, rgba(15, 23, 42, 0.14));
+  background: var(--color-surface, #ffffff);
+  color: var(--color-text, #1e293b);
+  font-size: 0.85rem;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.ec-create-documents-picker input {
+  position: absolute;
+  inset: 0;
+  opacity: 0;
+  cursor: pointer;
+}
+
+.ec-create-documents-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 0.7rem;
+}
+
+.ec-create-documents-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  padding: 0.8rem 0.9rem;
+  border-radius: 14px;
+  background: var(--color-surface, #ffffff);
+  border: 1px solid var(--color-border, rgba(15, 23, 42, 0.08));
+}
+
+.ec-create-documents-name {
+  min-width: 0;
+  font-size: 0.88rem;
+  color: var(--color-text, #0f172a);
+  overflow-wrap: anywhere;
+}
+
+.ec-create-documents-remove {
+  border: 1px solid var(--color-border, rgba(15, 23, 42, 0.14));
+  background: transparent;
+  color: var(--color-text-muted, #475569);
+  border-radius: 999px;
+  padding: 0.45rem 0.8rem;
+  font-size: 0.78rem;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.ec-create-documents-empty {
+  margin: 0;
+  font-size: 0.85rem;
+  color: var(--color-text-muted, #64748b);
+}
+
 .ec-no-commission-state {
   display: flex;
   flex-direction: column;
@@ -1188,6 +1286,12 @@
 
   .ec-create-actions {
     flex-direction: column-reverse;
+  }
+
+  .ec-create-documents-header,
+  .ec-create-documents-item {
+    flex-direction: column;
+    align-items: flex-start;
   }
 
   .ec-create-action {

@@ -5,6 +5,7 @@ import { useActivity } from '../activity/ActivityContext';
 import { trackEvent } from '../utils/analytics';
 import type { AppView } from '../types/appView';
 import type { GlobalSearchResult } from '../types/globalSearch';
+import WssLogo from '../assets/WssLogo';
 import './Sidebar.css';
 
 interface SidebarProps {
@@ -423,7 +424,7 @@ const Sidebar: React.FC<SidebarProps> = ({
   return (
     <div className="sidebar">
       <div className="sidebar-header">
-        <h2>Walter System</h2>
+        <WssLogo className="sidebar-brand-logo" />
       </div>
       <nav className="sidebar-nav">
         <div className="sidebar-search" ref={searchContainerRef}>

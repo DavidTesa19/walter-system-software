@@ -159,6 +159,105 @@
   grid-column: 1 / -1;
 }
 
+.ff-create-documents {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+  padding: 1rem 1.1rem;
+  border-radius: 18px;
+  border: 1px dashed var(--color-border-strong, rgba(148, 163, 184, 0.3));
+  background: color-mix(in srgb, var(--color-surface-alt, #f8fafc) 80%, transparent);
+}
+
+.ff-create-documents-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 1rem;
+}
+
+.ff-create-documents-title {
+  display: block;
+  color: var(--color-text, #101828);
+  font-size: 0.92rem;
+  font-weight: 700;
+  font-family: var(--font-subheading);
+}
+
+.ff-create-documents-subtitle {
+  margin: 0.3rem 0 0;
+  color: var(--color-text-muted, #667085);
+  font-size: 0.84rem;
+}
+
+.ff-create-documents-picker {
+  position: relative;
+  overflow: hidden;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 42px;
+  padding: 0 16px;
+  border-radius: 999px;
+  border: 1px solid var(--color-border, #d7dee8);
+  background: var(--color-surface, #ffffff);
+  color: var(--color-text, #101828);
+  font-size: 0.85rem;
+  font-weight: 700;
+  font-family: var(--font-subheading);
+  cursor: pointer;
+}
+
+.ff-create-documents-picker input {
+  position: absolute;
+  inset: 0;
+  opacity: 0;
+  cursor: pointer;
+}
+
+.ff-create-documents-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 0.7rem;
+}
+
+.ff-create-documents-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  padding: 0.75rem 0.85rem;
+  border-radius: 14px;
+  background: var(--color-surface, #ffffff);
+  border: 1px solid var(--color-border, #d7dee8);
+}
+
+.ff-create-documents-name {
+  min-width: 0;
+  overflow-wrap: anywhere;
+  color: var(--color-text, #101828);
+  font-size: 0.88rem;
+}
+
+.ff-create-documents-remove {
+  border: 1px solid var(--color-border, #d7dee8);
+  background: transparent;
+  color: var(--color-text-muted, #667085);
+  border-radius: 999px;
+  padding: 0.4rem 0.75rem;
+  font-size: 0.78rem;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.ff-create-documents-empty {
+  margin: 0;
+  color: var(--color-text-muted, #667085);
+  font-size: 0.84rem;
+}
+
 .ff-create-checkbox {
   display: flex;
   align-items: center;
@@ -270,6 +369,12 @@
 
   .ff-create-field-wide {
     grid-column: auto;
+  }
+
+  .ff-create-documents-header,
+  .ff-create-documents-item {
+    flex-direction: column;
+    align-items: flex-start;
   }
 
   .ff-create-header,

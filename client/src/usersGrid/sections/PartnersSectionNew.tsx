@@ -15,6 +15,7 @@ import StatusCellRenderer from "../cells/StatusCellRenderer";
 import ApprovalStatusCellRenderer from "../cells/ApprovalStatusCellRenderer";
 import { mapViewToStatus } from "../constants";
 import { apiDelete, apiGet, apiPost, apiPut } from "../../utils/api";
+import { uploadDocuments } from "../../utils/uploadDocuments";
 import type { SectionProps } from "./SectionTypes";
 import useProfileDocuments from "../hooks/useProfileDocuments";
 import useProfileNotes from "../hooks/useProfileNotes";
@@ -381,6 +382,7 @@ const PartnersSectionNew: React.FC<SectionProps> = ({ viewMode, isActive, system
   const [createModalOpen, setCreateModalOpen] = useState(false);
   const [isCreating, setIsCreating] = useState(false);
   const [includeCommission, setIncludeCommission] = useState(false);
+  const [createFiles, setCreateFiles] = useState<File[]>([]);
   const [createDraft, setCreateDraft] = useState<PartnerCreateDraft>(createDefaultPartnerDraft);
   const [selectedEntityId, setSelectedEntityId] = useState<number | null>(null);
   const [selectedCommissionId, setSelectedCommissionId] = useState<number | null>(null);
@@ -578,6 +580,7 @@ const PartnersSectionNew: React.FC<SectionProps> = ({ viewMode, isActive, system
   const openCreateModal = useCallback((draft?: PartnerCreateDraft) => {
     setCreateDraft(draft ?? createDefaultPartnerDraft());
     setIncludeCommission(Boolean(draft));
+    setCreateFiles([]);
     setCreateModalOpen(true);
   }, []);
 
@@ -585,8 +588,22 @@ const PartnersSectionNew: React.FC<SectionProps> = ({ viewMode, isActive, system
     if (isCreating) return;
     setCreateModalOpen(false);
     setIncludeCommission(false);
+    setCreateFiles([]);
     setCreateDraft(createDefaultPartnerDraft());
   }, [isCreating]);
+
+  const uploadCreateDocuments = useCallback(async (entityId: number) => {
+    if (!createFiles.length) {
+      return;
+    }
+
+    try {
+      await uploadDocuments(`/${resourceKey}/${entityId}/documents`, createFiles);
+    } catch (error) {
+      console.error("Error uploading partner create documents:", error);
+      alert("Záznam byl vytvořen, ale nepodařilo se nahrát některé dokumenty.");
+    }
+  }, [createFiles, resourceKey]);
 
   const handleDraftEntityChange = useCallback((key: string, value: string | string[]) => {
     setCreateDraft((current) => ({ ...current, entity: { ...current.entity, [key]: value } }));
@@ -736,7 +753,13 @@ const PartnersSectionNew: React.FC<SectionProps> = ({ viewMode, isActive, system
         }
       });
 
+      if (response?.entity?.id) {
+        await uploadCreateDocuments(response.entity.id);
+      }
+
       setCreateModalOpen(false);
+      setIncludeCommission(false);
+      setCreateFiles([]);
       setCreateDraft(createDefaultPartnerDraft());
       await fetchData();
 
@@ -750,7 +773,7 @@ const PartnersSectionNew: React.FC<SectionProps> = ({ viewMode, isActive, system
     } finally {
       setIsCreating(false);
     }
-  }, [createDraft, fetchData, status]);
+  }, [createDraft, fetchData, status, uploadCreateDocuments]);
 
   const handleCreateEntityOnly = useCallback(async () => {
     setIsCreating(true);
@@ -768,7 +791,13 @@ const PartnersSectionNew: React.FC<SectionProps> = ({ viewMode, isActive, system
         assigned_user_ids: fromAssignmentDraftValue(createDraft.entity.assigned_user_ids)
       });
 
+      if (entity?.id) {
+        await uploadCreateDocuments(entity.id);
+      }
+
       setCreateModalOpen(false);
+      setIncludeCommission(false);
+      setCreateFiles([]);
       setCreateDraft(createDefaultPartnerDraft());
       await fetchData();
 
@@ -782,7 +811,7 @@ const PartnersSectionNew: React.FC<SectionProps> = ({ viewMode, isActive, system
     } finally {
       setIsCreating(false);
     }
-  }, [createDraft, entityApiBase, fetchData, status]);
+  }, [createDraft, entityApiBase, fetchData, status, uploadCreateDocuments]);
 
   const handleCreate = useCallback(async () => {
     if (includeCommission) {
@@ -1083,6 +1112,8 @@ const PartnersSectionNew: React.FC<SectionProps> = ({ viewMode, isActive, system
         onEntityChange={handleDraftEntityChange}
         onCommissionChange={handleDraftCommissionChange}
         onIncludeCommissionChange={setIncludeCommission}
+        files={createFiles}
+        onFilesChange={setCreateFiles}
         onSubmit={handleCreate}
       />
     </>

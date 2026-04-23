@@ -23,6 +23,8 @@ interface EntityCommissionCreateModalProps {
   onCommissionChange: (key: string, value: string | string[]) => void;
   onIncludeCommissionChange: (checked: boolean) => void;
   onSubmit: () => void | Promise<void>;
+  files?: File[];
+  onFilesChange?: (files: File[]) => void;
 }
 
 interface DraftFieldProps {
@@ -190,7 +192,9 @@ const EntityCommissionCreateModal: React.FC<EntityCommissionCreateModalProps> = 
   onEntityChange,
   onCommissionChange,
   onIncludeCommissionChange,
-  onSubmit
+  onSubmit,
+  files,
+  onFilesChange
 }) => {
   const panelRef = useRef<HTMLDivElement>(null);
   const titleId = useMemo(() => `entity-create-modal-${title.replace(/\s+/g, "-").toLowerCase()}`, [title]);
@@ -305,6 +309,23 @@ const EntityCommissionCreateModal: React.FC<EntityCommissionCreateModalProps> = 
     }
   }, [onClose]);
 
+  const handleFileInputChange = useCallback((event: React.ChangeEvent<HTMLInputElement>) => {
+    if (!onFilesChange || !event.target.files?.length) {
+      return;
+    }
+
+    onFilesChange([...(files ?? []), ...Array.from(event.target.files)]);
+    event.target.value = "";
+  }, [files, onFilesChange]);
+
+  const handleRemoveFile = useCallback((index: number) => {
+    if (!onFilesChange || !files) {
+      return;
+    }
+
+    onFilesChange(files.filter((_, fileIndex) => fileIndex !== index));
+  }, [files, onFilesChange]);
+
   if (!open) {
     return null;
   }
@@ -375,6 +396,46 @@ const EntityCommissionCreateModal: React.FC<EntityCommissionCreateModalProps> = 
                 </div>
               </div>
             </div>
+
+            {onFilesChange && (
+              <section className="ec-create-documents" aria-label="Dokumenty k vytvoření">
+                <div className="ec-create-documents-header">
+                  <div>
+                    <h3 className="ec-create-documents-title">Dokumenty</h3>
+                    <p className="ec-create-documents-subtitle">Nahrajte přílohy hned při vytvoření záznamu.</p>
+                  </div>
+                  <label className="ec-create-documents-picker">
+                    <input
+                      type="file"
+                      multiple
+                      onChange={handleFileInputChange}
+                      disabled={isSubmitting}
+                    />
+                    <span>Přidat dokumenty</span>
+                  </label>
+                </div>
+
+                {files && files.length > 0 ? (
+                  <ul className="ec-create-documents-list">
+                    {files.map((file, index) => (
+                      <li key={`${file.name}-${index}`} className="ec-create-documents-item">
+                        <span className="ec-create-documents-name">{file.name}</span>
+                        <button
+                          type="button"
+                          className="ec-create-documents-remove"
+                          onClick={() => handleRemoveFile(index)}
+                          disabled={isSubmitting}
+                        >
+                          Odebrat
+                        </button>
+                      </li>
+                    ))}
+                  </ul>
+                ) : (
+                  <p className="ec-create-documents-empty">Zatím nejsou vybrány žádné dokumenty.</p>
+                )}
+              </section>
+            )}
 
             <div className="ec-create-actions">
               <button type="button" className="ec-create-action secondary" onClick={onClose} disabled={isSubmitting}>
