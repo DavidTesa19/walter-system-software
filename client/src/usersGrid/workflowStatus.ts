@@ -7,7 +7,7 @@ export type WorkflowStatusOption = {
 export const WORKFLOW_STATUS_OPTIONS: readonly WorkflowStatusOption[] = [
   { value: "Uzavřeno", label: "Uzavřeno", dotColor: "#16a34a" },
   { value: "Podepsáno", label: "Podepsáno", dotColor: "#a3e635" },
-  { value: "Před podpisem", label: "Před podpisem", dotColor: "#eab308" },
+  { value: "Před podepsáním", label: "Před podepsáním", dotColor: "#eab308" },
   { value: "Aktuální", label: "Aktuální", dotColor: "#22d3ee" },
   { value: "Probíhá", label: "Probíhá", dotColor: "#f59e0b" },
   { value: "Plánováno", label: "Plánováno", dotColor: "#3b82f6" },
@@ -16,6 +16,9 @@ export const WORKFLOW_STATUS_OPTIONS: readonly WorkflowStatusOption[] = [
 ] as const;
 
 const WORKFLOW_STATUS_ALIASES: Record<string, string> = {
+  "před podpisem": "Před podepsáním",
+  "pred podpisem": "Před podepsáním",
+  "before signing": "Před podepsáním",
   "not started": "Plánováno",
   "in process": "Probíhá",
   "in progress": "Probíhá",
@@ -33,6 +36,9 @@ const WORKFLOW_STATUS_ALIASES: Record<string, string> = {
 
 export const DEFAULT_WORKFLOW_STATUS = "Plánováno";
 export const WORKFLOW_STATUS_VALUES = WORKFLOW_STATUS_OPTIONS.map((option) => option.value);
+export const WORKFLOW_STATUS_COLOR_MAP: Record<string, string> = Object.fromEntries(
+  WORKFLOW_STATUS_OPTIONS.map((option) => [option.value, option.dotColor])
+);
 const WORKFLOW_STATUS_ORDER = new Map(WORKFLOW_STATUS_VALUES.map((value, index) => [value, index]));
 
 export const getNormalizedWorkflowStatus = (value?: string | null): string => {

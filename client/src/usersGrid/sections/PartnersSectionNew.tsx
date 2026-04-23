@@ -25,11 +25,12 @@ import { fieldOptions, groupedFieldOptions, projectsFieldOptions, projectsGroupe
 import { formatProfileDate } from "../utils/profileUtils";
 import { compareApprovalStatuses } from "../utils/approvalStatus";
 import { formatAssignedUsernames, fromAssignmentDraftValue, toAssignmentDraftValue } from "../assignmentUtils";
-import { compareWorkflowStatuses, DEFAULT_WORKFLOW_STATUS, getNormalizedWorkflowStatus, WORKFLOW_STATUS_VALUES } from "../workflowStatus";
+import { compareWorkflowStatuses, DEFAULT_WORKFLOW_STATUS, getNormalizedWorkflowStatus, WORKFLOW_STATUS_COLOR_MAP, WORKFLOW_STATUS_VALUES } from "../workflowStatus";
 import useAssignableUsers from "../hooks/useAssignableUsers";
 import ActivityCellRenderer from "../../activity/ActivityCellRenderer";
 import { useActivity } from "../../activity/ActivityContext";
 import { buildCommissionsRecordScope, buildSubjectsRecordScope, getActivitySystem } from "../../activity/activityKeys";
+import OptionSelectEditor from "../../futureFunctions/cells/OptionSelectEditor";
 
 type PartnerEntityApi = {
   id: number;
@@ -84,6 +85,8 @@ type PartnerCommissionApi = {
 
 const FIELD_OPTIONS_ARRAY = fieldOptions.map((opt) => opt.value);
 const PROJECTS_FIELD_OPTIONS_ARRAY = projectsFieldOptions.map((opt) => opt.value);
+const PROJECT_SUBJECT_STATUS_OPTIONS = ["accepted", "archived"];
+const PROJECT_COMMISSION_STATUS_OPTIONS = ["accepted", "pending", "archived"];
 
 type PartnerCreateDraft = {
   entity: {
@@ -196,6 +199,7 @@ const mapPartnerEntityUpdates = (updates: Record<string, unknown>) => {
     else if (key === "company") mapped.company_name = value;
     else if (key === "mobile") mapped.phone = value;
     else if (key === "assigned_user_ids") mapped.assigned_user_ids = value;
+    else if (key === "status") mapped.status = value;
     else if (["field", "location", "email", "website", "info"].includes(key)) mapped[key] = value;
   }
 
@@ -374,7 +378,7 @@ const buildPartnerDraftCommissionData = (draft: PartnerCreateDraft, status: Part
   }, assignmentOptions)!.groups
 });
 
-const PartnersSectionNew: React.FC<SectionProps> = ({ viewMode, isActive, systemNamespace, onRegisterAddHandler, onLoadingChange }) => {
+const PartnersSectionNew: React.FC<SectionProps> = ({ viewMode, isActive, systemNamespace, sectionKind, onRegisterAddHandler, onLoadingChange }) => {
   const { users: assignableUsers, options: assignmentOptions } = useAssignableUsers();
   const { markItemSeen } = useActivity();
   const [entities, setEntities] = useState<PartnerEntity[]>([]);
@@ -395,6 +399,13 @@ const PartnersSectionNew: React.FC<SectionProps> = ({ viewMode, isActive, system
   const fieldOptionsArray = systemNamespace ? PROJECTS_FIELD_OPTIONS_ARRAY : FIELD_OPTIONS_ARRAY;
   const fieldOptionChoices = systemNamespace ? projectsFieldOptions : fieldOptions;
   const groupedFieldOptionChoices = systemNamespace ? projectsGroupedFieldOptions : groupedFieldOptions;
+  const projectStatusOptions = useMemo(
+    () =>
+      systemNamespace === "projects"
+        ? [...(sectionKind === "subjects" ? PROJECT_SUBJECT_STATUS_OPTIONS : PROJECT_COMMISSION_STATUS_OPTIONS)]
+        : null,
+    [sectionKind, systemNamespace]
+  );
   const activitySystem = useMemo(() => getActivitySystem(systemNamespace), [systemNamespace]);
   const subjectActivityScope = useMemo(() => buildSubjectsRecordScope(activitySystem, "partners"), [activitySystem]);
   const commissionActivityScope = useMemo(() => buildCommissionsRecordScope(activitySystem, "partners"), [activitySystem]);
@@ -630,6 +641,58 @@ const PartnersSectionNew: React.FC<SectionProps> = ({ viewMode, isActive, system
     fetchData();
   }, [commissionApiBase, fetchData]);
 
+  const updateProjectClusterStatus = useCallback(async (row: PartnerGridRow, nextStatus: string) => {
+    const entityId = row.entity?.id ?? row.partner_entity_id ?? null;
+    if (entityId === null) {
+      return;
+    }
+
+    const linkedCommissions = commissions.filter((commission) => commission.partner_entity_id === entityId);
+    const entityRequest = nextStatus === "accepted"
+      ? apiPost(`${entityApiBase}/${entityId}/restore`)
+      : nextStatus === "archived"
+        ? apiPost(`${entityApiBase}/${entityId}/archive`)
+        : apiPut(`${entityApiBase}/${entityId}`, { status: nextStatus });
+
+    await entityRequest;
+    await Promise.all(
+      linkedCommissions.map((commission) =>
+        nextStatus === "accepted"
+          ? apiPost(`${commissionApiBase}/${commission.id}/restore`)
+          : nextStatus === "archived"
+            ? apiPost(`${commissionApiBase}/${commission.id}/archive`)
+            : apiPut(`${commissionApiBase}/${commission.id}`, { status: nextStatus })
+      )
+    );
+
+    if (selectedEntityId === entityId) {
+      closeProfile();
+    }
+
+    await fetchData();
+  }, [closeProfile, commissionApiBase, commissions, entityApiBase, fetchData, selectedEntityId]);
+
+  const updateProjectClusterWorkflowState = useCallback(async (row: PartnerGridRow, nextState: string) => {
+    const entityId = row.entity?.id ?? row.partner_entity_id ?? null;
+    if (entityId === null) {
+      return;
+    }
+
+    const linkedCommissions = commissions.filter((commission) => commission.partner_entity_id === entityId);
+    if (linkedCommissions.length === 0) {
+      return;
+    }
+
+    const normalizedState = getNormalizedWorkflowStatus(nextState);
+    await Promise.all(
+      linkedCommissions.map((commission) =>
+        apiPut(`${commissionApiBase}/${commission.id}`, { state: normalizedState })
+      )
+    );
+
+    await fetchData();
+  }, [commissionApiBase, commissions, fetchData]);
+
   const handleApprove = useCallback(async (id: number) => {
     try {
       const row = gridData.find((item) => item.id === id);
@@ -647,6 +710,10 @@ const PartnersSectionNew: React.FC<SectionProps> = ({ viewMode, isActive, system
     try {
       const row = gridData.find((item) => item.id === id);
       if (!row) return;
+      if (systemNamespace === "projects" && row.entity) {
+        await updateProjectClusterStatus(row, "accepted");
+        return;
+      }
       if (row.entityOnly && row.entity) await apiPost(`${entityApiBase}/${row.entity.id}/restore`);
       else await apiPost(`${commissionApiBase}/${id}/restore`);
       fetchData();
@@ -654,13 +721,31 @@ const PartnersSectionNew: React.FC<SectionProps> = ({ viewMode, isActive, system
       console.error("Error restoring partner commission:", error);
       alert("Chyba při obnovování zakázky");
     }
-  }, [commissionApiBase, entityApiBase, fetchData, gridData]);
+  }, [commissionApiBase, entityApiBase, fetchData, gridData, systemNamespace, updateProjectClusterStatus]);
 
   const handleDelete = useCallback(async (id: number) => {
     if (viewMode === "active") {
       const row = gridData.find((item) => item.id === id);
       const entityId = row?.entity?.id ?? null;
       if (!row || entityId === null) return;
+
+      if (systemNamespace === "projects") {
+        const linkedCount = row.commission_count ?? 0;
+        const label = row.name || row.company || row.entity_id;
+        const confirmMessage = linkedCount > 0
+          ? `Opravdu chcete přesunout tento subjekt a všech ${linkedCount} navázaných zakázek do archivu?\n\nSubjekt: ${label}\nID: ${row.entity_id}`
+          : `Opravdu chcete přesunout tento subjekt do archivu?\n\nSubjekt: ${label}\nID: ${row.entity_id}`;
+
+        if (!window.confirm(confirmMessage)) return;
+
+        try {
+          await updateProjectClusterStatus(row, "archived");
+        } catch (error) {
+          console.error("Error archiving partner project cluster:", error);
+          alert("Chyba při archivaci subjektu");
+        }
+        return;
+      }
 
       const linkedCount = row.commission_count ?? 0;
       const label = row.name || row.company || row.entity_id;
@@ -726,7 +811,7 @@ const PartnersSectionNew: React.FC<SectionProps> = ({ viewMode, isActive, system
       console.error("Error deleting or archiving partner commission:", error);
       alert("Chyba při provádění akce");
     }
-  }, [closeProfile, commissionApiBase, commissions, entityApiBase, fetchData, gridData, selectedEntityId, viewMode]);
+  }, [closeProfile, commissionApiBase, commissions, entityApiBase, fetchData, gridData, selectedEntityId, systemNamespace, updateProjectClusterStatus, viewMode]);
 
   const handleCreateWithCommission = useCallback(async () => {
     setIsCreating(true);
@@ -915,11 +1000,37 @@ const PartnersSectionNew: React.FC<SectionProps> = ({ viewMode, isActive, system
       viewMode,
       entityAccusative: viewMode === "active" ? "partnera" : "zakázku",
       entityOnlyAccusative: "partnera",
+      activeAction: systemNamespace === "projects" && viewMode === "active" ? "archive" : "delete",
       onApprove: handleApprove,
       onRestore: handleRestore,
       onDelete: handleDelete
     }
-  }), [handleApprove, handleDelete, handleRestore, openProfile, viewMode]);
+  }), [handleApprove, handleDelete, handleRestore, openProfile, systemNamespace, viewMode]);
+
+  const onStatusCellClicked = useCallback((params: any) => {
+    const field = params.colDef?.field as string | undefined;
+    const isApprovalStatusCell = field === "status" && Boolean(projectStatusOptions?.length);
+    const isWorkflowStatusCell = field === "state";
+
+    if (!isApprovalStatusCell && !isWorkflowStatusCell) {
+      return;
+    }
+
+    const rowIndex = params.node?.rowIndex;
+    const colId = params.column?.getId?.() ?? params.column?.getColId?.();
+    if (rowIndex == null || colId == null) {
+      return;
+    }
+
+    const isAlreadyEditing = params.api.getEditingCells().some((cell: any) => {
+      const cellColId = cell.column?.getId?.() ?? cell.column?.getColId?.();
+      return cell.rowIndex === rowIndex && cellColId === colId;
+    });
+
+    if (!isAlreadyEditing) {
+      params.api.startEditingCell({ rowIndex, colKey: colId });
+    }
+  }, [projectStatusOptions]);
 
   const onCellValueChanged = useCallback(async (params: any) => {
     const row = params.data as PartnerGridRow;
@@ -927,6 +1038,45 @@ const PartnersSectionNew: React.FC<SectionProps> = ({ viewMode, isActive, system
     if (!field) return;
 
     try {
+      if (field === "status" && typeof params.newValue === "string" && projectStatusOptions?.includes(params.newValue)) {
+        if (row.entity && viewMode === "active") {
+          await updateProjectClusterStatus(row, params.newValue);
+          return;
+        }
+
+        if (row.entityOnly && row.entity) {
+          await handleUpdateEntity(row.entity.id, { status: params.newValue });
+          return;
+        }
+
+        if (!row.entityOnly) {
+          await handleUpdateCommission(row.id, { status: params.newValue });
+          return;
+        }
+      }
+
+      if (field === "state" && typeof params.newValue === "string") {
+        const normalizedState = getNormalizedWorkflowStatus(params.newValue);
+
+        if (systemNamespace === "projects" && viewMode === "active" && row.entity) {
+          await updateProjectClusterWorkflowState(row, normalizedState);
+          return;
+        }
+
+        if (!row.entityOnly) {
+          const targetCommissionId = viewMode === "active"
+            ? (row.primaryCommissionId ?? null)
+            : row.id;
+
+          if (targetCommissionId !== null) {
+            await handleUpdateCommission(targetCommissionId, { state: normalizedState });
+          }
+          return;
+        }
+
+        return;
+      }
+
       if (["name", "company", "field", "location", "mobile", "email"].includes(field) && row.entity) {
         await handleUpdateEntity(row.entity.id, { [field]: params.newValue });
       } else if (!row.entityOnly) {
@@ -937,7 +1087,7 @@ const PartnersSectionNew: React.FC<SectionProps> = ({ viewMode, isActive, system
       alert("Chyba při aktualizaci");
       fetchData();
     }
-  }, [fetchData, handleUpdateCommission, handleUpdateEntity]);
+  }, [fetchData, handleUpdateCommission, handleUpdateEntity, projectStatusOptions, systemNamespace, updateProjectClusterStatus, updateProjectClusterWorkflowState, viewMode]);
 
   const handleAdd = useCallback(async () => {
     openCreateModal();
@@ -976,11 +1126,19 @@ const PartnersSectionNew: React.FC<SectionProps> = ({ viewMode, isActive, system
       field: "status",
       headerName: "Schválení",
       filter: true,
-      editable: false,
+      editable: Boolean(projectStatusOptions?.length) && systemNamespace !== "projects",
       flex: 1,
       minWidth: 130,
       comparator: (left: string | null | undefined, right: string | null | undefined) => compareApprovalStatuses(left, right),
       cellRenderer: ApprovalStatusCellRenderer,
+      ...(projectStatusOptions?.length && systemNamespace !== "projects"
+        ? {
+            cellEditor: OptionSelectEditor,
+            cellEditorPopup: true,
+            cellEditorParams: { values: projectStatusOptions },
+            onCellClicked: onStatusCellClicked,
+          }
+        : {}),
     };
     const assignedUsersColumn: ColDef<PartnerGridRow> = {
       field: "assigned_user_ids",
@@ -998,6 +1156,20 @@ const PartnersSectionNew: React.FC<SectionProps> = ({ viewMode, isActive, system
       filterValueGetter: (params) => formatAssignedUsernames(params.data?.assigned_user_ids, assignableUsers, params.data?.assigned_to) ?? "",
       tooltipValueGetter: (params) => formatAssignedUsernames(params.data?.assigned_user_ids, assignableUsers, params.data?.assigned_to) ?? ""
     };
+    const workflowStateColumn: ColDef<PartnerGridRow> = {
+      field: "state",
+      headerName: "Stav",
+      filter: true,
+      editable: (params) => viewMode === "active" || !params.data?.entityOnly,
+      flex: 1.1,
+      minWidth: 150,
+      comparator: (left, right) => compareWorkflowStatuses(left, right),
+      cellRenderer: StatusCellRenderer,
+      cellEditor: OptionSelectEditor,
+      cellEditorPopup: true,
+      cellEditorParams: { values: [...WORKFLOW_STATUS_VALUES], colorMap: WORKFLOW_STATUS_COLOR_MAP },
+      onCellClicked: onStatusCellClicked
+    };
     const activeSubjectCols: ColDef<PartnerGridRow>[] = [
       ...(showApprovalStatusColumn ? [approvalStatusCol] : []),
       { field: "mobile", headerName: "Telefon", filter: true, editable: true, flex: 1, minWidth: 120 },
@@ -1011,7 +1183,6 @@ const PartnersSectionNew: React.FC<SectionProps> = ({ viewMode, isActive, system
       { field: "commission_value", headerName: "Provize", filter: true, editable: (params) => !params.data?.entityOnly, flex: 1, minWidth: 110 },
       assignedUsersColumn,
       ...(showApprovalStatusColumn ? [approvalStatusCol] : []),
-      { field: "state", headerName: "Stav", filter: true, editable: false, flex: 1.1, minWidth: 140, comparator: (left, right) => compareWorkflowStatuses(left, right), cellRenderer: StatusCellRenderer },
       { field: "priority", headerName: "Priorita", filter: true, editable: (params) => !params.data?.entityOnly, flex: 0.9, minWidth: 90, cellEditor: "agSelectCellEditor", cellEditorParams: { values: ["Nízká", "Střední", "Vysoká", "Urgentní"] } }
     ];
 
@@ -1039,6 +1210,7 @@ const PartnersSectionNew: React.FC<SectionProps> = ({ viewMode, isActive, system
       },
       { field: "name", headerName: "Jméno / Název", filter: true, editable: true, flex: 1.5, minWidth: 160 },
       { field: "company", headerName: "Společnost", filter: true, editable: true, flex: 1.5, minWidth: 160 },
+      workflowStateColumn,
       { field: "field", headerName: "Obor", filter: true, editable: false, flex: 1, minWidth: 110, cellRenderer: FieldCellRenderer, cellRendererParams: { fieldOptions: fieldOptionChoices, groupedFieldOptions: groupedFieldOptionChoices } },
       { field: "location", headerName: "Lokalita", filter: true, editable: true, flex: 1, minWidth: 110 },
       { field: "created_at", headerName: "Datum přidání", filter: true, editable: false, flex: 0.95, minWidth: 130, valueFormatter: (params) => formatAddedDate(params.value) },
@@ -1046,7 +1218,7 @@ const PartnersSectionNew: React.FC<SectionProps> = ({ viewMode, isActive, system
     );
 
     return cols;
-  }, [assignableUsers, fieldOptionChoices, groupedFieldOptionChoices, systemNamespace, viewMode]);
+  }, [assignableUsers, fieldOptionChoices, groupedFieldOptionChoices, onStatusCellClicked, projectStatusOptions, systemNamespace, viewMode]);
 
   const useContentHeightLayout = gridData.length <= 8;
 
@@ -1058,6 +1230,7 @@ const PartnersSectionNew: React.FC<SectionProps> = ({ viewMode, isActive, system
             ref={gridRef}
             rowData={gridData}
             columnDefs={columnDefs}
+            popupParent={typeof document !== "undefined" ? document.body : undefined}
             domLayout={useContentHeightLayout ? 'autoHeight' : 'normal'}
             onCellValueChanged={onCellValueChanged}
             defaultColDef={{ resizable: true, sortable: true }}

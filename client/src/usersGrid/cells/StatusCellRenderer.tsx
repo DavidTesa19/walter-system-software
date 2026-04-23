@@ -3,10 +3,15 @@ import { getWorkflowStatusOption, WORKFLOW_STATUS_OPTIONS } from "../workflowSta
 
 const StatusCellRenderer: React.FC<any> = (params) => {
   const isDark = document.documentElement.getAttribute("data-theme") === "dark";
+  const usesGridCellEditor = Boolean(params?.colDef?.cellEditor);
 
   const current = getWorkflowStatusOption(params.value);
 
   const handleClick = (e: React.MouseEvent) => {
+    if (usesGridCellEditor) {
+      return;
+    }
+
     e.stopPropagation();
     e.preventDefault();
 
@@ -105,7 +110,7 @@ const StatusCellRenderer: React.FC<any> = (params) => {
         gap: "5px",
         fontWeight: 500,
         fontSize: "12px",
-        cursor: "pointer",
+        cursor: usesGridCellEditor ? "default" : "pointer",
         userSelect: "none",
         height: "100%",
       }}

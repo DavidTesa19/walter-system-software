@@ -8,6 +8,7 @@ export interface SectionProps {
   onRegisterAddHandler: (handler: AddHandler) => void;
   onLoadingChange: (isLoading: boolean) => void;
   systemNamespace?: string;
+  sectionKind?: "subjects" | "commissions";
   focusRecordId?: number | null;
   focusRequestKey?: string | null;
 }

@@ -89,6 +89,7 @@ const UsersGrid: React.FC<UsersGridProps> = ({
           viewMode={viewMode}
           isActive
           systemNamespace={systemNamespace}
+          sectionKind="commissions"
           onRegisterAddHandler={registerAddHandler}
           onLoadingChange={handleLoadingChange}
           focusRecordId={
@@ -111,6 +112,7 @@ const UsersGrid: React.FC<UsersGridProps> = ({
           viewMode={viewMode}
           isActive
           systemNamespace={systemNamespace}
+          sectionKind="commissions"
           onRegisterAddHandler={registerAddHandler}
           onLoadingChange={handleLoadingChange}
           focusRecordId={
@@ -132,6 +134,7 @@ const UsersGrid: React.FC<UsersGridProps> = ({
         viewMode={viewMode}
         isActive
         systemNamespace={systemNamespace}
+        sectionKind="commissions"
         onRegisterAddHandler={registerAddHandler}
         onLoadingChange={handleLoadingChange}
         focusRecordId={

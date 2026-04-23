@@ -25,11 +25,12 @@ import { fieldOptions, groupedFieldOptions, projectsFieldOptions, projectsGroupe
 import { formatProfileDate } from "../utils/profileUtils";
 import { compareApprovalStatuses } from "../utils/approvalStatus";
 import { formatAssignedUsernames, fromAssignmentDraftValue, toAssignmentDraftValue } from "../assignmentUtils";
-import { compareWorkflowStatuses, DEFAULT_WORKFLOW_STATUS, getNormalizedWorkflowStatus, WORKFLOW_STATUS_VALUES } from "../workflowStatus";
+import { compareWorkflowStatuses, DEFAULT_WORKFLOW_STATUS, getNormalizedWorkflowStatus, WORKFLOW_STATUS_COLOR_MAP, WORKFLOW_STATUS_VALUES } from "../workflowStatus";
 import useAssignableUsers from "../hooks/useAssignableUsers";
 import ActivityCellRenderer from "../../activity/ActivityCellRenderer";
 import { useActivity } from "../../activity/ActivityContext";
 import { buildCommissionsRecordScope, buildSubjectsRecordScope, getActivitySystem } from "../../activity/activityKeys";
+import OptionSelectEditor from "../../futureFunctions/cells/OptionSelectEditor";
 
 type TiperEntityApi = {
   id: number;
@@ -84,6 +85,8 @@ type TiperCommissionApi = {
 
 const FIELD_OPTIONS_ARRAY = fieldOptions.map((opt) => opt.value);
 const PROJECTS_FIELD_OPTIONS_ARRAY = projectsFieldOptions.map((opt) => opt.value);
+const PROJECT_SUBJECT_STATUS_OPTIONS = ["accepted", "archived"];
+const PROJECT_COMMISSION_STATUS_OPTIONS = ["accepted", "pending", "archived"];
 const joinName = (...parts: Array<string | null | undefined>) => parts.filter((part): part is string => Boolean(part && part.trim())).join(" ").trim();
 
 type TiperCreateDraft = {
@@ -193,6 +196,7 @@ const mapTiperEntityUpdates = (updates: Record<string, unknown>) => {
     else if (key === "company") mapped.company_name = value;
     else if (key === "mobile") mapped.phone = value;
     else if (key === "assigned_user_ids") mapped.assigned_user_ids = value;
+    else if (key === "status") mapped.status = value;
     else if (["field", "location", "email", "website", "info"].includes(key)) mapped[key] = value;
   }
   return mapped;
@@ -386,6 +390,7 @@ const TipersSectionNew: React.FC<SectionProps> = ({
   viewMode,
   isActive,
   systemNamespace,
+  sectionKind,
   onRegisterAddHandler,
   onLoadingChange
 }) => {
@@ -414,6 +419,13 @@ const TipersSectionNew: React.FC<SectionProps> = ({
   const fieldOptionsArray = systemNamespace ? PROJECTS_FIELD_OPTIONS_ARRAY : FIELD_OPTIONS_ARRAY;
   const fieldOptionChoices = systemNamespace ? projectsFieldOptions : fieldOptions;
   const groupedFieldOptionChoices = systemNamespace ? projectsGroupedFieldOptions : groupedFieldOptions;
+  const projectStatusOptions = useMemo(
+    () =>
+      systemNamespace === "projects"
+        ? [...(sectionKind === "subjects" ? PROJECT_SUBJECT_STATUS_OPTIONS : PROJECT_COMMISSION_STATUS_OPTIONS)]
+        : null,
+    [sectionKind, systemNamespace]
+  );
   const activitySystem = useMemo(() => getActivitySystem(systemNamespace), [systemNamespace]);
   const subjectActivityScope = useMemo(() => buildSubjectsRecordScope(activitySystem, "tipers"), [activitySystem]);
   const commissionActivityScope = useMemo(() => buildCommissionsRecordScope(activitySystem, "tipers"), [activitySystem]);
@@ -686,6 +698,58 @@ const TipersSectionNew: React.FC<SectionProps> = ({
     }
   }, [commissionApiBase, fetchData]);
 
+  const updateProjectClusterStatus = useCallback(async (row: TiperGridRow, nextStatus: string) => {
+    const entityId = row.entity?.id ?? row.tiper_entity_id ?? null;
+    if (entityId === null) {
+      return;
+    }
+
+    const linkedCommissions = commissions.filter((commission) => commission.tiper_entity_id === entityId);
+    const entityRequest = nextStatus === "accepted"
+      ? apiPost(`${entityApiBase}/${entityId}/restore`)
+      : nextStatus === "archived"
+        ? apiPost(`${entityApiBase}/${entityId}/archive`)
+        : apiPut(`${entityApiBase}/${entityId}`, { status: nextStatus });
+
+    await entityRequest;
+    await Promise.all(
+      linkedCommissions.map((commission) =>
+        nextStatus === "accepted"
+          ? apiPost(`${commissionApiBase}/${commission.id}/restore`)
+          : nextStatus === "archived"
+            ? apiPost(`${commissionApiBase}/${commission.id}/archive`)
+            : apiPut(`${commissionApiBase}/${commission.id}`, { status: nextStatus })
+      )
+    );
+
+    if (selectedEntityId === entityId) {
+      closeProfile();
+    }
+
+    await fetchData();
+  }, [closeProfile, commissionApiBase, commissions, entityApiBase, fetchData, selectedEntityId]);
+
+  const updateProjectClusterWorkflowState = useCallback(async (row: TiperGridRow, nextState: string) => {
+    const entityId = row.entity?.id ?? row.tiper_entity_id ?? null;
+    if (entityId === null) {
+      return;
+    }
+
+    const linkedCommissions = commissions.filter((commission) => commission.tiper_entity_id === entityId);
+    if (linkedCommissions.length === 0) {
+      return;
+    }
+
+    const normalizedState = getNormalizedWorkflowStatus(nextState);
+    await Promise.all(
+      linkedCommissions.map((commission) =>
+        apiPut(`${commissionApiBase}/${commission.id}`, { state: normalizedState })
+      )
+    );
+
+    await fetchData();
+  }, [commissionApiBase, commissions, fetchData]);
+
   // ==========================================================================
   // ROW ACTIONS
   // ==========================================================================
@@ -707,6 +771,10 @@ const TipersSectionNew: React.FC<SectionProps> = ({
     try {
       const row = gridData.find((item) => item.id === id);
       if (!row) return;
+      if (systemNamespace === "projects" && row.entity) {
+        await updateProjectClusterStatus(row, "accepted");
+        return;
+      }
       if (row.entityOnly && row.entity) await apiPost(`${entityApiBase}/${row.entity.id}/restore`);
       else await apiPost(`${commissionApiBase}/${id}/restore`);
       fetchData();
@@ -714,13 +782,31 @@ const TipersSectionNew: React.FC<SectionProps> = ({
       console.error("Error restoring commission:", error);
       alert("Chyba při obnovování tipu");
     }
-  }, [commissionApiBase, entityApiBase, fetchData, gridData]);
+  }, [commissionApiBase, entityApiBase, fetchData, gridData, systemNamespace, updateProjectClusterStatus]);
 
   const handleDelete = useCallback(async (id: number) => {
     if (viewMode === "active") {
       const row = gridData.find(r => r.id === id);
       const entityId = row?.entity?.id ?? null;
       if (!row || entityId === null) return;
+
+      if (systemNamespace === "projects") {
+        const linkedCount = row.commission_count ?? 0;
+        const label = row.name || row.company || row.entity_id;
+        const confirmMessage = linkedCount > 0
+          ? `Opravdu chcete přesunout tento subjekt a všech ${linkedCount} navázaných tipů do archivu?\n\nSubjekt: ${label}\nID: ${row.entity_id}`
+          : `Opravdu chcete přesunout tento subjekt do archivu?\n\nSubjekt: ${label}\nID: ${row.entity_id}`;
+
+        if (!confirm(confirmMessage)) return;
+
+        try {
+          await updateProjectClusterStatus(row, "archived");
+        } catch (error) {
+          console.error("Error archiving tiper project cluster:", error);
+          alert("Chyba při archivaci subjektu");
+        }
+        return;
+      }
 
       const linkedCount = row.commission_count ?? 0;
       const label = row.name || row.company || row.entity_id;
@@ -790,7 +876,7 @@ const TipersSectionNew: React.FC<SectionProps> = ({
       console.error("Error performing action:", error);
       alert("Chyba při provádění akce");
     }
-  }, [closeProfile, commissionApiBase, commissions, entityApiBase, fetchData, gridData, selectedEntityId, viewMode]);
+  }, [closeProfile, commissionApiBase, commissions, entityApiBase, fetchData, gridData, selectedEntityId, systemNamespace, updateProjectClusterStatus, viewMode]);
 
   const handleCreateWithCommission = useCallback(async () => {
     setIsCreating(true);
@@ -983,11 +1069,37 @@ const TipersSectionNew: React.FC<SectionProps> = ({
       viewMode,
       entityAccusative: viewMode === "active" ? "tipaře" : "tip",
       entityOnlyAccusative: "tipaře",
+      activeAction: systemNamespace === "projects" && viewMode === "active" ? "archive" : "delete",
       onApprove: handleApprove,
       onRestore: handleRestore,
       onDelete: handleDelete
     }
-  }), [openProfile, viewMode, handleApprove, handleRestore, handleDelete]);
+  }), [openProfile, systemNamespace, viewMode, handleApprove, handleRestore, handleDelete]);
+
+  const onStatusCellClicked = useCallback((params: any) => {
+    const field = params.colDef?.field as string | undefined;
+    const isApprovalStatusCell = field === "status" && Boolean(projectStatusOptions?.length);
+    const isWorkflowStatusCell = field === "state";
+
+    if (!isApprovalStatusCell && !isWorkflowStatusCell) {
+      return;
+    }
+
+    const rowIndex = params.node?.rowIndex;
+    const colId = params.column?.getId?.() ?? params.column?.getColId?.();
+    if (rowIndex == null || colId == null) {
+      return;
+    }
+
+    const isAlreadyEditing = params.api.getEditingCells().some((cell: any) => {
+      const cellColId = cell.column?.getId?.() ?? cell.column?.getColId?.();
+      return cell.rowIndex === rowIndex && cellColId === colId;
+    });
+
+    if (!isAlreadyEditing) {
+      params.api.startEditingCell({ rowIndex, colKey: colId });
+    }
+  }, [projectStatusOptions]);
 
   // ==========================================================================
   // CELL VALUE CHANGED
@@ -1001,19 +1113,58 @@ const TipersSectionNew: React.FC<SectionProps> = ({
 
       if (!field) return;
 
+      if (field === "status" && typeof newValue === "string" && projectStatusOptions?.includes(newValue)) {
+        if (row.entity && viewMode === "active") {
+          await updateProjectClusterStatus(row, newValue);
+          return;
+        }
+
+        if (row.entityOnly && row.entity) {
+          await handleUpdateEntity(row.entity.id, { status: newValue });
+          return;
+        }
+
+        if (!row.entityOnly) {
+          await handleUpdateCommission(row.id, { status: newValue });
+          return;
+        }
+      }
+
+      if (field === "state" && typeof newValue === "string") {
+        const normalizedState = getNormalizedWorkflowStatus(newValue);
+
+        if (systemNamespace === "projects" && viewMode === "active" && row.entity) {
+          await updateProjectClusterWorkflowState(row, normalizedState);
+          return;
+        }
+
+        if (!row.entityOnly) {
+          const targetCommissionId = viewMode === "active"
+            ? (row.primaryCommissionId ?? null)
+            : row.id;
+
+          if (targetCommissionId !== null) {
+            await handleUpdateCommission(targetCommissionId, { state: normalizedState });
+          }
+          return;
+        }
+
+        return;
+      }
+
       const entityFields = ['name', 'company', 'field', 'location', 'mobile', 'email'];
       
       if (entityFields.includes(field) && row.entity) {
-        await handleUpdateEntity(row.entity.id, { [field]: newValue });
+        await handleUpdateEntity(row.entity.id, { [field]: params.newValue });
       } else if (!row.entityOnly) {
-        await handleUpdateCommission(row.id, { [field]: newValue });
+        await handleUpdateCommission(row.id, { [field]: params.newValue });
       }
     } catch (error) {
       console.error("Error updating:", error);
       alert("Chyba při aktualizaci");
       fetchData();
     }
-  }, [fetchData, handleUpdateCommission, handleUpdateEntity]);
+  }, [fetchData, handleUpdateCommission, handleUpdateEntity, projectStatusOptions, systemNamespace, updateProjectClusterStatus, updateProjectClusterWorkflowState, viewMode]);
 
   // ==========================================================================
   // ADD NEW TIPER + COMMISSION
@@ -1065,6 +1216,24 @@ const TipersSectionNew: React.FC<SectionProps> = ({
   const columnDefs = useMemo<ColDef<TiperGridRow>[]>(() => {
     const cols: ColDef<TiperGridRow>[] = [];
     const showApprovalStatusColumn = Boolean(systemNamespace);
+    const approvalStatusCol: ColDef<TiperGridRow> = {
+      field: "status",
+      headerName: "Schválení",
+      filter: true,
+      editable: Boolean(projectStatusOptions?.length) && systemNamespace !== "projects",
+      flex: 1,
+      minWidth: 130,
+      comparator: (left, right) => compareApprovalStatuses(left, right),
+      cellRenderer: ApprovalStatusCellRenderer,
+      ...(projectStatusOptions?.length && systemNamespace !== "projects"
+        ? {
+            cellEditor: OptionSelectEditor,
+            cellEditorPopup: true,
+            cellEditorParams: { values: projectStatusOptions },
+            onCellClicked: onStatusCellClicked,
+          }
+        : {}),
+    };
     const assignedUsersColumn: ColDef<TiperGridRow> = {
       field: "assigned_user_ids",
       headerName: "Přiřazení",
@@ -1080,6 +1249,20 @@ const TipersSectionNew: React.FC<SectionProps> = ({
       },
       filterValueGetter: (params) => formatAssignedUsernames(params.data?.assigned_user_ids, assignableUsers, params.data?.assigned_to) ?? "",
       tooltipValueGetter: (params) => formatAssignedUsernames(params.data?.assigned_user_ids, assignableUsers, params.data?.assigned_to) ?? ""
+    };
+    const workflowStateColumn: ColDef<TiperGridRow> = {
+      field: "state",
+      headerName: "Stav",
+      filter: true,
+      editable: (params) => viewMode === "active" || !params.data?.entityOnly,
+      flex: 1,
+      minWidth: 160,
+      comparator: (left, right) => compareWorkflowStatuses(left, right),
+      cellRenderer: StatusCellRenderer,
+      cellEditor: OptionSelectEditor,
+      cellEditorPopup: true,
+      cellEditorParams: { values: [...WORKFLOW_STATUS_VALUES], colorMap: WORKFLOW_STATUS_COLOR_MAP },
+      onCellClicked: onStatusCellClicked
     };
 
     if (viewMode === "pending" || viewMode === "archived") {
@@ -1196,6 +1379,7 @@ const TipersSectionNew: React.FC<SectionProps> = ({
         flex: 1.5,
         minWidth: 140
       },
+      workflowStateColumn,
       {
         field: "field",
         headerName: "Oblast",
@@ -1231,18 +1415,7 @@ const TipersSectionNew: React.FC<SectionProps> = ({
     if (viewMode === "active") {
       cols.push(
         ...(showApprovalStatusColumn
-          ? [
-              {
-                field: "status",
-                headerName: "Schválení",
-                filter: true,
-                editable: false,
-                flex: 1,
-                minWidth: 130,
-                comparator: (left, right) => compareApprovalStatuses(left, right),
-                cellRenderer: ApprovalStatusCellRenderer,
-              } satisfies ColDef<TiperGridRow>,
-            ]
+          ? [approvalStatusCol]
           : []),
         {
           field: "company",
@@ -1297,29 +1470,8 @@ const TipersSectionNew: React.FC<SectionProps> = ({
         },
         assignedUsersColumn,
         ...(showApprovalStatusColumn
-          ? [
-              {
-                field: "status",
-                headerName: "Schválení",
-                filter: true,
-                editable: false,
-                flex: 1,
-                minWidth: 130,
-                comparator: (left, right) => compareApprovalStatuses(left, right),
-                cellRenderer: ApprovalStatusCellRenderer,
-              } satisfies ColDef<TiperGridRow>,
-            ]
+          ? [approvalStatusCol]
           : []),
-        {
-          field: "state",
-          headerName: "Stav",
-          filter: true,
-          editable: false,
-          flex: 1,
-          minWidth: 140,
-          comparator: (left, right) => compareWorkflowStatuses(left, right),
-          cellRenderer: StatusCellRenderer
-        },
         {
           field: "priority",
           headerName: "Priorita",
@@ -1336,7 +1488,7 @@ const TipersSectionNew: React.FC<SectionProps> = ({
     }
 
     return cols;
-  }, [assignableUsers, fieldOptionChoices, groupedFieldOptionChoices, systemNamespace, viewMode]);
+  }, [assignableUsers, fieldOptionChoices, groupedFieldOptionChoices, onStatusCellClicked, projectStatusOptions, systemNamespace, viewMode]);
 
   const useContentHeightLayout = gridData.length <= 8;
 
@@ -1352,6 +1504,7 @@ const TipersSectionNew: React.FC<SectionProps> = ({
             ref={gridRef}
             rowData={gridData}
             columnDefs={columnDefs}
+            popupParent={typeof document !== "undefined" ? document.body : undefined}
             domLayout={useContentHeightLayout ? 'autoHeight' : 'normal'}
             onCellValueChanged={onCellValueChanged}
             defaultColDef={{

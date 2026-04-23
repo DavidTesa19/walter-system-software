@@ -7,6 +7,7 @@ type RowActionsContext = {
   viewMode: ViewMode;
   entityAccusative: string;
   entityOnlyAccusative?: string;
+  activeAction?: "delete" | "archive";
   onApprove?: (id: number) => void;
   onRestore?: (id: number) => void;
   onDelete?: (id: number) => void;
@@ -93,8 +94,12 @@ export const DeleteArchiveCellRenderer: React.FC<ICellRendererParams<any, any, G
     return null;
   }
 
+  const isArchiveAction = ctx.viewMode === "active" && ctx.activeAction === "archive";
+
   const title =
-    params.data?.subjectRow
+    isArchiveAction
+      ? `Archivovat ${label}`
+      : params.data?.subjectRow
       ? `Smazat ${label}`
       : ctx.viewMode === "pending"
       ? `Zamítnout ${label}`
@@ -109,15 +114,23 @@ export const DeleteArchiveCellRenderer: React.FC<ICellRendererParams<any, any, G
       className="inrow-delete-btn"
       title={title}
     >
-      <svg width="14" height="14" viewBox="0 0 12 12" fill="none" xmlns="http://www.w3.org/2000/svg">
-        <path
-          d="M9 3L3 9M3 3L9 9"
-          stroke="currentColor"
-          strokeWidth="2"
-          strokeLinecap="round"
-          strokeLinejoin="round"
-        />
-      </svg>
+      {isArchiveAction ? (
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+          <path d="M21 8v13H3V8" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+          <path d="M1 3h22v5H1z" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+          <path d="M10 12h4" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+        </svg>
+      ) : (
+        <svg width="14" height="14" viewBox="0 0 12 12" fill="none" xmlns="http://www.w3.org/2000/svg">
+          <path
+            d="M9 3L3 9M3 3L9 9"
+            stroke="currentColor"
+            strokeWidth="2"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+          />
+        </svg>
+      )}
     </button>
   );
 };

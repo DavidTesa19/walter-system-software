@@ -85,6 +85,7 @@ const EntitiesSystemView: React.FC<EntitiesSystemViewProps> = ({
           viewMode={viewMode}
           isActive
           systemNamespace={systemNamespace}
+          sectionKind="subjects"
           onRegisterAddHandler={registerAddHandler}
           onLoadingChange={handleLoadingChange}
         />
@@ -97,6 +98,7 @@ const EntitiesSystemView: React.FC<EntitiesSystemViewProps> = ({
           viewMode={viewMode}
           isActive
           systemNamespace={systemNamespace}
+          sectionKind="subjects"
           onRegisterAddHandler={registerAddHandler}
           onLoadingChange={handleLoadingChange}
         />
@@ -108,6 +110,7 @@ const EntitiesSystemView: React.FC<EntitiesSystemViewProps> = ({
         viewMode={viewMode}
         isActive
         systemNamespace={systemNamespace}
+        sectionKind="subjects"
         onRegisterAddHandler={registerAddHandler}
         onLoadingChange={handleLoadingChange}
       />

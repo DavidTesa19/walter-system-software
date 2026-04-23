@@ -19,6 +19,7 @@ interface OptionSelectEditorRef {
 
 interface OptionSelectEditorParams extends ICellEditorParams {
   values?: OptionValue[];
+  colorMap?: Record<string, string>;
 }
 
 const OptionSelectEditor = forwardRef<OptionSelectEditorRef, OptionSelectEditorParams>((params, ref) => {
@@ -28,6 +29,12 @@ const OptionSelectEditor = forwardRef<OptionSelectEditorRef, OptionSelectEditorP
     }
     const candidate = (params as unknown as { cellEditorParams?: { values?: OptionValue[] } }).cellEditorParams?.values;
     return Array.isArray(candidate) ? candidate : [];
+  }, [params]);
+
+  const colorMap = useMemo<Record<string, string> | undefined>(() => {
+    if (params.colorMap && typeof params.colorMap === "object") return params.colorMap;
+    const candidate = (params as unknown as { cellEditorParams?: { colorMap?: Record<string, string> } }).cellEditorParams?.colorMap;
+    return candidate && typeof candidate === "object" ? candidate : undefined;
   }, [params]);
 
   const containerRef = useRef<HTMLDivElement | null>(null);
@@ -117,7 +124,20 @@ const OptionSelectEditor = forwardRef<OptionSelectEditorRef, OptionSelectEditorP
               event.stopPropagation();
               commitSelection(option);
             }}
+            style={{ display: "flex", alignItems: "center", gap: "8px" }}
           >
+            {colorMap?.[option] && (
+              <span
+                style={{
+                  width: "8px",
+                  height: "8px",
+                  borderRadius: "50%",
+                  backgroundColor: colorMap[option],
+                  flexShrink: 0,
+                  display: "inline-block",
+                }}
+              />
+            )}
             {option}
           </button>
         );
