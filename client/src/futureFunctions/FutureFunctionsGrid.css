@@ -1,6 +1,8 @@
 .future-functions-page {
-  overflow: visible;
-  padding-bottom: 1rem;
+  min-height: 0;
+  overflow-x: hidden;
+  overflow-y: auto;
+  padding-bottom: calc(var(--app-footer-height) + 1rem);
 }
 
 .future-functions-summary {
@@ -173,7 +175,7 @@
 
 @media (max-width: 900px) {
   .future-functions-page {
-    padding-bottom: 1.25rem;
+    padding-bottom: calc(var(--app-footer-height) + 1.25rem);
   }
 
   .ff-grid-wrapper {
