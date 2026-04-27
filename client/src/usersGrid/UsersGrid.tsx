@@ -54,7 +54,10 @@ const UsersGrid: React.FC<UsersGridProps> = ({
     if (!searchTarget || searchTarget.viewMode !== viewMode) {
       return;
     }
-    setActiveTable(searchTarget.table);
+    const table = searchTarget.table;
+    if (table === "clients" || table === "partners" || table === "tipers") {
+      setActiveTable(table);
+    }
   }, [searchTarget, viewMode]);
 
   useEffect(() => {
