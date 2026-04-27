@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { canAccessProjectsSystem, canAccessStandardSystem, useAuth } from '../auth/AuthContext';
+import { canAccessProjectsSystem, canAccessStandardSystem, isViewAllowedForRole, useAuth } from '../auth/AuthContext';
 import ActivityIndicator from '../activity/ActivityIndicator';
 import { useActivity } from '../activity/ActivityContext';
 import { trackEvent } from '../utils/analytics';
@@ -158,9 +158,9 @@ const Sidebar: React.FC<SidebarProps> = ({
   const { user, logout } = useAuth();
   const { getViewCount } = useActivity();
   const accessScope = user?.accessScope;
+  const userRole = user?.role;
   const canAccessStandard = canAccessStandardSystem(accessScope);
   const canAccessProjects = canAccessProjectsSystem(accessScope);
-  const isAdmin = user?.role === 'admin';
   const [searchQuery, setSearchQuery] = useState('');
   const [searchResults, setSearchResults] = useState<GlobalSearchResult[]>([]);
   const [isSearching, setIsSearching] = useState(false);
@@ -406,11 +406,7 @@ const Sidebar: React.FC<SidebarProps> = ({
     .map((group) => ({
       ...group,
       items: group.items.filter((item) => {
-        if (item.id === 'admin_users') {
-          return isAdmin;
-        }
-
-        return true;
+        return isViewAllowedForRole(userRole, item.id as import('../types/appView').AppView);
       })
     }))
     .filter((group) => group.items.length > 0);

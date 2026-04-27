@@ -392,7 +392,8 @@ const TipersSectionNew: React.FC<SectionProps> = ({
   systemNamespace,
   sectionKind,
   onRegisterAddHandler,
-  onLoadingChange
+  onLoadingChange,
+  readOnly = false
 }) => {
   const { users: assignableUsers, options: assignmentOptions } = useAssignableUsers();
   const { markItemSeen } = useActivity();
@@ -1507,6 +1508,7 @@ const TipersSectionNew: React.FC<SectionProps> = ({
             popupParent={typeof document !== "undefined" ? document.body : undefined}
             domLayout={useContentHeightLayout ? 'autoHeight' : 'normal'}
             onCellValueChanged={onCellValueChanged}
+            onCellEditingStarted={readOnly ? (params) => params.api.stopEditing(true) : undefined}
             defaultColDef={{
               resizable: true,
               sortable: true

@@ -27,10 +27,9 @@ interface CreateUserFormState {
 
 const ROLE_OPTIONS: Array<{ value: UserRole; label: string; description: string }> = [
   { value: 'admin', label: 'Admin', description: 'Plný přístup včetně správy uživatelů' },
-  { value: 'manager', label: 'Manager', description: 'Rozšířený interní přístup bez admin sekce' },
-  { value: 'employee', label: 'Employee', description: 'Standardní interní uživatel' },
-  { value: 'salesman', label: 'Salesman', description: 'Omezený pracovní režim' },
-  { value: 'viewer', label: 'Viewer', description: 'Pouze pro čtení' },
+  { value: 'manager', label: 'Manager', description: 'Vše kromě analytiky, budoucích funkcí a správy uživatelů' },
+  { value: 'salesman', label: 'Salesman', description: 'Zakázky, subjekty, teamchat a motivy' },
+  { value: 'viewer', label: 'Viewer', description: 'Pouze pro čtení, stejný přístup jako Salesman' },
 ];
 
 const ACCESS_SCOPE_OPTIONS: Array<{ value: AccessScope; label: string; description: string }> = [
@@ -58,7 +57,7 @@ const formatDateTime = (value?: string | null): string => {
 const INITIAL_CREATE_FORM: CreateUserFormState = {
   username: '',
   password: '',
-  role: 'employee',
+  role: 'viewer',
   accessScope: 'all',
 };
 
@@ -417,6 +416,7 @@ export default function AdminUsersView() {
                   const isDirty = draftRole !== managedUser.role || draftScope !== managedUser.accessScope;
                   const isSaving = savingById[managedUser.id] === true;
                   const isCurrentUser = managedUser.id === user.id;
+                  const isAdminUser = managedUser.role === 'admin';
                   const activityState = getItemActivity(
                     ADMIN_USERS_RECORD_SCOPE,
                     managedUser.id,
@@ -444,7 +444,7 @@ export default function AdminUsersView() {
                           <select
                             value={draftRole}
                             onChange={(event) => handleRoleChange(managedUser.id, event.target.value as UserRole)}
-                            disabled={isSaving || isCurrentUser}
+                            disabled={isSaving || isCurrentUser || isAdminUser}
                           >
                             {ROLE_OPTIONS.map((option) => (
                               <option key={option.value} value={option.value}>
@@ -460,7 +460,7 @@ export default function AdminUsersView() {
                           <select
                             value={draftScope}
                             onChange={(event) => handleScopeChange(managedUser.id, event.target.value as AccessScope)}
-                            disabled={isSaving || isCurrentUser}
+                            disabled={isSaving || isCurrentUser || isAdminUser}
                           >
                             {ACCESS_SCOPE_OPTIONS.map((option) => (
                               <option key={option.value} value={option.value}>
@@ -479,7 +479,7 @@ export default function AdminUsersView() {
                             type="button"
                             className="admin-users-save"
                             onClick={() => handleSave(managedUser)}
-                            disabled={!isDirty || isSaving || isCurrentUser}
+                            disabled={!isDirty || isSaving || isCurrentUser || isAdminUser}
                           >
                             {isSaving ? 'Ukládám…' : 'Uložit'}
                           </button>
@@ -503,6 +503,7 @@ export default function AdminUsersView() {
                             {isSaving ? 'Ukládám…' : 'Nastavit heslo'}
                           </button>
                           {isCurrentUser && <div className="admin-users-inline-note">Vlastní roli ani přístup zde nelze měnit.</div>}
+                          {!isCurrentUser && isAdminUser && <div className="admin-users-inline-note">Role a přístup Admina nelze měnit.</div>}
                         </div>
                       </td>
                     </tr>

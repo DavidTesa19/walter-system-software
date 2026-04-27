@@ -11,4 +11,5 @@ export interface SectionProps {
   sectionKind?: "subjects" | "commissions";
   focusRecordId?: number | null;
   focusRequestKey?: string | null;
+  readOnly?: boolean;
 }

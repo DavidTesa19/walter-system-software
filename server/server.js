@@ -1288,6 +1288,17 @@ const requireAccessScope = (...allowedScopes) => {
   };
 };
 
+// Block write operations for viewer role on all data routes
+const rejectViewerWrites = (req, res, next) => {
+  if (req.method === 'OPTIONS' || req.method === 'GET') {
+    return next();
+  }
+  if (req.user && req.user.role === 'viewer') {
+    return res.status(403).json({ error: 'Viewer accounts cannot modify data' });
+  }
+  next();
+};
+
 // Optional auth middleware - doesn't fail if no token, just sets req.user if valid
 const optionalAuth = (req, res, next) => {
   const authHeader = req.headers['authorization'];
@@ -1313,10 +1324,10 @@ const optionalAuth = (req, res, next) => {
   /^\/api\/client-(entities|commissions)(\/|$)/,
   /^\/api\/tiper-(entities|commissions)(\/|$)/,
 ].forEach((pathPattern) => {
-  app.use(pathPattern, authenticateToken, requireAccessScope('all', 'standard'));
+  app.use(pathPattern, authenticateToken, requireAccessScope('all', 'standard'), rejectViewerWrites);
 });
 
-app.use(/^\/api\/projects(\/|$)/, authenticateToken, requireAccessScope('all', 'projects'));
+app.use(/^\/api\/projects(\/|$)/, authenticateToken, requireAccessScope('all', 'projects'), rejectViewerWrites);
 
 // AUTH ROUTES
 app.post("/auth/login", async (req, res) => {
@@ -1410,6 +1421,9 @@ app.put("/users/:id", authenticateToken, requireRole('admin'), (req, res) => {
   const db = readDb();
   const idx = db.users.findIndex((u) => u.id === id);
   if (idx === -1) return res.status(404).json({ error: "Not found" });
+  if (db.users[idx].role === 'admin' && (req.body.role !== 'admin' || req.body.accessScope !== db.users[idx].accessScope)) {
+    return res.status(403).json({ error: "Cannot change role or access scope of an admin user" });
+  }
   const updated = {
     ...db.users[idx],
     ...req.body,
@@ -1427,6 +1441,14 @@ app.patch("/users/:id", authenticateToken, requireRole('admin'), (req, res) => {
   const db = readDb();
   const idx = db.users.findIndex((u) => u.id === id);
   if (idx === -1) return res.status(404).json({ error: "Not found" });
+  if (db.users[idx].role === 'admin' && (req.body.role !== undefined || req.body.accessScope !== undefined)) {
+    if (req.body.role !== undefined && req.body.role !== 'admin') {
+      return res.status(403).json({ error: "Cannot change role of an admin user" });
+    }
+    if (req.body.accessScope !== undefined) {
+      return res.status(403).json({ error: "Cannot change access scope of an admin user" });
+    }
+  }
   db.users[idx] = {
     ...db.users[idx],
     ...req.body,
@@ -3912,7 +3934,7 @@ app.post('/public-submissions/:type', (req, res) => {
 // =============================================================================
 
 // CRUD for future functions roadmap
-app.get("/future-functions", authenticateToken, (req, res) => {
+app.get("/future-functions", authenticateToken, requireRole('admin', 'manager'), (req, res) => {
   const db = readDb();
   const status = typeof req.query.status === "string" ? req.query.status : undefined;
   let records = db.futureFunctions ?? [];
@@ -3924,7 +3946,7 @@ app.get("/future-functions", authenticateToken, (req, res) => {
   res.json(records);
 });
 
-app.post("/future-functions", authenticateToken, (req, res) => {
+app.post("/future-functions", authenticateToken, requireRole('admin', 'manager'), (req, res) => {
   const db = readDb();
   const body = isPlainObject(req.body) ? req.body : {};
   const payload = { ...FUTURE_FUNCTION_DEFAULTS, ...body };
@@ -3943,7 +3965,7 @@ app.post("/future-functions", authenticateToken, (req, res) => {
   res.status(201).json(entry);
 });
 
-app.put("/future-functions/:id", authenticateToken, (req, res) => {
+app.put("/future-functions/:id", authenticateToken, requireRole('admin', 'manager'), (req, res) => {
   const id = Number(req.params.id);
   const db = readDb();
   const idx = db.futureFunctions.findIndex((record) => record.id === id);
@@ -3962,7 +3984,7 @@ app.put("/future-functions/:id", authenticateToken, (req, res) => {
   res.json(updated);
 });
 
-app.patch("/future-functions/:id", authenticateToken, (req, res) => {
+app.patch("/future-functions/:id", authenticateToken, requireRole('admin', 'manager'), (req, res) => {
   const id = Number(req.params.id);
   const db = readDb();
   const idx = db.futureFunctions.findIndex((record) => record.id === id);
@@ -3979,7 +4001,7 @@ app.patch("/future-functions/:id", authenticateToken, (req, res) => {
   res.json(db.futureFunctions[idx]);
 });
 
-app.delete("/future-functions/:id", authenticateToken, (req, res) => {
+app.delete("/future-functions/:id", authenticateToken, requireRole('admin', 'manager'), (req, res) => {
   const id = Number(req.params.id);
   const db = readDb();
   const before = db.futureFunctions.length;
@@ -4704,7 +4726,7 @@ app.post("/api/analytics/public-event", (req, res) => {
 });
 
 // Get analytics summary
-app.get("/api/analytics/summary", authenticateToken, (req, res) => {
+app.get("/api/analytics/summary", authenticateToken, requireRole('admin'), (req, res) => {
   const db = readDb();
   const events = db.analyticsEvents || [];
 

@@ -7,7 +7,7 @@ import { clearStoredNavigationState } from '../utils/navigationState';
 import type { AppView } from '../types/appView';
 
 // Define available roles
-export type UserRole = 'admin' | 'manager' | 'employee' | 'salesman' | 'viewer';
+export type UserRole = 'admin' | 'manager' | 'salesman' | 'viewer';
 export type UserAccessScope = 'all' | 'standard' | 'projects';
 
 const DEFAULT_ACCESS_SCOPE: UserAccessScope = 'all';
@@ -62,7 +62,24 @@ export const getDefaultViewForScope = (scope: UserAccessScope | null | undefined
     return 'projects_subjects_active';
   }
 
-  return 'future';
+  return 'teamchat';
+};
+
+// Views that are restricted by role (regardless of scope)
+const MANAGER_BLOCKED_VIEWS: AppView[] = ['future', 'analytics', 'admin_users'];
+const SALESMAN_VIEWER_ALLOWED_VIEWS: AppView[] = [
+  'active', 'pending', 'archived',
+  'entities_active', 'entities_pending', 'entities_archived',
+  'projects_active', 'projects_pending', 'projects_archived',
+  'projects_subjects_active', 'projects_subjects_pending', 'projects_subjects_archived',
+  'teamchat', 'palettes',
+];
+
+export const isViewAllowedForRole = (role: UserRole | undefined, view: AppView): boolean => {
+  if (!role || role === 'admin') return true;
+  if (role === 'manager') return !MANAGER_BLOCKED_VIEWS.includes(view);
+  if (role === 'salesman' || role === 'viewer') return SALESMAN_VIEWER_ALLOWED_VIEWS.includes(view);
+  return true;
 };
 
 export interface User {

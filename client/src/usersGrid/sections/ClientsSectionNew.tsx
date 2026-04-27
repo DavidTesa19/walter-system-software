@@ -415,7 +415,8 @@ const ClientsSectionNew: React.FC<SectionProps> = ({
   systemNamespace,
   sectionKind,
   onRegisterAddHandler,
-  onLoadingChange
+  onLoadingChange,
+  readOnly = false
 }) => {
   const { users: assignableUsers, options: assignmentOptions } = useAssignableUsers();
   const { markItemSeen } = useActivity();
@@ -1518,6 +1519,20 @@ const ClientsSectionNew: React.FC<SectionProps> = ({
           cellEditorParams: {
             values: ["Nízká", "Střední", "Vysoká", "Urgentní"]
           }
+        },
+        {
+          field: "created_at",
+          headerName: "Datum přidání",
+          filter: true,
+          editable: false,
+          flex: 0.95,
+          minWidth: 130,
+          valueFormatter: (params) => {
+            const v = params.value;
+            if (!v) return "";
+            const d = new Date(v);
+            return isNaN(d.getTime()) ? v : d.toLocaleDateString("cs-CZ");
+          }
         }
       );
     }
@@ -1542,6 +1557,7 @@ const ClientsSectionNew: React.FC<SectionProps> = ({
             popupParent={typeof document !== "undefined" ? document.body : undefined}
             domLayout={useContentHeightLayout ? 'autoHeight' : 'normal'}
             onCellValueChanged={onCellValueChanged}
+            onCellEditingStarted={readOnly ? (params) => params.api.stopEditing(true) : undefined}
             defaultColDef={{
               resizable: true,
               sortable: true

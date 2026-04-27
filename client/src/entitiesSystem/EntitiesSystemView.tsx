@@ -5,6 +5,7 @@ import { ModuleRegistry, AllCommunityModule } from "ag-grid-community";
 import ActivityIndicator from "../activity/ActivityIndicator";
 import { useActivity } from "../activity/ActivityContext";
 import { buildSubjectsCollectionKey, getActivitySystem } from "../activity/activityKeys";
+import { useAuth } from "../auth/AuthContext";
 import type { GridView } from "../types/appView";
 import type { GridSearchNavigationTarget } from "../types/globalSearch";
 import PartnersSectionNew from "../usersGrid/sections/PartnersSectionNew";
@@ -52,6 +53,8 @@ const EntitiesSystemView: React.FC<EntitiesSystemViewProps> = ({
 }) => {
   const [activeTable, setActiveTable] = useState<TableType>(() => getStoredTableView(storageKey));
   const { getCollectionCount, markCollectionSeen } = useActivity();
+  const { user } = useAuth();
+  const isReadOnly = user?.role === 'viewer';
   const addHandlerRef = useRef<AddHandler | null>(null);
   const [isAddDisabled, setIsAddDisabled] = useState(false);
   const { canUndo, canRedo, isBusy, undo, redo } = useUndoRedo();
@@ -104,6 +107,7 @@ const EntitiesSystemView: React.FC<EntitiesSystemViewProps> = ({
           sectionKind="subjects"
           onRegisterAddHandler={registerAddHandler}
           onLoadingChange={handleLoadingChange}
+          readOnly={isReadOnly}
           focusRecordId={
             searchTarget?.viewMode === viewMode && searchTarget.table === 'client_entities'
               ? searchTarget.recordId
@@ -127,6 +131,7 @@ const EntitiesSystemView: React.FC<EntitiesSystemViewProps> = ({
           sectionKind="subjects"
           onRegisterAddHandler={registerAddHandler}
           onLoadingChange={handleLoadingChange}
+          readOnly={isReadOnly}
           focusRecordId={
             searchTarget?.viewMode === viewMode && searchTarget.table === 'partner_entities'
               ? searchTarget.recordId
@@ -149,6 +154,7 @@ const EntitiesSystemView: React.FC<EntitiesSystemViewProps> = ({
         sectionKind="subjects"
         onRegisterAddHandler={registerAddHandler}
         onLoadingChange={handleLoadingChange}
+        readOnly={isReadOnly}
         focusRecordId={
           searchTarget?.viewMode === viewMode && searchTarget.table === 'tiper_entities'
             ? searchTarget.recordId
@@ -215,7 +221,7 @@ const EntitiesSystemView: React.FC<EntitiesSystemViewProps> = ({
               <path d="M17 6l4 4-4 4" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
             </svg>
           </button>
-          <button className="add-user-btn" onClick={handleAddClick} disabled={isAddDisabled}>
+          <button className="add-user-btn" onClick={handleAddClick} disabled={isAddDisabled || isReadOnly} style={isReadOnly ? { display: 'none' } : undefined}>
             + Přidat {addLabel}
           </button>
         </div>

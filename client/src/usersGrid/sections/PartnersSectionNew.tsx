@@ -378,7 +378,7 @@ const buildPartnerDraftCommissionData = (draft: PartnerCreateDraft, status: Part
   }, assignmentOptions)!.groups
 });
 
-const PartnersSectionNew: React.FC<SectionProps> = ({ viewMode, isActive, systemNamespace, sectionKind, onRegisterAddHandler, onLoadingChange }) => {
+const PartnersSectionNew: React.FC<SectionProps> = ({ viewMode, isActive, systemNamespace, sectionKind, onRegisterAddHandler, onLoadingChange, readOnly = false }) => {
   const { users: assignableUsers, options: assignmentOptions } = useAssignableUsers();
   const { markItemSeen } = useActivity();
   const [entities, setEntities] = useState<PartnerEntity[]>([]);
@@ -1233,6 +1233,7 @@ const PartnersSectionNew: React.FC<SectionProps> = ({ viewMode, isActive, system
             popupParent={typeof document !== "undefined" ? document.body : undefined}
             domLayout={useContentHeightLayout ? 'autoHeight' : 'normal'}
             onCellValueChanged={onCellValueChanged}
+            onCellEditingStarted={readOnly ? (params) => params.api.stopEditing(true) : undefined}
             defaultColDef={{ resizable: true, sortable: true }}
             suppressRowClickSelection={true}
             loading={isLoading}

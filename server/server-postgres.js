@@ -147,6 +147,17 @@ const requireAccessScope = (...allowedScopes) => {
 };
 
 // Optional auth - attaches user if token present, but doesn't require it
+const rejectViewerWrites = (req, res, next) => {
+  if (req.method === 'OPTIONS' || req.method === 'GET') {
+    return next();
+  }
+  if (req.user && req.user.role === 'viewer') {
+    return res.status(403).json({ error: 'Viewer accounts cannot modify data' });
+  }
+  next();
+};
+
+// Optional auth - attaches user if token present, but doesn't require it
 const optionalAuth = (req, res, next) => {
   const authHeader = req.headers['authorization'];
   const token = authHeader && authHeader.split(' ')[1];
@@ -171,10 +182,10 @@ const optionalAuth = (req, res, next) => {
   /^\/api\/client-(entities|commissions)(\/|$)/,
   /^\/api\/tiper-(entities|commissions)(\/|$)/,
 ].forEach((pathPattern) => {
-  app.use(pathPattern, authenticateToken, requireAccessScope('all', 'standard'));
+  app.use(pathPattern, authenticateToken, requireAccessScope('all', 'standard'), rejectViewerWrites);
 });
 
-app.use(/^\/api\/projects(\/|$)/, authenticateToken, requireAccessScope('all', 'projects'));
+app.use(/^\/api\/projects(\/|$)/, authenticateToken, requireAccessScope('all', 'projects'), rejectViewerWrites);
 
 // File-based storage (development mode)
 const DATA_DIR = process.env.DATA_DIR || path.resolve(process.cwd(), "data");
@@ -2720,6 +2731,15 @@ app.put("/users/:id", authenticateToken, requireRole('admin'), async (req, res) 
   const { username, password, role, accessScope } = req.body;
 
   try {
+    // Prevent changing an admin user's role or access scope
+    const dbCheck = db.isPostgres()
+      ? (await db.query('SELECT role FROM users WHERE id = $1', [userId])).rows[0]
+      : readDb().users.find(u => String(u.id) === String(userId));
+    const existingRole = dbCheck?.role ?? dbCheck?.role;
+    if (existingRole === 'admin' && (role !== undefined || accessScope !== undefined)) {
+      return res.status(403).json({ error: 'Cannot change role or access scope of an admin user' });
+    }
+
     if (db.isPostgres()) {
       const updates = [];
       const params = [];
@@ -2791,6 +2811,16 @@ app.patch("/users/:id", authenticateToken, requireRole('admin'), async (req, res
   const { username, password, role, accessScope } = req.body;
 
   try {
+    // Prevent changing an admin user's role or access scope
+    if (role !== undefined || accessScope !== undefined) {
+      const dbCheck = db.isPostgres()
+        ? (await db.query('SELECT role FROM users WHERE id = $1', [userId])).rows[0]
+        : readDb().users.find(u => String(u.id) === String(userId));
+      if (dbCheck?.role === 'admin') {
+        return res.status(403).json({ error: 'Cannot change role or access scope of an admin user' });
+      }
+    }
+
     const updates = [];
     const params = [];
 
@@ -3085,7 +3115,7 @@ function createCrudRoutes(tableName) {
 function createFutureFunctionsRoutes() {
   const tableName = 'future_functions';
 
-  app.get('/future-functions', async (req, res) => {
+  app.get('/future-functions', authenticateToken, requireRole('admin', 'manager'), async (req, res) => {
     try {
       const status = typeof req.query.status === 'string' ? req.query.status : undefined;
 
@@ -3107,7 +3137,7 @@ function createFutureFunctionsRoutes() {
     }
   });
 
-  app.post('/future-functions', async (req, res) => {
+  app.post('/future-functions', authenticateToken, requireRole('admin', 'manager'), async (req, res) => {
     try {
       const payload = { ...FUTURE_FUNCTION_DEFAULTS, ...(req.body ?? {}) };
 
@@ -3138,7 +3168,7 @@ function createFutureFunctionsRoutes() {
     }
   });
 
-  app.put('/future-functions/:id', async (req, res) => {
+  app.put('/future-functions/:id', authenticateToken, requireRole('admin', 'manager'), async (req, res) => {
     try {
       const id = Number(req.params.id);
       const payload = { ...FUTURE_FUNCTION_DEFAULTS, ...(req.body ?? {}) };
@@ -3173,7 +3203,7 @@ function createFutureFunctionsRoutes() {
     }
   });
 
-  app.patch('/future-functions/:id', async (req, res) => {
+  app.patch('/future-functions/:id', authenticateToken, requireRole('admin', 'manager'), async (req, res) => {
     try {
       const id = Number(req.params.id);
       const patch = req.body ?? {};
@@ -3208,7 +3238,7 @@ function createFutureFunctionsRoutes() {
     }
   });
 
-  app.delete('/future-functions/:id', async (req, res) => {
+  app.delete('/future-functions/:id', authenticateToken, requireRole('admin', 'manager'), async (req, res) => {
     try {
       const id = Number(req.params.id);
 
@@ -4465,7 +4495,7 @@ app.post("/api/analytics/public-event", async (req, res) => {
 });
 
 // Get analytics summary
-app.get("/api/analytics/summary", authenticateToken, async (req, res) => {
+app.get("/api/analytics/summary", authenticateToken, requireRole('admin'), async (req, res) => {
   try {
     let events = [];
 

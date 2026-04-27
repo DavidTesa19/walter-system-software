@@ -4,6 +4,7 @@ import {
   canAccessProjectsSystem,
   canAccessStandardSystem,
   getDefaultViewForScope,
+  isViewAllowedForRole,
   isViewAllowedForScope,
   useAuth,
 } from './auth/AuthContext';
@@ -225,12 +226,11 @@ const AppContent: React.FC = () => {
   const accessScope = user?.accessScope;
   const isAdmin = user?.role === 'admin';
   const isViewAllowed = useCallback((view: AppView) => {
-    if (view === 'admin_users') {
-      return isAdmin;
+    if (!isViewAllowedForRole(user?.role, view)) {
+      return false;
     }
-
     return isViewAllowedForScope(accessScope, view);
-  }, [accessScope, isAdmin]);
+  }, [accessScope, user?.role]);
 
   useEffect(() => {
     if (!isAuthenticated) {
