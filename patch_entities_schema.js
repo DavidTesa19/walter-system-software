@@ -1,0 +1,1 @@
+const fs = require('fs'); let content = fs.readFileSync('server/db.js', 'utf8'); content = content.replace(/assigned_user_ids INTEGER\\[\\] DEFAULT '\\{\\}',\\s*created_at TIMESTAMP/g, 'assigned_user_ids INTEGER[] DEFAULT \\'\\{\\}',\\n          state VARCHAR(100),\\n          created_at TIMESTAMP'); fs.writeFileSync('server/db.js', content); console.log('Patched');

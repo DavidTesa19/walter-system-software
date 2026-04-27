@@ -22,7 +22,6 @@ import useProfileDocuments from "../hooks/useProfileDocuments";
 import useProfileNotes from "../hooks/useProfileNotes";
 import { ApproveRestoreCellRenderer, DeleteArchiveCellRenderer } from "../cells/RowActionCellRenderers";
 import { fieldOptions, groupedFieldOptions, projectsFieldOptions, projectsGroupedFieldOptions } from "../fieldOptions";
-import { formatProfileDate } from "../utils/profileUtils";
 import {
   formatAssignedUsernames,
   fromAssignmentDraftValue,
@@ -75,10 +74,12 @@ type ClientCommissionApi = {
   priority?: string | null;
   phone?: string | null;
   commission_value?: string | null;
+  project_name?: string | null;
   notes?: string | null;
   entity_company_name?: string | null;
   entity_first_name?: string | null;
   entity_last_name?: string | null;
+  entity_project_name?: string | null;
   entity_field?: string | null;
   entity_service?: string | null;
   entity_budget?: string | null;
@@ -116,6 +117,7 @@ type ClientCreateDraft = {
     service_position: string;
     assigned_user_ids: string[];
     budget: string;
+    project_name: string;
     commission_value: string;
     priority: string;
     state: string;
@@ -148,6 +150,7 @@ const createDefaultClientDraft = (): ClientCreateDraft => ({
     service_position: "",
     assigned_user_ids: [],
     budget: "",
+    project_name: "",
     commission_value: "",
     priority: "",
     state: DEFAULT_WORKFLOW_STATUS,
@@ -181,6 +184,7 @@ const normalizeClientCommission = (commission: ClientCommissionApi): ClientCommi
   id: commission.id,
   commission_id: commission.commission_id,
   client_entity_id: Number(commission.entity_id),
+  project_name: commission.project_name ?? null,
   status: commission.status,
   assigned_to: commission.assigned_to ?? null,
   assigned_user_ids: commission.assigned_user_ids ?? [],
@@ -337,8 +341,6 @@ const buildCommissionData = (commission: ClientCommission | null, assignmentOpti
   };
 };
 
-const formatAddedDate = (value?: string | null) => formatProfileDate(value) ?? "";
-
 const buildLinkedCommissionItems = (commissions: ClientCommission[], assignedUsers: Parameters<typeof formatAssignedUsernames>[1]): LinkedCommissionItem[] => commissions
   .map((commission) => ({
     id: commission.id,
@@ -383,6 +385,7 @@ const buildClientDraftCommissionData = (draft: ClientCreateDraft, status: Client
     commission_id: "Nová zakázka",
     client_entity_id: 0,
     status,
+    project_name: emptyToNull(draft.commission.project_name),
     assigned_to: null,
     assigned_user_ids: fromAssignmentDraftValue(draft.commission.assigned_user_ids),
     priority: draft.commission.priority,
@@ -497,6 +500,7 @@ const ClientsSectionNew: React.FC<SectionProps> = ({
             notes: primaryCommission?.notes ?? null,
             deadline: primaryCommission?.deadline ?? null,
             state: getNormalizedWorkflowStatus(primaryCommission?.state),
+            project_name: primaryCommission?.project_name ?? null,
             commission_value: primaryCommission?.commission_value ?? null,
             position: primaryCommission?.position ?? null,
             budget: primaryCommission?.budget ?? null,
@@ -566,6 +570,7 @@ const ClientsSectionNew: React.FC<SectionProps> = ({
           deadline: null,
           state: null,
           commission_value: null,
+          project_name: null,
           position: null,
           budget: null,
           service_position: null,
@@ -1025,6 +1030,7 @@ const ClientsSectionNew: React.FC<SectionProps> = ({
         service_position: selectedCommission.service_position ?? "",
         assigned_user_ids: toAssignmentDraftValue(selectedCommission.assigned_user_ids),
         budget: selectedCommission.budget ?? "",
+        project_name: selectedCommission.project_name ?? "",
         commission_value: selectedCommission.commission_value ?? "",
         priority: selectedCommission.priority ?? "",
         state: selectedCommission.state ?? "",
@@ -1389,13 +1395,12 @@ const ClientsSectionNew: React.FC<SectionProps> = ({
     });
 
     cols.push({
-      field: "created_at",
-      headerName: "Datum přidání",
+      field: "project_name",
+      headerName: "Projekt",
       filter: true,
-      editable: false,
-      flex: 0.95,
-      minWidth: 130,
-      valueFormatter: (params) => formatAddedDate(params.value)
+      editable: true,
+      flex: 1,
+      minWidth: 120
     });
 
     // Entity info columns

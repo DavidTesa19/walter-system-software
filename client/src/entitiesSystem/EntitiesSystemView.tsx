@@ -6,6 +6,7 @@ import ActivityIndicator from "../activity/ActivityIndicator";
 import { useActivity } from "../activity/ActivityContext";
 import { buildSubjectsCollectionKey, getActivitySystem } from "../activity/activityKeys";
 import type { GridView } from "../types/appView";
+import type { GridSearchNavigationTarget } from "../types/globalSearch";
 import PartnersSectionNew from "../usersGrid/sections/PartnersSectionNew";
 import ClientsSectionNew from "../usersGrid/sections/ClientsSectionNew";
 import TipersSectionNew from "../usersGrid/sections/TipersSectionNew";
@@ -39,13 +40,15 @@ interface EntitiesSystemViewProps {
   systemNamespace?: string;
   storageKey?: string;
   title?: string;
+  searchTarget?: GridSearchNavigationTarget | null;
 }
 
 const EntitiesSystemView: React.FC<EntitiesSystemViewProps> = ({
   viewMode,
   systemNamespace,
   storageKey = ENTITIES_SYSTEM_TABLE_STORAGE_KEY,
-  title
+  title,
+  searchTarget
 }) => {
   const [activeTable, setActiveTable] = useState<TableType>(() => getStoredTableView(storageKey));
   const { getCollectionCount, markCollectionSeen } = useActivity();
@@ -74,6 +77,19 @@ const EntitiesSystemView: React.FC<EntitiesSystemViewProps> = ({
     markCollectionSeen(buildSubjectsCollectionKey(getActivitySystem(systemNamespace), viewMode, activeTable));
   }, [activeTable, markCollectionSeen, systemNamespace, viewMode]);
 
+  useEffect(() => {
+    if (!searchTarget || searchTarget.viewMode !== viewMode) {
+      return;
+    }
+    if (searchTarget.table === 'partner_entities') {
+      setActiveTable('partners');
+    } else if (searchTarget.table === 'client_entities') {
+      setActiveTable('clients');
+    } else if (searchTarget.table === 'tiper_entities') {
+      setActiveTable('tipers');
+    }
+  }, [searchTarget, viewMode]);
+
   const handleAddClick = useCallback(() => {
     void addHandlerRef.current?.();
   }, []);
@@ -88,6 +104,16 @@ const EntitiesSystemView: React.FC<EntitiesSystemViewProps> = ({
           sectionKind="subjects"
           onRegisterAddHandler={registerAddHandler}
           onLoadingChange={handleLoadingChange}
+          focusRecordId={
+            searchTarget?.viewMode === viewMode && searchTarget.table === 'client_entities'
+              ? searchTarget.recordId
+              : null
+          }
+          focusRequestKey={
+            searchTarget?.viewMode === viewMode && searchTarget.table === 'client_entities'
+              ? searchTarget.requestKey
+              : null
+          }
         />
       );
     }
@@ -101,6 +127,16 @@ const EntitiesSystemView: React.FC<EntitiesSystemViewProps> = ({
           sectionKind="subjects"
           onRegisterAddHandler={registerAddHandler}
           onLoadingChange={handleLoadingChange}
+          focusRecordId={
+            searchTarget?.viewMode === viewMode && searchTarget.table === 'partner_entities'
+              ? searchTarget.recordId
+              : null
+          }
+          focusRequestKey={
+            searchTarget?.viewMode === viewMode && searchTarget.table === 'partner_entities'
+              ? searchTarget.requestKey
+              : null
+          }
         />
       );
     }
@@ -113,6 +149,16 @@ const EntitiesSystemView: React.FC<EntitiesSystemViewProps> = ({
         sectionKind="subjects"
         onRegisterAddHandler={registerAddHandler}
         onLoadingChange={handleLoadingChange}
+        focusRecordId={
+          searchTarget?.viewMode === viewMode && searchTarget.table === 'tiper_entities'
+            ? searchTarget.recordId
+            : null
+        }
+        focusRequestKey={
+          searchTarget?.viewMode === viewMode && searchTarget.table === 'tiper_entities'
+            ? searchTarget.requestKey
+            : null
+        }
       />
     );
   };

@@ -444,6 +444,7 @@ export function createClientCommission(db, entityInternalId, data) {
     entity_id: entityInternalId,
     entity_code: entity.entity_id,
     status: data.status || 'pending',
+    project_name: data.project_name || null,
     position: data.position || null,
     budget: data.budget || null,
     state: data.state || null,

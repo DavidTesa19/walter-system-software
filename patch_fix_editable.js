@@ -1,0 +1,1 @@
+const fs = require('fs'); const files = ['client/src/usersGrid/sections/ClientsSectionNew.tsx', 'client/src/usersGrid/sections/PartnersSectionNew.tsx', 'client/src/usersGrid/sections/TipersSectionNew.tsx']; for(let file of files){ let c = fs.readFileSync(file, 'utf8'); c = c.replace(/editable: !isReadOnly/, 'editable: true'); fs.writeFileSync(file, c); } console.log('Patched');

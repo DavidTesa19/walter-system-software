@@ -106,6 +106,7 @@ export interface PartnerCommission extends BaseCommission {
 export interface ClientCommission extends BaseCommission {
   client_entity_id: number;
 
+  project_name: string | null;
   position: string | null;
   budget: string | null;
   service_position: string | null;

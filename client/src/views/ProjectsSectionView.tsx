@@ -308,6 +308,7 @@ const ProjectsSectionView: React.FC<ProjectsSectionViewProps> = ({
           systemNamespace="projects"
           storageKey={PROJECTS_SUBJECTS_TABLE_STORAGE_KEY}
           title={title}
+          searchTarget={searchTarget}
         />
       ) : (
         <UsersGrid

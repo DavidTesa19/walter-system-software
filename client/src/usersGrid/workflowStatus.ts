@@ -5,12 +5,12 @@ export type WorkflowStatusOption = {
 };
 
 export const WORKFLOW_STATUS_OPTIONS: readonly WorkflowStatusOption[] = [
-  { value: "Uzavřeno", label: "Uzavřeno", dotColor: "#16a34a" },
-  { value: "Podepsáno", label: "Podepsáno", dotColor: "#a3e635" },
-  { value: "Před podepsáním", label: "Před podepsáním", dotColor: "#eab308" },
-  { value: "Aktuální", label: "Aktuální", dotColor: "#22d3ee" },
-  { value: "Probíhá", label: "Probíhá", dotColor: "#f59e0b" },
-  { value: "Plánováno", label: "Plánováno", dotColor: "#3b82f6" },
+  { value: "Uzavřeno", label: "Uzavřeno", dotColor: "#03983f" },
+  { value: "Podepsáno", label: "Podepsáno", dotColor: "#60e005" },
+  { value: "Před podepsáním", label: "Před podepsáním", dotColor: "#e3ea08" },
+  { value: "Probíhá", label: "Probíhá", dotColor: "#0bf5c2" },
+  { value: "Aktuální", label: "Aktuální", dotColor: "#00a9e7" },
+  { value: "Plánováno", label: "Plánováno", dotColor: "#793bf6" },
   { value: "Odloženo", label: "Odloženo", dotColor: "#6b7280" },
   { value: "Zrušeno", label: "Zrušeno", dotColor: "#dc2626" },
 ] as const;

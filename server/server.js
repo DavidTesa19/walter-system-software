@@ -3341,7 +3341,7 @@ const PROJECT_JSON_CONFIG = {
     entityPrefix: 'PK',
     entityDefaults: { company_name: 'Nová společnost' },
     entityFields: ['status', 'company_name', 'field', 'service', 'location', 'info', 'category', 'budget', 'first_name', 'last_name', 'email', 'phone', 'website', 'assigned_to', 'assigned_user_ids'],
-    commissionFields: ['status', 'position', 'budget', 'state', 'assigned_to', 'assigned_user_ids', 'field', 'service_position', 'location', 'info', 'category', 'deadline', 'priority', 'phone', 'commission_value', 'is_tipped', 'notes']
+    commissionFields: ['status', 'project_name', 'position', 'budget', 'state', 'assigned_to', 'assigned_user_ids', 'field', 'service_position', 'location', 'info', 'category', 'deadline', 'priority', 'phone', 'commission_value', 'is_tipped', 'notes']
   },
   tiper: {
     entityCollection: 'project_tiper_entities',

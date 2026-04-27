@@ -1,6 +1,6 @@
 import type { AppView, GridView } from "./appView";
 
-export type SearchTable = "clients" | "partners" | "tipers";
+export type SearchTable = "clients" | "partners" | "tipers" | "partner_entities" | "client_entities" | "tiper_entities";
 
 export interface GlobalSearchResult {
   id: string;
