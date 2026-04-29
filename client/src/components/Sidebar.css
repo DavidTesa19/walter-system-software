@@ -399,15 +399,16 @@
 .main-content {
   margin-left: 260px;
   width: calc(100% - 260px);
-  min-height: calc(100vh - var(--app-footer-height));
-  height: calc(100vh - var(--app-footer-height));
-  max-height: calc(100vh - var(--app-footer-height));
+  min-height: 100vh;
+  height: 100vh;
+  max-height: 100vh;
   background: var(--color-background);
   color: var(--color-text);
   overflow: auto;
   display: flex;
   flex-direction: column;
-  padding-bottom: 0;
+  padding-bottom: calc(var(--app-footer-height) + 1.5rem);
+  box-sizing: border-box;
 }
 
 .main-content--fullscreen {
@@ -432,5 +433,6 @@
   .main-content--fullscreen {
     overflow: hidden;
     padding: 0;
+    padding-bottom: 0;
   }
 }
