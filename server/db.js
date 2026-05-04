@@ -1687,8 +1687,16 @@ export const db = {
 
     const commissionTable = `${entityTablePrefix}_commissions`;
     const { rows } = await pool.query(
-      `SELECT COUNT(*)::INT + 1 AS next_num FROM ${commissionTable} WHERE entity_code = $1`,
-      [entityId]
+      `SELECT COALESCE(MAX(
+         CASE
+           WHEN commission_id ~ ('^' || $1 || '-[0-9]+$')
+             THEN split_part(commission_id, '-', 2)::INT
+           ELSE NULL
+         END
+       ), 0) + 1 AS next_num
+       FROM ${commissionTable}
+       WHERE entity_code = $1 OR commission_id LIKE $2`,
+      [entityId, `${entityId}-%`]
     );
     return rows[0]?.next_num ?? 1;
   },

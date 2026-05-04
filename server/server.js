@@ -3412,7 +3412,19 @@ const nextProjectEntityCode = (store, counterKey, prefix) => {
 };
 
 const nextProjectCommissionCode = (commissions, entityCode) => {
-  const nextNumber = commissions.filter((item) => item.entity_code === entityCode).length + 1;
+  const nextNumber = commissions.reduce((max, item) => {
+    const matchesEntity = item?.entity_code === entityCode
+      || (typeof item?.commission_id === 'string' && item.commission_id.startsWith(`${entityCode}-`));
+
+    if (!matchesEntity || typeof item?.commission_id !== 'string') {
+      return max;
+    }
+
+    const [, rawSuffix] = item.commission_id.split('-');
+    const suffix = Number.parseInt(rawSuffix ?? '', 10);
+    return Number.isInteger(suffix) ? Math.max(max, suffix) : max;
+  }, 0) + 1;
+
   return `${entityCode}-${String(nextNumber).padStart(3, '0')}`;
 };
 
