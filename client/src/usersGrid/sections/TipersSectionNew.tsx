@@ -1532,6 +1532,7 @@ const TipersSectionNew: React.FC<SectionProps> = ({
         onDuplicateEntityCommission={handleDuplicateEntityCommission}
         onDuplicateCommission={handleDuplicateCommission}
         onCreateCommission={selectedEntity ? handleCreateFirstCommission : undefined}
+        onRemoveCommission={selectedCommission ? () => void handleDelete(selectedCommission.id) : undefined}
         onClose={closeProfile}
         onUpdateEntity={handleUpdateEntity}
         onUpdateCommission={handleUpdateCommission}

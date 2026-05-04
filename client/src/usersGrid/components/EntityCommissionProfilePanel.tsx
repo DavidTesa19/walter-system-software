@@ -64,6 +64,7 @@ interface EntityCommissionProfilePanelProps {
   onDuplicateEntityCommission?: () => void;
   onDuplicateCommission?: () => void;
   onCreateCommission?: () => void;
+  onRemoveCommission?: () => void;
   
   // Callbacks
   onClose: () => void;
@@ -429,6 +430,7 @@ const EntityCommissionProfilePanel: React.FC<EntityCommissionProfilePanelProps> 
   onDuplicateEntityCommission,
   onDuplicateCommission,
   onCreateCommission,
+  onRemoveCommission,
   onClose,
   onUpdateEntity,
   onUpdateCommission,
@@ -682,11 +684,18 @@ const EntityCommissionProfilePanel: React.FC<EntityCommissionProfilePanelProps> 
                           <h4 className="ec-linked-commissions-title">Navázané zakázky</h4>
                           <p className="ec-linked-commissions-subtitle">Počet odpovídá hodnotě v tabulce subjektů.</p>
                         </div>
-                        {onCreateCommission ? (
-                          <button type="button" className="ec-header-action secondary" onClick={onCreateCommission}>
-                            Přidat zakázku
-                          </button>
-                        ) : null}
+                        <div className="ec-linked-commissions-actions">
+                          {onRemoveCommission && commission ? (
+                            <button type="button" className="ec-header-action danger" onClick={onRemoveCommission}>
+                              Odebrat zakázku
+                            </button>
+                          ) : null}
+                          {onCreateCommission ? (
+                            <button type="button" className="ec-header-action secondary" onClick={onCreateCommission}>
+                              Přidat zakázku
+                            </button>
+                          ) : null}
+                        </div>
                       </div>
 
                       <div className="ec-linked-commissions-list">

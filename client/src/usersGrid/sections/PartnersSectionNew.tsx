@@ -1254,6 +1254,7 @@ const PartnersSectionNew: React.FC<SectionProps> = ({ viewMode, isActive, system
         onDuplicateEntityCommission={handleDuplicateEntityCommission}
         onDuplicateCommission={handleDuplicateCommission}
         onCreateCommission={selectedEntity ? handleCreateFirstCommission : undefined}
+        onRemoveCommission={selectedCommission ? () => void handleDelete(selectedCommission.id) : undefined}
         onClose={closeProfile}
         onUpdateEntity={handleUpdateEntity}
         onUpdateCommission={handleUpdateCommission}
