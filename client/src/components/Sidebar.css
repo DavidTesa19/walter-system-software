@@ -399,16 +399,20 @@
 .main-content {
   margin-left: 260px;
   width: calc(100% - 260px);
-  min-height: 100vh;
-  height: 100vh;
-  max-height: 100vh;
+  min-height: calc(100vh - var(--app-footer-height) - 16px);
+  height: calc(100vh - var(--app-footer-height) - 16px);
+  max-height: calc(100vh - var(--app-footer-height) - 16px);
   background: var(--color-background);
   color: var(--color-text);
   overflow: auto;
   display: flex;
   flex-direction: column;
-  padding-bottom: calc(var(--app-footer-height) + 1.5rem);
+  padding-bottom: 2.5rem;
   box-sizing: border-box;
+}
+
+.main-content--table-scroll {
+  overflow: hidden;
 }
 
 .main-content--fullscreen {

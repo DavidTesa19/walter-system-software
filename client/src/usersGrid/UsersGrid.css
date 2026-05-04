@@ -150,7 +150,7 @@
   width: 100%;
   overflow: hidden;
   flex: 1;
-  min-height: var(--grid-min-height);
+  min-height: 0;
   align-items: stretch;
 }
 
@@ -357,6 +357,7 @@
 }
 
 .grid-wrapper {
+  --walter-grid-scroll-spacer: 20px;
   background: var(--color-surface);
   border: 1px solid var(--color-border);
   border-radius: 1rem;
@@ -370,7 +371,7 @@
   min-width: 0; /* allows flex child to shrink and prevents overflow */
   display: flex;
   flex-direction: column;
-  min-height: var(--grid-min-height);
+  min-height: 0;
 }
 
 .grid-wrapper--content-height {
@@ -406,9 +407,6 @@
   min-height: 0;
 }
 
-.grid-wrapper .ag-layout-normal,
-.grid-wrapper .ag-body,
-.grid-wrapper .ag-body-viewport,
 .grid-wrapper .ag-center-cols-viewport,
 .grid-wrapper .ag-center-cols-container,
 .grid-wrapper .ag-overlay,
@@ -416,6 +414,17 @@
 .grid-wrapper .ag-overlay-no-rows-wrapper,
 .grid-wrapper .ag-overlay-loading-wrapper {
   min-height: 100%;
+}
+
+.grid-wrapper .ag-body,
+.grid-wrapper .ag-body-viewport,
+.grid-wrapper .ag-body-horizontal-scroll,
+.grid-wrapper .ag-body-horizontal-scroll-viewport {
+  min-height: 0;
+}
+
+.grid-wrapper .ag-body {
+  margin-bottom: var(--walter-grid-scroll-spacer);
 }
 
 .grid-wrapper:has(.ag-overlay-no-rows-wrapper) {

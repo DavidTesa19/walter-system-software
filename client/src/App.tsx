@@ -484,6 +484,26 @@ const AppContent: React.FC = () => {
   }
 
   const isFullscreenView = viewMode === 'chatbot' || viewMode === 'teamchat' || viewMode === 'calendar';
+  const isTableScrollView = [
+    'active',
+    'pending',
+    'archived',
+    'future',
+    'entities_active',
+    'entities_pending',
+    'entities_archived',
+    'projects_active',
+    'projects_pending',
+    'projects_archived',
+    'projects_subjects_active',
+    'projects_subjects_pending',
+    'projects_subjects_archived'
+  ].includes(viewMode);
+  const mainContentClassName = [
+    'main-content',
+    isFullscreenView ? 'main-content--fullscreen' : '',
+    isTableScrollView ? 'main-content--table-scroll' : ''
+  ].filter(Boolean).join(' ');
 
   return (
     <ActivityProvider userId={user?.id} accessScope={accessScope} isAdmin={isAdmin} activeView={viewMode}>
@@ -494,7 +514,7 @@ const AppContent: React.FC = () => {
           onGlobalSearch={runGlobalSearch}
           onSearchNavigate={handleSearchNavigate}
         />
-        <div className={`main-content ${isFullscreenView ? 'main-content--fullscreen' : ''}`}>
+        <div className={mainContentClassName}>
           {(() => {
             switch (viewMode) {
               case 'active':
