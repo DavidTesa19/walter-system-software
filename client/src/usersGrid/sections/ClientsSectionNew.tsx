@@ -1075,7 +1075,7 @@ const ClientsSectionNew: React.FC<SectionProps> = ({
     if (!selectedEntity) return;
 
     try {
-      const response = await apiPost<{ id: number }>('/api/client-commissions', {
+        const response = await apiPost<{ id: number }>(commissionApiBase, {
         entity_id: selectedEntity.id,
         status,
         position: null,
@@ -1093,7 +1093,7 @@ const ClientsSectionNew: React.FC<SectionProps> = ({
       console.error('Error creating first client commission:', error);
       alert('Chyba při vytváření první zakázky');
     }
-  }, [fetchData, selectedEntity, status]);
+  }, [commissionApiBase, fetchData, selectedEntity, status]);
 
   // ==========================================================================
   // GRID CONTEXT
