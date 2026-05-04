@@ -159,6 +159,26 @@ export async function initDatabase() {
     `);
 
     await client.query(`
+      ALTER TABLE documents
+      ADD COLUMN IF NOT EXISTS archived_at TIMESTAMP DEFAULT NULL
+    `);
+
+    await client.query(`
+      ALTER TABLE documents
+      ADD COLUMN IF NOT EXISTS note_id INTEGER DEFAULT NULL
+    `);
+
+    await client.query(`
+      ALTER TABLE documents
+      ADD COLUMN IF NOT EXISTS item_kind VARCHAR(20) DEFAULT 'file'
+    `);
+
+    await client.query(`
+      ALTER TABLE documents
+      ADD COLUMN IF NOT EXISTS parent_id INTEGER DEFAULT NULL
+    `);
+
+    await client.query(`
       CREATE INDEX IF NOT EXISTS idx_documents_entity
         ON documents (entity_type, entity_id)
     `);
