@@ -146,6 +146,8 @@ export async function initDatabase() {
         id SERIAL PRIMARY KEY,
         entity_type VARCHAR(50) NOT NULL,
         entity_id INTEGER NOT NULL,
+        item_kind VARCHAR(20) NOT NULL DEFAULT 'file',
+        parent_id INTEGER DEFAULT NULL,
         filename VARCHAR(255) NOT NULL,
         mime_type VARCHAR(120) NOT NULL,
         size_bytes INTEGER NOT NULL,
@@ -159,6 +161,11 @@ export async function initDatabase() {
     await client.query(`
       CREATE INDEX IF NOT EXISTS idx_documents_entity
         ON documents (entity_type, entity_id)
+    `);
+
+    await client.query(`
+      CREATE INDEX IF NOT EXISTS idx_documents_parent
+        ON documents (parent_id)
     `);
 
     // Create notes table
@@ -325,6 +332,8 @@ export async function initDatabase() {
       "ALTER TABLE users ADD COLUMN IF NOT EXISTS access_scope VARCHAR(50) DEFAULT 'all'",
       "ALTER TABLE documents ADD COLUMN IF NOT EXISTS archived_at TIMESTAMP DEFAULT NULL",
       "ALTER TABLE documents ADD COLUMN IF NOT EXISTS note_id INTEGER DEFAULT NULL",
+      "ALTER TABLE documents ADD COLUMN IF NOT EXISTS item_kind VARCHAR(20) DEFAULT 'file'",
+      "ALTER TABLE documents ADD COLUMN IF NOT EXISTS parent_id INTEGER DEFAULT NULL",
       "ALTER TABLE partner_entities ADD COLUMN IF NOT EXISTS status VARCHAR(50) DEFAULT 'accepted'",
       "ALTER TABLE client_entities ADD COLUMN IF NOT EXISTS status VARCHAR(50) DEFAULT 'accepted'",
       "ALTER TABLE tiper_entities ADD COLUMN IF NOT EXISTS status VARCHAR(50) DEFAULT 'accepted'",
@@ -953,10 +962,15 @@ function toDocumentResponse(row, { includeData = false } = {}) {
     return null;
   }
 
+  const itemKind = row.item_kind ?? row.itemKind ?? ((row.mime_type ?? row.mimeType) === 'inode/directory' ? 'folder' : 'file');
+  const parentIdRaw = row.parent_id ?? row.parentId;
+
   const base = {
     id: row.id,
     entityType: row.entity_type,
     entityId: row.entity_id,
+    itemKind,
+    parentId: parentIdRaw == null ? null : Number(parentIdRaw),
     filename: row.filename,
     mimeType: row.mime_type,
     sizeBytes: typeof row.size_bytes === 'number' ? row.size_bytes : Number(row.size_bytes),
@@ -1335,10 +1349,10 @@ export const db = {
 
     const archivedFilter = includeArchived ? '' : ' AND archived_at IS NULL';
     const result = await pool.query(
-      `SELECT id, entity_type, entity_id, filename, mime_type, size_bytes, created_at, archived_at
+      `SELECT id, entity_type, entity_id, item_kind, parent_id, filename, mime_type, size_bytes, created_at, archived_at, note_id
          FROM documents
         WHERE entity_type = $1 AND entity_id = $2${archivedFilter}
-        ORDER BY created_at DESC`,
+        ORDER BY CASE WHEN item_kind = 'folder' THEN 0 ELSE 1 END, LOWER(filename) ASC, created_at DESC`,
       [entityType, entityId]
     );
 
@@ -1349,8 +1363,8 @@ export const db = {
     if (!USE_POSTGRES) return null;
 
     const columns = includeData
-      ? 'id, entity_type, entity_id, filename, mime_type, size_bytes, created_at, data'
-      : 'id, entity_type, entity_id, filename, mime_type, size_bytes, created_at';
+      ? 'id, entity_type, entity_id, item_kind, parent_id, filename, mime_type, size_bytes, created_at, archived_at, note_id, data'
+      : 'id, entity_type, entity_id, item_kind, parent_id, filename, mime_type, size_bytes, created_at, archived_at, note_id';
 
     const result = await pool.query(
       `SELECT ${columns} FROM documents WHERE id = $1`,
@@ -1360,14 +1374,14 @@ export const db = {
     return toDocumentResponse(result.rows[0], { includeData });
   },
 
-  async createDocument(entityType, entityId, { filename, mimeType, sizeBytes, buffer, noteId }) {
+  async createDocument(entityType, entityId, { filename, mimeType, sizeBytes, buffer, noteId, parentId }) {
     if (!USE_POSTGRES) return null;
 
     const result = await pool.query(
-      `INSERT INTO documents (entity_type, entity_id, filename, mime_type, size_bytes, data, note_id)
-       VALUES ($1, $2, $3, $4, $5, $6, $7)
-       RETURNING id, entity_type, entity_id, filename, mime_type, size_bytes, created_at, note_id`,
-      [entityType, entityId, filename, mimeType, sizeBytes, buffer, noteId || null]
+      `INSERT INTO documents (entity_type, entity_id, item_kind, parent_id, filename, mime_type, size_bytes, data, note_id)
+       VALUES ($1, $2, 'file', $3, $4, $5, $6, $7, $8)
+       RETURNING id, entity_type, entity_id, item_kind, parent_id, filename, mime_type, size_bytes, created_at, archived_at, note_id`,
+      [entityType, entityId, parentId ?? null, filename, mimeType, sizeBytes, buffer, noteId || null]
     );
 
     await touchEntityActivityRecords(entityType, entityId);
@@ -1375,17 +1389,102 @@ export const db = {
     return toDocumentResponse(result.rows[0]);
   },
 
+  async createDocumentFolder(entityType, entityId, { name, parentId }) {
+    if (!USE_POSTGRES) return null;
+
+    const result = await pool.query(
+      `INSERT INTO documents (entity_type, entity_id, item_kind, parent_id, filename, mime_type, size_bytes, data)
+       VALUES ($1, $2, 'folder', $3, $4, 'inode/directory', 0, $5)
+       RETURNING id, entity_type, entity_id, item_kind, parent_id, filename, mime_type, size_bytes, created_at, archived_at, note_id`,
+      [entityType, entityId, parentId ?? null, name, Buffer.alloc(0)]
+    );
+
+    await touchEntityActivityRecords(entityType, entityId);
+
+    return toDocumentResponse(result.rows[0]);
+  },
+
+  async updateDocumentItem(id, { filename, parentId }) {
+    if (!USE_POSTGRES) return null;
+
+    const updates = [];
+    const values = [];
+
+    if (filename !== undefined) {
+      values.push(filename);
+      updates.push(`filename = $${values.length}`);
+    }
+
+    if (parentId !== undefined) {
+      values.push(parentId);
+      updates.push(`parent_id = $${values.length}`);
+    }
+
+    if (updates.length === 0) {
+      return this.getDocumentById(id);
+    }
+
+    values.push(id);
+
+    const result = await pool.query(
+      `UPDATE documents
+          SET ${updates.join(', ')}, updated_at = CURRENT_TIMESTAMP
+        WHERE id = $${values.length}
+    RETURNING id, entity_type, entity_id, item_kind, parent_id, filename, mime_type, size_bytes, created_at, archived_at, note_id`,
+      values
+    );
+
+    const updated = result.rows[0];
+    if (updated) {
+      await touchEntityActivityRecords(updated.entity_type, updated.entity_id);
+    }
+
+    return toDocumentResponse(updated);
+  },
+
+  async isDocumentDescendant(ancestorId, descendantId) {
+    if (!USE_POSTGRES) return false;
+
+    const result = await pool.query(
+      `WITH RECURSIVE document_tree AS (
+         SELECT id, parent_id
+           FROM documents
+          WHERE id = $1
+         UNION ALL
+         SELECT d.id, d.parent_id
+           FROM documents d
+           INNER JOIN document_tree dt ON d.parent_id = dt.id
+       )
+       SELECT 1
+         FROM document_tree
+        WHERE id = $2
+        LIMIT 1`,
+      [ancestorId, descendantId]
+    );
+
+    return result.rows.length > 0;
+  },
+
   async deleteDocument(id) {
     if (!USE_POSTGRES) return null;
 
     const result = await pool.query(
-      `DELETE FROM documents
-        WHERE id = $1
-    RETURNING id, entity_type, entity_id, filename, mime_type, size_bytes, created_at, archived_at`,
+      `WITH RECURSIVE document_tree AS (
+         SELECT id, entity_type, entity_id, item_kind, parent_id, filename, mime_type, size_bytes, created_at, archived_at, note_id
+           FROM documents
+          WHERE id = $1
+         UNION ALL
+         SELECT d.id, d.entity_type, d.entity_id, d.item_kind, d.parent_id, d.filename, d.mime_type, d.size_bytes, d.created_at, d.archived_at, d.note_id
+           FROM documents d
+           INNER JOIN document_tree dt ON d.parent_id = dt.id
+       )
+       DELETE FROM documents
+        WHERE id IN (SELECT id FROM document_tree)
+    RETURNING id, entity_type, entity_id, item_kind, parent_id, filename, mime_type, size_bytes, created_at, archived_at, note_id`,
       [id]
     );
 
-    const deleted = result.rows[0];
+    const deleted = result.rows.find((row) => Number(row.id) === Number(id)) ?? result.rows[0];
     if (deleted) {
       await touchEntityActivityRecords(deleted.entity_type, deleted.entity_id);
     }
@@ -1400,7 +1499,7 @@ export const db = {
       `UPDATE documents
          SET archived_at = CURRENT_TIMESTAMP, updated_at = CURRENT_TIMESTAMP
        WHERE id = $1 AND archived_at IS NULL
-   RETURNING id, entity_type, entity_id, filename, mime_type, size_bytes, created_at, archived_at`,
+   RETURNING id, entity_type, entity_id, item_kind, parent_id, filename, mime_type, size_bytes, created_at, archived_at, note_id`,
       [id]
     );
 
@@ -1419,7 +1518,7 @@ export const db = {
       `UPDATE documents
          SET archived_at = NULL, updated_at = CURRENT_TIMESTAMP
        WHERE id = $1 AND archived_at IS NOT NULL
-   RETURNING id, entity_type, entity_id, filename, mime_type, size_bytes, created_at, archived_at`,
+   RETURNING id, entity_type, entity_id, item_kind, parent_id, filename, mime_type, size_bytes, created_at, archived_at, note_id`,
       [id]
     );
 
@@ -1447,7 +1546,7 @@ export const db = {
     let docsByNoteId = {};
     if (noteIds.length > 0) {
       const docsResult = await pool.query(
-        `SELECT id, entity_type, entity_id, filename, mime_type, size_bytes, created_at, archived_at, note_id
+        `SELECT id, entity_type, entity_id, item_kind, parent_id, filename, mime_type, size_bytes, created_at, archived_at, note_id
            FROM documents
           WHERE note_id = ANY($1::int[])`,
         [noteIds]
@@ -1455,17 +1554,7 @@ export const db = {
       for (const doc of docsResult.rows) {
         const nid = doc.note_id;
         if (!docsByNoteId[nid]) docsByNoteId[nid] = [];
-        docsByNoteId[nid].push({
-          id: doc.id,
-          entityType: doc.entity_type,
-          entityId: doc.entity_id,
-          filename: doc.filename,
-          mimeType: doc.mime_type,
-          sizeBytes: Number(doc.size_bytes || 0),
-          createdAt: doc.created_at,
-          archivedAt: doc.archived_at ?? null,
-          noteId: doc.note_id
-        });
+        docsByNoteId[nid].push(toDocumentResponse(doc));
       }
     }
 
@@ -1524,7 +1613,7 @@ export const db = {
     await touchEntityActivityRecords(row.entity_type, row.entity_id);
 
     const docsResult = await pool.query(
-      `SELECT id, entity_type, entity_id, filename, mime_type, size_bytes, created_at, archived_at, note_id
+      `SELECT id, entity_type, entity_id, item_kind, parent_id, filename, mime_type, size_bytes, created_at, archived_at, note_id
          FROM documents
         WHERE note_id = $1`,
       [id]
@@ -1538,17 +1627,7 @@ export const db = {
       author: row.author,
       createdAt: row.created_at,
       updatedAt: row.updated_at,
-      attachments: docsResult.rows.map((doc) => ({
-        id: doc.id,
-        entityType: doc.entity_type,
-        entityId: doc.entity_id,
-        filename: doc.filename,
-        mimeType: doc.mime_type,
-        sizeBytes: Number(doc.size_bytes || 0),
-        createdAt: doc.created_at,
-        archivedAt: doc.archived_at ?? null,
-        noteId: doc.note_id
-      }))
+      attachments: docsResult.rows.map((doc) => toDocumentResponse(doc))
     };
   },
 

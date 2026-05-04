@@ -1,10 +1,9 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { ProfileDocument, ProfileNote } from "../types/profile";
-import { apiDownload } from "../../utils/api";
 import { useAuth } from "../../auth/AuthContext";
-import { isDocumentViewable } from "../../utils/documentUtils";
 import { getApprovalStatusMeta } from "../utils/approvalStatus";
-import DocumentViewerModal from "../../components/DocumentViewerModal";
+import type { DocumentBreadcrumb } from "../hooks/useProfileDocuments";
+import DocumentExplorer from "./DocumentExplorer";
 import ThemeToggleButton from "../../components/ThemeToggleButton";
 import "./EntityCommissionProfilePanel.css";
 
@@ -73,12 +72,26 @@ interface EntityCommissionProfilePanelProps {
   
   // Documents
   documents?: ProfileDocument[];
+  visibleDocuments?: ProfileDocument[];
   documentsLoading?: boolean;
   documentsUploading?: boolean;
   onUploadDocument?: (file: File) => Promise<void> | void;
+  onUploadDocuments?: (files: File[]) => Promise<void> | void;
+  onCreateFolder?: (name: string) => Promise<void> | void;
+  onRenameDocument?: (documentId: number, filename: string) => Promise<boolean | void> | boolean | void;
   onDeleteDocument?: (documentId: number) => Promise<boolean | void> | boolean | void;
   onArchiveDocument?: (documentId: number) => Promise<boolean | void> | boolean | void;
   onUnarchiveDocument?: (documentId: number) => Promise<boolean | void> | boolean | void;
+  onMoveDocument?: (documentId: number, parentId: number | null) => Promise<boolean | void> | boolean | void;
+  currentDocumentFolderId?: number | null;
+  documentBreadcrumbs?: DocumentBreadcrumb[];
+  documentFolderOptions?: DocumentBreadcrumb[];
+  onOpenDocumentFolder?: (folderId: number) => void;
+  onGoToDocumentFolder?: (folderId: number | null) => void;
+  onGoBackDocumentFolder?: () => void;
+  canMoveDocumentTo?: (documentId: number, parentId: number | null) => boolean;
+  getDocumentPath?: (documentId: number) => string;
+  getFolderItemCount?: (folderId: number) => number;
   archivedDocuments?: ProfileDocument[];
   documentDownloadBaseUrl?: string;
   
@@ -419,13 +432,26 @@ const EntityCommissionProfilePanel: React.FC<EntityCommissionProfilePanelProps> 
   onClose,
   onUpdateEntity,
   onUpdateCommission,
-  documents,
+  visibleDocuments = [],
   documentsLoading = false,
   documentsUploading = false,
   onUploadDocument,
+  onUploadDocuments,
+  onCreateFolder,
+  onRenameDocument,
   onDeleteDocument,
   onArchiveDocument,
   onUnarchiveDocument,
+  onMoveDocument,
+  currentDocumentFolderId = null,
+  documentBreadcrumbs = [{ id: null, label: "Kořen" }],
+  documentFolderOptions = [{ id: null, label: "Kořen" }],
+  onOpenDocumentFolder,
+  onGoToDocumentFolder,
+  onGoBackDocumentFolder,
+  canMoveDocumentTo,
+  getDocumentPath,
+  getFolderItemCount,
   archivedDocuments = [],
   documentDownloadBaseUrl,
   notes,
@@ -437,12 +463,9 @@ const EntityCommissionProfilePanel: React.FC<EntityCommissionProfilePanelProps> 
 }) => {
   const { user } = useAuth();
   const panelRef = useRef<HTMLDivElement>(null);
-  const fileInputRef = useRef<HTMLInputElement>(null);
   const [newNote, setNewNote] = useState("");
   const [editingNote, setEditingNote] = useState<ProfileNote | null>(null);
   const [noteSubmitting, setNoteSubmitting] = useState(false);
-  const [showArchivedDocs, setShowArchivedDocs] = useState(false);
-  const [viewingDocument, setViewingDocument] = useState<{ id: number; filename: string } | null>(null);
 
   // Entity type labels
   const entityTypeLabels = {
@@ -471,40 +494,6 @@ const EntityCommissionProfilePanel: React.FC<EntityCommissionProfilePanelProps> 
       onUpdateCommission(commission.id, { [key]: value });
     }
   }, [commission, onUpdateCommission]);
-
-  const handleFileChange = useCallback(
-    (event: React.ChangeEvent<HTMLInputElement>) => {
-      if (!onUploadDocument) return;
-      const file = event.target.files?.[0];
-      if (file) {
-        onUploadDocument(file);
-      }
-      if (fileInputRef.current) {
-        fileInputRef.current.value = "";
-      }
-    },
-    [onUploadDocument]
-  );
-
-  const handleDeleteDocument = useCallback(
-    (documentId: number, filename: string) => {
-      if (!onDeleteDocument) return;
-      const confirmed = window.confirm(`Opravdu chcete odstranit dokument "${filename}"?`);
-      if (!confirmed) return;
-      onDeleteDocument(documentId);
-    },
-    [onDeleteDocument]
-  );
-
-  const handleArchiveDocument = useCallback(
-    (documentId: number, filename: string) => {
-      if (!onArchiveDocument) return;
-      const confirmed = window.confirm(`Opravdu chcete archivovat dokument "${filename}"?`);
-      if (!confirmed) return;
-      onArchiveDocument(documentId);
-    },
-    [onArchiveDocument]
-  );
 
   const handleStartNoteEdit = useCallback((note: ProfileNote) => {
     if (note.author !== user?.username) {
@@ -584,7 +573,7 @@ const EntityCommissionProfilePanel: React.FC<EntityCommissionProfilePanelProps> 
   }
 
   const showDocumentsSection = Boolean(
-    onUploadDocument || onDeleteDocument || onArchiveDocument || documentsLoading || (documents && documents.length > 0) || archivedDocuments.length > 0
+    onUploadDocument || onUploadDocuments || onCreateFolder || onDeleteDocument || onArchiveDocument || documentsLoading || visibleDocuments.length > 0 || archivedDocuments.length > 0
   );
 
   return (
@@ -766,138 +755,30 @@ const EntityCommissionProfilePanel: React.FC<EntityCommissionProfilePanelProps> 
 
             {/* Documents Section */}
             {showDocumentsSection && (
-              <section className="ec-documents-section">
-                <div className="ec-documents-header">
-                  <h3 className="ec-section-title">Dokumenty</h3>
-                  {onUploadDocument && (
-                    <label className="ec-upload-btn">
-                      <input
-                        ref={fileInputRef}
-                        type="file"
-                        onChange={handleFileChange}
-                        disabled={documentsUploading}
-                      />
-                      <span>{documentsUploading ? "Nahrávám..." : "+ Přidat"}</span>
-                    </label>
-                  )}
-                </div>
-
-                {documentsLoading ? (
-                  <p className="ec-empty-text">Načítám dokumenty…</p>
-                ) : documents && documents.length > 0 ? (
-                  <ul className="ec-documents-list">
-                    {documents.map((doc) => {
-                      return (
-                        <li key={doc.id} className="ec-document-item">
-                          <div className="ec-document-info">
-                            <span className="ec-document-name">{doc.filename}</span>
-                            <span className="ec-document-meta">
-                              {formatFileSize(doc.sizeBytes)} · {formatDate(doc.createdAt)}
-                            </span>
-                          </div>
-                          <div className="ec-document-actions">
-                            {documentDownloadBaseUrl && isDocumentViewable(doc.filename) && (
-                              <button
-                                type="button"
-                                className="ec-doc-action"
-                                onClick={() => setViewingDocument({ id: doc.id, filename: doc.filename })}
-                              >
-                                Zobrazit
-                              </button>
-                            )}
-                            {documentDownloadBaseUrl && (
-                              <button
-                                type="button"
-                                className="ec-doc-action"
-                                onClick={() => apiDownload(`/documents/${doc.id}/download`, doc.filename)}
-                              >
-                                Stáhnout
-                              </button>
-                            )}
-                            {onArchiveDocument && (
-                              <button
-                                type="button"
-                                className="ec-doc-action archive"
-                                onClick={() => handleArchiveDocument(doc.id, doc.filename)}
-                              >
-                                Archivovat
-                              </button>
-                            )}
-                            {onDeleteDocument && (
-                              <button
-                                type="button"
-                                className="ec-doc-action danger"
-                                onClick={() => handleDeleteDocument(doc.id, doc.filename)}
-                              >
-                                Odstranit
-                              </button>
-                            )}
-                          </div>
-                        </li>
-                      );
-                    })}
-                  </ul>
-                ) : (
-                  <p className="ec-empty-text">Žádné dokumenty.</p>
-                )}
-
-                {archivedDocuments.length > 0 && (
-                  <div className="ec-documents-archived">
-                    <button
-                      type="button"
-                      className="ec-documents-archived-toggle"
-                      onClick={() => setShowArchivedDocs((v) => !v)}
-                    >
-                      {showArchivedDocs ? "▾" : "▸"} Archivované dokumenty ({archivedDocuments.length})
-                    </button>
-                    {showArchivedDocs && (
-                      <ul className="ec-documents-list ec-documents-list--archived">
-                        {archivedDocuments.map((doc) => {
-                          return (
-                            <li key={doc.id} className="ec-document-item ec-document-item--archived">
-                              <div className="ec-document-info">
-                                <span className="ec-document-name">{doc.filename}</span>
-                                <span className="ec-document-meta">
-                                  {formatFileSize(doc.sizeBytes)} · archivováno {formatDate(doc.archivedAt ?? doc.createdAt)}
-                                </span>
-                              </div>
-                              <div className="ec-document-actions">
-                                {documentDownloadBaseUrl && isDocumentViewable(doc.filename) && (
-                                  <button
-                                    type="button"
-                                    className="ec-doc-action"
-                                    onClick={() => setViewingDocument({ id: doc.id, filename: doc.filename })}
-                                  >
-                                    Zobrazit
-                                  </button>
-                                )}
-                                {documentDownloadBaseUrl && (
-                                  <button
-                                    type="button"
-                                    className="ec-doc-action"
-                                    onClick={() => apiDownload(`/documents/${doc.id}/download`, doc.filename)}
-                                  >
-                                    Stáhnout
-                                  </button>
-                                )}
-                                {onUnarchiveDocument && (
-                                  <button
-                                    type="button"
-                                    className="ec-doc-action unarchive"
-                                    onClick={() => onUnarchiveDocument(doc.id)}
-                                  >
-                                    Obnovit
-                                  </button>
-                                )}
-                              </div>
-                            </li>
-                          );
-                        })}
-                      </ul>
-                    )}
-                  </div>
-                )}
-              </section>
+              <DocumentExplorer
+                items={visibleDocuments}
+                archivedItems={archivedDocuments}
+                breadcrumbs={documentBreadcrumbs}
+                currentFolderId={currentDocumentFolderId}
+                folderOptions={documentFolderOptions}
+                isLoading={documentsLoading}
+                isUploading={documentsUploading}
+                downloadBaseUrl={documentDownloadBaseUrl}
+                onUploadDocument={onUploadDocument}
+                onUploadDocuments={onUploadDocuments}
+                onCreateFolder={onCreateFolder}
+                onRenameDocument={onRenameDocument}
+                onDeleteDocument={onDeleteDocument}
+                onArchiveDocument={onArchiveDocument}
+                onUnarchiveDocument={onUnarchiveDocument}
+                onMoveDocument={onMoveDocument}
+                onOpenFolder={onOpenDocumentFolder ?? (() => undefined)}
+                onGoToFolder={onGoToDocumentFolder ?? (() => undefined)}
+                onGoBack={onGoBackDocumentFolder ?? (() => undefined)}
+                canMoveDocumentTo={canMoveDocumentTo ?? (() => false)}
+                getDocumentPath={getDocumentPath ?? (() => "")}
+                getFolderItemCount={getFolderItemCount ?? (() => 0)}
+              />
             )}
           </div>
 
@@ -982,34 +863,9 @@ const EntityCommissionProfilePanel: React.FC<EntityCommissionProfilePanelProps> 
         </div>
       </div>
 
-      {viewingDocument && (
-        <DocumentViewerModal
-          documentId={viewingDocument.id}
-          filename={viewingDocument.filename}
-          onClose={() => setViewingDocument(null)}
-        />
-      )}
     </div>
   );
 };
-
-// =============================================================================
-// UTILITIES
-// =============================================================================
-
-function formatFileSize(bytes?: number) {
-  if (!bytes || Number.isNaN(bytes)) return "0 B";
-  const thresh = 1024;
-  if (Math.abs(bytes) < thresh) return `${bytes} B`;
-  const units = ["KB", "MB", "GB", "TB"];
-  let u = -1;
-  let value = bytes;
-  do {
-    value /= thresh;
-    u += 1;
-  } while (Math.abs(value) >= thresh && u < units.length - 1);
-  return `${value.toFixed(1)} ${units[u]}`;
-}
 
 function formatDate(value?: string | null) {
   if (!value) return "";

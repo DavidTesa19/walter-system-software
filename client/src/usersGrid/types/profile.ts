@@ -23,11 +23,14 @@ export interface ProfileDocument {
   id: number;
   entityType: "clients" | "partners" | "tipers";
   entityId: number;
+  itemKind: "file" | "folder";
+  parentId: number | null;
   filename: string;
   mimeType: string;
   sizeBytes: number;
   createdAt: string;
   archivedAt?: string | null;
+  noteId?: number | null;
 }
 
 export interface ProfileNote {

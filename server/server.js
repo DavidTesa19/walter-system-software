@@ -132,6 +132,34 @@ const sanitizeFilename = (value) => {
   return safe.length > 180 ? safe.slice(-180) : safe;
 };
 
+const DIRECTORY_MIME_TYPE = "inode/directory";
+
+const getDocumentItemKind = (doc) => doc?.itemKind ?? (doc?.mimeType === DIRECTORY_MIME_TYPE ? "folder" : "file");
+
+const normalizeDocumentParentId = (value) => {
+  if (value === null || value === undefined || value === "") {
+    return null;
+  }
+
+  const parsed = Number(value);
+  return Number.isInteger(parsed) && parsed > 0 ? parsed : null;
+};
+
+const parseDocumentParentId = (value) => {
+  if (value === null || value === undefined || value === "") {
+    return { parentId: null };
+  }
+
+  const parsed = Number(value);
+  if (!Number.isInteger(parsed) || parsed <= 0) {
+    return { error: "Invalid parent folder id" };
+  }
+
+  return { parentId: parsed };
+};
+
+const isFolderDocument = (doc) => getDocumentItemKind(doc) === "folder";
+
 const stripDocumentData = (doc) => {
   if (!doc) {
     return null;
@@ -141,6 +169,8 @@ const stripDocumentData = (doc) => {
     id: doc.id,
     entityType: doc.entityType,
     entityId: doc.entityId,
+    itemKind: getDocumentItemKind(doc),
+    parentId: normalizeDocumentParentId(doc.parentId),
     filename: doc.filename,
     mimeType: doc.mimeType,
     sizeBytes: Number(doc.sizeBytes ?? 0),
@@ -166,14 +196,71 @@ const findDocumentInStore = (store, id) => {
   return store.documents.find((doc) => Number(doc.id) === id) ?? null;
 };
 
+const findDocumentChildrenInStore = (store, parentId) => {
+  ensureDocumentsCollection(store);
+  const normalizedParentId = normalizeDocumentParentId(parentId);
+  return store.documents.filter((doc) => normalizeDocumentParentId(doc.parentId) === normalizedParentId);
+};
+
+const collectDocumentDescendantIds = (store, rootId) => {
+  const pending = [Number(rootId)];
+  const visited = new Set();
+
+  while (pending.length > 0) {
+    const currentId = pending.pop();
+    if (!currentId || visited.has(currentId)) {
+      continue;
+    }
+
+    visited.add(currentId);
+    const children = findDocumentChildrenInStore(store, currentId);
+    for (const child of children) {
+      pending.push(Number(child.id));
+    }
+  }
+
+  return visited;
+};
+
 const removeDocumentFromStore = (store, id) => {
   ensureDocumentsCollection(store);
-  const idx = store.documents.findIndex((doc) => Number(doc.id) === id);
-  if (idx === -1) {
+  const root = findDocumentInStore(store, id);
+  if (!root) {
     return null;
   }
-  const [removed] = store.documents.splice(idx, 1);
-  return removed ?? null;
+
+  const idsToRemove = collectDocumentDescendantIds(store, id);
+  store.documents = store.documents.filter((doc) => !idsToRemove.has(Number(doc.id)));
+  return root;
+};
+
+const isDocumentDescendantInStore = (store, ancestorId, descendantId) => {
+  return collectDocumentDescendantIds(store, ancestorId).has(Number(descendantId));
+};
+
+const validateDocumentParentInStore = (store, entity, entityId, parentId, movingDocumentId = null) => {
+  if (parentId === null) {
+    return { ok: true, parent: null };
+  }
+
+  const parent = findDocumentInStore(store, parentId);
+  if (!parent) {
+    return { ok: false, status: 404, message: "Parent folder not found" };
+  }
+
+  if (parent.entityType !== entity || Number(parent.entityId) !== Number(entityId)) {
+    return { ok: false, status: 400, message: "Parent folder belongs to a different record" };
+  }
+
+  if (!isFolderDocument(parent)) {
+    return { ok: false, status: 400, message: "Parent item must be a folder" };
+  }
+
+  if (movingDocumentId && (Number(parent.id) === Number(movingDocumentId) || isDocumentDescendantInStore(store, movingDocumentId, parent.id))) {
+    return { ok: false, status: 400, message: "Cannot move a folder into itself or one of its descendants" };
+  }
+
+  return { ok: true, parent };
 };
 
 const touchStoreRecordTimestamp = (record, timestamp) => {
@@ -1773,7 +1860,15 @@ app.get("/:entity/:id/documents", authenticateToken, (req, res) => {
     const docs = store.documents
       .filter((doc) => doc.entityType === entity && Number(doc.entityId) === entityId)
       .filter((doc) => includeArchived || !doc.archivedAt)
-      .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
+      .sort((left, right) => {
+        const leftKind = getDocumentItemKind(left);
+        const rightKind = getDocumentItemKind(right);
+        if (leftKind !== rightKind) {
+          return leftKind === "folder" ? -1 : 1;
+        }
+
+        return String(left.filename || "").localeCompare(String(right.filename || ""), 'cs', { sensitivity: 'base' });
+      })
       .map((doc) => stripDocumentData(doc));
     return res.json(docs);
   } catch (error) {
@@ -1804,10 +1899,22 @@ app.post("/:entity/:id/documents", authenticateToken, upload.single("file"), (re
       return res.status(status).json({ error: message });
     }
 
+    const { parentId, error: parentError } = parseDocumentParentId(req.body.parentId);
+    if (parentError) {
+      return res.status(400).json({ error: parentError });
+    }
+
+    const parentValidation = validateDocumentParentInStore(store, entity, entityId, parentId);
+    if (!parentValidation.ok) {
+      return res.status(parentValidation.status).json({ error: parentValidation.message });
+    }
+
     const entry = {
       id: nextDocumentId(store),
       entityType: entity,
       entityId,
+      itemKind: "file",
+      parentId,
       filename: sanitizeFilename(req.file.originalname),
       mimeType: req.file.mimetype || "application/octet-stream",
       sizeBytes: req.file.size,
@@ -1829,6 +1936,110 @@ app.post("/:entity/:id/documents", authenticateToken, upload.single("file"), (re
   } catch (error) {
     console.error(`Error uploading document for ${entity}:`, error);
     res.status(500).json({ error: "Failed to upload document" });
+  }
+});
+
+app.post("/:entity/:id/document-folders", authenticateToken, (req, res) => {
+  const entity = req.params.entity;
+  const entityId = Number(req.params.id);
+
+  if (!isDocumentEntity(entity)) {
+    return respondUnsupportedEntity(res);
+  }
+
+  if (Number.isNaN(entityId)) {
+    return res.status(400).json({ error: "Invalid entity id" });
+  }
+
+  const folderName = sanitizeFilename(req.body?.name);
+  const { parentId, error: parentError } = parseDocumentParentId(req.body?.parentId);
+  if (parentError) {
+    return res.status(400).json({ error: parentError });
+  }
+
+  try {
+    const { ok, status, message, store } = ensureParentRecord(entity, entityId);
+    if (!ok) {
+      return res.status(status).json({ error: message });
+    }
+
+    const parentValidation = validateDocumentParentInStore(store, entity, entityId, parentId);
+    if (!parentValidation.ok) {
+      return res.status(parentValidation.status).json({ error: parentValidation.message });
+    }
+
+    const entry = {
+      id: nextDocumentId(store),
+      entityType: entity,
+      entityId,
+      itemKind: "folder",
+      parentId,
+      filename: folderName,
+      mimeType: DIRECTORY_MIME_TYPE,
+      sizeBytes: 0,
+      createdAt: new Date().toISOString(),
+      data: "",
+      noteId: null,
+      archivedAt: null
+    };
+
+    ensureDocumentsCollection(store);
+    store.documents.push(entry);
+    touchEntityParentsInStore(store, entity, entityId, entry.createdAt);
+
+    if (!writeDb(store)) {
+      return res.status(500).json({ error: "Failed to persist folder" });
+    }
+
+    return res.status(201).json(stripDocumentData(entry));
+  } catch (error) {
+    console.error(`Error creating document folder for ${entity}:`, error);
+    res.status(500).json({ error: "Failed to create folder" });
+  }
+});
+
+app.patch("/documents/:documentId", authenticateToken, (req, res) => {
+  const documentId = Number(req.params.documentId);
+  if (Number.isNaN(documentId)) {
+    return res.status(400).json({ error: "Invalid document id" });
+  }
+
+  try {
+    const store = readDb();
+    const doc = findDocumentInStore(store, documentId);
+    if (!doc) {
+      return res.status(404).json({ error: "Document not found" });
+    }
+
+    const hasParentUpdate = Object.prototype.hasOwnProperty.call(req.body ?? {}, 'parentId');
+    if (hasParentUpdate) {
+      const { parentId, error: parentError } = parseDocumentParentId(req.body.parentId);
+      if (parentError) {
+        return res.status(400).json({ error: parentError });
+      }
+
+      const parentValidation = validateDocumentParentInStore(store, doc.entityType, doc.entityId, parentId, documentId);
+      if (!parentValidation.ok) {
+        return res.status(parentValidation.status).json({ error: parentValidation.message });
+      }
+
+      doc.parentId = parentId;
+    }
+
+    if (typeof req.body?.filename === 'string' && req.body.filename.trim()) {
+      doc.filename = sanitizeFilename(req.body.filename);
+    }
+
+    touchEntityParentsInStore(store, doc.entityType, doc.entityId);
+
+    if (!writeDb(store)) {
+      return res.status(500).json({ error: "Failed to persist document update" });
+    }
+
+    return res.json(stripDocumentData(doc));
+  } catch (error) {
+    console.error("Error updating document:", error);
+    res.status(500).json({ error: "Failed to update document" });
   }
 });
 
@@ -1933,6 +2144,10 @@ app.get("/documents/:documentId/download", authenticateToken, (req, res) => {
       return res.status(404).json({ error: "Document not found" });
     }
 
+    if (isFolderDocument(doc)) {
+      return res.status(400).json({ error: "Folders cannot be downloaded" });
+    }
+
     const buffer = Buffer.from(doc.data || "", "base64");
     res.setHeader("Content-Type", doc.mimeType || "application/octet-stream");
     res.setHeader("Content-Length", buffer.length);
@@ -1963,6 +2178,21 @@ app.get("/documents/:documentId/public-token", authenticateToken, (req, res) => 
     return res.status(400).json({ error: "Invalid document id" });
   }
 
+  try {
+    const store = readDb();
+    const doc = findDocumentInStore(store, documentId);
+    if (!doc) {
+      return res.status(404).json({ error: "Document not found" });
+    }
+
+    if (isFolderDocument(doc)) {
+      return res.status(400).json({ error: "Folders cannot be viewed" });
+    }
+  } catch (error) {
+    console.error("Error preparing public token:", error);
+    return res.status(500).json({ error: "Failed to prepare document token" });
+  }
+
   const token = crypto.randomBytes(32).toString('hex');
   publicDocumentTokens.set(token, {
     documentId,
@@ -1985,6 +2215,10 @@ app.get("/documents/public/:token", (req, res) => {
     const doc = findDocumentInStore(store, info.documentId);
     if (!doc) {
       return res.status(404).send("Document not found");
+    }
+
+    if (isFolderDocument(doc)) {
+      return res.status(400).send("Folders cannot be viewed");
     }
 
     const buffer = Buffer.from(doc.data || "", "base64");
