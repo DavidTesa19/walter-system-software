@@ -4,6 +4,30 @@ import dotenv from 'dotenv';
 dotenv.config();
 const { Pool } = pkg;
 
+const FIELD_OPTION_SCOPES = new Set(['standard', 'project']);
+const REMOVED_FIELD_OPTION_LABEL = 'Odstraněno';
+const FIELD_OPTION_REPLACEMENT_TABLES = {
+  standard: [
+    'partners',
+    'clients',
+    'tipers',
+    'partner_entities',
+    'partner_commissions',
+    'client_entities',
+    'client_commissions',
+    'tiper_entities',
+    'tiper_commissions',
+  ],
+  project: [
+    'project_partner_entities',
+    'project_partner_commissions',
+    'project_client_entities',
+    'project_client_commissions',
+    'project_tiper_entities',
+    'project_tiper_commissions',
+  ],
+};
+
 // Database connection configuration
 // Uses PostgreSQL in production (Railway), JSON file in development
 const USE_POSTGRES = process.env.DATABASE_URL ? true : false;
@@ -341,6 +365,21 @@ export async function initDatabase() {
       )
     `);
 
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS field_options (
+        id SERIAL PRIMARY KEY,
+        scope VARCHAR(20) NOT NULL CHECK (scope IN ('standard', 'project')),
+        value VARCHAR(255) NOT NULL,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+      )
+    `);
+
+    await client.query(`
+      CREATE UNIQUE INDEX IF NOT EXISTS idx_field_options_scope_value_lower
+        ON field_options (scope, LOWER(value))
+    `);
+
     // Create calendar events table
     await client.query(`
       CREATE TABLE IF NOT EXISTS calendar_events (
@@ -383,6 +422,7 @@ export async function initDatabase() {
       "ALTER TABLE tipers ADD COLUMN IF NOT EXISTS status VARCHAR(50) DEFAULT 'pending'",
       "ALTER TABLE tipers ADD COLUMN IF NOT EXISTS stage VARCHAR(50) DEFAULT 'Not Started'",
       "ALTER TABLE color_palettes ADD COLUMN IF NOT EXISTS typography JSONB NOT NULL DEFAULT '{}'::jsonb",
+      "ALTER TABLE field_options ADD COLUMN IF NOT EXISTS updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP",
       "ALTER TABLE future_functions ADD COLUMN IF NOT EXISTS priority VARCHAR(50)",
       "ALTER TABLE future_functions ADD COLUMN IF NOT EXISTS complexity VARCHAR(50)",
       "ALTER TABLE future_functions ADD COLUMN IF NOT EXISTS phase VARCHAR(120)",
@@ -1100,6 +1140,38 @@ async function touchEntityActivityRecords(entityType, entityId) {
   );
 }
 
+const normalizeFieldOptionScope = (scope) => (
+  FIELD_OPTION_SCOPES.has(scope) ? scope : null
+);
+
+const normalizeFieldOptionValue = (value) => {
+  if (typeof value !== 'string') {
+    return null;
+  }
+
+  const trimmed = value.trim();
+  return trimmed ? trimmed : null;
+};
+
+async function replaceDeletedFieldOptionReferences(client, scope, value) {
+  const normalizedScope = normalizeFieldOptionScope(scope);
+  const normalizedValue = normalizeFieldOptionValue(value);
+  if (!normalizedScope || !normalizedValue) {
+    return;
+  }
+
+  const tableNames = FIELD_OPTION_REPLACEMENT_TABLES[normalizedScope] ?? [];
+  for (const tableName of tableNames) {
+    await client.query(
+      `UPDATE ${tableName}
+          SET field = $1,
+              updated_at = CURRENT_TIMESTAMP
+        WHERE field = $2`,
+      [REMOVED_FIELD_OPTION_LABEL, normalizedValue]
+    );
+  }
+}
+
 // Generic database operations
 export const db = {
   // Execute raw query
@@ -1220,6 +1292,77 @@ export const db = {
       'SELECT * FROM color_palettes ORDER BY mode, id'
     );
     return result.rows;
+  },
+
+  async getFieldOptions(scope) {
+    if (!USE_POSTGRES) return null;
+
+    const normalizedScope = normalizeFieldOptionScope(scope);
+    if (!normalizedScope) {
+      throw new Error('Invalid field option scope');
+    }
+
+    const result = await pool.query(
+      `SELECT id, scope, value, created_at, updated_at
+         FROM field_options
+        WHERE scope = $1
+        ORDER BY created_at ASC, id ASC`,
+      [normalizedScope]
+    );
+    return result.rows;
+  },
+
+  async createFieldOption(scope, value) {
+    if (!USE_POSTGRES) return null;
+
+    const normalizedScope = normalizeFieldOptionScope(scope);
+    const normalizedValue = normalizeFieldOptionValue(value);
+    if (!normalizedScope || !normalizedValue) {
+      throw new Error('Invalid field option payload');
+    }
+
+    const result = await pool.query(
+      `INSERT INTO field_options (scope, value)
+       VALUES ($1, $2)
+       RETURNING id, scope, value, created_at, updated_at`,
+      [normalizedScope, normalizedValue]
+    );
+
+    return result.rows[0] ?? null;
+  },
+
+  async deleteFieldOption(id) {
+    if (!USE_POSTGRES) return null;
+
+    const client = await pool.connect();
+    try {
+      await client.query('BEGIN');
+
+      const { rows } = await client.query(
+        `SELECT id, scope, value, created_at, updated_at
+           FROM field_options
+          WHERE id = $1`,
+        [id]
+      );
+
+      if (rows.length === 0) {
+        await client.query('ROLLBACK');
+        return null;
+      }
+
+      const deletedOption = rows[0];
+
+      await client.query('DELETE FROM field_options WHERE id = $1', [id]);
+      await replaceDeletedFieldOptionReferences(client, deletedOption.scope, deletedOption.value);
+
+      await client.query('COMMIT');
+      return deletedOption;
+    } catch (error) {
+      await client.query('ROLLBACK');
+      throw error;
+    } finally {
+      client.release();
+    }
   },
 
   async createColorPalette({ name, mode, colors, typography, is_active }) {

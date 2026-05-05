@@ -11,6 +11,12 @@ import bcrypt from "bcryptjs";
 import jwt from "jsonwebtoken";
 import crypto from "crypto";
 import db, { initDatabase } from "./db.js";
+import {
+  hasDuplicateFieldOptionValue,
+  hasFixedFieldOptionValue,
+  normalizeFieldOptionScope,
+  normalizeFieldOptionValue,
+} from "./field-options.js";
 
 dotenv.config();
 
@@ -207,6 +213,47 @@ const optionalAuth = (req, res, next) => {
   } else {
     next();
   }
+};
+
+const canAccessFieldOptionScope = (user, scope) => {
+  const normalizedScope = normalizeFieldOptionScope(scope);
+  if (!normalizedScope || !user) {
+    return false;
+  }
+
+  const accessScope = normalizeAccessScope(user.accessScope ?? user.access_scope);
+  if (accessScope === 'all') {
+    return true;
+  }
+
+  return normalizedScope === 'standard'
+    ? accessScope === 'standard'
+    : accessScope === 'projects';
+};
+
+const requireFieldOptionScopeAccess = (req, res, scope, { write = false } = {}) => {
+  const normalizedScope = normalizeFieldOptionScope(scope);
+  if (!normalizedScope) {
+    res.status(400).json({ error: 'Invalid field option scope' });
+    return null;
+  }
+
+  if (!req.user) {
+    res.status(401).json({ error: 'Authentication required' });
+    return null;
+  }
+
+  if (write && req.user.role === 'viewer') {
+    res.status(403).json({ error: 'Viewer accounts cannot modify data' });
+    return null;
+  }
+
+  if (!canAccessFieldOptionScope(req.user, normalizedScope)) {
+    res.status(403).json({ error: 'Insufficient scope permissions' });
+    return null;
+  }
+
+  return normalizedScope;
 };
 
 [
@@ -1764,6 +1811,86 @@ app.delete("/api/conversations/:id", authenticateToken, (req, res) => {
   store.conversations.splice(index, 1);
   if (!writeDb(store)) return res.status(500).json({ error: "Failed to delete" });
   res.status(204).end();
+});
+
+app.get("/field-options", authenticateToken, async (req, res) => {
+  try {
+    const scope = requireFieldOptionScopeAccess(req, res, req.query.scope, { write: false });
+    if (!scope) {
+      return;
+    }
+
+    const options = await db.getFieldOptions(scope);
+    res.json(options ?? []);
+  } catch (error) {
+    console.error('Error fetching field options:', error);
+    res.status(500).json({ error: 'Failed to fetch field options' });
+  }
+});
+
+app.post("/field-options", authenticateToken, async (req, res) => {
+  try {
+    const scope = requireFieldOptionScopeAccess(req, res, req.body?.scope, { write: true });
+    if (!scope) {
+      return;
+    }
+
+    const value = normalizeFieldOptionValue(req.body?.value ?? req.body?.name);
+    if (!value) {
+      return res.status(400).json({ error: 'Field option value is required' });
+    }
+
+    const existingOptions = await db.getFieldOptions(scope);
+    if (hasFixedFieldOptionValue(scope, value) || hasDuplicateFieldOptionValue(existingOptions ?? [], value)) {
+      return res.status(409).json({ error: 'Field option already exists' });
+    }
+
+    const created = await db.createFieldOption(scope, value);
+    res.status(201).json(created);
+  } catch (error) {
+    if (error?.code === '23505') {
+      return res.status(409).json({ error: 'Field option already exists' });
+    }
+
+    console.error('Error creating field option:', error);
+    res.status(500).json({ error: 'Failed to create field option' });
+  }
+});
+
+app.delete("/field-options/:id", authenticateToken, async (req, res) => {
+  try {
+    const id = Number(req.params.id);
+    if (!Number.isInteger(id) || id <= 0) {
+      return res.status(400).json({ error: 'Invalid field option id' });
+    }
+
+    const check = await db.query(
+      `SELECT id, scope, value, created_at, updated_at
+         FROM field_options
+        WHERE id = $1`,
+      [id]
+    );
+
+    const fieldOption = check.rows[0];
+    if (!fieldOption) {
+      return res.status(404).json({ error: 'Field option not found' });
+    }
+
+    const scope = requireFieldOptionScopeAccess(req, res, fieldOption.scope, { write: true });
+    if (!scope) {
+      return;
+    }
+
+    const deleted = await db.deleteFieldOption(id);
+    if (!deleted) {
+      return res.status(404).json({ error: 'Field option not found' });
+    }
+
+    res.json(deleted);
+  } catch (error) {
+    console.error('Error deleting field option:', error);
+    res.status(500).json({ error: 'Failed to delete field option' });
+  }
 });
 
 // Color palette routes

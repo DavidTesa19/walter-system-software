@@ -11,6 +11,14 @@ import bcrypt from "bcryptjs";
 import jwt from "jsonwebtoken";
 import crypto from "crypto";
 import * as entityCommissionJson from "./entity-commission-json.js";
+import {
+  getFieldOptionReplacementTables,
+  hasDuplicateFieldOptionValue,
+  hasFixedFieldOptionValue,
+  normalizeFieldOptionScope,
+  normalizeFieldOptionValue,
+  REMOVED_FIELD_OPTION_LABEL,
+} from "./field-options.js";
 
 // Load environment variables
 dotenv.config();
@@ -1166,6 +1174,7 @@ if (!fs.existsSync(DATA_FILE)) {
           project_client_commissions: [],
           project_tiper_entities: [],
           project_tiper_commissions: [],
+          field_options: [],
           color_palettes: cloneDefaultPalettes()
         };
       fs.writeFileSync(DATA_FILE, JSON.stringify(defaultData, null, 2));
@@ -1238,6 +1247,9 @@ function readDb() {
     if (!Array.isArray(obj.project_tiper_commissions)) {
       obj.project_tiper_commissions = [];
     }
+    if (!Array.isArray(obj.field_options)) {
+      obj.field_options = [];
+    }
     if (!Array.isArray(obj.documents)) {
       obj.documents = [];
     }
@@ -1282,6 +1294,7 @@ function readDb() {
       project_client_commissions: [],
       project_tiper_entities: [],
       project_tiper_commissions: [],
+      field_options: [],
       // color_palettes: cloneDefaultPalettes() // No longer needed for global palettes
     };
   }
@@ -1438,6 +1451,78 @@ const optionalAuth = (req, res, next) => {
     }
     next();
   });
+};
+
+const ensureFieldOptionsCollection = (store) => {
+  if (!Array.isArray(store.field_options)) {
+    store.field_options = [];
+  }
+};
+
+const getNextFieldOptionId = (store) => {
+  ensureFieldOptionsCollection(store);
+  return store.field_options.reduce((maxId, item) => Math.max(maxId, Number(item.id) || 0), 0) + 1;
+};
+
+const canAccessFieldOptionScope = (user, scope) => {
+  const normalizedScope = normalizeFieldOptionScope(scope);
+  if (!normalizedScope || !user) {
+    return false;
+  }
+
+  const accessScope = normalizeAccessScope(user.accessScope ?? user.access_scope);
+  if (accessScope === 'all') {
+    return true;
+  }
+
+  return normalizedScope === 'standard'
+    ? accessScope === 'standard'
+    : accessScope === 'projects';
+};
+
+const requireFieldOptionScopeAccess = (req, res, scope, { write = false } = {}) => {
+  const normalizedScope = normalizeFieldOptionScope(scope);
+  if (!normalizedScope) {
+    res.status(400).json({ error: 'Invalid field option scope' });
+    return null;
+  }
+
+  if (!req.user) {
+    res.status(401).json({ error: 'Authentication required' });
+    return null;
+  }
+
+  if (write && req.user.role === 'viewer') {
+    res.status(403).json({ error: 'Viewer accounts cannot modify data' });
+    return null;
+  }
+
+  if (!canAccessFieldOptionScope(req.user, normalizedScope)) {
+    res.status(403).json({ error: 'Insufficient scope permissions' });
+    return null;
+  }
+
+  return normalizedScope;
+};
+
+const replaceDeletedFieldOptionReferencesInStore = (store, scope, value, actorUserId) => {
+  const normalizedScope = normalizeFieldOptionScope(scope);
+  const normalizedValue = normalizeFieldOptionValue(value);
+  if (!normalizedScope || !normalizedValue) {
+    return;
+  }
+
+  for (const tableName of getFieldOptionReplacementTables(normalizedScope)) {
+    if (!Array.isArray(store[tableName])) {
+      continue;
+    }
+
+    store[tableName] = store[tableName].map((record) => (
+      record?.field === normalizedValue
+        ? updateAuditedJsonRecord(record, { field: REMOVED_FIELD_OPTION_LABEL }, actorUserId)
+        : record
+    ));
+  }
 };
 
 [
@@ -1678,6 +1763,95 @@ app.post("/partners/:id/archive", authenticateToken, (req, res) => {
   db.partners[idx] = updateAuditedJsonRecord(db.partners[idx], { status: "archived" }, getRequestActorUserId(req));
   if (!writeDb(db)) return res.status(500).json({ error: "Failed to persist" });
   res.json(db.partners[idx]);
+});
+
+app.get("/field-options", authenticateToken, (req, res) => {
+  const scope = requireFieldOptionScopeAccess(req, res, req.query.scope, { write: false });
+  if (!scope) {
+    return;
+  }
+
+  const store = readDb();
+  ensureFieldOptionsCollection(store);
+
+  const options = store.field_options
+    .filter((entry) => entry.scope === scope)
+    .sort((left, right) => {
+      const leftCreatedAt = left.created_at ?? '';
+      const rightCreatedAt = right.created_at ?? '';
+      if (leftCreatedAt !== rightCreatedAt) {
+        return leftCreatedAt.localeCompare(rightCreatedAt);
+      }
+      return Number(left.id) - Number(right.id);
+    });
+
+  res.json(options);
+});
+
+app.post("/field-options", authenticateToken, (req, res) => {
+  const scope = requireFieldOptionScopeAccess(req, res, req.body?.scope, { write: true });
+  if (!scope) {
+    return;
+  }
+
+  const value = normalizeFieldOptionValue(req.body?.value ?? req.body?.name);
+  if (!value) {
+    return res.status(400).json({ error: 'Field option value is required' });
+  }
+
+  const store = readDb();
+  ensureFieldOptionsCollection(store);
+
+  const existingOptions = store.field_options.filter((entry) => entry.scope === scope);
+  if (hasFixedFieldOptionValue(scope, value) || hasDuplicateFieldOptionValue(existingOptions, value)) {
+    return res.status(409).json({ error: 'Field option already exists' });
+  }
+
+  const newFieldOption = createAuditedJsonRecord(
+    {
+      id: getNextFieldOptionId(store),
+      scope,
+      value,
+    },
+    getRequestActorUserId(req)
+  );
+
+  store.field_options.push(newFieldOption);
+
+  if (!writeDb(store)) {
+    return res.status(500).json({ error: 'Failed to persist field option' });
+  }
+
+  res.status(201).json(newFieldOption);
+});
+
+app.delete("/field-options/:id", authenticateToken, (req, res) => {
+  const id = Number(req.params.id);
+  if (!Number.isInteger(id) || id <= 0) {
+    return res.status(400).json({ error: 'Invalid field option id' });
+  }
+
+  const store = readDb();
+  ensureFieldOptionsCollection(store);
+
+  const fieldOption = store.field_options.find((entry) => Number(entry.id) === id);
+  if (!fieldOption) {
+    return res.status(404).json({ error: 'Field option not found' });
+  }
+
+  const scope = requireFieldOptionScopeAccess(req, res, fieldOption.scope, { write: true });
+  if (!scope) {
+    return;
+  }
+
+  store.field_options = store.field_options.filter((entry) => Number(entry.id) !== id);
+  replaceDeletedFieldOptionReferencesInStore(store, scope, fieldOption.value, getRequestActorUserId(req));
+
+  if (!writeDb(store)) {
+    return res.status(500).json({ error: 'Failed to delete field option' });
+  }
+
+  res.json(fieldOption);
 });
 
 // Color palette routes for local JSON storage
