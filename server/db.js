@@ -10,6 +10,48 @@ const USE_POSTGRES = process.env.DATABASE_URL ? true : false;
 
 let pool = null;
 
+const ACTIVITY_ACTOR_TABLES = new Set([
+  'partners',
+  'clients',
+  'tipers',
+  'users',
+  'future_functions',
+  'partner_entities',
+  'partner_commissions',
+  'client_entities',
+  'client_commissions',
+  'tiper_entities',
+  'tiper_commissions',
+  'project_partner_entities',
+  'project_partner_commissions',
+  'project_client_entities',
+  'project_client_commissions',
+  'project_tiper_entities',
+  'project_tiper_commissions',
+]);
+
+const toActivityActorUserId = (value) => {
+  const parsed = Number(value);
+  return Number.isInteger(parsed) && parsed > 0 ? parsed : null;
+};
+
+const withActivityActorFields = (table, data, actorUserId, isCreate = false) => {
+  if (!ACTIVITY_ACTOR_TABLES.has(table)) {
+    return data;
+  }
+
+  const normalizedActorUserId = toActivityActorUserId(actorUserId);
+  if (!normalizedActorUserId) {
+    return data;
+  }
+
+  return {
+    ...data,
+    ...(isCreate && data.created_by_user_id == null ? { created_by_user_id: normalizedActorUserId } : {}),
+    updated_by_user_id: normalizedActorUserId,
+  };
+};
+
 if (USE_POSTGRES) {
   pool = new Pool({
     connectionString: process.env.DATABASE_URL,
@@ -764,6 +806,31 @@ export async function initDatabase() {
       )
     `);
 
+    const activityActorColumnTables = [
+      'partners',
+      'clients',
+      'tipers',
+      'users',
+      'future_functions',
+      'partner_entities',
+      'partner_commissions',
+      'client_entities',
+      'client_commissions',
+      'tiper_entities',
+      'tiper_commissions',
+      'project_partner_entities',
+      'project_partner_commissions',
+      'project_client_entities',
+      'project_client_commissions',
+      'project_tiper_entities',
+      'project_tiper_commissions',
+    ];
+
+    for (const tableName of activityActorColumnTables) {
+      await client.query(`ALTER TABLE ${tableName} ADD COLUMN IF NOT EXISTS created_by_user_id INTEGER`);
+      await client.query(`ALTER TABLE ${tableName} ADD COLUMN IF NOT EXISTS updated_by_user_id INTEGER`);
+    }
+
     await ensureDefaultPalettes(client);
     await ensureLegacyEntityCommissionMigration();
 
@@ -1072,12 +1139,14 @@ export const db = {
   },
 
   // Create new record (supports explicit id for undo-recreation)
-  async create(table, data) {
+  async create(table, data, actorUserId) {
     if (!USE_POSTGRES) return null;
+
+    const nextData = withActivityActorFields(table, data, actorUserId, true);
     
-    const hasExplicitId = data.id != null;
-    const fields = Object.keys(data).filter(k => (k !== 'id' || hasExplicitId) && k !== 'created_at' && k !== 'updated_at');
-    const values = fields.map(f => data[f]);
+    const hasExplicitId = nextData.id != null;
+    const fields = Object.keys(nextData).filter(k => (k !== 'id' || hasExplicitId) && k !== 'created_at' && k !== 'updated_at');
+    const values = fields.map(f => nextData[f]);
     const placeholders = fields.map((_, i) => `$${i + 1}`).join(', ');
     
     const query = `
@@ -1102,12 +1171,14 @@ export const db = {
   },
 
   // Update record
-  async update(table, id, data) {
+  async update(table, id, data, actorUserId) {
     if (!USE_POSTGRES) return null;
+
+    const nextData = withActivityActorFields(table, data, actorUserId);
     
     // Filter out id and PostgreSQL metadata fields
-    const fields = Object.keys(data).filter(k => k !== 'id' && k !== 'created_at' && k !== 'updated_at');
-    const values = fields.map(f => data[f]);
+    const fields = Object.keys(nextData).filter(k => k !== 'id' && k !== 'created_at' && k !== 'updated_at');
+    const values = fields.map(f => nextData[f]);
     const setClause = fields.map((f, i) => `"${f}" = $${i + 1}`).join(', ');
     
     const query = `
@@ -1692,34 +1763,61 @@ export const db = {
   },
 
   // Approve a pending record (change status to accepted)
-  async approve(table, id) {
+  async approve(table, id, actorUserId) {
     if (!USE_POSTGRES) return null;
+
+    const normalizedActorUserId = toActivityActorUserId(actorUserId);
+    const setClauses = ["status = 'accepted'", 'updated_at = CURRENT_TIMESTAMP'];
+    const params = [id];
+
+    if (ACTIVITY_ACTOR_TABLES.has(table) && normalizedActorUserId) {
+      setClauses.push('updated_by_user_id = $2');
+      params.push(normalizedActorUserId);
+    }
     
     const result = await pool.query(
-      `UPDATE ${table} SET status = 'accepted', updated_at = CURRENT_TIMESTAMP WHERE id = $1 RETURNING *`,
-      [id]
+      `UPDATE ${table} SET ${setClauses.join(', ')} WHERE id = $1 RETURNING *`,
+      params
     );
     return result.rows[0] || null;
   },
 
   // Archive a record (mark for removal)
-  async archive(table, id) {
+  async archive(table, id, actorUserId) {
     if (!USE_POSTGRES) return null;
 
+    const normalizedActorUserId = toActivityActorUserId(actorUserId);
+    const setClauses = ["status = 'archived'", 'updated_at = CURRENT_TIMESTAMP'];
+    const params = [id];
+
+    if (ACTIVITY_ACTOR_TABLES.has(table) && normalizedActorUserId) {
+      setClauses.push('updated_by_user_id = $2');
+      params.push(normalizedActorUserId);
+    }
+
     const result = await pool.query(
-      `UPDATE ${table} SET status = 'archived', updated_at = CURRENT_TIMESTAMP WHERE id = $1 RETURNING *`,
-      [id]
+      `UPDATE ${table} SET ${setClauses.join(', ')} WHERE id = $1 RETURNING *`,
+      params
     );
     return result.rows[0] || null;
   },
 
   // Restore a record from archive (back to accepted)
-  async restore(table, id) {
+  async restore(table, id, actorUserId) {
     if (!USE_POSTGRES) return null;
 
+    const normalizedActorUserId = toActivityActorUserId(actorUserId);
+    const setClauses = ["status = 'accepted'", 'updated_at = CURRENT_TIMESTAMP'];
+    const params = [id];
+
+    if (ACTIVITY_ACTOR_TABLES.has(table) && normalizedActorUserId) {
+      setClauses.push('updated_by_user_id = $2');
+      params.push(normalizedActorUserId);
+    }
+
     const result = await pool.query(
-      `UPDATE ${table} SET status = 'accepted', updated_at = CURRENT_TIMESTAMP WHERE id = $1 RETURNING *`,
-      [id]
+      `UPDATE ${table} SET ${setClauses.join(', ')} WHERE id = $1 RETURNING *`,
+      params
     );
     return result.rows[0] || null;
   },

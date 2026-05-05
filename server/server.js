@@ -1319,7 +1319,44 @@ const serializeManagedUser = (user) => ({
   ...toAuthUser(user),
   createdAt: user.createdAt ?? user.created_at ?? null,
   updatedAt: user.updatedAt ?? user.updated_at ?? null,
+  createdByUserId: user.createdByUserId ?? user.created_by_user_id ?? null,
+  updatedByUserId: user.updatedByUserId ?? user.updated_by_user_id ?? null,
 });
+
+const toActivityActorUserId = (value) => {
+  const parsed = Number(value);
+  return Number.isInteger(parsed) && parsed > 0 ? parsed : null;
+};
+
+const getRequestActorUserId = (req) => toActivityActorUserId(req?.user?.id);
+
+const createAuditedJsonRecord = (data, actorUserId, explicitCreatedAt) => {
+  const now = new Date().toISOString();
+  const normalizedActorUserId = toActivityActorUserId(actorUserId);
+  return {
+    ...data,
+    created_at: typeof explicitCreatedAt === 'string' && explicitCreatedAt ? explicitCreatedAt : now,
+    updated_at: now,
+    ...(normalizedActorUserId ? {
+      created_by_user_id: normalizedActorUserId,
+      updated_by_user_id: normalizedActorUserId,
+    } : {}),
+  };
+};
+
+const updateAuditedJsonRecord = (existing, updates, actorUserId) => {
+  const normalizedActorUserId = toActivityActorUserId(actorUserId);
+  return {
+    ...existing,
+    ...updates,
+    created_at: existing?.created_at ?? new Date().toISOString(),
+    updated_at: new Date().toISOString(),
+    ...(normalizedActorUserId ? {
+      created_by_user_id: existing?.created_by_user_id ?? normalizedActorUserId,
+      updated_by_user_id: normalizedActorUserId,
+    } : {}),
+  };
+};
 
 // Middleware to authenticate token
 const authenticateToken = (req, res, next) => {
@@ -1466,8 +1503,7 @@ app.post("/auth/register", authenticateToken, requireRole('admin'), async (req, 
     password_hash,
     role: role || 'employee',
     accessScope: normalizeAccessScope(accessScope),
-    created_at: new Date().toISOString(),
-    updated_at: new Date().toISOString()
+    ...createAuditedJsonRecord({}, getRequestActorUserId(req))
   };
 
   db.users.push(newUser);
@@ -1497,7 +1533,11 @@ app.post("/users", authenticateToken, requireRole('admin'), (req, res) => {
   const maxId = db.users.reduce((m, u) => Math.max(m, Number(u.id) || 0), 0);
   const nextId = maxId + 1;
   const now = new Date().toISOString();
-  const newUser = { id: nextId, ...user, accessScope: normalizeAccessScope(user.accessScope), created_at: now, updated_at: now };
+  const newUser = createAuditedJsonRecord(
+    { id: nextId, ...user, accessScope: normalizeAccessScope(user.accessScope) },
+    getRequestActorUserId(req),
+    now
+  );
   db.users.push(newUser);
   if (!writeDb(db)) return res.status(500).json({ error: "Failed to persist" });
   res.status(201).json(serializeManagedUser(newUser));
@@ -1511,13 +1551,15 @@ app.put("/users/:id", authenticateToken, requireRole('admin'), (req, res) => {
   if (db.users[idx].role === 'admin' && (req.body.role !== 'admin' || req.body.accessScope !== db.users[idx].accessScope)) {
     return res.status(403).json({ error: "Cannot change role or access scope of an admin user" });
   }
-  const updated = {
-    ...db.users[idx],
-    ...req.body,
-    id,
-    accessScope: normalizeAccessScope(req.body?.accessScope),
-    updated_at: new Date().toISOString()
-  };
+  const updated = updateAuditedJsonRecord(
+    db.users[idx],
+    {
+      ...req.body,
+      id,
+      accessScope: normalizeAccessScope(req.body?.accessScope),
+    },
+    getRequestActorUserId(req)
+  );
   db.users[idx] = updated;
   if (!writeDb(db)) return res.status(500).json({ error: "Failed to persist" });
   res.json(serializeManagedUser(updated));
@@ -1536,13 +1578,15 @@ app.patch("/users/:id", authenticateToken, requireRole('admin'), (req, res) => {
       return res.status(403).json({ error: "Cannot change access scope of an admin user" });
     }
   }
-  db.users[idx] = {
-    ...db.users[idx],
-    ...req.body,
-    id,
-    accessScope: normalizeAccessScope(req.body?.accessScope ?? db.users[idx]?.accessScope),
-    updated_at: new Date().toISOString(),
-  };
+  db.users[idx] = updateAuditedJsonRecord(
+    db.users[idx],
+    {
+      ...req.body,
+      id,
+      accessScope: normalizeAccessScope(req.body?.accessScope ?? db.users[idx]?.accessScope),
+    },
+    getRequestActorUserId(req)
+  );
   if (!writeDb(db)) return res.status(500).json({ error: "Failed to persist" });
   res.json(serializeManagedUser(db.users[idx]));
 });
@@ -1574,7 +1618,7 @@ app.post("/partners", authenticateToken, (req, res) => {
   const maxId = db.partners.reduce((m, p) => Math.max(m, Number(p.id) || 0), 0);
   const nextId = maxId + 1;
   // Default status is 'pending' if not specified, or use the provided status
-  const newPartner = { id: nextId, status: 'pending', ...partner };
+  const newPartner = createAuditedJsonRecord({ id: nextId, status: 'pending', ...partner }, getRequestActorUserId(req), partner.created_at);
   db.partners.push(newPartner);
   if (!writeDb(db)) return res.status(500).json({ error: "Failed to persist" });
   res.status(201).json(newPartner);
@@ -1588,7 +1632,7 @@ app.put("/partners/:id", authenticateToken, (req, res) => {
   const db = readDb();
   const idx = db.partners.findIndex((p) => p.id === id);
   if (idx === -1) return res.status(404).json({ error: "Not found" });
-  const updated = { ...db.partners[idx], ...req.body, id };
+  const updated = updateAuditedJsonRecord(db.partners[idx], { ...req.body, id }, getRequestActorUserId(req));
   db.partners[idx] = updated;
   if (!writeDb(db)) return res.status(500).json({ error: "Failed to persist" });
   res.json(updated);
@@ -1599,7 +1643,7 @@ app.patch("/partners/:id", authenticateToken, (req, res) => {
   const db = readDb();
   const idx = db.partners.findIndex((p) => p.id === id);
   if (idx === -1) return res.status(404).json({ error: "Not found" });
-  db.partners[idx] = { ...db.partners[idx], ...req.body, id };
+  db.partners[idx] = updateAuditedJsonRecord(db.partners[idx], { ...req.body, id }, getRequestActorUserId(req));
   if (!writeDb(db)) return res.status(500).json({ error: "Failed to persist" });
   res.json(db.partners[idx]);
 });
@@ -1620,7 +1664,7 @@ app.post("/partners/:id/approve", authenticateToken, (req, res) => {
   const db = readDb();
   const idx = db.partners.findIndex((p) => p.id === id);
   if (idx === -1) return res.status(404).json({ error: "Not found" });
-  db.partners[idx] = { ...db.partners[idx], status: "accepted" };
+  db.partners[idx] = updateAuditedJsonRecord(db.partners[idx], { status: "accepted" }, getRequestActorUserId(req));
   if (!writeDb(db)) return res.status(500).json({ error: "Failed to persist" });
   res.json(db.partners[idx]);
 });
@@ -1631,7 +1675,7 @@ app.post("/partners/:id/archive", authenticateToken, (req, res) => {
   const db = readDb();
   const idx = db.partners.findIndex((p) => p.id === id);
   if (idx === -1) return res.status(404).json({ error: "Not found" });
-  db.partners[idx] = { ...db.partners[idx], status: "archived" };
+  db.partners[idx] = updateAuditedJsonRecord(db.partners[idx], { status: "archived" }, getRequestActorUserId(req));
   if (!writeDb(db)) return res.status(500).json({ error: "Failed to persist" });
   res.json(db.partners[idx]);
 });
@@ -2403,7 +2447,7 @@ app.post("/partners/:id/restore", authenticateToken, (req, res) => {
   const db = readDb();
   const idx = db.partners.findIndex((p) => p.id === id);
   if (idx === -1) return res.status(404).json({ error: "Not found" });
-  db.partners[idx] = { ...db.partners[idx], status: "accepted" };
+  db.partners[idx] = updateAuditedJsonRecord(db.partners[idx], { status: "accepted" }, getRequestActorUserId(req));
   if (!writeDb(db)) return res.status(500).json({ error: "Failed to persist" });
   res.json(db.partners[idx]);
 });
@@ -2486,7 +2530,7 @@ app.post("/clients", authenticateToken, (req, res) => {
   const maxId = db.clients.reduce((m, c) => Math.max(m, Number(c.id) || 0), 0);
   const nextId = maxId + 1;
   // Default status is 'pending' if not specified, or use the provided status
-  const newClient = { id: nextId, status: 'pending', ...client };
+  const newClient = createAuditedJsonRecord({ id: nextId, status: 'pending', ...client }, getRequestActorUserId(req), client.created_at);
   db.clients.push(newClient);
   if (!writeDb(db)) return res.status(500).json({ error: "Failed to persist" });
   res.status(201).json(newClient);
@@ -2500,7 +2544,7 @@ app.put("/clients/:id", authenticateToken, (req, res) => {
   const db = readDb();
   const idx = db.clients.findIndex((c) => c.id === id);
   if (idx === -1) return res.status(404).json({ error: "Not found" });
-  const updated = { ...db.clients[idx], ...req.body, id };
+  const updated = updateAuditedJsonRecord(db.clients[idx], { ...req.body, id }, getRequestActorUserId(req));
   db.clients[idx] = updated;
   if (!writeDb(db)) return res.status(500).json({ error: "Failed to persist" });
   res.json(updated);
@@ -2511,7 +2555,7 @@ app.patch("/clients/:id", authenticateToken, (req, res) => {
   const db = readDb();
   const idx = db.clients.findIndex((c) => c.id === id);
   if (idx === -1) return res.status(404).json({ error: "Not found" });
-  db.clients[idx] = { ...db.clients[idx], ...req.body, id };
+  db.clients[idx] = updateAuditedJsonRecord(db.clients[idx], { ...req.body, id }, getRequestActorUserId(req));
   if (!writeDb(db)) return res.status(500).json({ error: "Failed to persist" });
   res.json(db.clients[idx]);
 });
@@ -2532,7 +2576,7 @@ app.post("/clients/:id/approve", authenticateToken, (req, res) => {
   const db = readDb();
   const idx = db.clients.findIndex((c) => c.id === id);
   if (idx === -1) return res.status(404).json({ error: "Not found" });
-  db.clients[idx] = { ...db.clients[idx], status: "accepted" };
+  db.clients[idx] = updateAuditedJsonRecord(db.clients[idx], { status: "accepted" }, getRequestActorUserId(req));
   if (!writeDb(db)) return res.status(500).json({ error: "Failed to persist" });
   res.json(db.clients[idx]);
 });
@@ -2543,7 +2587,7 @@ app.post("/clients/:id/archive", authenticateToken, (req, res) => {
   const db = readDb();
   const idx = db.clients.findIndex((c) => c.id === id);
   if (idx === -1) return res.status(404).json({ error: "Not found" });
-  db.clients[idx] = { ...db.clients[idx], status: "archived" };
+  db.clients[idx] = updateAuditedJsonRecord(db.clients[idx], { status: "archived" }, getRequestActorUserId(req));
   if (!writeDb(db)) return res.status(500).json({ error: "Failed to persist" });
   res.json(db.clients[idx]);
 });
@@ -2554,7 +2598,7 @@ app.post("/clients/:id/restore", authenticateToken, (req, res) => {
   const db = readDb();
   const idx = db.clients.findIndex((c) => c.id === id);
   if (idx === -1) return res.status(404).json({ error: "Not found" });
-  db.clients[idx] = { ...db.clients[idx], status: "accepted" };
+  db.clients[idx] = updateAuditedJsonRecord(db.clients[idx], { status: "accepted" }, getRequestActorUserId(req));
   if (!writeDb(db)) return res.status(500).json({ error: "Failed to persist" });
   res.json(db.clients[idx]);
 });
@@ -2576,7 +2620,7 @@ app.post("/tipers", authenticateToken, (req, res) => {
   const maxId = db.tipers.reduce((m, t) => Math.max(m, Number(t.id) || 0), 0);
   const nextId = maxId + 1;
   // Default status is 'pending' if not specified, or use the provided status
-  const newTiper = { id: nextId, status: 'pending', ...tiper };
+  const newTiper = createAuditedJsonRecord({ id: nextId, status: 'pending', ...tiper }, getRequestActorUserId(req), tiper.created_at);
   db.tipers.push(newTiper);
   if (!writeDb(db)) return res.status(500).json({ error: "Failed to persist" });
   res.status(201).json(newTiper);
@@ -2590,7 +2634,7 @@ app.put("/tipers/:id", authenticateToken, (req, res) => {
   const db = readDb();
   const idx = db.tipers.findIndex((t) => t.id === id);
   if (idx === -1) return res.status(404).json({ error: "Not found" });
-  const updated = { ...db.tipers[idx], ...req.body, id };
+  const updated = updateAuditedJsonRecord(db.tipers[idx], { ...req.body, id }, getRequestActorUserId(req));
   db.tipers[idx] = updated;
   if (!writeDb(db)) return res.status(500).json({ error: "Failed to persist" });
   res.json(updated);
@@ -2601,7 +2645,7 @@ app.patch("/tipers/:id", authenticateToken, (req, res) => {
   const db = readDb();
   const idx = db.tipers.findIndex((t) => t.id === id);
   if (idx === -1) return res.status(404).json({ error: "Not found" });
-  db.tipers[idx] = { ...db.tipers[idx], ...req.body, id };
+  db.tipers[idx] = updateAuditedJsonRecord(db.tipers[idx], { ...req.body, id }, getRequestActorUserId(req));
   if (!writeDb(db)) return res.status(500).json({ error: "Failed to persist" });
   res.json(db.tipers[idx]);
 });
@@ -2622,7 +2666,7 @@ app.post("/tipers/:id/approve", authenticateToken, (req, res) => {
   const db = readDb();
   const idx = db.tipers.findIndex((t) => t.id === id);
   if (idx === -1) return res.status(404).json({ error: "Not found" });
-  db.tipers[idx] = { ...db.tipers[idx], status: "accepted" };
+  db.tipers[idx] = updateAuditedJsonRecord(db.tipers[idx], { status: "accepted" }, getRequestActorUserId(req));
   if (!writeDb(db)) return res.status(500).json({ error: "Failed to persist" });
   res.json(db.tipers[idx]);
 });
@@ -2633,7 +2677,7 @@ app.post("/tipers/:id/archive", authenticateToken, (req, res) => {
   const db = readDb();
   const idx = db.tipers.findIndex((t) => t.id === id);
   if (idx === -1) return res.status(404).json({ error: "Not found" });
-  db.tipers[idx] = { ...db.tipers[idx], status: "archived" };
+  db.tipers[idx] = updateAuditedJsonRecord(db.tipers[idx], { status: "archived" }, getRequestActorUserId(req));
   if (!writeDb(db)) return res.status(500).json({ error: "Failed to persist" });
   res.json(db.tipers[idx]);
 });
@@ -2644,7 +2688,7 @@ app.post("/tipers/:id/restore", authenticateToken, (req, res) => {
   const db = readDb();
   const idx = db.tipers.findIndex((t) => t.id === id);
   if (idx === -1) return res.status(404).json({ error: "Not found" });
-  db.tipers[idx] = { ...db.tipers[idx], status: "accepted" };
+  db.tipers[idx] = updateAuditedJsonRecord(db.tipers[idx], { status: "accepted" }, getRequestActorUserId(req));
   if (!writeDb(db)) return res.status(500).json({ error: "Failed to persist" });
   res.json(db.tipers[idx]);
 });
@@ -3709,25 +3753,23 @@ const getProjectCommissionRecord = (type, store, id) => {
   return buildProjectCommissionResponse(type, commission, entity);
 };
 
-const createProjectEntity = (type, store, data = {}) => {
+const createProjectEntity = (type, store, data = {}, actorUserId) => {
   ensureProjectCollections(store);
   const config = PROJECT_JSON_CONFIG[type];
   const collection = store[config.entityCollection];
   const now = new Date().toISOString();
-  const entity = {
+  const entity = createAuditedJsonRecord({
     id: nextCollectionId(collection),
     entity_id: nextProjectEntityCode(store, config.counterKey, config.entityPrefix),
     status: data.status || 'accepted',
     ...config.entityDefaults,
     ...pickDefinedFields(data, config.entityFields.filter((field) => field !== 'status')),
-    created_at: now,
-    updated_at: now
-  };
+  }, actorUserId, now);
   collection.push(entity);
   return entity;
 };
 
-const updateProjectEntity = (type, store, id, data = {}) => {
+const updateProjectEntity = (type, store, id, data = {}, actorUserId) => {
   ensureProjectCollections(store);
   const config = PROJECT_JSON_CONFIG[type];
   const collection = store[config.entityCollection];
@@ -3735,13 +3777,15 @@ const updateProjectEntity = (type, store, id, data = {}) => {
   if (index === -1) {
     return null;
   }
-  const updated = {
-    ...collection[index],
-    ...pickDefinedFields(data, config.entityFields),
-    id: collection[index].id,
-    entity_id: collection[index].entity_id,
-    updated_at: new Date().toISOString()
-  };
+  const updated = updateAuditedJsonRecord(
+    collection[index],
+    {
+      ...pickDefinedFields(data, config.entityFields),
+      id: collection[index].id,
+      entity_id: collection[index].entity_id,
+    },
+    actorUserId
+  );
   collection[index] = updated;
   return updated;
 };
@@ -3759,7 +3803,7 @@ const deleteProjectEntity = (type, store, id) => {
   return removed;
 };
 
-const createProjectCommission = (type, store, entityInternalId, data = {}) => {
+const createProjectCommission = (type, store, entityInternalId, data = {}, actorUserId) => {
   ensureProjectCollections(store);
   const config = PROJECT_JSON_CONFIG[type];
   const entities = store[config.entityCollection];
@@ -3770,21 +3814,19 @@ const createProjectCommission = (type, store, entityInternalId, data = {}) => {
   }
 
   const now = new Date().toISOString();
-  const commission = {
+  const commission = createAuditedJsonRecord({
     id: nextCollectionId(commissions),
     commission_id: nextProjectCommissionCode(commissions, entity.entity_id),
     entity_id: Number(entityInternalId),
     entity_code: entity.entity_id,
     status: data.status || 'pending',
     ...pickDefinedFields(data, config.commissionFields.filter((field) => field !== 'status')),
-    created_at: now,
-    updated_at: now
-  };
+  }, actorUserId, now);
   commissions.push(commission);
   return getProjectCommissionRecord(type, store, commission.id);
 };
 
-const updateProjectCommission = (type, store, id, data = {}) => {
+const updateProjectCommission = (type, store, id, data = {}, actorUserId) => {
   ensureProjectCollections(store);
   const config = PROJECT_JSON_CONFIG[type];
   const commissions = store[config.commissionCollection];
@@ -3800,15 +3842,17 @@ const updateProjectCommission = (type, store, id, data = {}) => {
     }
   }
 
-  commissions[index] = {
-    ...commissions[index],
-    ...filteredUpdates,
-    id: commissions[index].id,
-    commission_id: commissions[index].commission_id,
-    entity_id: commissions[index].entity_id,
-    entity_code: commissions[index].entity_code,
-    updated_at: new Date().toISOString()
-  };
+  commissions[index] = updateAuditedJsonRecord(
+    commissions[index],
+    {
+      ...filteredUpdates,
+      id: commissions[index].id,
+      commission_id: commissions[index].commission_id,
+      entity_id: commissions[index].entity_id,
+      entity_code: commissions[index].entity_code,
+    },
+    actorUserId
+  );
 
   return getProjectCommissionRecord(type, store, id);
 };
@@ -3864,7 +3908,7 @@ const createProjectRoutes = (entityTypes) => {
       try {
         const store = readDb();
         const payload = applyAssignmentPayload(store, req.body || {});
-        const created = createProjectEntity(type, store, payload);
+        const created = createProjectEntity(type, store, payload, getRequestActorUserId(req));
         if (!writeDb(store)) return res.status(500).json({ error: 'Failed to persist' });
         res.status(201).json(created);
       } catch (error) {
@@ -3877,7 +3921,7 @@ const createProjectRoutes = (entityTypes) => {
       try {
         const store = readDb();
         const payload = applyAssignmentPayload(store, req.body || {});
-        const updated = updateProjectEntity(type, store, req.params.id, payload);
+        const updated = updateProjectEntity(type, store, req.params.id, payload, getRequestActorUserId(req));
         if (!updated) {
           return res.status(404).json({ error: 'Not found' });
         }
@@ -3892,7 +3936,7 @@ const createProjectRoutes = (entityTypes) => {
     app.post(`${entitiesPath}/:id/approve`, authenticateToken, (req, res) => {
       try {
         const store = readDb();
-        const updated = updateProjectEntity(type, store, req.params.id, { status: 'accepted' });
+        const updated = updateProjectEntity(type, store, req.params.id, { status: 'accepted' }, getRequestActorUserId(req));
         if (!updated) {
           return res.status(404).json({ error: 'Not found' });
         }
@@ -3907,7 +3951,7 @@ const createProjectRoutes = (entityTypes) => {
     app.post(`${entitiesPath}/:id/archive`, authenticateToken, (req, res) => {
       try {
         const store = readDb();
-        const updated = updateProjectEntity(type, store, req.params.id, { status: 'archived' });
+        const updated = updateProjectEntity(type, store, req.params.id, { status: 'archived' }, getRequestActorUserId(req));
         if (!updated) {
           return res.status(404).json({ error: 'Not found' });
         }
@@ -3922,7 +3966,7 @@ const createProjectRoutes = (entityTypes) => {
     app.post(`${entitiesPath}/:id/restore`, authenticateToken, (req, res) => {
       try {
         const store = readDb();
-        const updated = updateProjectEntity(type, store, req.params.id, { status: 'accepted' });
+        const updated = updateProjectEntity(type, store, req.params.id, { status: 'accepted' }, getRequestActorUserId(req));
         if (!updated) {
           return res.status(404).json({ error: 'Not found' });
         }
@@ -3961,8 +4005,8 @@ const createProjectRoutes = (entityTypes) => {
         const createdEntity = createProjectEntity(type, store, {
           ...normalizedEntity,
           status: normalizedEntity?.status || normalizedCommission?.status || 'accepted'
-        });
-        const createdCommission = createProjectCommission(type, store, createdEntity.id, normalizedCommission);
+        }, getRequestActorUserId(req));
+        const createdCommission = createProjectCommission(type, store, createdEntity.id, normalizedCommission, getRequestActorUserId(req));
         if (!writeDb(store)) return res.status(500).json({ error: 'Failed to persist' });
         res.status(201).json({ entity: createdEntity, commission: createdCommission });
       } catch (error) {
@@ -4006,8 +4050,8 @@ const createProjectRoutes = (entityTypes) => {
           const createdEntity = createProjectEntity(type, store, {
             ...normalizedEntity,
             status: normalizedEntity?.status || normalizedCommission?.status || 'accepted'
-          });
-          const createdCommission = createProjectCommission(type, store, createdEntity.id, normalizedCommission);
+          }, getRequestActorUserId(req));
+          const createdCommission = createProjectCommission(type, store, createdEntity.id, normalizedCommission, getRequestActorUserId(req));
           if (!writeDb(store)) return res.status(500).json({ error: 'Failed to persist' });
           return res.status(201).json(createdCommission);
         }
@@ -4017,7 +4061,7 @@ const createProjectRoutes = (entityTypes) => {
         }
 
         const payload = applyAssignmentPayload(store, req.body);
-        const created = createProjectCommission(type, store, req.body.entity_id, payload);
+        const created = createProjectCommission(type, store, req.body.entity_id, payload, getRequestActorUserId(req));
         if (!writeDb(store)) return res.status(500).json({ error: 'Failed to persist' });
         res.status(201).json(created);
       } catch (error) {
@@ -4030,7 +4074,7 @@ const createProjectRoutes = (entityTypes) => {
       try {
         const store = readDb();
         const payload = applyAssignmentPayload(store, req.body || {});
-        const updated = updateProjectCommission(type, store, req.params.id, payload);
+        const updated = updateProjectCommission(type, store, req.params.id, payload, getRequestActorUserId(req));
         if (!updated) {
           return res.status(404).json({ error: 'Not found' });
         }
@@ -4046,7 +4090,7 @@ const createProjectRoutes = (entityTypes) => {
       try {
         const store = readDb();
         const payload = applyAssignmentPayload(store, req.body || {});
-        const updated = updateProjectCommission(type, store, req.params.id, payload);
+        const updated = updateProjectCommission(type, store, req.params.id, payload, getRequestActorUserId(req));
         if (!updated) {
           return res.status(404).json({ error: 'Not found' });
         }
@@ -4076,12 +4120,12 @@ const createProjectRoutes = (entityTypes) => {
     app.post(`${commissionsPath}/:id/approve`, authenticateToken, (req, res) => {
       try {
         const store = readDb();
-        const updated = updateProjectCommission(type, store, req.params.id, { status: 'accepted' });
+        const updated = updateProjectCommission(type, store, req.params.id, { status: 'accepted' }, getRequestActorUserId(req));
         if (!updated) {
           return res.status(404).json({ error: 'Not found' });
         }
         if (updated.entity_id) {
-          updateProjectEntity(type, store, updated.entity_id, { status: 'accepted' });
+          updateProjectEntity(type, store, updated.entity_id, { status: 'accepted' }, getRequestActorUserId(req));
         }
         if (!writeDb(store)) return res.status(500).json({ error: 'Failed to persist' });
         res.json(updated);
@@ -4094,7 +4138,7 @@ const createProjectRoutes = (entityTypes) => {
     app.post(`${commissionsPath}/:id/archive`, authenticateToken, (req, res) => {
       try {
         const store = readDb();
-        const updated = updateProjectCommission(type, store, req.params.id, { status: 'archived' });
+        const updated = updateProjectCommission(type, store, req.params.id, { status: 'archived' }, getRequestActorUserId(req));
         if (!updated) {
           return res.status(404).json({ error: 'Not found' });
         }
@@ -4109,12 +4153,12 @@ const createProjectRoutes = (entityTypes) => {
     app.post(`${commissionsPath}/:id/restore`, authenticateToken, (req, res) => {
       try {
         const store = readDb();
-        const updated = updateProjectCommission(type, store, req.params.id, { status: 'accepted' });
+        const updated = updateProjectCommission(type, store, req.params.id, { status: 'accepted' }, getRequestActorUserId(req));
         if (!updated) {
           return res.status(404).json({ error: 'Not found' });
         }
         if (updated.entity_id) {
-          updateProjectEntity(type, store, updated.entity_id, { status: 'accepted' });
+          updateProjectEntity(type, store, updated.entity_id, { status: 'accepted' }, getRequestActorUserId(req));
         }
         if (!writeDb(store)) return res.status(500).json({ error: 'Failed to persist' });
         res.json(updated);
@@ -4199,12 +4243,11 @@ app.post("/future-functions", authenticateToken, requireRole('admin', 'manager')
   const futureFunctions = Array.isArray(db.futureFunctions) ? db.futureFunctions : [];
   const now = new Date().toISOString();
   const maxId = futureFunctions.reduce((max, item) => Math.max(max, Number(item.id) || 0), 0);
-  const entry = {
-    id: maxId + 1,
-    ...payload,
-    created_at: typeof body.created_at === "string" && body.created_at ? body.created_at : now,
-    updated_at: now
-  };
+  const entry = createAuditedJsonRecord(
+    { id: maxId + 1, ...payload },
+    getRequestActorUserId(req),
+    typeof body.created_at === "string" && body.created_at ? body.created_at : now
+  );
   db.futureFunctions = futureFunctions;
   db.futureFunctions.push(entry);
   if (!writeDb(db)) return res.status(500).json({ error: "Failed to persist" });
@@ -4217,14 +4260,16 @@ app.put("/future-functions/:id", authenticateToken, requireRole('admin', 'manage
   const idx = db.futureFunctions.findIndex((record) => record.id === id);
   if (idx === -1) return res.status(404).json({ error: "Not found" });
   const body = isPlainObject(req.body) ? req.body : {};
-  const updated = {
-    ...FUTURE_FUNCTION_DEFAULTS,
-    ...db.futureFunctions[idx],
-    ...body,
-    id,
-    created_at: db.futureFunctions[idx].created_at ?? body.created_at ?? new Date().toISOString(),
-    updated_at: new Date().toISOString()
-  };
+  const updated = updateAuditedJsonRecord(
+    db.futureFunctions[idx],
+    {
+      ...FUTURE_FUNCTION_DEFAULTS,
+      ...db.futureFunctions[idx],
+      ...body,
+      id,
+    },
+    getRequestActorUserId(req)
+  );
   db.futureFunctions[idx] = updated;
   if (!writeDb(db)) return res.status(500).json({ error: "Failed to persist" });
   res.json(updated);
@@ -4236,13 +4281,7 @@ app.patch("/future-functions/:id", authenticateToken, requireRole('admin', 'mana
   const idx = db.futureFunctions.findIndex((record) => record.id === id);
   if (idx === -1) return res.status(404).json({ error: "Not found" });
   const body = isPlainObject(req.body) ? req.body : {};
-  db.futureFunctions[idx] = {
-    ...db.futureFunctions[idx],
-    ...body,
-    id,
-    created_at: db.futureFunctions[idx].created_at ?? body.created_at ?? new Date().toISOString(),
-    updated_at: new Date().toISOString()
-  };
+  db.futureFunctions[idx] = updateAuditedJsonRecord(db.futureFunctions[idx], { ...body, id }, getRequestActorUserId(req));
   if (!writeDb(db)) return res.status(500).json({ error: "Failed to persist" });
   res.json(db.futureFunctions[idx]);
 });

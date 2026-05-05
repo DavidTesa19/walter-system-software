@@ -1,5 +1,10 @@
 export type ActivityState = "none" | "new" | "updated";
 
+const toUserId = (value: unknown): number | null => {
+  const parsed = typeof value === "number" ? value : Number(value);
+  return Number.isInteger(parsed) && parsed > 0 ? parsed : null;
+};
+
 const toMs = (value?: string | null): number => {
   if (!value) {
     return 0;
@@ -45,6 +50,33 @@ export const getActivityTimestampsFromRecord = (record: Record<string, unknown> 
   return { createdAt, latestAt };
 };
 
+export const getActivityActorUserIdsFromRecord = (record: Record<string, unknown> | null | undefined) => {
+  if (!record) {
+    return { createdByUserId: null, updatedByUserId: null };
+  }
+
+  return {
+    createdByUserId: toUserId(record.created_by_user_id ?? record.createdByUserId),
+    updatedByUserId: toUserId(record.updated_by_user_id ?? record.updatedByUserId),
+  };
+};
+
+export const getRecordActivityState = (
+  record: Record<string, unknown>,
+  seenAt?: string | null,
+  currentUserId?: number | null,
+): ActivityState => {
+  const { createdAt, latestAt } = getActivityTimestampsFromRecord(record);
+  const { createdByUserId, updatedByUserId } = getActivityActorUserIdsFromRecord(record);
+  const latestActorUserId = updatedByUserId ?? createdByUserId;
+
+  if (currentUserId && latestActorUserId === currentUserId) {
+    return "none";
+  }
+
+  return getActivityState({ createdAt, latestAt, seenAt });
+};
+
 export const getActivityState = ({
   createdAt,
   latestAt,
@@ -72,9 +104,12 @@ export const getActivityState = ({
   return "updated";
 };
 
-export const countUnseenRecords = (records: Array<Record<string, unknown>>, seenAt?: string | null): number => {
+export const countUnseenRecords = (
+  records: Array<Record<string, unknown>>,
+  seenAt?: string | null,
+  currentUserId?: number | null,
+): number => {
   return records.reduce((count, record) => {
-    const { createdAt, latestAt } = getActivityTimestampsFromRecord(record);
-    return getActivityState({ createdAt, latestAt, seenAt }) === "none" ? count : count + 1;
+    return getRecordActivityState(record, seenAt, currentUserId) === "none" ? count : count + 1;
   }, 0);
 };

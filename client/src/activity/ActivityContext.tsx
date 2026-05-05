@@ -99,6 +99,7 @@ const queueTableCollections = (
   tasks: Array<Promise<void>>,
   snapshot: ActivitySnapshot,
   activityState: StoredActivityState,
+  currentUserId: number | undefined,
   view: AppView,
   gridView: GridView,
   system: ActivitySystem,
@@ -117,8 +118,8 @@ const queueTableCollections = (
         const collectionSeenAt = activityState.collections[collectionKey] ?? activityState.baselineAt;
         const viewSeenAt = activityState.views[view] ?? activityState.baselineAt;
 
-        snapshot.collectionCounts[collectionKey] = countUnseenRecords(rows, collectionSeenAt);
-        mergeCount(snapshot.viewCounts, view, countUnseenRecords(rows, viewSeenAt));
+        snapshot.collectionCounts[collectionKey] = countUnseenRecords(rows, collectionSeenAt, currentUserId);
+        mergeCount(snapshot.viewCounts, view, countUnseenRecords(rows, viewSeenAt, currentUserId));
       })
       .catch(() => {
         snapshot.collectionCounts[collectionKey] = 0;
@@ -126,7 +127,19 @@ const queueTableCollections = (
   );
 };
 
-const countChangedRooms = (rooms: Array<Record<string, unknown>>, seenAt?: string | null): number => {
+const isSameMoment = (left?: string | null, right?: string | null): boolean => {
+  if (!left || !right) {
+    return false;
+  }
+
+  return new Date(left).getTime() === new Date(right).getTime();
+};
+
+const countChangedRooms = (
+  rooms: Array<Record<string, unknown>>,
+  seenAt?: string | null,
+  currentUsername?: string | null,
+): number => {
   return rooms.reduce((count, room) => {
     const unreadCount = typeof room.unreadCount === "number" ? room.unreadCount : Number(room.unreadCount ?? 0);
     if (Number.isFinite(unreadCount) && unreadCount > 0) {
@@ -134,19 +147,34 @@ const countChangedRooms = (rooms: Array<Record<string, unknown>>, seenAt?: strin
     }
 
     const { createdAt, latestAt } = getActivityTimestampsFromRecord(room);
+    const createdBy = typeof room.created_by === "string"
+      ? room.created_by
+      : typeof room.createdBy === "string"
+        ? room.createdBy
+        : null;
+
+    if (currentUsername && createdBy === currentUsername) {
+      return count;
+    }
+
+    if (!isSameMoment(createdAt, latestAt)) {
+      return count;
+    }
+
     return getActivityState({ createdAt, latestAt, seenAt }) === "none" ? count : count + 1;
   }, 0);
 };
 
 interface ActivityProviderProps {
   userId?: number;
+  username?: string;
   accessScope?: UserAccessScope;
   isAdmin: boolean;
   activeView: AppView;
   children: React.ReactNode;
 }
 
-export const ActivityProvider: React.FC<ActivityProviderProps> = ({ userId, accessScope, isAdmin, activeView, children }) => {
+export const ActivityProvider: React.FC<ActivityProviderProps> = ({ userId, username, accessScope, isAdmin, activeView, children }) => {
   const [activityState, setActivityState] = useState<StoredActivityState>(() => readStoredState(userId));
   const [snapshot, setSnapshot] = useState<ActivitySnapshot>({ viewCounts: {}, collectionCounts: {} });
 
@@ -221,6 +249,7 @@ export const ActivityProvider: React.FC<ActivityProviderProps> = ({ userId, acce
             tasks,
             nextSnapshot,
             activityState,
+            userId,
             (system === "projects" ? (`projects_${view.replace("entities_", "subjects_")}` as AppView) : (view as AppView)),
             gridView as GridView,
             system,
@@ -242,6 +271,7 @@ export const ActivityProvider: React.FC<ActivityProviderProps> = ({ userId, acce
             tasks,
             nextSnapshot,
             activityState,
+            userId,
             view as AppView,
             gridView as GridView,
             system,
@@ -269,13 +299,15 @@ export const ActivityProvider: React.FC<ActivityProviderProps> = ({ userId, acce
           const archivedRows = rows.filter((row) => row.archived === true);
           nextSnapshot.collectionCounts[FUTURE_FUNCTIONS_ACTIVE_COLLECTION_KEY] = countUnseenRecords(
             activeRows,
-            activityState.collections[FUTURE_FUNCTIONS_ACTIVE_COLLECTION_KEY] ?? activityState.baselineAt
+            activityState.collections[FUTURE_FUNCTIONS_ACTIVE_COLLECTION_KEY] ?? activityState.baselineAt,
+            userId
           );
           nextSnapshot.collectionCounts[FUTURE_FUNCTIONS_ARCHIVE_COLLECTION_KEY] = countUnseenRecords(
             archivedRows,
-            activityState.collections[FUTURE_FUNCTIONS_ARCHIVE_COLLECTION_KEY] ?? activityState.baselineAt
+            activityState.collections[FUTURE_FUNCTIONS_ARCHIVE_COLLECTION_KEY] ?? activityState.baselineAt,
+            userId
           );
-          nextSnapshot.viewCounts.future = countUnseenRecords(rows, activityState.views.future ?? activityState.baselineAt);
+          nextSnapshot.viewCounts.future = countUnseenRecords(rows, activityState.views.future ?? activityState.baselineAt, userId);
         })
         .catch(() => {
           nextSnapshot.collectionCounts[FUTURE_FUNCTIONS_ACTIVE_COLLECTION_KEY] = 0;
@@ -289,8 +321,8 @@ export const ActivityProvider: React.FC<ActivityProviderProps> = ({ userId, acce
           const rooms = Array.isArray(payload) ? payload : [];
           const collectionSeenAt = activityState.collections[TEAMCHAT_COLLECTION_KEY] ?? activityState.baselineAt;
           const viewSeenAt = activityState.views.teamchat ?? activityState.baselineAt;
-          nextSnapshot.collectionCounts[TEAMCHAT_COLLECTION_KEY] = countChangedRooms(rooms, collectionSeenAt);
-          nextSnapshot.viewCounts.teamchat = countChangedRooms(rooms, viewSeenAt);
+          nextSnapshot.collectionCounts[TEAMCHAT_COLLECTION_KEY] = countChangedRooms(rooms, collectionSeenAt, username);
+          nextSnapshot.viewCounts.teamchat = countChangedRooms(rooms, viewSeenAt, username);
         })
         .catch(() => {
           nextSnapshot.collectionCounts[TEAMCHAT_COLLECTION_KEY] = 0;
@@ -304,9 +336,10 @@ export const ActivityProvider: React.FC<ActivityProviderProps> = ({ userId, acce
             const rows = Array.isArray(payload) ? payload : [];
             nextSnapshot.collectionCounts[ADMIN_USERS_COLLECTION_KEY] = countUnseenRecords(
               rows,
-              activityState.collections[ADMIN_USERS_COLLECTION_KEY] ?? activityState.baselineAt
+              activityState.collections[ADMIN_USERS_COLLECTION_KEY] ?? activityState.baselineAt,
+              userId
             );
-            nextSnapshot.viewCounts.admin_users = countUnseenRecords(rows, activityState.views.admin_users ?? activityState.baselineAt);
+            nextSnapshot.viewCounts.admin_users = countUnseenRecords(rows, activityState.views.admin_users ?? activityState.baselineAt, userId);
           })
           .catch(() => {
             nextSnapshot.collectionCounts[ADMIN_USERS_COLLECTION_KEY] = 0;
@@ -316,7 +349,7 @@ export const ActivityProvider: React.FC<ActivityProviderProps> = ({ userId, acce
 
     await Promise.all(tasks);
     setSnapshot(nextSnapshot);
-  }, [accessScope, activityState, isAdmin, userId]);
+  }, [accessScope, activityState, isAdmin, userId, username]);
 
   useEffect(() => {
     void refresh();

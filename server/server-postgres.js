@@ -49,7 +49,42 @@ const serializeManagedUser = (user) => ({
   ...toAuthUser(user),
   createdAt: user.createdAt ?? user.created_at ?? null,
   updatedAt: user.updatedAt ?? user.updated_at ?? null,
+  createdByUserId: user.createdByUserId ?? user.created_by_user_id ?? null,
+  updatedByUserId: user.updatedByUserId ?? user.updated_by_user_id ?? null,
 });
+
+const getRequestActorUserId = (req) => {
+  const parsed = Number(req?.user?.id);
+  return Number.isInteger(parsed) && parsed > 0 ? parsed : undefined;
+};
+
+const createAuditedJsonRecord = (data, actorUserId, explicitCreatedAt) => {
+  const now = new Date().toISOString();
+  const normalizedActorUserId = getRequestActorUserId({ user: { id: actorUserId } });
+  return {
+    ...data,
+    created_at: typeof explicitCreatedAt === 'string' && explicitCreatedAt ? explicitCreatedAt : now,
+    updated_at: now,
+    ...(normalizedActorUserId ? {
+      created_by_user_id: normalizedActorUserId,
+      updated_by_user_id: normalizedActorUserId,
+    } : {}),
+  };
+};
+
+const updateAuditedJsonRecord = (existing, updates, actorUserId) => {
+  const normalizedActorUserId = getRequestActorUserId({ user: { id: actorUserId } });
+  return {
+    ...existing,
+    ...updates,
+    created_at: existing?.created_at ?? new Date().toISOString(),
+    updated_at: new Date().toISOString(),
+    ...(normalizedActorUserId ? {
+      created_by_user_id: existing?.created_by_user_id ?? normalizedActorUserId,
+      updated_by_user_id: normalizedActorUserId,
+    } : {}),
+  };
+};
 
 const normalizeAssignedUserIds = (value) => {
   if (!Array.isArray(value)) {
@@ -2940,8 +2975,8 @@ app.post("/auth/register", authenticateToken, requireRole('admin'), async (req, 
       const password_hash = await bcrypt.hash(password, salt);
 
       const result = await db.query(
-        'INSERT INTO users (username, password_hash, role, access_scope) VALUES ($1, $2, $3, $4) RETURNING id',
-        [username, password_hash, role || 'employee', normalizeAccessScope(accessScope)]
+        'INSERT INTO users (username, password_hash, role, access_scope, created_by_user_id, updated_by_user_id) VALUES ($1, $2, $3, $4, $5, $5) RETURNING id',
+        [username, password_hash, role || 'employee', normalizeAccessScope(accessScope), getRequestActorUserId(req) ?? null]
       );
 
       return res.status(201).json({ message: "User created", userId: result.rows[0].id });
@@ -2965,7 +3000,7 @@ app.post("/auth/register", authenticateToken, requireRole('admin'), async (req, 
       password_hash,
       role: role || 'employee',
       accessScope: normalizeAccessScope(accessScope),
-      created_at: new Date().toISOString()
+      ...createAuditedJsonRecord({}, getRequestActorUserId(req))
     };
 
     dbData.users.push(newUser);
@@ -3028,8 +3063,8 @@ app.post("/users", authenticateToken, requireRole('admin'), async (req, res) => 
 
     if (db.isPostgres()) {
       const result = await db.query(
-        'INSERT INTO users (username, password_hash, role, access_scope) VALUES ($1, $2, $3, $4) RETURNING *',
-        [username, password_hash, role || 'employee', normalizeAccessScope(accessScope)]
+        'INSERT INTO users (username, password_hash, role, access_scope, created_by_user_id, updated_by_user_id) VALUES ($1, $2, $3, $4, $5, $5) RETURNING *',
+        [username, password_hash, role || 'employee', normalizeAccessScope(accessScope), getRequestActorUserId(req) ?? null]
       );
       return res.status(201).json(serializeManagedUser(result.rows[0]));
     }
@@ -3041,7 +3076,8 @@ app.post("/users", authenticateToken, requireRole('admin'), async (req, res) => 
       username,
       password_hash,
       role: role || 'employee',
-      accessScope: normalizeAccessScope(accessScope)
+      accessScope: normalizeAccessScope(accessScope),
+      ...createAuditedJsonRecord({}, getRequestActorUserId(req))
     };
     dbData.users.push(newUser);
     if (!writeDb(dbData)) {
@@ -3099,8 +3135,8 @@ app.put("/users/:id", authenticateToken, requireRole('admin'), async (req, res) 
       }
 
       const result = await db.query(
-        'UPDATE users SET ' + updates.join(', ') + ' WHERE id = $' + (params.length + 1) + ' RETURNING *',
-        [...params, userId]
+        'UPDATE users SET ' + updates.join(', ') + ', updated_at = CURRENT_TIMESTAMP, updated_by_user_id = $' + (params.length + 1) + ' WHERE id = $' + (params.length + 2) + ' RETURNING *',
+        [...params, getRequestActorUserId(req) ?? null, userId]
       );
 
       const user = result.rows[0];
@@ -3123,6 +3159,7 @@ app.put("/users/:id", authenticateToken, requireRole('admin'), async (req, res) 
     }
     if (role !== undefined) user.role = role;
     if (accessScope !== undefined) user.accessScope = normalizeAccessScope(accessScope);
+    Object.assign(user, updateAuditedJsonRecord(user, {}, getRequestActorUserId(req)));
 
     if (!writeDb(dbData)) {
       return res.status(500).json({ error: "Failed to persist user" });
@@ -3180,8 +3217,8 @@ app.patch("/users/:id", authenticateToken, requireRole('admin'), async (req, res
 
     if (db.isPostgres()) {
       const result = await db.query(
-        'UPDATE users SET ' + updates.join(', ') + ' WHERE id = $' + (params.length + 1) + ' RETURNING *',
-        [...params, userId]
+        'UPDATE users SET ' + updates.join(', ') + ', updated_at = CURRENT_TIMESTAMP, updated_by_user_id = $' + (params.length + 1) + ' WHERE id = $' + (params.length + 2) + ' RETURNING *',
+        [...params, getRequestActorUserId(req) ?? null, userId]
       );
 
       const updatedUser = result.rows[0];
@@ -3205,6 +3242,7 @@ app.patch("/users/:id", authenticateToken, requireRole('admin'), async (req, res
     }
     if (role !== undefined) existingUser.role = role;
     if (accessScope !== undefined) existingUser.accessScope = normalizeAccessScope(accessScope);
+    Object.assign(existingUser, updateAuditedJsonRecord(existingUser, {}, getRequestActorUserId(req)));
 
     if (!writeDb(dbData)) {
       return res.status(500).json({ error: 'Failed to persist user' });
@@ -3302,12 +3340,12 @@ function createCrudRoutes(tableName) {
       }
       
       if (db.isPostgres()) {
-        const newRecord = await db.create(tableName, data);
+        const newRecord = await db.create(tableName, data, getRequestActorUserId(req));
         res.status(201).json(newRecord);
       } else {
         const dbData = readDb();
         const maxId = dbData[tableName].reduce((m, r) => (r.id > m ? r.id : m), 0);
-        const newRecord = { id: maxId + 1, ...data };
+        const newRecord = createAuditedJsonRecord({ id: maxId + 1, ...data }, getRequestActorUserId(req), data.created_at);
         dbData[tableName].push(newRecord);
         if (!writeDb(dbData)) return res.status(500).json({ error: "Failed to persist" });
         res.status(201).json(newRecord);
@@ -3330,14 +3368,14 @@ function createCrudRoutes(tableName) {
       }
       
       if (db.isPostgres()) {
-        const updated = await db.update(tableName, id, data);
+        const updated = await db.update(tableName, id, data, getRequestActorUserId(req));
         if (!updated) return res.status(404).json({ error: "Not found" });
         res.json(updated);
       } else {
         const dbData = readDb();
         const idx = dbData[tableName].findIndex(r => r.id === id);
         if (idx === -1) return res.status(404).json({ error: "Not found" });
-        dbData[tableName][idx] = { ...dbData[tableName][idx], ...data, id };
+        dbData[tableName][idx] = updateAuditedJsonRecord(dbData[tableName][idx], { ...data, id }, getRequestActorUserId(req));
         if (!writeDb(dbData)) return res.status(500).json({ error: "Failed to persist" });
         res.json(dbData[tableName][idx]);
       }
@@ -3376,14 +3414,14 @@ function createCrudRoutes(tableName) {
       const id = Number(req.params.id);
       
       if (db.isPostgres()) {
-        const approved = await db.approve(tableName, id);
+        const approved = await db.approve(tableName, id, getRequestActorUserId(req));
         if (!approved) return res.status(404).json({ error: "Not found" });
         res.json(approved);
       } else {
         const dbData = readDb();
         const idx = dbData[tableName].findIndex(r => r.id === id);
         if (idx === -1) return res.status(404).json({ error: "Not found" });
-        dbData[tableName][idx] = { ...dbData[tableName][idx], status: 'accepted' };
+        dbData[tableName][idx] = updateAuditedJsonRecord(dbData[tableName][idx], { status: 'accepted' }, getRequestActorUserId(req));
         if (!writeDb(dbData)) return res.status(500).json({ error: "Failed to persist" });
         res.json(dbData[tableName][idx]);
       }
@@ -3399,14 +3437,14 @@ function createCrudRoutes(tableName) {
       const id = Number(req.params.id);
 
       if (db.isPostgres()) {
-        const archived = await db.archive(tableName, id);
+        const archived = await db.archive(tableName, id, getRequestActorUserId(req));
         if (!archived) return res.status(404).json({ error: "Not found" });
         res.json(archived);
       } else {
         const dbData = readDb();
         const idx = dbData[tableName].findIndex(r => r.id === id);
         if (idx === -1) return res.status(404).json({ error: "Not found" });
-        dbData[tableName][idx] = { ...dbData[tableName][idx], status: 'archived' };
+        dbData[tableName][idx] = updateAuditedJsonRecord(dbData[tableName][idx], { status: 'archived' }, getRequestActorUserId(req));
         if (!writeDb(dbData)) return res.status(500).json({ error: "Failed to persist" });
         res.json(dbData[tableName][idx]);
       }
@@ -3422,14 +3460,14 @@ function createCrudRoutes(tableName) {
       const id = Number(req.params.id);
 
       if (db.isPostgres()) {
-        const restored = await db.restore(tableName, id);
+        const restored = await db.restore(tableName, id, getRequestActorUserId(req));
         if (!restored) return res.status(404).json({ error: "Not found" });
         res.json(restored);
       } else {
         const dbData = readDb();
         const idx = dbData[tableName].findIndex(r => r.id === id);
         if (idx === -1) return res.status(404).json({ error: "Not found" });
-        dbData[tableName][idx] = { ...dbData[tableName][idx], status: 'accepted' };
+        dbData[tableName][idx] = updateAuditedJsonRecord(dbData[tableName][idx], { status: 'accepted' }, getRequestActorUserId(req));
         if (!writeDb(dbData)) return res.status(500).json({ error: "Failed to persist" });
         res.json(dbData[tableName][idx]);
       }
@@ -3470,7 +3508,7 @@ function createFutureFunctionsRoutes() {
       const payload = { ...FUTURE_FUNCTION_DEFAULTS, ...(req.body ?? {}) };
 
       if (db.isPostgres()) {
-        const created = await db.create(tableName, payload);
+        const created = await db.create(tableName, payload, getRequestActorUserId(req));
         return res.status(201).json(created);
       }
 
@@ -3478,12 +3516,11 @@ function createFutureFunctionsRoutes() {
       const futureFunctions = Array.isArray(store.futureFunctions) ? store.futureFunctions : [];
       const now = new Date().toISOString();
       const maxId = futureFunctions.reduce((max, item) => (item.id > max ? item.id : max), 0);
-      const entry = {
-        id: maxId + 1,
-        ...payload,
-        created_at: typeof req.body?.created_at === 'string' && req.body.created_at ? req.body.created_at : now,
-        updated_at: now
-      };
+      const entry = createAuditedJsonRecord(
+        { id: maxId + 1, ...payload },
+        getRequestActorUserId(req),
+        typeof req.body?.created_at === 'string' && req.body.created_at ? req.body.created_at : now
+      );
       store.futureFunctions = futureFunctions;
       store.futureFunctions.push(entry);
       if (!writeDb(store)) {
@@ -3502,7 +3539,7 @@ function createFutureFunctionsRoutes() {
       const payload = { ...FUTURE_FUNCTION_DEFAULTS, ...(req.body ?? {}) };
 
       if (db.isPostgres()) {
-        const updated = await db.update(tableName, id, payload);
+        const updated = await db.update(tableName, id, payload, getRequestActorUserId(req));
         if (!updated) {
           return res.status(404).json({ error: 'Not found' });
         }
@@ -3514,13 +3551,7 @@ function createFutureFunctionsRoutes() {
       if (idx === -1) {
         return res.status(404).json({ error: 'Not found' });
       }
-      store.futureFunctions[idx] = {
-        ...store.futureFunctions[idx],
-        ...payload,
-        id,
-        created_at: store.futureFunctions[idx].created_at ?? req.body?.created_at ?? new Date().toISOString(),
-        updated_at: new Date().toISOString()
-      };
+      store.futureFunctions[idx] = updateAuditedJsonRecord(store.futureFunctions[idx], { ...payload, id }, getRequestActorUserId(req));
       if (!writeDb(store)) {
         return res.status(500).json({ error: 'Failed to persist' });
       }
@@ -3537,7 +3568,7 @@ function createFutureFunctionsRoutes() {
       const patch = req.body ?? {};
 
       if (db.isPostgres()) {
-        const updated = await db.update(tableName, id, patch);
+        const updated = await db.update(tableName, id, patch, getRequestActorUserId(req));
         if (!updated) {
           return res.status(404).json({ error: 'Not found' });
         }
@@ -3549,13 +3580,7 @@ function createFutureFunctionsRoutes() {
       if (idx === -1) {
         return res.status(404).json({ error: 'Not found' });
       }
-      store.futureFunctions[idx] = {
-        ...store.futureFunctions[idx],
-        ...patch,
-        id,
-        created_at: store.futureFunctions[idx].created_at ?? req.body?.created_at ?? new Date().toISOString(),
-        updated_at: new Date().toISOString()
-      };
+      store.futureFunctions[idx] = updateAuditedJsonRecord(store.futureFunctions[idx], { ...patch, id }, getRequestActorUserId(req));
       if (!writeDb(store)) {
         return res.status(500).json({ error: 'Failed to persist' });
       }
@@ -4016,7 +4041,7 @@ const getProjectCommissionRecord = async (type, id) => {
   return buildProjectCommissionResponse(type, commission, entity);
 };
 
-const createProjectEntityRecord = async (type, data = {}) => {
+const createProjectEntityRecord = async (type, data = {}, actorUserId) => {
   const config = PROJECT_ROUTE_CONFIG[type];
   const entityId = await db.getNextEntityId(config.counterKey);
   return db.create(config.entityTable, {
@@ -4024,10 +4049,10 @@ const createProjectEntityRecord = async (type, data = {}) => {
     status: data.status || 'accepted',
     ...config.entityDefaults,
     ...pickDefinedFields(data, config.entityFields.filter((field) => field !== 'status'))
-  });
+  }, actorUserId);
 };
 
-const createProjectCommissionRecord = async (type, entityInternalId, data = {}) => {
+const createProjectCommissionRecord = async (type, entityInternalId, data = {}, actorUserId) => {
   const config = PROJECT_ROUTE_CONFIG[type];
   const entity = await db.getById(config.entityTable, Number(entityInternalId));
   if (!entity) {
@@ -4042,7 +4067,7 @@ const createProjectCommissionRecord = async (type, entityInternalId, data = {}) 
     entity_code: entity.entity_id,
     status: data.status || 'pending',
     ...pickDefinedFields(data, config.commissionFields.filter((field) => field !== 'status'))
-  });
+  }, actorUserId);
 
   return getProjectCommissionRecord(type, created.id);
 };
@@ -4081,7 +4106,7 @@ const createProjectEntityCommissionRoutes = (entityTypes) => {
     app.post(entitiesPath, authenticateToken, async (req, res) => {
       try {
         const payload = await applyAssignmentPayload(req.body || {});
-        const created = await createProjectEntityRecord(type, payload);
+        const created = await createProjectEntityRecord(type, payload, getRequestActorUserId(req));
         res.status(201).json(created);
       } catch (error) {
         console.error(`Error creating projects ${type} entity:`, error);
@@ -4093,7 +4118,7 @@ const createProjectEntityCommissionRoutes = (entityTypes) => {
       try {
         const id = Number(req.params.id);
         const payload = await applyAssignmentPayload(req.body || {});
-        const updated = await db.update(config.entityTable, id, pickDefinedFields(payload || {}, config.entityFields));
+        const updated = await db.update(config.entityTable, id, pickDefinedFields(payload || {}, config.entityFields), getRequestActorUserId(req));
         if (!updated) {
           return res.status(404).json({ error: 'Not found' });
         }
@@ -4107,7 +4132,7 @@ const createProjectEntityCommissionRoutes = (entityTypes) => {
     app.post(`${entitiesPath}/:id/approve`, authenticateToken, async (req, res) => {
       try {
         const id = Number(req.params.id);
-        const updated = await db.update(config.entityTable, id, { status: 'accepted' });
+        const updated = await db.update(config.entityTable, id, { status: 'accepted' }, getRequestActorUserId(req));
         if (!updated) {
           return res.status(404).json({ error: 'Not found' });
         }
@@ -4121,7 +4146,7 @@ const createProjectEntityCommissionRoutes = (entityTypes) => {
     app.post(`${entitiesPath}/:id/archive`, authenticateToken, async (req, res) => {
       try {
         const id = Number(req.params.id);
-        const updated = await db.update(config.entityTable, id, { status: 'archived' });
+        const updated = await db.update(config.entityTable, id, { status: 'archived' }, getRequestActorUserId(req));
         if (!updated) {
           return res.status(404).json({ error: 'Not found' });
         }
@@ -4135,7 +4160,7 @@ const createProjectEntityCommissionRoutes = (entityTypes) => {
     app.post(`${entitiesPath}/:id/restore`, authenticateToken, async (req, res) => {
       try {
         const id = Number(req.params.id);
-        const updated = await db.update(config.entityTable, id, { status: 'accepted' });
+        const updated = await db.update(config.entityTable, id, { status: 'accepted' }, getRequestActorUserId(req));
         if (!updated) {
           return res.status(404).json({ error: 'Not found' });
         }
@@ -4171,8 +4196,8 @@ const createProjectEntityCommissionRoutes = (entityTypes) => {
         const createdEntity = await createProjectEntityRecord(type, {
           ...normalizedEntity,
           status: normalizedEntity?.status || normalizedCommission?.status || 'accepted'
-        });
-        const createdCommission = await createProjectCommissionRecord(type, createdEntity.id, normalizedCommission);
+        }, getRequestActorUserId(req));
+        const createdCommission = await createProjectCommissionRecord(type, createdEntity.id, normalizedCommission, getRequestActorUserId(req));
         res.status(201).json({ entity: createdEntity, commission: createdCommission });
       } catch (error) {
         console.error(`Error creating projects ${type} entity with commission:`, error);
@@ -4213,8 +4238,8 @@ const createProjectEntityCommissionRoutes = (entityTypes) => {
           const createdEntity = await createProjectEntityRecord(type, {
             ...normalizedEntity,
             status: normalizedEntity?.status || normalizedCommission?.status || 'accepted'
-          });
-          const createdCommission = await createProjectCommissionRecord(type, createdEntity.id, normalizedCommission);
+          }, getRequestActorUserId(req));
+          const createdCommission = await createProjectCommissionRecord(type, createdEntity.id, normalizedCommission, getRequestActorUserId(req));
           return res.status(201).json(createdCommission);
         }
 
@@ -4223,7 +4248,7 @@ const createProjectEntityCommissionRoutes = (entityTypes) => {
         }
 
         const payload = await applyAssignmentPayload(req.body);
-        const created = await createProjectCommissionRecord(type, req.body.entity_id, payload);
+        const created = await createProjectCommissionRecord(type, req.body.entity_id, payload, getRequestActorUserId(req));
         res.status(201).json(created);
       } catch (error) {
         console.error(`Error creating projects ${type} commission:`, error);
@@ -4235,7 +4260,7 @@ const createProjectEntityCommissionRoutes = (entityTypes) => {
       try {
         const id = Number(req.params.id);
         const payload = await applyAssignmentPayload(req.body || {});
-        const updated = await db.update(config.commissionTable, id, pickDefinedFields(payload || {}, config.commissionFields));
+        const updated = await db.update(config.commissionTable, id, pickDefinedFields(payload || {}, config.commissionFields), getRequestActorUserId(req));
         if (!updated) {
           return res.status(404).json({ error: 'Not found' });
         }
@@ -4250,7 +4275,7 @@ const createProjectEntityCommissionRoutes = (entityTypes) => {
       try {
         const id = Number(req.params.id);
         const payload = await applyAssignmentPayload(req.body || {});
-        const updated = await db.update(config.commissionTable, id, pickDefinedFields(payload || {}, config.commissionFields));
+        const updated = await db.update(config.commissionTable, id, pickDefinedFields(payload || {}, config.commissionFields), getRequestActorUserId(req));
         if (!updated) {
           return res.status(404).json({ error: 'Not found' });
         }
@@ -4278,12 +4303,12 @@ const createProjectEntityCommissionRoutes = (entityTypes) => {
     app.post(`${commissionsPath}/:id/approve`, authenticateToken, async (req, res) => {
       try {
         const id = Number(req.params.id);
-        const updated = await db.update(config.commissionTable, id, { status: 'accepted' });
+        const updated = await db.update(config.commissionTable, id, { status: 'accepted' }, getRequestActorUserId(req));
         if (!updated) {
           return res.status(404).json({ error: 'Not found' });
         }
         if (updated.entity_id) {
-          await db.update(config.entityTable, Number(updated.entity_id), { status: 'accepted' });
+          await db.update(config.entityTable, Number(updated.entity_id), { status: 'accepted' }, getRequestActorUserId(req));
         }
         res.json(await getProjectCommissionRecord(type, id));
       } catch (error) {
@@ -4295,7 +4320,7 @@ const createProjectEntityCommissionRoutes = (entityTypes) => {
     app.post(`${commissionsPath}/:id/archive`, authenticateToken, async (req, res) => {
       try {
         const id = Number(req.params.id);
-        const updated = await db.update(config.commissionTable, id, { status: 'archived' });
+        const updated = await db.update(config.commissionTable, id, { status: 'archived' }, getRequestActorUserId(req));
         if (!updated) {
           return res.status(404).json({ error: 'Not found' });
         }
@@ -4309,12 +4334,12 @@ const createProjectEntityCommissionRoutes = (entityTypes) => {
     app.post(`${commissionsPath}/:id/restore`, authenticateToken, async (req, res) => {
       try {
         const id = Number(req.params.id);
-        const updated = await db.update(config.commissionTable, id, { status: 'accepted' });
+        const updated = await db.update(config.commissionTable, id, { status: 'accepted' }, getRequestActorUserId(req));
         if (!updated) {
           return res.status(404).json({ error: 'Not found' });
         }
         if (updated.entity_id) {
-          await db.update(config.entityTable, Number(updated.entity_id), { status: 'accepted' });
+          await db.update(config.entityTable, Number(updated.entity_id), { status: 'accepted' }, getRequestActorUserId(req));
         }
         res.json(await getProjectCommissionRecord(type, id));
       } catch (error) {

@@ -506,7 +506,7 @@ const AppContent: React.FC = () => {
   ].filter(Boolean).join(' ');
 
   return (
-    <ActivityProvider userId={user?.id} accessScope={accessScope} isAdmin={isAdmin} activeView={viewMode}>
+    <ActivityProvider userId={user?.id} username={user?.username} accessScope={accessScope} isAdmin={isAdmin} activeView={viewMode}>
       <div style={{ display: 'flex' }}>
         <Sidebar
           activeView={viewMode}
