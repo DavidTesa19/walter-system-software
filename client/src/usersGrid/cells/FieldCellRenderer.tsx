@@ -10,11 +10,16 @@ interface FieldCellParams {
   setValue?: (value: string) => void;
   fieldOptions?: FieldOption[];
   groupedFieldOptions?: FieldCategory[];
+  onCreateFieldOption?: (value: string) => Promise<FieldOption | void> | FieldOption | void;
+  onDeleteFieldOption?: (optionId: number) => Promise<void> | void;
+  disabled?: boolean;
   // Ag-grid params
   colDef: any;
   data: any;
   node: any;
 }
+
+const REMOVED_FIELD_LABEL = "Odstraněno";
 
 const FieldCellRenderer: React.FC<FieldCellParams> = (params) => {
   const availableFieldOptions = params.fieldOptions ?? defaultFieldOptions;
@@ -24,6 +29,8 @@ const FieldCellRenderer: React.FC<FieldCellParams> = (params) => {
     : availableGroupedFieldOptions.flatMap((group) => group.options);
   const menuGroups = availableGroupedFieldOptions.filter((group) => group.options.length > 0);
   const showCategories = menuGroups.length > 1;
+  const canCreateFieldOptions = !params.disabled && typeof params.onCreateFieldOption === "function";
+  const canDeleteFieldOptions = !params.disabled && typeof params.onDeleteFieldOption === "function";
 
   const getCurrentField = () => {
     return (
@@ -35,6 +42,10 @@ const FieldCellRenderer: React.FC<FieldCellParams> = (params) => {
   };
 
   const handleFieldClick = (e: React.MouseEvent) => {
+    if (params.disabled) {
+      return;
+    }
+
     e.stopPropagation();
     e.preventDefault();
 
@@ -46,6 +57,10 @@ const FieldCellRenderer: React.FC<FieldCellParams> = (params) => {
     let currentView: 'categories' | 'suboptions' | 'search' = 'categories';
     let activeCategory: FieldCategory | null = null;
     let searchTerm: string = "";
+    let isAddingOption = false;
+    let isSubmittingOption = false;
+    let pendingFieldOptionName = "";
+    let footerErrorMessage = "";
 
     // --- DOM Elements ---
     const dropdown = document.createElement("div");
@@ -95,6 +110,13 @@ const FieldCellRenderer: React.FC<FieldCellParams> = (params) => {
     listContainer.style.maxHeight = "350px";
     dropdown.appendChild(listContainer);
 
+    const footerContainer = document.createElement("div");
+    footerContainer.style.padding = "8px";
+    footerContainer.style.borderTop = isDark ? "1px solid #2d2d2d" : "1px solid #eee";
+    footerContainer.style.backgroundColor = isDark ? "#1a1a1a" : "white";
+    footerContainer.style.flexShrink = "0";
+    dropdown.appendChild(footerContainer);
+
     // Add to DOM
     document.body.appendChild(dropdown);
 
@@ -120,7 +142,7 @@ const FieldCellRenderer: React.FC<FieldCellParams> = (params) => {
           listContainer.appendChild(emptyDiv);
         } else {
           filteredOptions.forEach(opt => {
-            const item = createItem(opt.label, false, false, () => selectValue(opt.value));
+            const item = createOptionItem(opt, false);
             listContainer.appendChild(item);
           });
         }
@@ -161,7 +183,7 @@ const FieldCellRenderer: React.FC<FieldCellParams> = (params) => {
 
         // Options in category
         activeCategory.options.forEach(opt => {
-          const item = createItem(opt.label, false, true, () => selectValue(opt.value));
+          const item = createOptionItem(opt, true);
           listContainer.appendChild(item);
         });
       }
@@ -188,10 +210,142 @@ const FieldCellRenderer: React.FC<FieldCellParams> = (params) => {
           listContainer.appendChild(item);
         });
       }
+
+      renderFooter();
+    };
+
+    const renderFooter = () => {
+      footerContainer.innerHTML = "";
+
+      if (!canCreateFieldOptions) {
+        return;
+      }
+
+      if (!isAddingOption) {
+        const addButton = document.createElement("button");
+        addButton.type = "button";
+        addButton.textContent = "+ Přidat";
+        addButton.style.width = "100%";
+        addButton.style.padding = "10px 12px";
+        addButton.style.border = "none";
+        addButton.style.borderRadius = "6px";
+        addButton.style.cursor = "pointer";
+        addButton.style.fontSize = "14px";
+        addButton.style.fontWeight = "600";
+        addButton.style.fontFamily = "var(--font-body)";
+        addButton.style.backgroundColor = isDark ? "#252525" : "#f3f7fb";
+        addButton.style.color = isDark ? "#e0e0e0" : "#22577a";
+        addButton.onclick = (event) => {
+          event.stopPropagation();
+          isAddingOption = true;
+          pendingFieldOptionName = searchTerm.trim();
+          footerErrorMessage = "";
+          renderFooter();
+        };
+        footerContainer.appendChild(addButton);
+        return;
+      }
+
+      const formContainer = document.createElement("div");
+      formContainer.style.display = "flex";
+      formContainer.style.flexDirection = "column";
+      formContainer.style.gap = "8px";
+
+      const input = document.createElement("input");
+      input.type = "text";
+      input.value = pendingFieldOptionName;
+      input.placeholder = "Název nového oboru";
+      input.style.width = "100%";
+      input.style.padding = "8px 12px";
+      input.style.border = isDark ? "1px solid #3d3d3d" : "1px solid #ccc";
+      input.style.borderRadius = "6px";
+      input.style.backgroundColor = isDark ? "#0d0d0d" : "#f8f9fa";
+      input.style.color = isDark ? "#e0e0e0" : "#333";
+      input.style.fontSize = "14px";
+      input.style.fontFamily = "var(--font-body)";
+      input.oninput = (event) => {
+        pendingFieldOptionName = (event.target as HTMLInputElement).value;
+        footerErrorMessage = "";
+      };
+      input.onkeydown = (event) => {
+        event.stopPropagation();
+        if (event.key === "Enter") {
+          event.preventDefault();
+          void submitNewFieldOption();
+        }
+        if (event.key === "Escape") {
+          event.preventDefault();
+          isAddingOption = false;
+          pendingFieldOptionName = "";
+          footerErrorMessage = "";
+          renderFooter();
+        }
+      };
+      formContainer.appendChild(input);
+
+      if (footerErrorMessage) {
+        const errorLabel = document.createElement("div");
+        errorLabel.textContent = footerErrorMessage;
+        errorLabel.style.fontSize = "12px";
+        errorLabel.style.color = "#d14343";
+        formContainer.appendChild(errorLabel);
+      }
+
+      const actionsRow = document.createElement("div");
+      actionsRow.style.display = "flex";
+      actionsRow.style.gap = "8px";
+
+      const cancelButton = document.createElement("button");
+      cancelButton.type = "button";
+      cancelButton.textContent = "Zrušit";
+      cancelButton.disabled = isSubmittingOption;
+      cancelButton.style.flex = "1";
+      cancelButton.style.padding = "8px 12px";
+      cancelButton.style.border = isDark ? "1px solid #3d3d3d" : "1px solid #ccc";
+      cancelButton.style.borderRadius = "6px";
+      cancelButton.style.cursor = isSubmittingOption ? "default" : "pointer";
+      cancelButton.style.backgroundColor = isDark ? "#1a1a1a" : "white";
+      cancelButton.style.color = isDark ? "#e0e0e0" : "#333";
+      cancelButton.onclick = (event) => {
+        event.stopPropagation();
+        isAddingOption = false;
+        pendingFieldOptionName = "";
+        footerErrorMessage = "";
+        renderFooter();
+      };
+      actionsRow.appendChild(cancelButton);
+
+      const saveButton = document.createElement("button");
+      saveButton.type = "button";
+      saveButton.textContent = isSubmittingOption ? "Ukládám..." : "Uložit";
+      saveButton.disabled = isSubmittingOption;
+      saveButton.style.flex = "1";
+      saveButton.style.padding = "8px 12px";
+      saveButton.style.border = "none";
+      saveButton.style.borderRadius = "6px";
+      saveButton.style.cursor = isSubmittingOption ? "default" : "pointer";
+      saveButton.style.backgroundColor = "#0ea5e9";
+      saveButton.style.color = "white";
+      saveButton.onclick = (event) => {
+        event.stopPropagation();
+        void submitNewFieldOption();
+      };
+      actionsRow.appendChild(saveButton);
+
+      formContainer.appendChild(actionsRow);
+      footerContainer.appendChild(formContainer);
+
+      requestAnimationFrame(() => input.focus());
     };
 
     // Helper to create list items
-    const createItem = (text: string, isGroup: boolean, isSubItem: boolean, onClick: () => void) => {
+    const createItem = (
+      text: string,
+      isGroup: boolean,
+      isSubItem: boolean,
+      onClick: () => void,
+      action?: { label: string; onClick: () => void }
+    ) => {
       const el = document.createElement("div");
       
       // Dynamic styles
@@ -216,6 +370,11 @@ const FieldCellRenderer: React.FC<FieldCellParams> = (params) => {
 
       const labelSpan = document.createElement("span");
       labelSpan.textContent = text;
+      labelSpan.style.flex = "1";
+      labelSpan.style.minWidth = "0";
+      labelSpan.style.overflow = "hidden";
+      labelSpan.style.textOverflow = "ellipsis";
+      labelSpan.style.whiteSpace = "nowrap";
       el.appendChild(labelSpan);
 
       if (isGroup) {
@@ -223,6 +382,22 @@ const FieldCellRenderer: React.FC<FieldCellParams> = (params) => {
          arrow.innerHTML = `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="9 18 15 12 9 6"></polyline></svg>`;
          arrow.style.opacity = "0.6";
          el.appendChild(arrow);
+      } else if (action) {
+        const actionButton = document.createElement("button");
+        actionButton.type = "button";
+        actionButton.textContent = action.label;
+        actionButton.style.marginLeft = "12px";
+        actionButton.style.border = "none";
+        actionButton.style.background = "transparent";
+        actionButton.style.color = isDark ? "#fca5a5" : "#c2410c";
+        actionButton.style.cursor = "pointer";
+        actionButton.style.fontSize = "12px";
+        actionButton.style.fontWeight = "600";
+        actionButton.onclick = (event) => {
+          event.stopPropagation();
+          action.onClick();
+        };
+        el.appendChild(actionButton);
       }
 
       el.onmouseenter = () => { el.style.backgroundColor = isDark ? "#2d2d2d" : "#f8f9fa"; };
@@ -232,6 +407,72 @@ const FieldCellRenderer: React.FC<FieldCellParams> = (params) => {
         onClick();
       };
       return el;
+    };
+
+    const createOptionItem = (option: FieldOption, isSubItem: boolean) => createItem(
+      option.label,
+      false,
+      isSubItem,
+      () => selectValue(option.value),
+      option.isCustom && canDeleteFieldOptions && option.id != null
+        ? {
+            label: "Odstranit",
+            onClick: () => {
+              void deleteFieldOption(option);
+            },
+          }
+        : undefined
+    );
+
+    const submitNewFieldOption = async () => {
+      if (!params.onCreateFieldOption) {
+        return;
+      }
+
+      const normalizedName = pendingFieldOptionName.trim();
+      if (!normalizedName) {
+        footerErrorMessage = "Zadejte název oboru.";
+        renderFooter();
+        return;
+      }
+
+      isSubmittingOption = true;
+      footerErrorMessage = "";
+      renderFooter();
+
+      try {
+        const createdOption = await params.onCreateFieldOption(normalizedName);
+        selectValue(createdOption?.value ?? normalizedName);
+      } catch (error) {
+        footerErrorMessage = error instanceof Error ? error.message : "Nepodařilo se přidat obor.";
+        isSubmittingOption = false;
+        renderFooter();
+      }
+    };
+
+    const deleteFieldOption = async (option: FieldOption) => {
+      if (!params.onDeleteFieldOption || option.id == null) {
+        return;
+      }
+
+      const confirmed = window.confirm(`Opravdu chcete odstranit obor \"${option.label}\"?`);
+      if (!confirmed) {
+        return;
+      }
+
+      try {
+        await params.onDeleteFieldOption(option.id);
+        if (params.value === option.value) {
+          if (typeof params.setValue === "function") {
+            params.setValue(REMOVED_FIELD_LABEL);
+          } else if (params.colDef?.field && typeof params.node?.setDataValue === "function") {
+            params.node.setDataValue(params.colDef.field, REMOVED_FIELD_LABEL);
+          }
+        }
+        cleanup();
+      } catch (error) {
+        window.alert(error instanceof Error ? error.message : "Nepodařilo se odstranit obor.");
+      }
     };
 
     const selectValue = (val: string) => {
@@ -302,7 +543,8 @@ const FieldCellRenderer: React.FC<FieldCellParams> = (params) => {
         cursor: "pointer",
         padding: "0 8px",
         borderRadius: "4px",
-        transition: "all 0.2s ease"
+        transition: "all 0.2s ease",
+        opacity: params.disabled ? 0.7 : 1,
       }}
     >
       <span style={{ 

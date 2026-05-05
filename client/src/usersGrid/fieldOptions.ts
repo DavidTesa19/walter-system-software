@@ -1,6 +1,8 @@
 export interface FieldOption {
+  id?: number;
   value: string;
   label: string;
+  isCustom?: boolean;
 }
 
 export interface FieldCategory {

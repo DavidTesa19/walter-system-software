@@ -18,10 +18,11 @@ import { mapViewToStatus } from "../constants";
 import { apiGet, apiPost, apiPut, apiDelete } from "../../utils/api";
 import { uploadDocuments } from "../../utils/uploadDocuments";
 import type { SectionProps } from "./SectionTypes";
+import useFieldOptions from "../hooks/useFieldOptions";
 import useProfileDocuments from "../hooks/useProfileDocuments";
 import useProfileNotes from "../hooks/useProfileNotes";
 import { ApproveRestoreCellRenderer, DeleteArchiveCellRenderer } from "../cells/RowActionCellRenderers";
-import { fieldOptions, groupedFieldOptions, projectsFieldOptions, projectsGroupedFieldOptions } from "../fieldOptions";
+import { fieldOptions } from "../fieldOptions";
 import { formatProfileDate } from "../utils/profileUtils";
 import { compareApprovalStatuses } from "../utils/approvalStatus";
 import { formatAssignedUsernames, fromAssignmentDraftValue, toAssignmentDraftValue } from "../assignmentUtils";
@@ -84,7 +85,6 @@ type TiperCommissionApi = {
 };
 
 const FIELD_OPTIONS_ARRAY = fieldOptions.map((opt) => opt.value);
-const PROJECTS_FIELD_OPTIONS_ARRAY = projectsFieldOptions.map((opt) => opt.value);
 const PROJECT_SUBJECT_STATUS_OPTIONS = ["accepted", "archived"];
 const PROJECT_COMMISSION_STATUS_OPTIONS = ["accepted", "pending", "archived"];
 const joinName = (...parts: Array<string | null | undefined>) => parts.filter((part): part is string => Boolean(part && part.trim())).join(" ").trim();
@@ -417,9 +417,13 @@ const TipersSectionNew: React.FC<SectionProps> = ({
   // Get status from viewMode
   const status = useMemo(() => mapViewToStatus(viewMode), [viewMode]);
   const resourceKey = systemNamespace ? "project-tipers" : "tipers";
-  const fieldOptionsArray = systemNamespace ? PROJECTS_FIELD_OPTIONS_ARRAY : FIELD_OPTIONS_ARRAY;
-  const fieldOptionChoices = systemNamespace ? projectsFieldOptions : fieldOptions;
-  const groupedFieldOptionChoices = systemNamespace ? projectsGroupedFieldOptions : groupedFieldOptions;
+  const {
+    fieldOptionsArray,
+    fieldOptions: fieldOptionChoices,
+    groupedFieldOptions: groupedFieldOptionChoices,
+    createFieldOption,
+    deleteFieldOption,
+  } = useFieldOptions(systemNamespace);
   const projectStatusOptions = useMemo(
     () =>
       systemNamespace === "projects"
@@ -585,6 +589,13 @@ const TipersSectionNew: React.FC<SectionProps> = ({
       setIsLoading(false);
     }
   }, [commissionActivityScope, commissionApiBase, entityApiBase, status, subjectActivityScope]);
+
+  const handleCreateFieldOption = useCallback((value: string) => createFieldOption(value), [createFieldOption]);
+
+  const handleDeleteFieldOption = useCallback(async (optionId: number) => {
+    await deleteFieldOption(optionId);
+    await fetchData();
+  }, [deleteFieldOption, fetchData]);
 
   // ==========================================================================
   // PROFILE PANEL LOGIC
@@ -1391,7 +1402,10 @@ const TipersSectionNew: React.FC<SectionProps> = ({
         cellRenderer: FieldCellRenderer,
         cellRendererParams: {
           fieldOptions: fieldOptionChoices,
-          groupedFieldOptions: groupedFieldOptionChoices
+          groupedFieldOptions: groupedFieldOptionChoices,
+          onCreateFieldOption: readOnly ? undefined : handleCreateFieldOption,
+          onDeleteFieldOption: readOnly ? undefined : handleDeleteFieldOption,
+          disabled: readOnly,
         }
       },
       {
@@ -1489,7 +1503,7 @@ const TipersSectionNew: React.FC<SectionProps> = ({
     }
 
     return cols;
-  }, [assignableUsers, fieldOptionChoices, groupedFieldOptionChoices, onStatusCellClicked, projectStatusOptions, systemNamespace, viewMode]);
+  }, [assignableUsers, fieldOptionChoices, groupedFieldOptionChoices, handleCreateFieldOption, handleDeleteFieldOption, onStatusCellClicked, projectStatusOptions, readOnly, systemNamespace, viewMode]);
 
   const useContentHeightLayout = gridData.length <= 8;
 

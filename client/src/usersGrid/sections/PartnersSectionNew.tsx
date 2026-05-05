@@ -18,10 +18,11 @@ import { mapViewToStatus } from "../constants";
 import { apiDelete, apiGet, apiPost, apiPut } from "../../utils/api";
 import { uploadDocuments } from "../../utils/uploadDocuments";
 import type { SectionProps } from "./SectionTypes";
+import useFieldOptions from "../hooks/useFieldOptions";
 import useProfileDocuments from "../hooks/useProfileDocuments";
 import useProfileNotes from "../hooks/useProfileNotes";
 import { ApproveRestoreCellRenderer, DeleteArchiveCellRenderer } from "../cells/RowActionCellRenderers";
-import { fieldOptions, groupedFieldOptions, projectsFieldOptions, projectsGroupedFieldOptions } from "../fieldOptions";
+import { fieldOptions } from "../fieldOptions";
 import { formatProfileDate } from "../utils/profileUtils";
 import { compareApprovalStatuses } from "../utils/approvalStatus";
 import { formatAssignedUsernames, fromAssignmentDraftValue, toAssignmentDraftValue } from "../assignmentUtils";
@@ -84,7 +85,6 @@ type PartnerCommissionApi = {
 };
 
 const FIELD_OPTIONS_ARRAY = fieldOptions.map((opt) => opt.value);
-const PROJECTS_FIELD_OPTIONS_ARRAY = projectsFieldOptions.map((opt) => opt.value);
 const PROJECT_SUBJECT_STATUS_OPTIONS = ["accepted", "archived"];
 const PROJECT_COMMISSION_STATUS_OPTIONS = ["accepted", "pending", "archived"];
 
@@ -396,9 +396,13 @@ const PartnersSectionNew: React.FC<SectionProps> = ({ viewMode, isActive, system
   const gridRef = useRef<AgGridReact<PartnerGridRow>>(null);
   const status = useMemo(() => mapViewToStatus(viewMode), [viewMode]);
   const resourceKey = systemNamespace ? "project-partners" : "partners";
-  const fieldOptionsArray = systemNamespace ? PROJECTS_FIELD_OPTIONS_ARRAY : FIELD_OPTIONS_ARRAY;
-  const fieldOptionChoices = systemNamespace ? projectsFieldOptions : fieldOptions;
-  const groupedFieldOptionChoices = systemNamespace ? projectsGroupedFieldOptions : groupedFieldOptions;
+  const {
+    fieldOptionsArray,
+    fieldOptions: fieldOptionChoices,
+    groupedFieldOptions: groupedFieldOptionChoices,
+    createFieldOption,
+    deleteFieldOption,
+  } = useFieldOptions(systemNamespace);
   const projectStatusOptions = useMemo(
     () =>
       systemNamespace === "projects"
@@ -557,6 +561,13 @@ const PartnersSectionNew: React.FC<SectionProps> = ({ viewMode, isActive, system
       setIsLoading(false);
     }
   }, [commissionActivityScope, commissionApiBase, entityApiBase, status, subjectActivityScope]);
+
+  const handleCreateFieldOption = useCallback((value: string) => createFieldOption(value), [createFieldOption]);
+
+  const handleDeleteFieldOption = useCallback(async (optionId: number) => {
+    await deleteFieldOption(optionId);
+    await fetchData();
+  }, [deleteFieldOption, fetchData]);
 
   const selectedEntity = useMemo(() => selectedEntityId === null ? null : entities.find((entity) => entity.id === selectedEntityId) || null, [entities, selectedEntityId]);
   const selectedCommission = useMemo(() => selectedCommissionId === null ? null : commissions.find((commission) => commission.id === selectedCommissionId) || null, [commissions, selectedCommissionId]);
@@ -1211,14 +1222,29 @@ const PartnersSectionNew: React.FC<SectionProps> = ({ viewMode, isActive, system
       { field: "name", headerName: "Jméno / Název", filter: true, editable: true, flex: 1.5, minWidth: 160 },
       { field: "company", headerName: "Společnost", filter: true, editable: true, flex: 1.5, minWidth: 160 },
       workflowStateColumn,
-      { field: "field", headerName: "Obor", filter: true, editable: false, flex: 1, minWidth: 110, cellRenderer: FieldCellRenderer, cellRendererParams: { fieldOptions: fieldOptionChoices, groupedFieldOptions: groupedFieldOptionChoices } },
+      {
+        field: "field",
+        headerName: "Obor",
+        filter: true,
+        editable: false,
+        flex: 1,
+        minWidth: 110,
+        cellRenderer: FieldCellRenderer,
+        cellRendererParams: {
+          fieldOptions: fieldOptionChoices,
+          groupedFieldOptions: groupedFieldOptionChoices,
+          onCreateFieldOption: readOnly ? undefined : handleCreateFieldOption,
+          onDeleteFieldOption: readOnly ? undefined : handleDeleteFieldOption,
+          disabled: readOnly,
+        }
+      },
       { field: "location", headerName: "Lokalita", filter: true, editable: true, flex: 1, minWidth: 110 },
       { field: "created_at", headerName: "Datum přidání", filter: true, editable: false, flex: 0.95, minWidth: 130, valueFormatter: (params) => formatAddedDate(params.value) },
       ...(viewMode === "active" ? activeSubjectCols : commissionCols)
     );
 
     return cols;
-  }, [assignableUsers, fieldOptionChoices, groupedFieldOptionChoices, onStatusCellClicked, projectStatusOptions, systemNamespace, viewMode]);
+  }, [assignableUsers, fieldOptionChoices, groupedFieldOptionChoices, handleCreateFieldOption, handleDeleteFieldOption, onStatusCellClicked, projectStatusOptions, readOnly, systemNamespace, viewMode]);
 
   const useContentHeightLayout = gridData.length <= 8;
 
