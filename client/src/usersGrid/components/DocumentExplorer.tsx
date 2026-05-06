@@ -33,7 +33,7 @@ type DocumentExplorerProps = {
 
 type ViewMode = "grid" | "list" | "canvas";
 type ZoomLevel = "small" | "normal" | "big";
-type DocumentLabelColor = "red" | "yellow" | "green" | "blue" | "purple";
+type DocumentLabelColor = "red" | "yellow" | "green" | "blue" | "purple" | "orange" | "grey" | "black";
 
 const VIEW_MODE_STORAGE_KEY = "ec-documents-view-mode";
 const ZOOM_LEVEL_STORAGE_KEY = "ec-documents-zoom-level";
@@ -65,7 +65,10 @@ const DOCUMENT_LABEL_COLORS: Array<{ value: DocumentLabelColor | null; label: st
   { value: "yellow", label: "Žlutá", color: "#facc15" },
   { value: "green", label: "Zelená", color: "#22c55e" },
   { value: "blue", label: "Modrá", color: "#3b82f6" },
-  { value: "purple", label: "Fialová", color: "#a855f7" }
+  { value: "purple", label: "Fialová", color: "#a855f7" },
+  { value: "orange", label: "Oranžová", color: "#f97316" },
+  { value: "grey", label: "Šedá", color: "#6b7280" },
+  { value: "black", label: "Černá", color: "#1f2937" }
 ];
 
 const FOLDER_COLOR_OPTIONS: Array<{ value: DocumentLabelColor | null; label: string; color?: string }> = [
@@ -74,7 +77,10 @@ const FOLDER_COLOR_OPTIONS: Array<{ value: DocumentLabelColor | null; label: str
   { value: "yellow", label: "Žlutá", color: "#f5b301" },
   { value: "green", label: "Zelená", color: "#22c55e" },
   { value: "blue", label: "Tmavě modrá", color: "#1e3a8a" },
-  { value: "purple", label: "Fialová", color: "#a855f7" }
+  { value: "purple", label: "Fialová", color: "#a855f7" },
+  { value: "orange", label: "Oranžová", color: "#f97316" },
+  { value: "grey", label: "Šedá", color: "#6b7280" },
+  { value: "black", label: "Černá", color: "#1f2937" }
 ];
 
 const DEFAULT_FOLDER_PALETTE = { top: "#6FB3E0", body: "#7EC4ED", shade: "#5FA1CE" };
@@ -84,7 +90,10 @@ const FOLDER_COLOR_PALETTE: Record<DocumentLabelColor, { top: string; body: stri
   yellow: { top: "#E8B43B", body: "#F5C658", shade: "#C8941D" },
   green: { top: "#5BB97A", body: "#7AD295", shade: "#3F9B5C" },
   blue: { top: "#1E40AF", body: "#2952C8", shade: "#152F86" },
-  purple: { top: "#9C7AD6", body: "#B594E5", shade: "#7B5BB7" }
+  purple: { top: "#9C7AD6", body: "#B594E5", shade: "#7B5BB7" },
+  orange: { top: "#D97706", body: "#F59E0B", shade: "#B45309" },
+  grey: { top: "#4B5563", body: "#6B7280", shade: "#374151" },
+  black: { top: "#111827", body: "#1F2937", shade: "#030712" }
 };
 
 const readFolderColorMap = (): Record<string, DocumentLabelColor | null> => {
