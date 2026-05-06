@@ -31,11 +31,33 @@ type DocumentExplorerProps = {
   getFolderItemCount: (folderId: number) => number;
 };
 
-type ViewMode = "grid" | "list";
+type ViewMode = "grid" | "list" | "canvas";
+type ZoomLevel = "small" | "normal" | "big";
 type DocumentLabelColor = "red" | "yellow" | "green" | "blue" | "purple";
 
 const VIEW_MODE_STORAGE_KEY = "ec-documents-view-mode";
+const ZOOM_LEVEL_STORAGE_KEY = "ec-documents-zoom-level";
+const FOLDER_COLOR_STORAGE_KEY = "ec-documents-folder-colors";
+const CANVAS_POSITIONS_STORAGE_KEY = "ec-documents-canvas-positions";
 const DEFAULT_NEW_FOLDER_NAME = "Nová složka";
+
+const ZOOM_SCALES: Record<ZoomLevel, number> = {
+  small: 0.78,
+  normal: 1,
+  big: 1.34
+};
+
+const ZOOM_VALUE_TO_LEVEL: Record<number, ZoomLevel> = {
+  1: "small",
+  2: "normal",
+  3: "big"
+};
+
+const ZOOM_LEVEL_TO_VALUE: Record<ZoomLevel, number> = {
+  small: 1,
+  normal: 2,
+  big: 3
+};
 
 const DOCUMENT_LABEL_COLORS: Array<{ value: DocumentLabelColor | null; label: string; color?: string }> = [
   { value: null, label: "Bez barvy" },
@@ -45,6 +67,63 @@ const DOCUMENT_LABEL_COLORS: Array<{ value: DocumentLabelColor | null; label: st
   { value: "blue", label: "Modrá", color: "#3b82f6" },
   { value: "purple", label: "Fialová", color: "#a855f7" }
 ];
+
+const FOLDER_COLOR_OPTIONS: Array<{ value: DocumentLabelColor | null; label: string; color?: string }> = [
+  { value: null, label: "Výchozí modrá" },
+  { value: "red", label: "Červená", color: "#ef4444" },
+  { value: "yellow", label: "Žlutá", color: "#f5b301" },
+  { value: "green", label: "Zelená", color: "#22c55e" },
+  { value: "blue", label: "Modrá", color: "#3b82f6" },
+  { value: "purple", label: "Fialová", color: "#a855f7" }
+];
+
+const DEFAULT_FOLDER_PALETTE = { top: "#6FB3E0", body: "#7EC4ED", shade: "#5FA1CE" };
+
+const FOLDER_COLOR_PALETTE: Record<DocumentLabelColor, { top: string; body: string; shade: string }> = {
+  red: { top: "#E07472", body: "#F08C8B", shade: "#C5524F" },
+  yellow: { top: "#E8B43B", body: "#F5C658", shade: "#C8941D" },
+  green: { top: "#5BB97A", body: "#7AD295", shade: "#3F9B5C" },
+  blue: { top: "#6FB3E0", body: "#7EC4ED", shade: "#5FA1CE" },
+  purple: { top: "#9C7AD6", body: "#B594E5", shade: "#7B5BB7" }
+};
+
+const readFolderColorMap = (): Record<string, DocumentLabelColor | null> => {
+  if (typeof window === "undefined") {
+    return {};
+  }
+  try {
+    const stored = window.localStorage.getItem(FOLDER_COLOR_STORAGE_KEY);
+    if (!stored) {
+      return {};
+    }
+    const parsed = JSON.parse(stored);
+    if (parsed && typeof parsed === "object") {
+      return parsed as Record<string, DocumentLabelColor | null>;
+    }
+  } catch {
+    /* ignore */
+  }
+  return {};
+};
+
+const readCanvasPositionsMap = (): Record<string, { x: number; y: number }> => {
+  if (typeof window === "undefined") {
+    return {};
+  }
+  try {
+    const stored = window.localStorage.getItem(CANVAS_POSITIONS_STORAGE_KEY);
+    if (!stored) {
+      return {};
+    }
+    const parsed = JSON.parse(stored);
+    if (parsed && typeof parsed === "object") {
+      return parsed as Record<string, { x: number; y: number }>;
+    }
+  } catch {
+    /* ignore */
+  }
+  return {};
+};
 
 const formatFileSize = (bytes: number) => {
   if (!Number.isFinite(bytes) || bytes <= 0) {
@@ -110,27 +189,70 @@ const getDocumentLabelColor = (item: ProfileDocument) => {
   return DOCUMENT_LABEL_COLORS.find((entry) => entry.value === item.labelColor) ?? DOCUMENT_LABEL_COLORS[0];
 };
 
-const FolderGlyph: React.FC<{ small?: boolean }> = ({ small }) => (
-  <svg
-    className={`ec-fs-glyph ec-fs-glyph--folder${small ? " ec-fs-glyph--small" : ""}`}
-    viewBox="0 0 64 56"
-    aria-hidden="true"
-  >
-    <path
-      d="M5 14 a3 3 0 0 1 3 -3 h17 l5 5 h26 a3 3 0 0 1 3 3 v6 H5 z"
-      fill="#6FB3E0"
-    />
-    <path
-      d="M5 20 h59 v28 a4 4 0 0 1 -4 4 h-51 a4 4 0 0 1 -4 -4 z"
-      fill="#7EC4ED"
-    />
-    <path
-      d="M5 20 h59 v3 h-59 z"
-      fill="#5FA1CE"
-      opacity="0.55"
-    />
-  </svg>
-);
+const getFolderPalette = (color: DocumentLabelColor | null | undefined) => {
+  if (color && FOLDER_COLOR_PALETTE[color]) {
+    return FOLDER_COLOR_PALETTE[color];
+  }
+  return DEFAULT_FOLDER_PALETTE;
+};
+
+const FolderGlyph: React.FC<{ small?: boolean; color?: DocumentLabelColor | null }> = ({ small, color }) => {
+  const palette = getFolderPalette(color ?? null);
+  return (
+    <svg
+      className={`ec-fs-glyph ec-fs-glyph--folder${small ? " ec-fs-glyph--small" : ""}`}
+      viewBox="0 0 64 56"
+      aria-hidden="true"
+    >
+      <path
+        d="M5 14 a3 3 0 0 1 3 -3 h17 l5 5 h26 a3 3 0 0 1 3 3 v6 H5 z"
+        fill={palette.top}
+      />
+      <path
+        d="M5 20 h59 v28 a4 4 0 0 1 -4 4 h-51 a4 4 0 0 1 -4 -4 z"
+        fill={palette.body}
+      />
+      <path
+        d="M5 20 h59 v3 h-59 z"
+        fill={palette.shade}
+        opacity="0.55"
+      />
+    </svg>
+  );
+};
+
+const FolderSwatch: React.FC<{ color: DocumentLabelColor | null; isEmpty?: boolean }> = ({ color, isEmpty }) => {
+  if (isEmpty) {
+    return (
+      <span className="ec-fs-folder-swatch is-empty" aria-hidden="true">
+        <svg viewBox="0 0 24 18" width="100%" height="100%">
+          <path
+            d="M2 4.5 a1.2 1.2 0 0 1 1.2 -1.2 h6.4 l1.8 1.8 h9.4 a1.2 1.2 0 0 1 1.2 1.2 v8.8 a1.2 1.2 0 0 1 -1.2 1.2 h-17.6 a1.2 1.2 0 0 1 -1.2 -1.2 z"
+            fill="none"
+            stroke="#94a3b8"
+            strokeWidth="1.5"
+            strokeDasharray="2.5 2"
+          />
+        </svg>
+      </span>
+    );
+  }
+  const palette = getFolderPalette(color);
+  return (
+    <span className="ec-fs-folder-swatch" aria-hidden="true">
+      <svg viewBox="0 0 24 18" width="100%" height="100%">
+        <path
+          d="M2 4.5 a1.2 1.2 0 0 1 1.2 -1.2 h6.4 l1.8 1.8 h9.4 a1.2 1.2 0 0 1 1.2 1.2 v2.2 H2 z"
+          fill={palette.top}
+        />
+        <path
+          d="M2 6.8 h21 v8.5 a1.2 1.2 0 0 1 -1.2 1.2 h-18.6 a1.2 1.2 0 0 1 -1.2 -1.2 z"
+          fill={palette.body}
+        />
+      </svg>
+    </span>
+  );
+};
 
 const FileGlyph: React.FC<{ kind: FileKind; extension?: string; small?: boolean }> = ({ kind, extension, small }) => {
   const palette: Record<FileKind, { body: string; tag: string; label: string }> = {
@@ -274,8 +396,28 @@ const DocumentExplorer: React.FC<DocumentExplorerProps> = ({
       return "grid";
     }
     const stored = window.localStorage.getItem(VIEW_MODE_STORAGE_KEY);
-    return stored === "list" ? "list" : "grid";
+    if (stored === "list" || stored === "canvas" || stored === "grid") {
+      return stored;
+    }
+    return "grid";
   });
+  const [zoomLevel, setZoomLevel] = useState<ZoomLevel>(() => {
+    if (typeof window === "undefined") {
+      return "normal";
+    }
+    const stored = window.localStorage.getItem(ZOOM_LEVEL_STORAGE_KEY);
+    if (stored === "small" || stored === "normal" || stored === "big") {
+      return stored;
+    }
+    return "normal";
+  });
+  const [folderColorMap, setFolderColorMap] = useState<Record<string, DocumentLabelColor | null>>(() => readFolderColorMap());
+  const [canvasPositions, setCanvasPositions] = useState<Record<string, { x: number; y: number }>>(() => readCanvasPositionsMap());
+  const [canvasDrag, setCanvasDrag] = useState<{
+    itemIds: number[];
+    initial: Record<number, { x: number; y: number }>;
+    pointerStart: { x: number; y: number };
+  } | null>(null);
 
   useEffect(() => {
     if (typeof window === "undefined") {
@@ -283,6 +425,66 @@ const DocumentExplorer: React.FC<DocumentExplorerProps> = ({
     }
     window.localStorage.setItem(VIEW_MODE_STORAGE_KEY, viewMode);
   }, [viewMode]);
+
+  useEffect(() => {
+    if (typeof window === "undefined") {
+      return;
+    }
+    window.localStorage.setItem(ZOOM_LEVEL_STORAGE_KEY, zoomLevel);
+  }, [zoomLevel]);
+
+  useEffect(() => {
+    if (typeof window === "undefined") {
+      return;
+    }
+    try {
+      window.localStorage.setItem(FOLDER_COLOR_STORAGE_KEY, JSON.stringify(folderColorMap));
+    } catch {
+      /* ignore */
+    }
+  }, [folderColorMap]);
+
+  useEffect(() => {
+    if (typeof window === "undefined") {
+      return;
+    }
+    try {
+      window.localStorage.setItem(CANVAS_POSITIONS_STORAGE_KEY, JSON.stringify(canvasPositions));
+    } catch {
+      /* ignore */
+    }
+  }, [canvasPositions]);
+
+  const getFolderColorFor = useCallback((item: ProfileDocument): DocumentLabelColor | null => {
+    if (item.itemKind !== "folder") {
+      return null;
+    }
+    const stored = folderColorMap[String(item.id)];
+    if (stored === "red" || stored === "yellow" || stored === "green" || stored === "blue" || stored === "purple") {
+      return stored;
+    }
+    return null;
+  }, [folderColorMap]);
+
+  const updateFolderColors = useCallback((targetItems: ProfileDocument[], color: DocumentLabelColor | null) => {
+    const folderTargets = targetItems.filter((item) => item.itemKind === "folder");
+    if (folderTargets.length === 0) {
+      return;
+    }
+    setFolderColorMap((prev) => {
+      const next = { ...prev };
+      for (const item of folderTargets) {
+        if (color === null) {
+          delete next[String(item.id)];
+        } else {
+          next[String(item.id)] = color;
+        }
+      }
+      return next;
+    });
+  }, []);
+
+  const zoomScale = ZOOM_SCALES[zoomLevel];
 
   const normalizedSearch = searchQuery.trim().toLocaleLowerCase("cs-CZ");
 
@@ -407,6 +609,40 @@ const DocumentExplorer: React.FC<DocumentExplorerProps> = ({
     }
     wasDraftFolderActiveRef.current = isDraftFolderActive;
   }, [draftFolderName]);
+
+  useEffect(() => {
+    if (!canvasDrag) {
+      return;
+    }
+
+    const handleMove = (event: MouseEvent) => {
+      const dx = event.clientX - canvasDrag.pointerStart.x;
+      const dy = event.clientY - canvasDrag.pointerStart.y;
+      setCanvasPositions((prev) => {
+        const next = { ...prev };
+        for (const id of canvasDrag.itemIds) {
+          const initial = canvasDrag.initial[id];
+          if (!initial) continue;
+          next[String(id)] = {
+            x: Math.max(0, initial.x + dx),
+            y: Math.max(0, initial.y + dy)
+          };
+        }
+        return next;
+      });
+    };
+
+    const handleUp = () => {
+      setCanvasDrag(null);
+    };
+
+    window.addEventListener("mousemove", handleMove);
+    window.addEventListener("mouseup", handleUp);
+    return () => {
+      window.removeEventListener("mousemove", handleMove);
+      window.removeEventListener("mouseup", handleUp);
+    };
+  }, [canvasDrag]);
 
   useEffect(() => {
     if (!selectionBox) {
@@ -862,7 +1098,9 @@ const DocumentExplorer: React.FC<DocumentExplorerProps> = ({
     return [contextMenuItem];
   }, [contextMenuItem, items, selectedItemIds]);
 
-  const renderTile = (item: ProfileDocument) => {
+  const renderTile = (item: ProfileDocument, options?: { canvas?: boolean; canvasIndex?: number }) => {
+    const isCanvas = options?.canvas === true;
+    const canvasIndex = options?.canvasIndex ?? 0;
     const isSelected = selectedItemIds.includes(item.id);
     const isFolder = item.itemKind === "folder";
     const folderDropKey = `folder:${item.id}`;
@@ -872,14 +1110,30 @@ const DocumentExplorer: React.FC<DocumentExplorerProps> = ({
     const ext = getFileExtension(item.filename);
     const fileKind = isFolder ? "generic" : getFileKind(item.filename);
     const labelColor = getDocumentLabelColor(item);
+    const folderColor = getFolderColorFor(item);
 
     const tileClassNames = [
       "ec-fs-tile",
       `ec-fs-tile--${item.itemKind}`,
+      isCanvas ? "ec-fs-tile--canvas" : "",
       isSelected ? "is-selected" : "",
       isDropTarget ? "is-drop-target" : "",
       isRenaming ? "is-renaming" : ""
     ].filter(Boolean).join(" ");
+
+    const canvasPos = isCanvas ? canvasPositions[String(item.id)] : null;
+    const fallbackTileWidth = Math.round(124 * zoomScale);
+    const fallbackTileHeight = Math.round(118 * zoomScale);
+    const fallbackPerRow = 5;
+    const fallbackX = 16 + (canvasIndex % fallbackPerRow) * fallbackTileWidth;
+    const fallbackY = 16 + Math.floor(canvasIndex / fallbackPerRow) * fallbackTileHeight;
+    const tileStyle: React.CSSProperties | undefined = isCanvas
+      ? {
+          position: "absolute",
+          left: canvasPos?.x ?? fallbackX,
+          top: canvasPos?.y ?? fallbackY
+        }
+      : undefined;
 
     return (
       <div
@@ -887,11 +1141,43 @@ const DocumentExplorer: React.FC<DocumentExplorerProps> = ({
         data-document-id={item.id}
         className={tileClassNames}
         title={item.filename}
-        draggable={!isRenaming && !isApplyingBulkAction}
+        style={tileStyle}
+        draggable={!isCanvas && !isRenaming && !isApplyingBulkAction}
+        onMouseDown={(event) => {
+          if (!isCanvas || event.button !== 0 || isRenaming) {
+            return;
+          }
+          const targetEl = event.target as HTMLElement;
+          if (targetEl.tagName === "INPUT" || targetEl.tagName === "TEXTAREA") {
+            return;
+          }
+          event.stopPropagation();
+          const movingIds = selectedItemIds.includes(item.id) && selectedItemIds.length > 0
+            ? selectedItemIds
+            : [item.id];
+          if (!selectedItemIds.includes(item.id)) {
+            setSelectedItemIds([item.id]);
+            setLastSelectedId(item.id);
+          }
+          const initial: Record<number, { x: number; y: number }> = {};
+          for (const id of movingIds) {
+            const pos = canvasPositions[String(id)];
+            initial[id] = pos ? { ...pos } : { x: 16, y: 16 };
+          }
+          setCanvasDrag({
+            itemIds: movingIds,
+            initial,
+            pointerStart: { x: event.clientX, y: event.clientY }
+          });
+        }}
         onClick={(event) => handleTileClick(item, event)}
         onDoubleClick={() => handleTileDoubleClick(item)}
         onContextMenu={(event) => handleTileContextMenu(item, event)}
         onDragStart={(event) => {
+          if (isCanvas) {
+            event.preventDefault();
+            return;
+          }
           event.dataTransfer.effectAllowed = "move";
           event.dataTransfer.setData("text/plain", String(item.id));
           setDraggedItemId(item.id);
@@ -918,7 +1204,7 @@ const DocumentExplorer: React.FC<DocumentExplorerProps> = ({
         }}
       >
         <div className="ec-fs-tile-icon">
-          {isFolder ? <FolderGlyph /> : <FileGlyph kind={fileKind} extension={ext} />}
+          {isFolder ? <FolderGlyph color={folderColor} /> : <FileGlyph kind={fileKind} extension={ext} />}
         </div>
         {isRenaming ? (
           <input
@@ -965,6 +1251,7 @@ const DocumentExplorer: React.FC<DocumentExplorerProps> = ({
     const ext = getFileExtension(item.filename);
     const fileKind = isFolder ? "generic" : getFileKind(item.filename);
     const labelColor = getDocumentLabelColor(item);
+    const folderColor = getFolderColorFor(item);
 
     const rowClassNames = [
       "ec-fs-row",
@@ -1011,7 +1298,7 @@ const DocumentExplorer: React.FC<DocumentExplorerProps> = ({
         }}
       >
         <div className="ec-fs-row-icon">
-          {isFolder ? <FolderGlyph small /> : <FileGlyph kind={fileKind} extension={ext} small />}
+          {isFolder ? <FolderGlyph small color={folderColor} /> : <FileGlyph kind={fileKind} extension={ext} small />}
         </div>
         <div className="ec-fs-row-main">
           {isRenaming ? (
@@ -1059,7 +1346,7 @@ const DocumentExplorer: React.FC<DocumentExplorerProps> = ({
     return (
       <div key="draft-folder" className="ec-fs-tile ec-fs-tile--folder ec-fs-tile--draft is-selected">
         <div className="ec-fs-tile-icon">
-          <FolderGlyph />
+          <FolderGlyph color={null} />
         </div>
         <input
           ref={draftFolderInputRef}
@@ -1112,7 +1399,7 @@ const DocumentExplorer: React.FC<DocumentExplorerProps> = ({
     return (
       <div key="draft-folder-row" className="ec-fs-row ec-fs-row--folder ec-fs-row--draft is-selected">
         <div className="ec-fs-row-icon">
-          <FolderGlyph small />
+          <FolderGlyph small color={null} />
         </div>
         <div className="ec-fs-row-main">
           <input
@@ -1227,6 +1514,19 @@ const DocumentExplorer: React.FC<DocumentExplorerProps> = ({
           <div className="ec-fs-view-toggle" role="group" aria-label="Zobrazení">
             <button
               type="button"
+              className={`ec-fs-view-toggle-btn ${viewMode === "list" ? "is-active" : ""}`}
+              onClick={() => setViewMode("list")}
+              title="Seznam (řádky)"
+              aria-pressed={viewMode === "list"}
+            >
+              <svg viewBox="0 0 16 16" width="14" height="14" aria-hidden="true">
+                <rect x="1" y="2" width="14" height="2" rx="1" fill="currentColor" />
+                <rect x="1" y="7" width="14" height="2" rx="1" fill="currentColor" />
+                <rect x="1" y="12" width="14" height="2" rx="1" fill="currentColor" />
+              </svg>
+            </button>
+            <button
+              type="button"
               className={`ec-fs-view-toggle-btn ${viewMode === "grid" ? "is-active" : ""}`}
               onClick={() => setViewMode("grid")}
               title="Ikony"
@@ -1241,17 +1541,36 @@ const DocumentExplorer: React.FC<DocumentExplorerProps> = ({
             </button>
             <button
               type="button"
-              className={`ec-fs-view-toggle-btn ${viewMode === "list" ? "is-active" : ""}`}
-              onClick={() => setViewMode("list")}
-              title="Seznam"
-              aria-pressed={viewMode === "list"}
+              className={`ec-fs-view-toggle-btn ${viewMode === "canvas" ? "is-active" : ""}`}
+              onClick={() => setViewMode("canvas")}
+              title="Plátno (volné rozmístění)"
+              aria-pressed={viewMode === "canvas"}
             >
               <svg viewBox="0 0 16 16" width="14" height="14" aria-hidden="true">
-                <rect x="1" y="2" width="14" height="2" rx="1" fill="currentColor" />
-                <rect x="1" y="7" width="14" height="2" rx="1" fill="currentColor" />
-                <rect x="1" y="12" width="14" height="2" rx="1" fill="currentColor" />
+                <rect x="1" y="1" width="14" height="14" rx="1.5" fill="none" stroke="currentColor" strokeWidth="1.4" />
+                <rect x="3.5" y="3.5" width="4" height="4" rx="0.6" fill="currentColor" />
+                <rect x="9" y="8" width="4" height="4" rx="0.6" fill="currentColor" />
               </svg>
             </button>
+          </div>
+          <div className="ec-fs-zoom-slider" role="group" aria-label="Velikost zobrazení">
+            <span className="ec-fs-zoom-icon ec-fs-zoom-icon--small" aria-hidden="true">A</span>
+            <input
+              type="range"
+              min={1}
+              max={3}
+              step={1}
+              value={ZOOM_LEVEL_TO_VALUE[zoomLevel]}
+              onChange={(event) => {
+                const numeric = Number(event.target.value);
+                const next = ZOOM_VALUE_TO_LEVEL[numeric] ?? "normal";
+                setZoomLevel(next);
+              }}
+              className="ec-fs-zoom-input"
+              aria-label="Přiblížení"
+              title={`Velikost: ${zoomLevel === "small" ? "Malé" : zoomLevel === "big" ? "Velké" : "Normální"}`}
+            />
+            <span className="ec-fs-zoom-icon ec-fs-zoom-icon--big" aria-hidden="true">A</span>
           </div>
           {onCreateFolder ? (
             <button
@@ -1285,14 +1604,14 @@ const DocumentExplorer: React.FC<DocumentExplorerProps> = ({
         </span>
       </div>
 
-        <div className="ec-fs-browser-area">
+        <div className="ec-fs-browser-area" style={{ ['--ec-fs-zoom' as string]: zoomScale }}>
           {isLoading ? (
             <p className="ec-empty-text">Načítám dokumenty…</p>
           ) : filteredItems.length > 0 || draftFolderName !== null || (onCreateFolder && !normalizedSearch) ? (
             viewMode === "grid" ? (
               <div
                 ref={activeSelectionSurfaceRef}
-                className="ec-fs-grid"
+                className={`ec-fs-grid ec-fs-zoom--${zoomLevel}`}
                 onMouseDown={handleSelectionSurfaceMouseDown}
                 onClick={handleEmptyAreaClick}
                 onContextMenu={(event) => {
@@ -1318,15 +1637,48 @@ const DocumentExplorer: React.FC<DocumentExplorerProps> = ({
                   void handleDropToFolder(currentFolderId);
                 }}
               >
-                {filteredItems.map(renderTile)}
+                {filteredItems.map((item) => renderTile(item))}
                 {renderDraftFolderTile()}
                 {renderAddFolderTile()}
                 {selectionBox ? <div className="ec-fs-selection-rect" style={{ left: selectionBox.x, top: selectionBox.y, width: selectionBox.width, height: selectionBox.height }} /> : null}
               </div>
+            ) : viewMode === "canvas" ? (
+              <div
+                ref={activeSelectionSurfaceRef}
+                className={`ec-fs-canvas ec-fs-zoom--${zoomLevel}`}
+                onMouseDown={handleSelectionSurfaceMouseDown}
+                onClick={handleEmptyAreaClick}
+                onContextMenu={(event) => {
+                  if (event.target !== event.currentTarget) {
+                    return;
+                  }
+                  event.preventDefault();
+                }}
+                onDragOver={(event) => {
+                  if (!canDropDraggedItemsTo(currentFolderId)) {
+                    return;
+                  }
+                  event.preventDefault();
+                }}
+                onDrop={(event) => {
+                  if (event.target !== event.currentTarget) {
+                    return;
+                  }
+                  if (!canDropDraggedItemsTo(currentFolderId)) {
+                    return;
+                  }
+                  event.preventDefault();
+                  void handleDropToFolder(currentFolderId);
+                }}
+              >
+                {filteredItems.map((item, index) => renderTile(item, { canvas: true, canvasIndex: index }))}
+                {selectionBox ? <div className="ec-fs-selection-rect" style={{ left: selectionBox.x, top: selectionBox.y, width: selectionBox.width, height: selectionBox.height }} /> : null}
+                <div className="ec-fs-canvas-label">Plátno</div>
+              </div>
             ) : (
               <div
                 ref={activeSelectionSurfaceRef}
-                className="ec-fs-list"
+                className={`ec-fs-list ec-fs-zoom--${zoomLevel}`}
                 onMouseDown={handleSelectionSurfaceMouseDown}
                 onClick={handleEmptyAreaClick}
                 onContextMenu={(event) => {
@@ -1409,22 +1761,48 @@ const DocumentExplorer: React.FC<DocumentExplorerProps> = ({
           </div>
 
           {onUpdateDocumentColor ? (
-            <div className="ec-fs-color-strip" aria-label="Barva označení">
-              {DOCUMENT_LABEL_COLORS.map((entry) => (
-                <button
-                  key={`inspector-color-${entry.value ?? "none"}`}
-                  type="button"
-                  className={`ec-fs-color-dot-btn ${selectedItems.length > 0 && selectedItems.every((item) => (item.labelColor ?? null) === entry.value) ? "is-active" : ""}`}
-                  title={entry.label}
-                  aria-label={entry.label}
-                  onClick={() => void handleColorItems(selectedItems, entry.value)}
-                  disabled={selectedItems.length === 0 || isApplyingBulkAction}
-                >
-                  <span className={`ec-fs-color-dot ${entry.value ? "" : "is-empty"}`} style={entry.color ? { backgroundColor: entry.color } : undefined} />
-                </button>
-              ))}
+            <div className="ec-fs-color-section">
+              <div className="ec-fs-color-section-label">Tečka</div>
+              <div className="ec-fs-color-strip" aria-label="Barva tečky">
+                {DOCUMENT_LABEL_COLORS.map((entry) => (
+                  <button
+                    key={`inspector-color-${entry.value ?? "none"}`}
+                    type="button"
+                    className={`ec-fs-color-dot-btn ${selectedItems.length > 0 && selectedItems.every((item) => (item.labelColor ?? null) === entry.value) ? "is-active" : ""}`}
+                    title={entry.label}
+                    aria-label={entry.label}
+                    onClick={() => void handleColorItems(selectedItems, entry.value)}
+                    disabled={selectedItems.length === 0 || isApplyingBulkAction}
+                  >
+                    <span className={`ec-fs-color-dot ${entry.value ? "" : "is-empty"}`} style={entry.color ? { backgroundColor: entry.color } : undefined} />
+                  </button>
+                ))}
+              </div>
             </div>
           ) : null}
+
+          <div className="ec-fs-color-section">
+            <div className="ec-fs-color-section-label">Složka</div>
+            <div className="ec-fs-color-strip ec-fs-color-strip--folders" aria-label="Barva složky">
+              {FOLDER_COLOR_OPTIONS.map((entry) => {
+                const folderTargets = selectedItems.filter((item) => item.itemKind === "folder");
+                const isActive = folderTargets.length > 0 && folderTargets.every((item) => (folderColorMap[String(item.id)] ?? null) === entry.value);
+                return (
+                  <button
+                    key={`inspector-folder-color-${entry.value ?? "none"}`}
+                    type="button"
+                    className={`ec-fs-folder-swatch-btn ${isActive ? "is-active" : ""}`}
+                    title={entry.label}
+                    aria-label={entry.label}
+                    onClick={() => updateFolderColors(selectedItems, entry.value)}
+                    disabled={folderTargets.length === 0}
+                  >
+                    <FolderSwatch color={entry.value} isEmpty={entry.value === null} />
+                  </button>
+                );
+              })}
+            </div>
+          </div>
 
           <div className="ec-fs-inspector-details">
             <div className="ec-fs-inspector-title">
@@ -1596,8 +1974,8 @@ const DocumentExplorer: React.FC<DocumentExplorerProps> = ({
           {onUpdateDocumentColor ? (
             <>
               <div className="ec-fs-context-separator" />
-              <div className="ec-fs-context-label-title">Barva</div>
-              <div className="ec-fs-context-color-row" role="group" aria-label="Barva položky">
+              <div className="ec-fs-context-label-title">Tečka</div>
+              <div className="ec-fs-context-color-row" role="group" aria-label="Barva tečky">
                 {DOCUMENT_LABEL_COLORS.map((entry) => (
                   <button
                     key={`context-color-${entry.value ?? "none"}`}
@@ -1615,6 +1993,33 @@ const DocumentExplorer: React.FC<DocumentExplorerProps> = ({
                     <span className={`ec-fs-color-dot ${entry.value ? "" : "is-empty"}`} style={entry.color ? { backgroundColor: entry.color } : undefined} />
                   </button>
                 ))}
+              </div>
+            </>
+          ) : null}
+          {contextMenuTargets.some((item) => item.itemKind === "folder") ? (
+            <>
+              <div className="ec-fs-context-label-title">Složka</div>
+              <div className="ec-fs-context-color-row ec-fs-context-color-row--folders" role="group" aria-label="Barva složky">
+                {FOLDER_COLOR_OPTIONS.map((entry) => {
+                  const folderTargets = contextMenuTargets.filter((item) => item.itemKind === "folder");
+                  const isActive = folderTargets.length > 0 && folderTargets.every((item) => (folderColorMap[String(item.id)] ?? null) === entry.value);
+                  return (
+                    <button
+                      key={`context-folder-color-${entry.value ?? "none"}`}
+                      type="button"
+                      className={`ec-fs-folder-swatch-btn ${isActive ? "is-active" : ""}`}
+                      title={entry.label}
+                      aria-label={entry.label}
+                      onClick={() => {
+                        const targets = contextMenuTargets;
+                        closeContextMenu();
+                        updateFolderColors(targets, entry.value);
+                      }}
+                    >
+                      <FolderSwatch color={entry.value} isEmpty={entry.value === null} />
+                    </button>
+                  );
+                })}
               </div>
             </>
           ) : null}
