@@ -367,6 +367,7 @@ const DocumentExplorer: React.FC<DocumentExplorerProps> = ({
 }) => {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const contextMenuRef = useRef<HTMLDivElement>(null);
+  const blankContextMenuRef = useRef<HTMLDivElement>(null);
   const movePopupRef = useRef<HTMLDivElement>(null);
   const renameInputRef = useRef<HTMLInputElement>(null);
   const draftFolderInputRef = useRef<HTMLInputElement>(null);
@@ -388,6 +389,7 @@ const DocumentExplorer: React.FC<DocumentExplorerProps> = ({
   const [draggedItemId, setDraggedItemId] = useState<number | null>(null);
   const [dropTargetKey, setDropTargetKey] = useState<string | null>(null);
   const [contextMenu, setContextMenu] = useState<ContextMenuState | null>(null);
+  const [blankContextMenu, setBlankContextMenu] = useState<{ x: number; y: number } | null>(null);
   const [movePopup, setMovePopup] = useState<MovePopupState | null>(null);
   const [moveTargetId, setMoveTargetId] = useState("");
   const [selectionBox, setSelectionBox] = useState<SelectionBoxState | null>(null);
@@ -543,14 +545,18 @@ const DocumentExplorer: React.FC<DocumentExplorerProps> = ({
     setContextMenu(null);
   }, []);
 
+  const closeBlankContextMenu = useCallback(() => {
+    setBlankContextMenu(null);
+  }, []);
+
   const closeMovePopup = useCallback(() => {
     setMovePopup(null);
     setMoveTargetId("");
   }, []);
 
-  // Close context menu / move popup on outside click or escape
+  // Close context menu / move popup / blank context menu on outside click or escape
   useEffect(() => {
-    if (!contextMenu && !movePopup) {
+    if (!contextMenu && !movePopup && !blankContextMenu) {
       return;
     }
 
@@ -562,14 +568,19 @@ const DocumentExplorer: React.FC<DocumentExplorerProps> = ({
       if (movePopupRef.current && target && movePopupRef.current.contains(target)) {
         return;
       }
+      if (blankContextMenuRef.current && target && blankContextMenuRef.current.contains(target)) {
+        return;
+      }
       closeContextMenu();
       closeMovePopup();
+      closeBlankContextMenu();
     };
 
     const handleKey = (event: KeyboardEvent) => {
       if (event.key === "Escape") {
         closeContextMenu();
         closeMovePopup();
+        closeBlankContextMenu();
       }
     };
 
@@ -584,7 +595,7 @@ const DocumentExplorer: React.FC<DocumentExplorerProps> = ({
       window.removeEventListener("scroll", closeContextMenu, true);
       window.removeEventListener("resize", closeContextMenu);
     };
-  }, [closeContextMenu, closeMovePopup, contextMenu, movePopup]);
+  }, [blankContextMenu, closeBlankContextMenu, closeContextMenu, closeMovePopup, contextMenu, movePopup]);
 
   // Focus rename input when renaming starts
   useLayoutEffect(() => {
@@ -1631,6 +1642,7 @@ const DocumentExplorer: React.FC<DocumentExplorerProps> = ({
                     return;
                   }
                   event.preventDefault();
+                  setBlankContextMenu({ x: event.clientX, y: event.clientY });
                 }}
                 onDragOver={(event) => {
                   if (!canDropDraggedItemsTo(currentFolderId)) {
@@ -1665,6 +1677,7 @@ const DocumentExplorer: React.FC<DocumentExplorerProps> = ({
                     return;
                   }
                   event.preventDefault();
+                  setBlankContextMenu({ x: event.clientX, y: event.clientY });
                 }}
                 onDragOver={(event) => {
                   if (!canDropDraggedItemsTo(currentFolderId)) {
@@ -1698,6 +1711,7 @@ const DocumentExplorer: React.FC<DocumentExplorerProps> = ({
                     return;
                   }
                   event.preventDefault();
+                  setBlankContextMenu({ x: event.clientX, y: event.clientY });
                 }}
               >
                 <div className="ec-fs-list-header">
@@ -2063,6 +2077,44 @@ const DocumentExplorer: React.FC<DocumentExplorerProps> = ({
                 Odstranit{contextMenuTargets.length > 1 ? ` (${contextMenuTargets.length})` : ""}
               </button>
             </>
+          ) : null}
+        </div>
+      ) : null}
+
+      {blankContextMenu ? (
+        <div
+          ref={blankContextMenuRef}
+          className="ec-fs-context-menu"
+          style={{ left: blankContextMenu.x, top: blankContextMenu.y }}
+          onClick={(event) => event.stopPropagation()}
+          onContextMenu={(event) => {
+            event.preventDefault();
+            event.stopPropagation();
+          }}
+        >
+          {onCreateFolder ? (
+            <button
+              type="button"
+              className="ec-fs-context-item"
+              onClick={() => {
+                closeBlankContextMenu();
+                startDraftFolder();
+              }}
+            >
+              Nová složka
+            </button>
+          ) : null}
+          {(onUploadDocuments || onUploadDocument) ? (
+            <button
+              type="button"
+              className="ec-fs-context-item"
+              onClick={() => {
+                closeBlankContextMenu();
+                fileInputRef.current?.click();
+              }}
+            >
+              Přidat soubory
+            </button>
           ) : null}
         </div>
       ) : null}
