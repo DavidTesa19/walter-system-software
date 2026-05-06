@@ -170,7 +170,7 @@ const parseDocumentParentId = (value) => {
   return { parentId: parsed };
 };
 
-const DOCUMENT_LABEL_COLORS = new Set(["red", "yellow", "green", "blue", "purple"]);
+const DOCUMENT_LABEL_COLORS = new Set(["red", "yellow", "green", "blue", "purple", "orange", "grey", "black"]);
 
 const parseDocumentLabelColor = (value) => {
   if (value === null || value === undefined || value === "") {
