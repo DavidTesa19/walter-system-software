@@ -474,7 +474,7 @@ const DocumentExplorer: React.FC<DocumentExplorerProps> = ({
       return null;
     }
     const stored = folderColorMap[String(item.id)];
-    if (stored === "red" || stored === "yellow" || stored === "green" || stored === "blue" || stored === "purple") {
+    if (stored && stored in FOLDER_COLOR_PALETTE) {
       return stored;
     }
     return null;
