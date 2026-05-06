@@ -374,6 +374,8 @@ const DocumentExplorer: React.FC<DocumentExplorerProps> = ({
   const activeSelectionSurfaceRef = useRef<HTMLDivElement | null>(null);
   const dragSelectBaseIdsRef = useRef<number[]>([]);
   const didDragSelectRef = useRef(false);
+  const pendingCanvasNewItemPosRef = useRef<{ x: number; y: number } | null>(null);
+  const prevItemIdsRef = useRef<Set<number>>(new Set());
   const draftFolderCommitInFlightRef = useRef(false);
   const wasDraftFolderActiveRef = useRef(false);
 
@@ -389,7 +391,8 @@ const DocumentExplorer: React.FC<DocumentExplorerProps> = ({
   const [draggedItemId, setDraggedItemId] = useState<number | null>(null);
   const [dropTargetKey, setDropTargetKey] = useState<string | null>(null);
   const [contextMenu, setContextMenu] = useState<ContextMenuState | null>(null);
-  const [blankContextMenu, setBlankContextMenu] = useState<{ x: number; y: number } | null>(null);
+  const [blankContextMenu, setBlankContextMenu] = useState<{ x: number; y: number; canvasPos?: { x: number; y: number } } | null>(null);
+  const [draftFolderCanvasPos, setDraftFolderCanvasPos] = useState<{ x: number; y: number } | null>(null);
   const [movePopup, setMovePopup] = useState<MovePopupState | null>(null);
   const [moveTargetId, setMoveTargetId] = useState("");
   const [selectionBox, setSelectionBox] = useState<SelectionBoxState | null>(null);
@@ -761,7 +764,7 @@ const DocumentExplorer: React.FC<DocumentExplorerProps> = ({
     }
   };
 
-  const startDraftFolder = () => {
+  const startDraftFolder = (canvasPos?: { x: number; y: number }) => {
     if (!onCreateFolder || isApplyingBulkAction) {
       return;
     }
@@ -770,6 +773,7 @@ const DocumentExplorer: React.FC<DocumentExplorerProps> = ({
     setSearchQuery("");
     setSelectedItemIds([]);
     setLastSelectedId(null);
+    setDraftFolderCanvasPos(canvasPos ?? null);
     setDraftFolderName(DEFAULT_NEW_FOLDER_NAME);
   };
 
@@ -780,7 +784,12 @@ const DocumentExplorer: React.FC<DocumentExplorerProps> = ({
 
     const nextName = draftFolderName.trim() || DEFAULT_NEW_FOLDER_NAME;
     draftFolderCommitInFlightRef.current = true;
+    if (draftFolderCanvasPos) {
+      pendingCanvasNewItemPosRef.current = draftFolderCanvasPos;
+      prevItemIdsRef.current = new Set(items.map((it) => it.id));
+    }
     setDraftFolderName(null);
+    setDraftFolderCanvasPos(null);
     try {
       await Promise.resolve(onCreateFolder(nextName));
     } finally {
@@ -790,7 +799,20 @@ const DocumentExplorer: React.FC<DocumentExplorerProps> = ({
 
   const cancelDraftFolder = () => {
     setDraftFolderName(null);
+    setDraftFolderCanvasPos(null);
   };
+
+  // When a new folder appears after canvas-positioned draft commit, pin its position
+  useEffect(() => {
+    if (!pendingCanvasNewItemPosRef.current) {
+      return;
+    }
+    const newItem = items.find((it) => it.itemKind === "folder" && !prevItemIdsRef.current.has(it.id));
+    if (newItem) {
+      setCanvasPositions((prev) => ({ ...prev, [String(newItem.id)]: pendingCanvasNewItemPosRef.current! }));
+      pendingCanvasNewItemPosRef.current = null;
+    }
+  }, [items]);
 
   const openFile = (item: ProfileDocument) => {
     if (item.itemKind === "folder") {
@@ -1361,13 +1383,17 @@ const DocumentExplorer: React.FC<DocumentExplorerProps> = ({
     );
   };
 
-  const renderDraftFolderTile = () => {
+  const renderDraftFolderTile = (canvasPos?: { x: number; y: number }) => {
     if (draftFolderName === null) {
       return null;
     }
 
+    const tileStyle: React.CSSProperties | undefined = canvasPos
+      ? { position: "absolute", left: canvasPos.x, top: canvasPos.y, width: `calc(108px * var(--ec-fs-zoom, 1))` }
+      : undefined;
+
     return (
-      <div key="draft-folder" className="ec-fs-tile ec-fs-tile--folder ec-fs-tile--draft is-selected">
+      <div key="draft-folder" className="ec-fs-tile ec-fs-tile--folder ec-fs-tile--canvas ec-fs-tile--draft is-selected" style={tileStyle}>
         <div className="ec-fs-tile-icon">
           <FolderGlyph color={null} />
         </div>
@@ -1677,7 +1703,12 @@ const DocumentExplorer: React.FC<DocumentExplorerProps> = ({
                     return;
                   }
                   event.preventDefault();
-                  setBlankContextMenu({ x: event.clientX, y: event.clientY });
+                  const el = activeSelectionSurfaceRef.current;
+                  const rect = el?.getBoundingClientRect();
+                  const canvasPos = rect
+                    ? { x: event.clientX - rect.left + (el?.scrollLeft ?? 0), y: event.clientY - rect.top + (el?.scrollTop ?? 0) }
+                    : undefined;
+                  setBlankContextMenu({ x: event.clientX, y: event.clientY, canvasPos });
                 }}
                 onDragOver={(event) => {
                   if (!canDropDraggedItemsTo(currentFolderId)) {
@@ -1697,6 +1728,7 @@ const DocumentExplorer: React.FC<DocumentExplorerProps> = ({
                 }}
               >
                 {filteredItems.map((item, index) => renderTile(item, { canvas: true, canvasIndex: index }))}
+                {renderDraftFolderTile(draftFolderCanvasPos ?? undefined)}
                 {selectionBox ? <div className="ec-fs-selection-rect" style={{ left: selectionBox.x, top: selectionBox.y, width: selectionBox.width, height: selectionBox.height }} /> : null}
                 <div className="ec-fs-canvas-label">Plátno</div>
               </div>
@@ -2097,8 +2129,9 @@ const DocumentExplorer: React.FC<DocumentExplorerProps> = ({
               type="button"
               className="ec-fs-context-item"
               onClick={() => {
+                const pos = blankContextMenu?.canvasPos;
                 closeBlankContextMenu();
-                startDraftFolder();
+                startDraftFolder(pos);
               }}
             >
               Nová složka
