@@ -33,6 +33,7 @@ type DocumentExplorerProps = {
 type ViewMode = "grid" | "list";
 
 const VIEW_MODE_STORAGE_KEY = "ec-documents-view-mode";
+const DEFAULT_NEW_FOLDER_NAME = "Nová složka";
 
 const formatFileSize = (bytes: number) => {
   if (!Number.isFinite(bytes) || bytes <= 0) {
@@ -180,6 +181,28 @@ type MovePopupState = {
   anchorY: number;
 };
 
+type SelectionBoxState = {
+  originX: number;
+  originY: number;
+  originClientX: number;
+  originClientY: number;
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+  additive: boolean;
+};
+
+type DocumentMetadata = ProfileDocument & Partial<{
+  updatedAt: string | null;
+  modifiedAt: string | null;
+  createdBy: string | null;
+  updatedBy: string | null;
+  modifiedBy: string | null;
+  uploadedBy: string | null;
+  author: string | null;
+}>;
+
 const DocumentExplorer: React.FC<DocumentExplorerProps> = ({
   items,
   archivedItems,
@@ -205,19 +228,22 @@ const DocumentExplorer: React.FC<DocumentExplorerProps> = ({
   getFolderItemCount
 }) => {
   const fileInputRef = useRef<HTMLInputElement>(null);
-  const gridRef = useRef<HTMLDivElement>(null);
   const contextMenuRef = useRef<HTMLDivElement>(null);
   const movePopupRef = useRef<HTMLDivElement>(null);
   const renameInputRef = useRef<HTMLInputElement>(null);
+  const draftFolderInputRef = useRef<HTMLInputElement>(null);
+  const activeSelectionSurfaceRef = useRef<HTMLDivElement | null>(null);
+  const dragSelectBaseIdsRef = useRef<number[]>([]);
+  const didDragSelectRef = useRef(false);
+  const draftFolderCommitInFlightRef = useRef(false);
 
-  const [showCreateFolder, setShowCreateFolder] = useState(false);
-  const [newFolderName, setNewFolderName] = useState("");
   const [searchQuery, setSearchQuery] = useState("");
   const [selectedItemIds, setSelectedItemIds] = useState<number[]>([]);
   const [lastSelectedId, setLastSelectedId] = useState<number | null>(null);
   const [isApplyingBulkAction, setIsApplyingBulkAction] = useState(false);
   const [renamingItemId, setRenamingItemId] = useState<number | null>(null);
   const [renameValue, setRenameValue] = useState("");
+  const [draftFolderName, setDraftFolderName] = useState<string | null>(null);
   const [showArchivedItems, setShowArchivedItems] = useState(false);
   const [viewingDocument, setViewingDocument] = useState<{ id: number; filename: string } | null>(null);
   const [draggedItemId, setDraggedItemId] = useState<number | null>(null);
@@ -225,6 +251,7 @@ const DocumentExplorer: React.FC<DocumentExplorerProps> = ({
   const [contextMenu, setContextMenu] = useState<ContextMenuState | null>(null);
   const [movePopup, setMovePopup] = useState<MovePopupState | null>(null);
   const [moveTargetId, setMoveTargetId] = useState("");
+  const [selectionBox, setSelectionBox] = useState<SelectionBoxState | null>(null);
   const [viewMode, setViewMode] = useState<ViewMode>(() => {
     if (typeof window === "undefined") {
       return "grid";
@@ -355,6 +382,79 @@ const DocumentExplorer: React.FC<DocumentExplorerProps> = ({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [renamingItemId]);
 
+  useLayoutEffect(() => {
+    if (draftFolderName !== null && draftFolderInputRef.current) {
+      draftFolderInputRef.current.focus();
+      draftFolderInputRef.current.select();
+    }
+  }, [draftFolderName]);
+
+  useEffect(() => {
+    if (!selectionBox) {
+      return;
+    }
+
+    const handleMouseMove = (event: MouseEvent) => {
+      const surface = activeSelectionSurfaceRef.current;
+      if (!surface) {
+        return;
+      }
+
+      const surfaceRect = surface.getBoundingClientRect();
+      const currentX = event.clientX - surfaceRect.left + surface.scrollLeft;
+      const currentY = event.clientY - surfaceRect.top + surface.scrollTop;
+      const nextBox = {
+        ...selectionBox,
+        x: Math.min(selectionBox.originX, currentX),
+        y: Math.min(selectionBox.originY, currentY),
+        width: Math.abs(currentX - selectionBox.originX),
+        height: Math.abs(currentY - selectionBox.originY)
+      };
+      setSelectionBox(nextBox);
+
+      if (nextBox.width > 4 || nextBox.height > 4) {
+        didDragSelectRef.current = true;
+      }
+
+      const selectionViewportRect = {
+        left: Math.min(selectionBox.originClientX, event.clientX),
+        right: Math.max(selectionBox.originClientX, event.clientX),
+        top: Math.min(selectionBox.originClientY, event.clientY),
+        bottom: Math.max(selectionBox.originClientY, event.clientY)
+      };
+      const intersectingIds = Array.from(surface.querySelectorAll<HTMLElement>("[data-document-id]"))
+        .filter((element) => {
+          const rect = element.getBoundingClientRect();
+          return (
+            rect.left < selectionViewportRect.right &&
+            rect.right > selectionViewportRect.left &&
+            rect.top < selectionViewportRect.bottom &&
+            rect.bottom > selectionViewportRect.top
+          );
+        })
+        .map((element) => Number(element.dataset.documentId))
+        .filter((id) => Number.isFinite(id));
+      const mergedIds = selectionBox.additive
+        ? Array.from(new Set([...dragSelectBaseIdsRef.current, ...intersectingIds]))
+        : intersectingIds;
+      setSelectedItemIds(mergedIds);
+      setLastSelectedId(mergedIds[mergedIds.length - 1] ?? null);
+    };
+
+    const handleMouseUp = () => {
+      setSelectionBox(null);
+      activeSelectionSurfaceRef.current = null;
+    };
+
+    window.addEventListener("mousemove", handleMouseMove);
+    window.addEventListener("mouseup", handleMouseUp);
+
+    return () => {
+      window.removeEventListener("mousemove", handleMouseMove);
+      window.removeEventListener("mouseup", handleMouseUp);
+    };
+  }, [selectionBox]);
+
   const getDraggedItemIds = (anchorItemId: number) => {
     if (selectedItemIds.includes(anchorItemId)) {
       return [...selectedItemIds];
@@ -395,14 +495,35 @@ const DocumentExplorer: React.FC<DocumentExplorerProps> = ({
     }
   };
 
-  const handleCreateFolder = async () => {
-    if (!onCreateFolder || !newFolderName.trim()) {
+  const startDraftFolder = () => {
+    if (!onCreateFolder || isApplyingBulkAction) {
+      return;
+    }
+    closeContextMenu();
+    closeMovePopup();
+    setSearchQuery("");
+    setSelectedItemIds([]);
+    setLastSelectedId(null);
+    setDraftFolderName(DEFAULT_NEW_FOLDER_NAME);
+  };
+
+  const commitDraftFolder = async () => {
+    if (!onCreateFolder || draftFolderName === null || draftFolderCommitInFlightRef.current) {
       return;
     }
 
-    await Promise.resolve(onCreateFolder(newFolderName.trim()));
-    setNewFolderName("");
-    setShowCreateFolder(false);
+    const nextName = draftFolderName.trim() || DEFAULT_NEW_FOLDER_NAME;
+    draftFolderCommitInFlightRef.current = true;
+    setDraftFolderName(null);
+    try {
+      await Promise.resolve(onCreateFolder(nextName));
+    } finally {
+      draftFolderCommitInFlightRef.current = false;
+    }
+  };
+
+  const cancelDraftFolder = () => {
+    setDraftFolderName(null);
   };
 
   const openFile = (item: ProfileDocument) => {
@@ -473,6 +594,14 @@ const DocumentExplorer: React.FC<DocumentExplorerProps> = ({
 
   const handleEmptyAreaClick = (event: React.MouseEvent) => {
     if (event.target !== event.currentTarget) {
+      return;
+    }
+    if (didDragSelectRef.current) {
+      didDragSelectRef.current = false;
+      return;
+    }
+    if (draftFolderName !== null) {
+      void commitDraftFolder();
       return;
     }
     setSelectedItemIds([]);
@@ -619,14 +748,68 @@ const DocumentExplorer: React.FC<DocumentExplorerProps> = ({
   };
 
   const handleSelectAll = () => {
-    if (selectedItemIds.length === filteredItems.length && filteredItems.length > 0) {
+    if (filteredItems.length === 0) {
+      return;
+    }
+    setSelectedItemIds(filteredItems.map((it) => it.id));
+    setLastSelectedId(filteredItems[filteredItems.length - 1]?.id ?? null);
+  };
+
+  const handleSelectionSurfaceMouseDown = (event: React.MouseEvent<HTMLDivElement>) => {
+    if (
+      event.button !== 0 ||
+      event.target !== event.currentTarget ||
+      renamingItemId !== null ||
+      draftFolderName !== null
+    ) {
+      return;
+    }
+
+    const surface = event.currentTarget;
+    const rect = surface.getBoundingClientRect();
+    const originX = event.clientX - rect.left + surface.scrollLeft;
+    const originY = event.clientY - rect.top + surface.scrollTop;
+    const additive = event.ctrlKey || event.metaKey;
+
+    activeSelectionSurfaceRef.current = surface;
+    dragSelectBaseIdsRef.current = additive ? selectedItemIds : [];
+    didDragSelectRef.current = false;
+    if (!additive) {
       setSelectedItemIds([]);
       setLastSelectedId(null);
-    } else {
-      setSelectedItemIds(filteredItems.map((it) => it.id));
-      setLastSelectedId(filteredItems[filteredItems.length - 1]?.id ?? null);
     }
+    setSelectionBox({
+      originX,
+      originY,
+      originClientX: event.clientX,
+      originClientY: event.clientY,
+      x: originX,
+      y: originY,
+      width: 0,
+      height: 0,
+      additive
+    });
+    closeContextMenu();
+    closeMovePopup();
+    event.preventDefault();
   };
+
+  const selectedSizeBytes = selectedItems.reduce((total, item) => total + (item.itemKind === "file" ? item.sizeBytes : 0), 0);
+  const selectedFolderCount = selectedItems.filter((item) => item.itemKind === "folder").length;
+  const selectedFileCount = selectedItems.length - selectedFolderCount;
+  const inspectorItem = selectedItems.length === 1 ? selectedItems[0] : null;
+  const inspectorMetadata = inspectorItem as DocumentMetadata | null;
+  const inspectorChangedAt = inspectorMetadata?.updatedAt ?? inspectorMetadata?.modifiedAt ?? inspectorMetadata?.createdAt ?? null;
+  const inspectorCreatedBy = inspectorMetadata?.createdBy ?? inspectorMetadata?.uploadedBy ?? inspectorMetadata?.author ?? null;
+  const inspectorChangedBy = inspectorMetadata?.updatedBy ?? inspectorMetadata?.modifiedBy ?? inspectorCreatedBy;
+  const inspectorPath = inspectorItem ? getDocumentPath(inspectorItem.id) || "Kořen" : breadcrumbs.map((crumb) => crumb.label).join(" / ");
+  const inspectorStorageText = inspectorItem
+    ? inspectorItem.itemKind === "folder"
+      ? `${getFolderItemCount(inspectorItem.id)} položek`
+      : formatFileSize(inspectorItem.sizeBytes)
+    : selectedItems.length > 0
+      ? `${selectedItems.length} položek · ${formatFileSize(selectedSizeBytes)}`
+      : `${filteredItems.length} položek v této složce`;
 
   const contextMenuItem = useMemo(() => {
     if (!contextMenu) {
@@ -666,6 +849,7 @@ const DocumentExplorer: React.FC<DocumentExplorerProps> = ({
     return (
       <div
         key={item.id}
+        data-document-id={item.id}
         className={tileClassNames}
         title={item.filename}
         draggable={!isRenaming && !isApplyingBulkAction}
@@ -754,6 +938,7 @@ const DocumentExplorer: React.FC<DocumentExplorerProps> = ({
     return (
       <div
         key={item.id}
+        data-document-id={item.id}
         className={rowClassNames}
         title={item.filename}
         draggable={!isRenaming && !isApplyingBulkAction}
@@ -821,6 +1006,121 @@ const DocumentExplorer: React.FC<DocumentExplorerProps> = ({
         </div>
         <div className="ec-fs-row-date">{formatDate(item.createdAt)}</div>
       </div>
+    );
+  };
+
+  const renderDraftFolderTile = () => {
+    if (draftFolderName === null) {
+      return null;
+    }
+
+    return (
+      <div key="draft-folder" className="ec-fs-tile ec-fs-tile--folder ec-fs-tile--draft is-selected">
+        <div className="ec-fs-tile-icon">
+          <FolderGlyph />
+        </div>
+        <input
+          ref={draftFolderInputRef}
+          type="text"
+          className="ec-fs-tile-rename-input"
+          value={draftFolderName}
+          onChange={(event) => setDraftFolderName(event.target.value)}
+          onClick={(event) => event.stopPropagation()}
+          onDoubleClick={(event) => event.stopPropagation()}
+          onMouseDown={(event) => event.stopPropagation()}
+          onKeyDown={(event) => {
+            event.stopPropagation();
+            if (event.key === "Enter") {
+              void commitDraftFolder();
+            } else if (event.key === "Escape") {
+              cancelDraftFolder();
+            }
+          }}
+          onBlur={() => void commitDraftFolder()}
+        />
+        <div className="ec-fs-tile-meta">0 položek</div>
+      </div>
+    );
+  };
+
+  const renderAddFolderTile = () => {
+    if (!onCreateFolder || normalizedSearch || draftFolderName !== null) {
+      return null;
+    }
+
+    return (
+      <button
+        key="add-folder"
+        type="button"
+        className="ec-fs-tile ec-fs-add-tile"
+        onClick={startDraftFolder}
+        title="Nová složka"
+      >
+        <span className="ec-fs-add-icon" aria-hidden="true">+</span>
+        <span className="ec-fs-add-label">Nová složka</span>
+      </button>
+    );
+  };
+
+  const renderDraftFolderRow = () => {
+    if (draftFolderName === null) {
+      return null;
+    }
+
+    return (
+      <div key="draft-folder-row" className="ec-fs-row ec-fs-row--folder ec-fs-row--draft is-selected">
+        <div className="ec-fs-row-icon">
+          <FolderGlyph small />
+        </div>
+        <div className="ec-fs-row-main">
+          <input
+            ref={draftFolderInputRef}
+            type="text"
+            className="ec-fs-row-rename-input"
+            value={draftFolderName}
+            onChange={(event) => setDraftFolderName(event.target.value)}
+            onClick={(event) => event.stopPropagation()}
+            onDoubleClick={(event) => event.stopPropagation()}
+            onMouseDown={(event) => event.stopPropagation()}
+            onKeyDown={(event) => {
+              event.stopPropagation();
+              if (event.key === "Enter") {
+                void commitDraftFolder();
+              } else if (event.key === "Escape") {
+                cancelDraftFolder();
+              }
+            }}
+            onBlur={() => void commitDraftFolder()}
+          />
+        </div>
+        <div className="ec-fs-row-meta">0 položek</div>
+        <div className="ec-fs-row-date">Právě teď</div>
+      </div>
+    );
+  };
+
+  const renderAddFolderRow = () => {
+    if (!onCreateFolder || normalizedSearch || draftFolderName !== null) {
+      return null;
+    }
+
+    return (
+      <button
+        key="add-folder-row"
+        type="button"
+        className="ec-fs-row ec-fs-add-row"
+        onClick={startDraftFolder}
+        title="Nová složka"
+      >
+        <span className="ec-fs-row-icon">
+          <span className="ec-fs-add-row-icon" aria-hidden="true">+</span>
+        </span>
+        <span className="ec-fs-row-main">
+          <span className="ec-fs-row-name">Nová složka</span>
+        </span>
+        <span className="ec-fs-row-meta">Složka</span>
+        <span className="ec-fs-row-date">Přidat</span>
+      </button>
     );
   };
 
@@ -913,7 +1213,8 @@ const DocumentExplorer: React.FC<DocumentExplorerProps> = ({
             <button
               type="button"
               className="ec-doc-toolbar-btn secondary"
-              onClick={() => setShowCreateFolder((value) => !value)}
+              onClick={startDraftFolder}
+              disabled={draftFolderName !== null || isApplyingBulkAction}
             >
               Nová složka
             </button>
@@ -940,64 +1241,103 @@ const DocumentExplorer: React.FC<DocumentExplorerProps> = ({
         </span>
       </div>
 
-      {showCreateFolder ? (
-        <div className="ec-doc-create-folder">
-          <input
-            type="text"
-            className="ec-doc-create-input"
-            placeholder="Název složky"
-            value={newFolderName}
-            onChange={(event) => setNewFolderName(event.target.value)}
-            autoFocus
-            onKeyDown={(event) => {
-              if (event.key === "Enter") {
-                void handleCreateFolder();
-              }
-              if (event.key === "Escape") {
-                setShowCreateFolder(false);
-                setNewFolderName("");
-              }
-            }}
-          />
-          <button type="button" className="ec-doc-toolbar-btn primary" onClick={() => void handleCreateFolder()}>
-            Vytvořit
-          </button>
-          <button
-            type="button"
-            className="ec-doc-toolbar-btn secondary"
-            onClick={() => {
-              setShowCreateFolder(false);
-              setNewFolderName("");
-            }}
-          >
-            Zrušit
-          </button>
+      <div className="ec-fs-workspace">
+        <div className="ec-fs-browser-area">
+          {isLoading ? (
+            <p className="ec-empty-text">Načítám dokumenty…</p>
+          ) : filteredItems.length > 0 || draftFolderName !== null || (onCreateFolder && !normalizedSearch) ? (
+            viewMode === "grid" ? (
+              <div
+                ref={activeSelectionSurfaceRef}
+                className="ec-fs-grid"
+                onMouseDown={handleSelectionSurfaceMouseDown}
+                onClick={handleEmptyAreaClick}
+                onContextMenu={(event) => {
+                  if (event.target !== event.currentTarget) {
+                    return;
+                  }
+                  event.preventDefault();
+                }}
+                onDragOver={(event) => {
+                  if (!canDropDraggedItemsTo(currentFolderId)) {
+                    return;
+                  }
+                  event.preventDefault();
+                }}
+                onDrop={(event) => {
+                  if (event.target !== event.currentTarget) {
+                    return;
+                  }
+                  if (!canDropDraggedItemsTo(currentFolderId)) {
+                    return;
+                  }
+                  event.preventDefault();
+                  void handleDropToFolder(currentFolderId);
+                }}
+              >
+                {filteredItems.map(renderTile)}
+                {renderDraftFolderTile()}
+                {renderAddFolderTile()}
+                {selectionBox ? <div className="ec-fs-selection-rect" style={{ left: selectionBox.x, top: selectionBox.y, width: selectionBox.width, height: selectionBox.height }} /> : null}
+              </div>
+            ) : (
+              <div
+                ref={activeSelectionSurfaceRef}
+                className="ec-fs-list"
+                onMouseDown={handleSelectionSurfaceMouseDown}
+                onClick={handleEmptyAreaClick}
+                onContextMenu={(event) => {
+                  if (event.target !== event.currentTarget) {
+                    return;
+                  }
+                  event.preventDefault();
+                }}
+              >
+                <div className="ec-fs-list-header">
+                  <span className="ec-fs-list-header-name">Název</span>
+                  <span className="ec-fs-list-header-meta">Velikost</span>
+                  <span className="ec-fs-list-header-date">Vytvořeno</span>
+                </div>
+                {filteredItems.map(renderListRow)}
+                {renderDraftFolderRow()}
+                {renderAddFolderRow()}
+                {selectionBox ? <div className="ec-fs-selection-rect" style={{ left: selectionBox.x, top: selectionBox.y, width: selectionBox.width, height: selectionBox.height }} /> : null}
+              </div>
+            )
+          ) : items.length > 0 && normalizedSearch ? (
+            <p className="ec-empty-text">Tomuto hledání neodpovídá žádná položka v aktuální složce.</p>
+          ) : (
+            <p className="ec-empty-text">Tato složka je prázdná.</p>
+          )}
         </div>
-      ) : null}
 
-      {selectedItems.length > 0 ? (
-        <div className="ec-fs-selection-bar">
-          <span className="ec-fs-selection-count">Vybráno: {selectedItems.length}</span>
-          <div className="ec-fs-selection-actions">
+        <aside className="ec-fs-inspector" aria-label="Akce a informace">
+          <div className="ec-fs-inspector-summary">
+            <span className="ec-fs-inspector-kicker">Výběr</span>
+            <strong>{selectedItems.length > 0 ? `Vybráno ${selectedItems.length}` : "Nic vybráno"}</strong>
+            <span>{selectedItems.length > 0 ? `${selectedFolderCount} složek · ${selectedFileCount} souborů` : "Kliknutím nebo tažením označíte položky."}</span>
+          </div>
+
+          <div className="ec-fs-inspector-actions">
             {onMoveDocument ? (
               <button
                 type="button"
-                className="ec-doc-toolbar-btn secondary"
+                className="ec-fs-inspector-action"
                 onClick={(event) => {
                   const rect = (event.currentTarget as HTMLButtonElement).getBoundingClientRect();
                   openMovePopupFor(selectedItems.map((it) => it.id), rect.left, rect.bottom + 6);
                 }}
-                disabled={isApplyingBulkAction || moveTargetsForSelection.length === 0}
+                disabled={isApplyingBulkAction || selectedItems.length === 0 || moveTargetsForSelection.length === 0}
               >
                 Přesunout
               </button>
             ) : null}
-            {onArchiveDocument && selectedItems.some((it) => it.itemKind === "file") ? (
+            {onArchiveDocument ? (
               <button
                 type="button"
-                className="ec-doc-toolbar-btn secondary"
+                className="ec-fs-inspector-action"
                 onClick={() => void handleArchiveItems(selectedItems)}
-                disabled={isApplyingBulkAction}
+                disabled={isApplyingBulkAction || !selectedItems.some((it) => it.itemKind === "file")}
               >
                 Archivovat
               </button>
@@ -1005,94 +1345,59 @@ const DocumentExplorer: React.FC<DocumentExplorerProps> = ({
             {onDeleteDocument ? (
               <button
                 type="button"
-                className="ec-doc-toolbar-btn secondary"
+                className="ec-fs-inspector-action danger"
                 onClick={() => void handleDeleteItems(selectedItems)}
-                disabled={isApplyingBulkAction}
+                disabled={isApplyingBulkAction || selectedItems.length === 0}
               >
                 Odstranit
               </button>
             ) : null}
-            <button
-              type="button"
-              className="ec-doc-toolbar-btn secondary"
-              onClick={() => {
-                setSelectedItemIds([]);
-                setLastSelectedId(null);
-              }}
-              disabled={isApplyingBulkAction}
-            >
-              Zrušit výběr
-            </button>
+            {filteredItems.length > 0 ? (
+              <button
+                type="button"
+                className="ec-fs-select-all-btn"
+                onClick={handleSelectAll}
+                disabled={selectedItemIds.length === filteredItems.length}
+              >
+                Vybrat vše
+              </button>
+            ) : null}
           </div>
-          {filteredItems.length > 0 ? (
-            <button
-              type="button"
-              className="ec-fs-select-all-btn"
-              onClick={handleSelectAll}
-            >
-              {selectedItemIds.length === filteredItems.length ? "Odznačit vše" : "Vybrat vše"}
-            </button>
-          ) : null}
-        </div>
-      ) : null}
 
-      {isLoading ? (
-        <p className="ec-empty-text">Načítám dokumenty…</p>
-      ) : filteredItems.length > 0 ? (
-        viewMode === "grid" ? (
-          <div
-            ref={gridRef}
-            className="ec-fs-grid"
-            onClick={handleEmptyAreaClick}
-            onContextMenu={(event) => {
-              if (event.target !== event.currentTarget) {
-                return;
-              }
-              event.preventDefault();
-            }}
-            onDragOver={(event) => {
-              if (!canDropDraggedItemsTo(currentFolderId)) {
-                return;
-              }
-              event.preventDefault();
-            }}
-            onDrop={(event) => {
-              if (event.target !== event.currentTarget) {
-                return;
-              }
-              if (!canDropDraggedItemsTo(currentFolderId)) {
-                return;
-              }
-              event.preventDefault();
-              void handleDropToFolder(currentFolderId);
-            }}
-          >
-            {filteredItems.map(renderTile)}
-          </div>
-        ) : (
-          <div
-            className="ec-fs-list"
-            onClick={handleEmptyAreaClick}
-            onContextMenu={(event) => {
-              if (event.target !== event.currentTarget) {
-                return;
-              }
-              event.preventDefault();
-            }}
-          >
-            <div className="ec-fs-list-header">
-              <span className="ec-fs-list-header-name">Název</span>
-              <span className="ec-fs-list-header-meta">Velikost</span>
-              <span className="ec-fs-list-header-date">Vytvořeno</span>
+          <div className="ec-fs-inspector-details">
+            <div className="ec-fs-inspector-title">
+              <span>{inspectorItem ? (inspectorItem.itemKind === "folder" ? "Složka" : "Soubor") : selectedItems.length > 1 ? "Více položek" : "Aktuální složka"}</span>
+              <strong>{inspectorItem?.filename ?? (selectedItems.length > 1 ? `${selectedItems.length} vybraných položek` : breadcrumbs[breadcrumbs.length - 1]?.label ?? "Kořen")}</strong>
             </div>
-            {filteredItems.map(renderListRow)}
+            <dl className="ec-fs-meta-list">
+              <div>
+                <dt>Velikost</dt>
+                <dd>{inspectorStorageText}</dd>
+              </div>
+              <div>
+                <dt>Umístění</dt>
+                <dd>{inspectorPath}</dd>
+              </div>
+              <div>
+                <dt>Vytvořeno</dt>
+                <dd>{inspectorItem ? formatDate(inspectorItem.createdAt) : "Není k dispozici"}</dd>
+              </div>
+              <div>
+                <dt>Změněno</dt>
+                <dd>{inspectorItem && inspectorChangedAt ? formatDate(inspectorChangedAt) : "Není k dispozici"}</dd>
+              </div>
+              <div>
+                <dt>Vytvořil</dt>
+                <dd>{inspectorCreatedBy || "Není k dispozici"}</dd>
+              </div>
+              <div>
+                <dt>Změnil</dt>
+                <dd>{inspectorChangedBy || "Není k dispozici"}</dd>
+              </div>
+            </dl>
           </div>
-        )
-      ) : items.length > 0 && normalizedSearch ? (
-        <p className="ec-empty-text">Tomuto hledání neodpovídá žádná položka v aktuální složce.</p>
-      ) : (
-        <p className="ec-empty-text">Tato složka je prázdná.</p>
-      )}
+        </aside>
+      </div>
 
       {archivedItems.length > 0 ? (
         <div className="ec-documents-archived">
