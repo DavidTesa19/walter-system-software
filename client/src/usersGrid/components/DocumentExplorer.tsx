@@ -802,8 +802,9 @@ const DocumentExplorer: React.FC<DocumentExplorerProps> = ({
     setDraftFolderCanvasPos(null);
   };
 
-  // When a new folder appears after canvas-positioned draft commit, pin its position
-  useEffect(() => {
+  // When a new folder appears after canvas-positioned draft commit, pin its position.
+  // useLayoutEffect runs before the browser paints so the folder is never seen at the fallback slot.
+  useLayoutEffect(() => {
     const pendingPos = pendingCanvasNewItemPosRef.current;
     if (!pendingPos) {
       return;
