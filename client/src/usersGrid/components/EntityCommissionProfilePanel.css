@@ -22,8 +22,9 @@
   color: var(--color-text, #1f2937);
   border-radius: 12px;
   box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.25);
-  width: 100%;
-  max-width: 1200px;
+  width: min(1500px, calc(100vw - 4rem));
+  max-width: 1500px;
+  height: min(900px, calc(100vh - 4rem));
   max-height: 90vh;
   display: flex;
   flex-direction: column;
@@ -35,16 +36,18 @@
 .ec-profile-header {
   display: flex;
   justify-content: space-between;
-  align-items: flex-start;
-  padding: 1.5rem 2rem;
+  align-items: center;
+  padding: 1.25rem 2rem;
   border-bottom: 1px solid var(--color-border, #e5e7eb);
   background: var(--color-surface, #ffffff);
+  gap: 1.25rem;
 }
 
 .ec-profile-header-info {
   display: flex;
   flex-direction: column;
   gap: 0.5rem;
+  min-width: 0;
 }
 
 .ec-profile-type {
@@ -154,6 +157,42 @@
   display: flex;
   align-items: center;
   gap: 0.75rem;
+  flex: 0 0 auto;
+}
+
+.ec-profile-view-switch {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.15rem;
+  padding: 0.18rem;
+  border: 1px solid var(--color-border, rgba(15, 23, 42, 0.12));
+  border-radius: 10px;
+  background: var(--color-surface-alt, rgba(15, 23, 42, 0.05));
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.08);
+}
+
+.ec-profile-view-tab {
+  min-height: 2rem;
+  padding: 0.42rem 0.8rem;
+  border: none;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--color-text-muted, #64748b);
+  font-size: 0.8rem;
+  font-weight: 700;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: background-color 0.15s ease, color 0.15s ease, box-shadow 0.15s ease;
+}
+
+.ec-profile-view-tab:hover {
+  color: var(--color-text, #0f172a);
+}
+
+.ec-profile-view-tab.is-active {
+  background: var(--color-primary, #3b82f6);
+  color: var(--color-primary-contrast, #ffffff);
+  box-shadow: var(--color-shadow-sm, 0 6px 16px rgba(59, 130, 246, 0.18));
 }
 
 .ec-header-action {
@@ -210,6 +249,46 @@
   flex-direction: column;
   gap: 2rem;
   background: var(--color-surface, #ffffff);
+}
+
+.ec-profile-documents-view {
+  flex: 1;
+  min-height: 0;
+  overflow: hidden;
+  padding: 1.25rem 1.5rem 1.5rem;
+  background: var(--color-surface, #ffffff);
+}
+
+.ec-profile-documents-view .ec-documents-section {
+  height: 100%;
+  min-height: 0;
+  padding-top: 0;
+  border-top: none;
+  display: flex;
+  flex-direction: column;
+}
+
+.ec-profile-documents-view .ec-documents-header {
+  flex: 0 0 auto;
+}
+
+.ec-profile-documents-view .ec-documents-search-row,
+.ec-profile-documents-view .ec-doc-create-folder,
+.ec-profile-documents-view .ec-fs-selection-bar,
+.ec-profile-documents-view .ec-documents-archived {
+  flex: 0 0 auto;
+}
+
+.ec-profile-documents-view .ec-fs-grid,
+.ec-profile-documents-view .ec-fs-list {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow: auto;
+}
+
+.ec-profile-documents-view .ec-fs-grid {
+  grid-template-columns: repeat(auto-fill, minmax(132px, 1fr));
+  align-content: start;
 }
 
 /* Two Column Layout */
@@ -1833,9 +1912,30 @@
   }
 
   .ec-profile-panel {
+    width: 100%;
+    height: 100vh;
     max-width: 100%;
     max-height: 100vh;
     border-radius: 0;
+  }
+
+  .ec-profile-header {
+    align-items: flex-start;
+    flex-wrap: wrap;
+    padding: 1rem;
+  }
+
+  .ec-profile-view-switch {
+    order: 3;
+    width: 100%;
+  }
+
+  .ec-profile-view-tab {
+    flex: 1;
+  }
+
+  .ec-profile-documents-view {
+    padding: 1rem;
   }
 
   .ec-profile-body {

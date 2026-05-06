@@ -105,6 +105,8 @@ interface EntityCommissionProfilePanelProps {
   onDeleteNote?: (noteId: number) => Promise<boolean | void> | boolean | void;
 }
 
+type ProfilePanelView = 'details' | 'documents';
+
 // =============================================================================
 // EDITABLE FIELD COMPONENT
 // =============================================================================
@@ -468,6 +470,7 @@ const EntityCommissionProfilePanel: React.FC<EntityCommissionProfilePanelProps> 
   const [newNote, setNewNote] = useState("");
   const [editingNote, setEditingNote] = useState<ProfileNote | null>(null);
   const [noteSubmitting, setNoteSubmitting] = useState(false);
+  const [activeView, setActiveView] = useState<ProfilePanelView>('details');
 
   // Entity type labels
   const entityTypeLabels = {
@@ -484,6 +487,9 @@ const EntityCommissionProfilePanel: React.FC<EntityCommissionProfilePanelProps> 
 
   const commissionLabel = entityType === 'tiper' ? 'Tip / Zakázka' : 'Zakázka';
   const hasLinkedCommissions = linkedCommissions.length > 0;
+  const showDocumentsSection = Boolean(
+    onUploadDocument || onUploadDocuments || onCreateFolder || onDeleteDocument || onArchiveDocument || documentsLoading || visibleDocuments.length > 0 || archivedDocuments.length > 0
+  );
 
   const handleEntityFieldSave = useCallback((key: string, value: string | boolean | string[] | null) => {
     if (entity && onUpdateEntity) {
@@ -564,6 +570,12 @@ const EntityCommissionProfilePanel: React.FC<EntityCommissionProfilePanelProps> 
     };
   }, [open, onClose]);
 
+  useEffect(() => {
+    if (!showDocumentsSection && activeView === 'documents') {
+      setActiveView('details');
+    }
+  }, [activeView, showDocumentsSection]);
+
   const handleOverlayMouseDown = (event: React.MouseEvent<HTMLDivElement>) => {
     if (event.target === event.currentTarget) {
       onClose();
@@ -573,10 +585,6 @@ const EntityCommissionProfilePanel: React.FC<EntityCommissionProfilePanelProps> 
   if (!open || !entity) {
     return null;
   }
-
-  const showDocumentsSection = Boolean(
-    onUploadDocument || onUploadDocuments || onCreateFolder || onDeleteDocument || onArchiveDocument || documentsLoading || visibleDocuments.length > 0 || archivedDocuments.length > 0
-  );
 
   return (
     <div className="ec-profile-overlay" onMouseDown={handleOverlayMouseDown} role="presentation">
@@ -603,6 +611,28 @@ const EntityCommissionProfilePanel: React.FC<EntityCommissionProfilePanelProps> 
                 <span className="ec-standalone-badge">Bez zakázky</span>
               )}
             </div>
+          </div>
+          <div className="ec-profile-view-switch" role="tablist" aria-label="Zobrazení profilu">
+            <button
+              type="button"
+              role="tab"
+              aria-selected={activeView === 'details'}
+              className={`ec-profile-view-tab ${activeView === 'details' ? 'is-active' : ''}`}
+              onClick={() => setActiveView('details')}
+            >
+              Profil
+            </button>
+            {showDocumentsSection ? (
+              <button
+                type="button"
+                role="tab"
+                aria-selected={activeView === 'documents'}
+                className={`ec-profile-view-tab ${activeView === 'documents' ? 'is-active' : ''}`}
+                onClick={() => setActiveView('documents')}
+              >
+                Dokumenty
+              </button>
+            ) : null}
           </div>
           <div className="ec-profile-header-actions">
             <ThemeToggleButton variant="icon" />
@@ -640,236 +670,237 @@ const EntityCommissionProfilePanel: React.FC<EntityCommissionProfilePanelProps> 
         </header>
 
         {/* Main Content */}
-        <div className="ec-profile-body">
-          {/* Left Column: Entity + Commission Info */}
-          <div className="ec-profile-main">
-            <div className="ec-profile-columns">
-              
-              {/* Entity Info Column */}
-              <div className="ec-profile-column entity-column">
-                <div className="ec-column-header">
-                  <div className="ec-column-heading">
-                    <h3 className="ec-column-title">{entityTypeLabels[entityType]}</h3>
-                    <span className="ec-column-meta">Datum přidání: {formatDate(entity.createdAt) || "—"}</span>
+        {activeView === 'details' ? (
+          <div className="ec-profile-body">
+            {/* Left Column: Entity + Commission Info */}
+            <div className="ec-profile-main">
+              <div className="ec-profile-columns">
+                
+                {/* Entity Info Column */}
+                <div className="ec-profile-column entity-column">
+                  <div className="ec-column-header">
+                    <div className="ec-column-heading">
+                      <h3 className="ec-column-title">{entityTypeLabels[entityType]}</h3>
+                      <span className="ec-column-meta">Datum přidání: {formatDate(entity.createdAt) || "—"}</span>
+                    </div>
+                    <span className="ec-column-id">{entity.entity_id}</span>
                   </div>
-                  <span className="ec-column-id">{entity.entity_id}</span>
-                </div>
-                <div className="ec-column-content">
-                  {entity.groups.map((group, idx) => (
-                    <FieldGroupComponent
-                      key={`entity-${idx}`}
-                      group={group}
-                      onSave={handleEntityFieldSave}
-                    />
-                  ))}
-                </div>
-              </div>
-
-              {/* Commission Info Column */}
-              <div className="ec-profile-column commission-column">
-                <div className="ec-column-header">
-                  <div className="ec-column-heading">
-                    <h3 className="ec-column-title">{commissionLabel}</h3>
-                    <span className="ec-column-meta">Datum přidání: {formatDate(commission?.createdAt) || "—"}</span>
+                  <div className="ec-column-content">
+                    {entity.groups.map((group, idx) => (
+                      <FieldGroupComponent
+                        key={`entity-${idx}`}
+                        group={group}
+                        onSave={handleEntityFieldSave}
+                      />
+                    ))}
                   </div>
-                  <span className="ec-column-id">
-                    {commission ? commission.commission_id : hasLinkedCommissions ? `${linkedCommissions.length} položek` : "Zatím žádná"}
-                  </span>
                 </div>
-                <div className="ec-column-content">
-                  {hasLinkedCommissions ? (
-                    <div className="ec-linked-commissions-section">
-                      <div className="ec-linked-commissions-header">
-                        <div>
-                          <h4 className="ec-linked-commissions-title">Navázané zakázky</h4>
-                          <p className="ec-linked-commissions-subtitle">Počet odpovídá hodnotě v tabulce subjektů.</p>
-                        </div>
-                        <div className="ec-linked-commissions-actions">
-                          {onRemoveCommission && commission ? (
-                            <button type="button" className="ec-header-action danger" onClick={onRemoveCommission}>
-                              Odebrat zakázku
-                            </button>
-                          ) : null}
-                          {onCreateCommission ? (
-                            <button type="button" className="ec-header-action secondary" onClick={onCreateCommission}>
-                              Přidat zakázku
-                            </button>
-                          ) : null}
-                        </div>
-                      </div>
 
-                      <div className="ec-linked-commissions-list">
-                        {linkedCommissions.map((linkedCommission) => (
-                          <div
-                            key={linkedCommission.id}
-                            className={`ec-linked-commission-item ${selectedCommissionId === linkedCommission.id ? 'selected' : ''}`}
-                          >
-                            <div className="ec-linked-commission-main">
-                              <div className="ec-linked-commission-topline">
-                                <span className="ec-linked-commission-id">{linkedCommission.commission_id}</span>
-                                {renderApprovalStatusBadge(linkedCommission.status, true)}
-                              </div>
-                              <div className="ec-linked-commission-title">{linkedCommission.title}</div>
-                              {linkedCommission.subtitle ? (
-                                <div className="ec-linked-commission-subline">{linkedCommission.subtitle}</div>
-                              ) : null}
-                            </div>
-                            <button
-                              type="button"
-                              className="ec-linked-commission-open"
-                              onClick={() => onSelectCommission?.(linkedCommission.id)}
-                              title="Otevřít detail zakázky"
+                {/* Commission Info Column */}
+                <div className="ec-profile-column commission-column">
+                  <div className="ec-column-header">
+                    <div className="ec-column-heading">
+                      <h3 className="ec-column-title">{commissionLabel}</h3>
+                      <span className="ec-column-meta">Datum přidání: {formatDate(commission?.createdAt) || "—"}</span>
+                    </div>
+                    <span className="ec-column-id">
+                      {commission ? commission.commission_id : hasLinkedCommissions ? `${linkedCommissions.length} položek` : "Zatím žádná"}
+                    </span>
+                  </div>
+                  <div className="ec-column-content">
+                    {hasLinkedCommissions ? (
+                      <div className="ec-linked-commissions-section">
+                        <div className="ec-linked-commissions-header">
+                          <div>
+                            <h4 className="ec-linked-commissions-title">Navázané zakázky</h4>
+                            <p className="ec-linked-commissions-subtitle">Počet odpovídá hodnotě v tabulce subjektů.</p>
+                          </div>
+                          <div className="ec-linked-commissions-actions">
+                            {onRemoveCommission && commission ? (
+                              <button type="button" className="ec-header-action danger" onClick={onRemoveCommission}>
+                                Odebrat zakázku
+                              </button>
+                            ) : null}
+                            {onCreateCommission ? (
+                              <button type="button" className="ec-header-action secondary" onClick={onCreateCommission}>
+                                Přidat zakázku
+                              </button>
+                            ) : null}
+                          </div>
+                        </div>
+
+                        <div className="ec-linked-commissions-list">
+                          {linkedCommissions.map((linkedCommission) => (
+                            <div
+                              key={linkedCommission.id}
+                              className={`ec-linked-commission-item ${selectedCommissionId === linkedCommission.id ? 'selected' : ''}`}
                             >
-                              Otevřít
-                            </button>
-                          </div>
-                        ))}
-                      </div>
+                              <div className="ec-linked-commission-main">
+                                <div className="ec-linked-commission-topline">
+                                  <span className="ec-linked-commission-id">{linkedCommission.commission_id}</span>
+                                  {renderApprovalStatusBadge(linkedCommission.status, true)}
+                                </div>
+                                <div className="ec-linked-commission-title">{linkedCommission.title}</div>
+                                {linkedCommission.subtitle ? (
+                                  <div className="ec-linked-commission-subline">{linkedCommission.subtitle}</div>
+                                ) : null}
+                              </div>
+                              <button
+                                type="button"
+                                className="ec-linked-commission-open"
+                                onClick={() => onSelectCommission?.(linkedCommission.id)}
+                                title="Otevřít detail zakázky"
+                              >
+                                Otevřít
+                              </button>
+                            </div>
+                          ))}
+                        </div>
 
-                      {commission ? (
-                        <div className="ec-linked-commission-detail">
-                          <div className="ec-linked-commission-detail-header">
-                            <h4 className="ec-linked-commissions-title">Detail zakázky</h4>
-                            <span className="ec-column-id">{commission.commission_id}</span>
+                        {commission ? (
+                          <div className="ec-linked-commission-detail">
+                            <div className="ec-linked-commission-detail-header">
+                              <h4 className="ec-linked-commissions-title">Detail zakázky</h4>
+                              <span className="ec-column-id">{commission.commission_id}</span>
+                            </div>
+                            <div className="ec-linked-commission-detail-groups">
+                              {commission.groups.map((group, idx) => (
+                                <FieldGroupComponent
+                                  key={`commission-${idx}`}
+                                  group={group}
+                                  onSave={handleCommissionFieldSave}
+                                />
+                              ))}
+                            </div>
                           </div>
-                          <div className="ec-linked-commission-detail-groups">
-                            {commission.groups.map((group, idx) => (
-                              <FieldGroupComponent
-                                key={`commission-${idx}`}
-                                group={group}
-                                onSave={handleCommissionFieldSave}
-                              />
-                            ))}
+                        ) : (
+                          <div className="ec-linked-commission-placeholder">
+                            Vyberte zakázku ze seznamu pro otevření detailu.
                           </div>
-                        </div>
-                      ) : (
-                        <div className="ec-linked-commission-placeholder">
-                          Vyberte zakázku ze seznamu pro otevření detailu.
-                        </div>
-                      )}
-                    </div>
-                  ) : (
-                    <div className="ec-no-commission-state">
-                      <p className="ec-no-commission-text">Tento subjekt zatím nemá žádnou zakázku.</p>
-                      {onCreateCommission ? (
-                        <button type="button" className="ec-header-action" onClick={onCreateCommission}>
-                          Přidat první zakázku
-                        </button>
-                      ) : null}
-                    </div>
-                  )}
+                        )}
+                      </div>
+                    ) : (
+                      <div className="ec-no-commission-state">
+                        <p className="ec-no-commission-text">Tento subjekt zatím nemá žádnou zakázku.</p>
+                        {onCreateCommission ? (
+                          <button type="button" className="ec-header-action" onClick={onCreateCommission}>
+                            Přidat první zakázku
+                          </button>
+                        ) : null}
+                      </div>
+                    )}
+                  </div>
                 </div>
               </div>
             </div>
 
-            {/* Documents Section */}
-            {showDocumentsSection && (
-              <DocumentExplorer
-                items={visibleDocuments}
-                archivedItems={archivedDocuments}
-                breadcrumbs={documentBreadcrumbs}
-                currentFolderId={currentDocumentFolderId}
-                folderOptions={documentFolderOptions}
-                isLoading={documentsLoading}
-                isUploading={documentsUploading}
-                downloadBaseUrl={documentDownloadBaseUrl}
-                onUploadDocument={onUploadDocument}
-                onUploadDocuments={onUploadDocuments}
-                onCreateFolder={onCreateFolder}
-                onRenameDocument={onRenameDocument}
-                onDeleteDocument={onDeleteDocument}
-                onArchiveDocument={onArchiveDocument}
-                onUnarchiveDocument={onUnarchiveDocument}
-                onMoveDocument={onMoveDocument}
-                onOpenFolder={onOpenDocumentFolder ?? (() => undefined)}
-                onGoToFolder={onGoToDocumentFolder ?? (() => undefined)}
-                onGoBack={onGoBackDocumentFolder ?? (() => undefined)}
-                canMoveDocumentTo={canMoveDocumentTo ?? (() => false)}
-                getDocumentPath={getDocumentPath ?? (() => "")}
-                getFolderItemCount={getFolderItemCount ?? (() => 0)}
-              />
-            )}
-          </div>
-
-          {/* Right Column: Notes */}
-          {(onAddNote || (notes && notes.length > 0)) && (
-            <div className="ec-profile-sidebar">
-              <div className="ec-sidebar-header">
-                <h3 className="ec-section-title">Poznámky</h3>
-              </div>
-              
-              <div className="ec-notes-list">
-                {notesLoading ? (
-                  <p className="ec-empty-text">Načítám poznámky...</p>
-                ) : notes && notes.length > 0 ? (
-                  notes.map(note => (
-                    <div key={note.id} className="ec-note-item">
-                      <div className="ec-note-header">
-                        <span className="ec-note-author">{note.author}</span>
-                        <span className="ec-note-date">{formatDate(note.createdAt)}</span>
-                        {note.updatedAt ? <span className="ec-note-edited">upraveno</span> : null}
-                        {onUpdateNote && canEditNote(note) && (
-                          <button
-                            className="ec-note-edit"
-                            onClick={() => handleStartNoteEdit(note)}
-                            title="Upravit"
-                          >
-                            ✎
-                          </button>
-                        )}
-                        {onDeleteNote && (
-                          <button 
-                            className="ec-note-delete"
-                            onClick={() => handleDeleteNote(note.id)}
-                            title="Smazat"
-                          >
-                            ×
-                          </button>
-                        )}
+            {/* Right Column: Notes */}
+            {(onAddNote || (notes && notes.length > 0)) && (
+              <div className="ec-profile-sidebar">
+                <div className="ec-sidebar-header">
+                  <h3 className="ec-section-title">Poznámky</h3>
+                </div>
+                
+                <div className="ec-notes-list">
+                  {notesLoading ? (
+                    <p className="ec-empty-text">Načítám poznámky...</p>
+                  ) : notes && notes.length > 0 ? (
+                    notes.map(note => (
+                      <div key={note.id} className="ec-note-item">
+                        <div className="ec-note-header">
+                          <span className="ec-note-author">{note.author}</span>
+                          <span className="ec-note-date">{formatDate(note.createdAt)}</span>
+                          {note.updatedAt ? <span className="ec-note-edited">upraveno</span> : null}
+                          {onUpdateNote && canEditNote(note) && (
+                            <button
+                              className="ec-note-edit"
+                              onClick={() => handleStartNoteEdit(note)}
+                              title="Upravit"
+                            >
+                              ✎
+                            </button>
+                          )}
+                          {onDeleteNote && (
+                            <button 
+                              className="ec-note-delete"
+                              onClick={() => handleDeleteNote(note.id)}
+                              title="Smazat"
+                            >
+                              ×
+                            </button>
+                          )}
+                        </div>
+                        <div className="ec-note-content">{note.content}</div>
                       </div>
-                      <div className="ec-note-content">{note.content}</div>
-                    </div>
-                  ))
-                ) : (
-                  <p className="ec-empty-text">Žádné poznámky.</p>
+                    ))
+                  ) : (
+                    <p className="ec-empty-text">Žádné poznámky.</p>
+                  )}
+                </div>
+
+                {onAddNote && (
+                  <div className="ec-notes-input">
+                    {editingNote && (
+                      <div className="ec-note-editing-info">
+                        <span>Upravujete zprávu od {editingNote.author}. Změní se pouze text poznámky.</span>
+                        <button type="button" className="ec-note-edit-cancel" onClick={handleCancelNoteEdit}>
+                          Zrušit
+                        </button>
+                      </div>
+                    )}
+                    <textarea
+                      className="ec-notes-textarea"
+                      placeholder={editingNote ? "Upravit text poznámky..." : "Napsat poznámku..."}
+                      value={newNote}
+                      onChange={(e) => setNewNote(e.target.value)}
+                      onKeyDown={(e) => {
+                        if (e.key === 'Enter' && !e.shiftKey) {
+                          e.preventDefault();
+                          handleAddNote();
+                        }
+                      }}
+                      disabled={notesCreating || noteSubmitting}
+                    />
+                    <button 
+                      className="ec-notes-submit"
+                      onClick={handleAddNote}
+                      disabled={!newNote.trim() || notesCreating || noteSubmitting}
+                    >
+                      {notesCreating || noteSubmitting ? "..." : editingNote ? "Uložit" : "Odeslat"}
+                    </button>
+                  </div>
                 )}
               </div>
-
-              {onAddNote && (
-                <div className="ec-notes-input">
-                  {editingNote && (
-                    <div className="ec-note-editing-info">
-                      <span>Upravujete zprávu od {editingNote.author}. Změní se pouze text poznámky.</span>
-                      <button type="button" className="ec-note-edit-cancel" onClick={handleCancelNoteEdit}>
-                        Zrušit
-                      </button>
-                    </div>
-                  )}
-                  <textarea
-                    className="ec-notes-textarea"
-                    placeholder={editingNote ? "Upravit text poznámky..." : "Napsat poznámku..."}
-                    value={newNote}
-                    onChange={(e) => setNewNote(e.target.value)}
-                    onKeyDown={(e) => {
-                      if (e.key === 'Enter' && !e.shiftKey) {
-                        e.preventDefault();
-                        handleAddNote();
-                      }
-                    }}
-                    disabled={notesCreating || noteSubmitting}
-                  />
-                  <button 
-                    className="ec-notes-submit"
-                    onClick={handleAddNote}
-                    disabled={!newNote.trim() || notesCreating || noteSubmitting}
-                  >
-                    {notesCreating || noteSubmitting ? "..." : editingNote ? "Uložit" : "Odeslat"}
-                  </button>
-                </div>
-              )}
-            </div>
-          )}
-        </div>
+            )}
+          </div>
+        ) : showDocumentsSection ? (
+          <div className="ec-profile-documents-view">
+            <DocumentExplorer
+              items={visibleDocuments}
+              archivedItems={archivedDocuments}
+              breadcrumbs={documentBreadcrumbs}
+              currentFolderId={currentDocumentFolderId}
+              folderOptions={documentFolderOptions}
+              isLoading={documentsLoading}
+              isUploading={documentsUploading}
+              downloadBaseUrl={documentDownloadBaseUrl}
+              onUploadDocument={onUploadDocument}
+              onUploadDocuments={onUploadDocuments}
+              onCreateFolder={onCreateFolder}
+              onRenameDocument={onRenameDocument}
+              onDeleteDocument={onDeleteDocument}
+              onArchiveDocument={onArchiveDocument}
+              onUnarchiveDocument={onUnarchiveDocument}
+              onMoveDocument={onMoveDocument}
+              onOpenFolder={onOpenDocumentFolder ?? (() => undefined)}
+              onGoToFolder={onGoToDocumentFolder ?? (() => undefined)}
+              onGoBack={onGoBackDocumentFolder ?? (() => undefined)}
+              canMoveDocumentTo={canMoveDocumentTo ?? (() => false)}
+              getDocumentPath={getDocumentPath ?? (() => "")}
+              getFolderItemCount={getFolderItemCount ?? (() => 0)}
+            />
+          </div>
+        ) : null}
       </div>
 
     </div>
