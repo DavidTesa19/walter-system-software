@@ -804,13 +804,14 @@ const DocumentExplorer: React.FC<DocumentExplorerProps> = ({
 
   // When a new folder appears after canvas-positioned draft commit, pin its position
   useEffect(() => {
-    if (!pendingCanvasNewItemPosRef.current) {
+    const pendingPos = pendingCanvasNewItemPosRef.current;
+    if (!pendingPos) {
       return;
     }
     const newItem = items.find((it) => it.itemKind === "folder" && !prevItemIdsRef.current.has(it.id));
     if (newItem) {
-      setCanvasPositions((prev) => ({ ...prev, [String(newItem.id)]: pendingCanvasNewItemPosRef.current! }));
       pendingCanvasNewItemPosRef.current = null;
+      setCanvasPositions((prev) => ({ ...prev, [String(newItem.id)]: pendingPos }));
     }
   }, [items]);
 
