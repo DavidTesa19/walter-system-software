@@ -12,10 +12,9 @@ import jwt from "jsonwebtoken";
 import crypto from "crypto";
 import db, { initDatabase } from "./db.js";
 import {
-  getNotificationRecipientsFromUsers,
   normalizeNotificationEmail,
-  sendPublicSubmissionNotification,
 } from "./submission-notifications.js";
+import { notifyPublicSubmission } from "./email.js";
 import {
   hasDuplicateFieldOptionValue,
   hasFixedFieldOptionValue,
@@ -4563,24 +4562,11 @@ app.post('/public-submissions/:type', async (req, res) => {
       createdCommissions.push(createdCommission);
     }
 
-    try {
-      const userResult = await db.query("SELECT notification_email FROM users WHERE notification_email IS NOT NULL AND notification_email <> ''");
-      const recipients = getNotificationRecipientsFromUsers(userResult.rows);
-      const notificationResult = await sendPublicSubmissionNotification({
-        recipients,
-        type,
-        entity: createdEntity,
-        commissions: createdCommissions,
-        entityId: createdEntity?.entity_id || null,
-        commissionIds: createdCommissions.map((item) => item?.commission_id).filter(Boolean)
-      });
-
-      if (!notificationResult?.sent && notificationResult?.skipped) {
-        console.warn('Public submission notification skipped:', notificationResult.skipped);
-      }
-    } catch (notificationError) {
-      console.error('Failed to send public submission notification:', notificationError);
-    }
+    await notifyPublicSubmission({
+      type,
+      entity: createdEntity,
+      commissions: createdCommissions,
+    });
 
     return res.status(201).json({
       entity: createdEntity,

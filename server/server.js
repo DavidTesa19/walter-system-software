@@ -12,10 +12,9 @@ import jwt from "jsonwebtoken";
 import crypto from "crypto";
 import * as entityCommissionJson from "./entity-commission-json.js";
 import {
-  getNotificationRecipientsFromUsers,
   normalizeNotificationEmail,
-  sendPublicSubmissionNotification,
 } from "./submission-notifications.js";
+import { notifyPublicSubmission } from "./email.js";
 import {
   getFieldOptionReplacementTables,
   hasDuplicateFieldOptionValue,
@@ -4428,20 +4427,10 @@ app.post('/public-submissions/:type', (req, res) => {
 
     if (!writeDb(db)) return res.status(500).json({ error: 'Failed to persist' });
 
-    const recipients = getNotificationRecipientsFromUsers(db.users || []);
-    void sendPublicSubmissionNotification({
-      recipients,
+    void notifyPublicSubmission({
       type,
       entity: result.entity,
       commissions: result.commissions,
-      entityId: result.entity?.entity_id || null,
-      commissionIds: result.commissions.map((item) => item?.commission_id).filter(Boolean)
-    }).then((notificationResult) => {
-      if (!notificationResult?.sent && notificationResult?.skipped) {
-        console.warn('Public submission notification skipped:', notificationResult.skipped);
-      }
-    }).catch((notificationError) => {
-      console.error('Failed to send public submission notification:', notificationError);
     });
 
     return res.status(201).json({
