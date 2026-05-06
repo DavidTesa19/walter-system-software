@@ -301,7 +301,7 @@
 }
 
 .ec-profile-documents-view .ec-fs-grid {
-  grid-template-columns: repeat(auto-fill, minmax(132px, 1fr));
+  grid-template-columns: repeat(auto-fill, minmax(calc(132px * var(--ec-fs-zoom, 1)), 1fr));
   align-content: start;
 }
 
