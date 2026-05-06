@@ -12,6 +12,11 @@ import jwt from "jsonwebtoken";
 import crypto from "crypto";
 import * as entityCommissionJson from "./entity-commission-json.js";
 import {
+  getNotificationRecipientsFromUsers,
+  normalizeNotificationEmail,
+  sendPublicSubmissionNotification,
+} from "./submission-notifications.js";
+import {
   getFieldOptionReplacementTables,
   hasDuplicateFieldOptionValue,
   hasFixedFieldOptionValue,
@@ -19,7 +24,6 @@ import {
   normalizeFieldOptionValue,
   REMOVED_FIELD_OPTION_LABEL,
 } from "./field-options.js";
-import { notifyPublicSubmission } from "./email.js";
 
 // Load environment variables
 dotenv.config();
@@ -1331,6 +1335,7 @@ const toAuthUser = (user) => ({
 
 const serializeManagedUser = (user) => ({
   ...toAuthUser(user),
+  notificationEmail: user.notificationEmail ?? user.notification_email ?? null,
   createdAt: user.createdAt ?? user.created_at ?? null,
   updatedAt: user.updatedAt ?? user.updated_at ?? null,
   createdByUserId: user.createdByUserId ?? user.created_by_user_id ?? null,
@@ -1570,7 +1575,7 @@ app.post("/auth/login", async (req, res) => {
 
 // Registration requires admin role (except for initial setup)
 app.post("/auth/register", authenticateToken, requireRole('admin'), async (req, res) => {
-  const { username, password, role, accessScope } = req.body;
+  const { username, password, role, accessScope, notificationEmail } = req.body;
   const db = readDb();
   
   if (db.users.find(u => u.username === username)) {
@@ -1589,6 +1594,7 @@ app.post("/auth/register", authenticateToken, requireRole('admin'), async (req, 
     password_hash,
     role: role || 'employee',
     accessScope: normalizeAccessScope(accessScope),
+    notification_email: normalizeNotificationEmail(notificationEmail),
     ...createAuditedJsonRecord({}, getRequestActorUserId(req))
   };
 
@@ -1620,7 +1626,12 @@ app.post("/users", authenticateToken, requireRole('admin'), (req, res) => {
   const nextId = maxId + 1;
   const now = new Date().toISOString();
   const newUser = createAuditedJsonRecord(
-    { id: nextId, ...user, accessScope: normalizeAccessScope(user.accessScope) },
+    {
+      id: nextId,
+      ...user,
+      accessScope: normalizeAccessScope(user.accessScope),
+      notification_email: normalizeNotificationEmail(user.notificationEmail),
+    },
     getRequestActorUserId(req),
     now
   );
@@ -1643,6 +1654,9 @@ app.put("/users/:id", authenticateToken, requireRole('admin'), (req, res) => {
       ...req.body,
       id,
       accessScope: normalizeAccessScope(req.body?.accessScope),
+      ...(req.body?.notificationEmail !== undefined
+        ? { notification_email: normalizeNotificationEmail(req.body.notificationEmail) }
+        : {}),
     },
     getRequestActorUserId(req)
   );
@@ -1670,6 +1684,9 @@ app.patch("/users/:id", authenticateToken, requireRole('admin'), (req, res) => {
       ...req.body,
       id,
       accessScope: normalizeAccessScope(req.body?.accessScope ?? db.users[idx]?.accessScope),
+      ...(req.body?.notificationEmail !== undefined
+        ? { notification_email: normalizeNotificationEmail(req.body.notificationEmail) }
+        : {}),
     },
     getRequestActorUserId(req)
   );
@@ -4380,10 +4397,21 @@ app.post('/public-submissions/:type', (req, res) => {
 
     if (!writeDb(db)) return res.status(500).json({ error: 'Failed to persist' });
 
-    // Fire-and-forget email notifications. Errors are logged inside notifyPublicSubmission
-    // so a slow or failing SMTP server never blocks the form response.
-    notifyPublicSubmission({ type, entity: result.entity, commissions: result.commissions })
-      .catch((err) => console.error('[email] notifyPublicSubmission rejected:', err?.message || err));
+    const recipients = getNotificationRecipientsFromUsers(db.users || []);
+    void sendPublicSubmissionNotification({
+      recipients,
+      type,
+      entity: result.entity,
+      commissions: result.commissions,
+      entityId: result.entity?.entity_id || null,
+      commissionIds: result.commissions.map((item) => item?.commission_id).filter(Boolean)
+    }).then((notificationResult) => {
+      if (!notificationResult?.sent && notificationResult?.skipped) {
+        console.warn('Public submission notification skipped:', notificationResult.skipped);
+      }
+    }).catch((notificationError) => {
+      console.error('Failed to send public submission notification:', notificationError);
+    });
 
     return res.status(201).json({
       entity: result.entity,

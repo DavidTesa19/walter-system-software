@@ -43,20 +43,8 @@ export function incrementEntityCounter(db, entityType) {
  * Get next commission number for an entity
  */
 export function getNextCommissionNumber(commissions, entityCode) {
-  const nextNumber = commissions.reduce((max, commission) => {
-    const matchesEntity = commission?.entity_code === entityCode
-      || (typeof commission?.commission_id === 'string' && commission.commission_id.startsWith(`${entityCode}-`));
-
-    if (!matchesEntity || typeof commission?.commission_id !== 'string') {
-      return max;
-    }
-
-    const [, rawSuffix] = commission.commission_id.split('-');
-    const suffix = Number.parseInt(rawSuffix ?? '', 10);
-    return Number.isInteger(suffix) ? Math.max(max, suffix) : max;
-  }, 0);
-
-  return nextNumber + 1;
+  const existing = commissions.filter(c => c.entity_code === entityCode);
+  return existing.length + 1;
 }
 
 /**

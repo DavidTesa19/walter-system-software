@@ -4,7 +4,9 @@ import { useAuth } from "../auth/AuthContext";
 import DocumentViewerModal from "../components/DocumentViewerModal";
 import ThemeToggleButton from "../components/ThemeToggleButton";
 import type { FutureFunction } from "./futureFunction.interface";
+import FutureFunctionProfileFields from "./FutureFunctionProfileFields";
 import { formatProfileDate } from "../usersGrid/utils/profileUtils";
+import "./FutureFunctionCreateModal.css";
 import "./FutureFunctionDetail.css";
 
 /* ------------------------------------------------------------------ */
@@ -133,16 +135,36 @@ const FutureFunctionDetail: React.FC<FutureFunctionDetailProps> = ({
   const fileInputRef = useRef<HTMLInputElement>(null);
   const noteFileInputRef = useRef<HTMLInputElement>(null);
   const dragCounterRef = useRef(0);
-  const detailsPanelRef = useRef<HTMLDivElement | null>(null);
+  const detailsPanelRef = useRef<HTMLFormElement | null>(null);
+  const firstFieldRef = useRef<HTMLInputElement | null>(null);
+  const titleId = `future-function-detail-title-${func.id}`;
 
   useEffect(() => {
     setDraft(func);
     setSavedDraft(func);
   }, [func]);
 
+  useEffect(() => {
+    document.body.style.overflow = "hidden";
+
+    const frame = window.requestAnimationFrame(() => {
+      firstFieldRef.current?.focus();
+      firstFieldRef.current?.select();
+    });
+
+    return () => {
+      document.body.style.overflow = "";
+      window.cancelAnimationFrame(frame);
+    };
+  }, []);
+
   const updateDraftField = useCallback(<K extends keyof FutureFunction>(key: K, value: FutureFunction[K]) => {
     setDraft((current) => ({ ...current, [key]: value }));
   }, []);
+
+  const handleProfileFieldChange = useCallback((key: keyof FutureFunction | "created_at" | "completedAt", value: string | boolean | null | undefined) => {
+    updateDraftField(key as keyof FutureFunction, value as FutureFunction[keyof FutureFunction]);
+  }, [updateDraftField]);
 
   const focusField = useCallback((element: HTMLElement | null) => {
     if (!element) {
@@ -186,7 +208,7 @@ const FutureFunctionDetail: React.FC<FutureFunctionDetailProps> = ({
     }
 
     if (direction === 1) {
-      const saveButton = detailsPanelRef.current?.querySelector<HTMLElement>(".ff-info-save-btn:not(:disabled)") ?? null;
+      const saveButton = detailsPanelRef.current?.querySelector<HTMLElement>(".ff-detail-submit:not(:disabled)") ?? null;
       focusField(saveButton);
     }
   }, [focusField, getNavigableDetailFields]);
@@ -315,18 +337,21 @@ const FutureFunctionDetail: React.FC<FutureFunctionDetailProps> = ({
     }
   }, [draft, func.id, normalizeDraftForSave, onUpdate]);
 
-  const handleDetailPanelBlur = useCallback((event: React.FocusEvent<HTMLDivElement>) => {
-    if (readOnly || isSavingDetails || !isDetailDirty) {
-      return;
+  const handleOverlayMouseDown = useCallback((event: React.MouseEvent<HTMLDivElement>) => {
+    if (event.target === event.currentTarget) {
+      onClose();
     }
+  }, [onClose]);
 
-    const nextFocused = event.relatedTarget as Node | null;
-    if (nextFocused && detailsPanelRef.current?.contains(nextFocused)) {
+  const handleDetailSubmit = useCallback((event: React.FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+
+    if (readOnly) {
       return;
     }
 
     void handleSaveDetails();
-  }, [handleSaveDetails, isDetailDirty, isSavingDetails, readOnly]);
+  }, [handleSaveDetails, readOnly]);
 
   /* ---- Data fetching ---- */
 
@@ -446,7 +471,7 @@ const FutureFunctionDetail: React.FC<FutureFunctionDetailProps> = ({
       await fetchAttachments();
     } catch (err) {
       console.error("Error adding note:", err);
-      alert("Nepodařilo se přidat poznámku");
+      alert("Nepodařilo se přidat zprávu");
     } finally {
       setNoteSending(false);
     }
@@ -454,7 +479,7 @@ const FutureFunctionDetail: React.FC<FutureFunctionDetailProps> = ({
 
   const handleDeleteNote = useCallback(
     async (noteId: number) => {
-      if (!confirm("Smazat tuto poznámku?")) return;
+      if (!confirm("Smazat tuto zprávu?")) return;
       try {
         if (editingNote?.id === noteId) {
           setEditingNote(null);
@@ -465,7 +490,7 @@ const FutureFunctionDetail: React.FC<FutureFunctionDetailProps> = ({
         await fetchNotes();
       } catch (err) {
         console.error("Error deleting note:", err);
-        alert("Nepodařilo se smazat poznámku");
+        alert("Nepodařilo se smazat zprávu");
       }
     },
     [editingNote?.id, fetchNotes]
@@ -502,7 +527,7 @@ const FutureFunctionDetail: React.FC<FutureFunctionDetailProps> = ({
       await fetchNotes();
     } catch (err) {
       console.error("Error updating note:", err);
-      alert("Nepodařilo se upravit poznámku");
+      alert("Nepodařilo se upravit zprávu");
     } finally {
       setNoteUpdating(false);
     }
@@ -711,250 +736,97 @@ const FutureFunctionDetail: React.FC<FutureFunctionDetailProps> = ({
 
   return (
     <>
-      <div className="ff-detail-overlay" onClick={onClose}>
+      <div className="ff-create-overlay" onMouseDown={handleOverlayMouseDown} role="presentation">
         <div
-          className="ff-detail-modal"
-          onClick={(e) => e.stopPropagation()}
+          className="ff-create-modal ff-detail-modal-shell"
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby={titleId}
+          onMouseDown={(e) => e.stopPropagation()}
         >
-          {/* Header */}
-          <div className="ff-detail-header">
-            <div className="ff-detail-header-left">
-              <span className="ff-detail-id">#{func.id}</span>
-              <h2 className="ff-detail-title">{draft.name}</h2>
+          <div className="ff-create-header">
+            <div>
+              <span className="ff-create-kicker">Detail funkce</span>
+              <h2 className="ff-create-title" id={titleId}>{draft.name || "Upravit funkci"}</h2>
             </div>
-            <div className="ff-detail-header-actions">
+            <div className="ff-create-header-actions">
               <ThemeToggleButton variant="icon" />
               <button
-                className="ff-detail-close"
+                type="button"
+                className="ff-create-close"
                 onClick={onClose}
-                title="Zavřít"
+                aria-label="Zavřít"
               >
                 ×
               </button>
             </div>
           </div>
 
-          {/* Body */}
-          <div className="ff-detail-body">
-            {/* Left panel: Info */}
-            <div className="ff-detail-info-panel" ref={detailsPanelRef} onBlurCapture={handleDetailPanelBlur}>
-              <div className="ff-info-panel-header">
-                <h3 className="ff-info-section-title">Přehled</h3>
-                {!readOnly && (
-                  <button
-                    type="button"
-                    className="ff-info-save-btn"
-                    onClick={() => void handleSaveDetails()}
-                    disabled={!isDetailDirty || isSavingDetails}
-                  >
-                    {isSavingDetails ? "Ukládám..." : "Uložit"}
-                  </button>
-                )}
-              </div>
-              <div className="ff-info-grid">
-                <div className="ff-info-item">
-                  <span className="ff-info-label">Název funkce</span>
-                  {readOnly ? (
-                    <div className="ff-info-value">{draft.name || "—"}</div>
-                  ) : (
-                    <input
-                      type="text"
-                      className="ff-info-input ff-detail-nav-field"
-                      value={draft.name}
-                      onChange={(event) => updateDraftField("name", event.target.value)}
-                      onKeyDown={(event) => handleDetailFieldKeyDown(event, "input")}
-                      disabled={isSavingDetails}
-                    />
-                  )}
+          <form ref={detailsPanelRef} className="ff-create-form ff-detail-form" onSubmit={handleDetailSubmit}>
+            <div className="ff-create-grid ff-detail-grid">
+              <section className="ff-create-profile-card ff-create-field-wide" aria-label="Profil funkce">
+                <div className="ff-detail-section-heading">
+                  <div>
+                    <span className="ff-create-documents-title">Profil funkce</span>
+                    <p className="ff-create-documents-subtitle">Stejné rozvržení jako při vytváření, ale pro úpravy detailů a průběžnou práci.</p>
+                  </div>
+                  <span className="ff-detail-record-id">#{func.id}</span>
                 </div>
-
-                <div className="ff-info-item">
-                  <span className="ff-info-label">Stav</span>
-                  {readOnly ? (
-                    <div className="ff-info-value">
-                      <span className="ff-status-badge">
-                        <span
-                          className="ff-status-dot"
-                          style={{ backgroundColor: statusColor }}
-                        />
-                        {draft.status}
-                      </span>
-                    </div>
-                  ) : (
-                    <div className="ff-info-edit-status">
-                      <span
-                        className="ff-status-dot"
-                        style={{ backgroundColor: statusColor }}
-                      />
-                      <select
-                        className="ff-info-input ff-detail-nav-field"
-                        value={draft.status}
-                        onChange={(event) => updateDraftField("status", event.target.value)}
-                        onKeyDown={(event) => handleDetailFieldKeyDown(event, "select", STATUS_OPTIONS, (nextValue) => updateDraftField("status", nextValue))}
-                        disabled={isSavingDetails}
-                      >
-                        {STATUS_OPTIONS.map((option) => (
-                          <option key={option} value={option}>
-                            {option}
-                          </option>
-                        ))}
-                      </select>
-                    </div>
-                  )}
+                <div className="ff-create-profile-grid ff-detail-profile-grid">
+                  <FutureFunctionProfileFields
+                    values={draft}
+                    priorityOptions={PRIORITY_OPTIONS}
+                    complexityOptions={COMPLEXITY_OPTIONS}
+                    phaseOptions={PHASE_OPTIONS}
+                    statusOptions={STATUS_OPTIONS}
+                    onFieldChange={handleProfileFieldChange}
+                    onFieldKeyDown={handleDetailFieldKeyDown}
+                    readOnly={readOnly}
+                    disabled={isSavingDetails}
+                    firstFieldRef={firstFieldRef}
+                    navFieldClassName="ff-detail-nav-field"
+                    archivedLabel="Zařadit do archivu"
+                    namePlaceholder="Např. Automatické schvalování"
+                    infoPlaceholder="Popis, očekávané chování, poznámky k implementaci..."
+                    showCreatedAt
+                    createdAtDisplay={formatShortDate(draft.created_at)}
+                    showCompletedAt
+                    statusColor={statusColor}
+                    staticFieldClassName="ff-detail-static-field"
+                    staticTextClassName="ff-detail-static-text"
+                    statusFieldClassName="ff-detail-status-field"
+                    statusEditorClassName="ff-detail-status-editor"
+                  />
                 </div>
+              </section>
 
-                <div className="ff-info-item">
-                  <span className="ff-info-label">Priorita</span>
-                  {readOnly ? (
-                    <div className="ff-info-value">{draft.priority || "—"}</div>
-                  ) : (
-                    <select
-                      className="ff-info-input ff-detail-nav-field"
-                      value={draft.priority}
-                      onChange={(event) => updateDraftField("priority", event.target.value)}
-                      onKeyDown={(event) => handleDetailFieldKeyDown(event, "select", PRIORITY_OPTIONS, (nextValue) => updateDraftField("priority", nextValue))}
-                      disabled={isSavingDetails}
-                    >
-                      {PRIORITY_OPTIONS.map((option) => (
-                        <option key={option} value={option}>
-                          {option}
-                        </option>
-                      ))}
-                    </select>
-                  )}
-                </div>
-
-                <div className="ff-info-item">
-                  <span className="ff-info-label">Komplexita</span>
-                  {readOnly ? (
-                    <div className="ff-info-value">
-                      {draft.complexity || "—"}
-                    </div>
-                  ) : (
-                    <select
-                      className="ff-info-input ff-detail-nav-field"
-                      value={draft.complexity}
-                      onChange={(event) => updateDraftField("complexity", event.target.value)}
-                      onKeyDown={(event) => handleDetailFieldKeyDown(event, "select", COMPLEXITY_OPTIONS, (nextValue) => updateDraftField("complexity", nextValue))}
-                      disabled={isSavingDetails}
-                    >
-                      {COMPLEXITY_OPTIONS.map((option) => (
-                        <option key={option} value={option}>
-                          {option}
-                        </option>
-                      ))}
-                    </select>
-                  )}
-                </div>
-
-                <div className="ff-info-item">
-                  <span className="ff-info-label">Časový plán</span>
-                  {readOnly ? (
-                    <div className="ff-info-value">{draft.phase || "—"}</div>
-                  ) : (
-                    <select
-                      className="ff-info-input ff-detail-nav-field"
-                      value={draft.phase}
-                      onChange={(event) => updateDraftField("phase", event.target.value)}
-                      onKeyDown={(event) => handleDetailFieldKeyDown(event, "select", PHASE_OPTIONS, (nextValue) => updateDraftField("phase", nextValue))}
-                      disabled={isSavingDetails}
-                    >
-                      {PHASE_OPTIONS.map((option) => (
-                        <option key={option} value={option}>
-                          {option}
-                        </option>
-                      ))}
-                    </select>
-                  )}
-                </div>
-
-                <div className="ff-info-item">
-                  <span className="ff-info-label">Datum přidání</span>
-                  <div className="ff-info-value">{formatShortDate(draft.created_at)}</div>
-                </div>
-
-                <div className="ff-info-item">
-                  <span className="ff-info-label">Datum dokončení</span>
-                  {readOnly ? (
-                    <div className="ff-info-value">
-                      {draft.completedAt || "—"}
-                    </div>
-                  ) : (
-                    <input
-                      type="date"
-                      className="ff-info-input ff-detail-nav-field"
-                      value={draft.completedAt ?? ""}
-                      onChange={(event) => updateDraftField("completedAt", event.target.value || null)}
-                      onKeyDown={(event) => handleDetailFieldKeyDown(event, "date")}
-                      disabled={isSavingDetails}
-                    />
-                  )}
-                </div>
-
-                <div className="ff-info-item">
-                  <span className="ff-info-label">Archivováno</span>
-                  {readOnly ? (
-                    <div className="ff-info-value">
-                      {draft.archived ? "Ano" : "Ne"}
-                    </div>
-                  ) : (
-                    <label className="ff-info-checkbox-row">
-                      <input
-                        type="checkbox"
-                        className="ff-detail-nav-field"
-                        checked={draft.archived}
-                        onChange={(event) => updateDraftField("archived", event.target.checked)}
-                        onKeyDown={(event) => handleDetailFieldKeyDown(event, "checkbox")}
-                        disabled={isSavingDetails}
-                      />
-                      <span>{draft.archived ? "Ano" : "Ne"}</span>
-                    </label>
-                  )}
-                </div>
-
-                <div className="ff-info-item">
-                  <span className="ff-info-label">Popis / Info</span>
-                  {readOnly ? (
-                    <div className="ff-info-value info-text">
-                      {draft.info || "Žádné informace"}
-                    </div>
-                  ) : (
-                    <textarea
-                      className="ff-info-input ff-info-textarea ff-detail-nav-field"
-                      value={draft.info}
-                      onChange={(event) => updateDraftField("info", event.target.value)}
-                      onKeyDown={(event) => handleDetailFieldKeyDown(event, "textarea")}
-                      disabled={isSavingDetails}
-                      rows={6}
-                      placeholder="Doplňte popis nebo poznámky k funkci"
-                    />
-                  )}
-                </div>
-              </div>
-            </div>
-
-            {/* Right panel: Notes + Attachments */}
-            <div className="ff-detail-content-panel">
-              <div className="ff-content-tabs">
+              <section className="ff-create-documents ff-create-field-wide ff-detail-workspace" aria-label="Aktivita a soubory">
+                <div className="ff-detail-workspace-header">
+                  <div>
+                    <span className="ff-create-documents-title">Aktivita a soubory</span>
+                    <p className="ff-create-documents-subtitle">Přepínejte mezi zprávami a soubory k této funkci.</p>
+                  </div>
+                  <div className="ff-detail-switch" role="tablist" aria-label="Sekce aktivity">
                 <button
                   type="button"
-                  className={`ff-content-tab${activeTab === "notes" ? " active" : ""}`}
+                  className={`ff-detail-switch-button${activeTab === "notes" ? " active" : ""}`}
                   onClick={() => setActiveTab("notes")}
                 >
-                  📝 Poznámky
+                  Zprávy
                   {notes.length > 0 && ` (${notes.length})`}
                 </button>
                 <button
                   type="button"
-                  className={`ff-content-tab${activeTab === "attachments" ? " active" : ""}`}
+                  className={`ff-detail-switch-button${activeTab === "attachments" ? " active" : ""}`}
                   onClick={() => setActiveTab("attachments")}
                 >
-                  📎 Přílohy
+                  Soubory
                   {generalAttachments.length > 0 && ` (${generalAttachments.length})`}
                 </button>
-              </div>
+                  </div>
+                </div>
 
-              <div className="ff-content-body">
+              <div className="ff-detail-section-body">
                 {/* ======== Notes Tab ======== */}
                 {activeTab === "notes" && (
                   <>
@@ -976,7 +848,7 @@ const FutureFunctionDetail: React.FC<FutureFunctionDetailProps> = ({
                       )}
                       <div className="ff-notes-input-row">
                         <textarea
-                          placeholder="Napište poznámku nebo aktualizaci..."
+                          placeholder="Napište zprávu nebo aktualizaci..."
                           value={noteText}
                           onChange={(e) => setNoteText(e.target.value)}
                           onKeyDown={(e) => {
@@ -1053,7 +925,7 @@ const FutureFunctionDetail: React.FC<FutureFunctionDetailProps> = ({
                       <p className="ff-notes-empty">Načítám...</p>
                     ) : notes.length === 0 ? (
                       <p className="ff-notes-empty">
-                        Zatím žádné poznámky. Přidejte první poznámku výše.
+                        Zatím žádné zprávy. Přidejte první zprávu výše.
                       </p>
                     ) : (
                       <div className="ff-notes-list">
@@ -1072,7 +944,7 @@ const FutureFunctionDetail: React.FC<FutureFunctionDetailProps> = ({
                                   type="button"
                                   className="ff-note-edit"
                                   onClick={() => handleStartEditNote(note)}
-                                  title="Upravit poznámku"
+                                  title="Upravit zprávu"
                                 >
                                   ✎
                                 </button>
@@ -1140,7 +1012,7 @@ const FutureFunctionDetail: React.FC<FutureFunctionDetailProps> = ({
                               type="button"
                               className="ff-note-delete"
                               onClick={() => void handleDeleteNote(note.id)}
-                              title="Smazat poznámku"
+                              title="Smazat zprávu"
                             >
                               ×
                             </button>
@@ -1282,8 +1154,20 @@ const FutureFunctionDetail: React.FC<FutureFunctionDetailProps> = ({
                   </>
                 )}
               </div>
+              </section>
             </div>
-          </div>
+
+            <div className="ff-create-actions ff-detail-actions">
+              <button type="button" className="ff-create-secondary" onClick={onClose} disabled={isSavingDetails}>
+                Zavřít
+              </button>
+              {!readOnly && (
+                <button type="submit" className="ff-create-primary ff-detail-submit" disabled={!isDetailDirty || isSavingDetails}>
+                  {isSavingDetails ? "Ukládám..." : "Uložit změny"}
+                </button>
+              )}
+            </div>
+          </form>
         </div>
       </div>
 
@@ -1291,7 +1175,7 @@ const FutureFunctionDetail: React.FC<FutureFunctionDetailProps> = ({
       {pasteToast && (
         <div className="ff-paste-indicator">
           📋 {activeTab === "notes"
-            ? "Soubor přidán k poznámce"
+            ? "Soubor přidán ke zprávě"
             : "Soubor vložen ze schránky — nahrávám..."}
         </div>
       )}

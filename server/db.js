@@ -159,6 +159,7 @@ export async function initDatabase() {
         password_hash VARCHAR(255),
         role VARCHAR(50) DEFAULT 'employee',
         access_scope VARCHAR(50) DEFAULT 'all',
+        notification_email VARCHAR(255),
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
         updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
       )
@@ -432,6 +433,7 @@ export async function initDatabase() {
       "ALTER TABLE users ADD COLUMN IF NOT EXISTS password_hash VARCHAR(255)",
       "ALTER TABLE users ADD COLUMN IF NOT EXISTS role VARCHAR(50) DEFAULT 'employee'",
       "ALTER TABLE users ADD COLUMN IF NOT EXISTS access_scope VARCHAR(50) DEFAULT 'all'",
+      "ALTER TABLE users ADD COLUMN IF NOT EXISTS notification_email VARCHAR(255)",
       "ALTER TABLE documents ADD COLUMN IF NOT EXISTS archived_at TIMESTAMP DEFAULT NULL",
       "ALTER TABLE documents ADD COLUMN IF NOT EXISTS note_id INTEGER DEFAULT NULL",
       "ALTER TABLE documents ADD COLUMN IF NOT EXISTS item_kind VARCHAR(20) DEFAULT 'file'",

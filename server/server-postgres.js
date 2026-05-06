@@ -12,12 +12,16 @@ import jwt from "jsonwebtoken";
 import crypto from "crypto";
 import db, { initDatabase } from "./db.js";
 import {
+  getNotificationRecipientsFromUsers,
+  normalizeNotificationEmail,
+  sendPublicSubmissionNotification,
+} from "./submission-notifications.js";
+import {
   hasDuplicateFieldOptionValue,
   hasFixedFieldOptionValue,
   normalizeFieldOptionScope,
   normalizeFieldOptionValue,
 } from "./field-options.js";
-import { notifyPublicSubmission } from "./email.js";
 
 dotenv.config();
 
@@ -54,6 +58,7 @@ const toAuthUser = (user) => ({
 
 const serializeManagedUser = (user) => ({
   ...toAuthUser(user),
+  notificationEmail: user.notificationEmail ?? user.notification_email ?? null,
   createdAt: user.createdAt ?? user.created_at ?? null,
   updatedAt: user.updatedAt ?? user.updated_at ?? null,
   createdByUserId: user.createdByUserId ?? user.created_by_user_id ?? null,
@@ -3090,7 +3095,7 @@ app.get("/auth/me", authenticateToken, (req, res) => {
 
 // Register - protected, only admins can create new users
 app.post("/auth/register", authenticateToken, requireRole('admin'), async (req, res) => {
-  const { username, password, role, accessScope } = req.body;
+  const { username, password, role, accessScope, notificationEmail } = req.body;
   
   try {
     if (db.isPostgres()) {
@@ -3103,8 +3108,8 @@ app.post("/auth/register", authenticateToken, requireRole('admin'), async (req, 
       const password_hash = await bcrypt.hash(password, salt);
 
       const result = await db.query(
-        'INSERT INTO users (username, password_hash, role, access_scope, created_by_user_id, updated_by_user_id) VALUES ($1, $2, $3, $4, $5, $5) RETURNING id',
-        [username, password_hash, role || 'employee', normalizeAccessScope(accessScope), getRequestActorUserId(req) ?? null]
+        'INSERT INTO users (username, password_hash, role, access_scope, notification_email, created_by_user_id, updated_by_user_id) VALUES ($1, $2, $3, $4, $5, $6, $6) RETURNING id',
+        [username, password_hash, role || 'employee', normalizeAccessScope(accessScope), normalizeNotificationEmail(notificationEmail), getRequestActorUserId(req) ?? null]
       );
 
       return res.status(201).json({ message: "User created", userId: result.rows[0].id });
@@ -3128,6 +3133,7 @@ app.post("/auth/register", authenticateToken, requireRole('admin'), async (req, 
       password_hash,
       role: role || 'employee',
       accessScope: normalizeAccessScope(accessScope),
+      notification_email: normalizeNotificationEmail(notificationEmail),
       ...createAuditedJsonRecord({}, getRequestActorUserId(req))
     };
 
@@ -3183,7 +3189,7 @@ app.get("/users/:id", authenticateToken, requireRole('admin'), async (req, res) 
 });
 
 app.post("/users", authenticateToken, requireRole('admin'), async (req, res) => {
-  const { username, password, role, accessScope } = req.body;
+  const { username, password, role, accessScope, notificationEmail } = req.body;
 
   try {
     const salt = await bcrypt.genSalt(10);
@@ -3191,8 +3197,8 @@ app.post("/users", authenticateToken, requireRole('admin'), async (req, res) => 
 
     if (db.isPostgres()) {
       const result = await db.query(
-        'INSERT INTO users (username, password_hash, role, access_scope, created_by_user_id, updated_by_user_id) VALUES ($1, $2, $3, $4, $5, $5) RETURNING *',
-        [username, password_hash, role || 'employee', normalizeAccessScope(accessScope), getRequestActorUserId(req) ?? null]
+        'INSERT INTO users (username, password_hash, role, access_scope, notification_email, created_by_user_id, updated_by_user_id) VALUES ($1, $2, $3, $4, $5, $6, $6) RETURNING *',
+        [username, password_hash, role || 'employee', normalizeAccessScope(accessScope), normalizeNotificationEmail(notificationEmail), getRequestActorUserId(req) ?? null]
       );
       return res.status(201).json(serializeManagedUser(result.rows[0]));
     }
@@ -3205,6 +3211,7 @@ app.post("/users", authenticateToken, requireRole('admin'), async (req, res) => 
       password_hash,
       role: role || 'employee',
       accessScope: normalizeAccessScope(accessScope),
+      notification_email: normalizeNotificationEmail(notificationEmail),
       ...createAuditedJsonRecord({}, getRequestActorUserId(req))
     };
     dbData.users.push(newUser);
@@ -3220,7 +3227,7 @@ app.post("/users", authenticateToken, requireRole('admin'), async (req, res) => 
 
 app.put("/users/:id", authenticateToken, requireRole('admin'), async (req, res) => {
   const userId = req.params.id;
-  const { username, password, role, accessScope } = req.body;
+  const { username, password, role, accessScope, notificationEmail } = req.body;
 
   try {
     // Prevent changing an admin user's role or access scope
@@ -3258,6 +3265,11 @@ app.put("/users/:id", authenticateToken, requireRole('admin'), async (req, res) 
         params.push(normalizeAccessScope(accessScope));
       }
 
+      if (notificationEmail !== undefined) {
+        updates.push('notification_email = $' + (params.length + 1));
+        params.push(normalizeNotificationEmail(notificationEmail));
+      }
+
       if (updates.length === 0) {
         return res.status(400).json({ error: "No valid fields to update" });
       }
@@ -3287,6 +3299,7 @@ app.put("/users/:id", authenticateToken, requireRole('admin'), async (req, res) 
     }
     if (role !== undefined) user.role = role;
     if (accessScope !== undefined) user.accessScope = normalizeAccessScope(accessScope);
+    if (notificationEmail !== undefined) user.notification_email = normalizeNotificationEmail(notificationEmail);
     Object.assign(user, updateAuditedJsonRecord(user, {}, getRequestActorUserId(req)));
 
     if (!writeDb(dbData)) {
@@ -3301,7 +3314,7 @@ app.put("/users/:id", authenticateToken, requireRole('admin'), async (req, res) 
 
 app.patch("/users/:id", authenticateToken, requireRole('admin'), async (req, res) => {
   const userId = req.params.id;
-  const { username, password, role, accessScope } = req.body;
+  const { username, password, role, accessScope, notificationEmail } = req.body;
 
   try {
     // Prevent changing an admin user's role or access scope
@@ -3339,6 +3352,11 @@ app.patch("/users/:id", authenticateToken, requireRole('admin'), async (req, res
       params.push(normalizeAccessScope(accessScope));
     }
 
+    if (notificationEmail !== undefined) {
+      updates.push('notification_email = $' + (params.length + 1));
+      params.push(normalizeNotificationEmail(notificationEmail));
+    }
+
     if (updates.length === 0) {
       return res.status(400).json({ error: 'No valid fields to update' });
     }
@@ -3370,6 +3388,7 @@ app.patch("/users/:id", authenticateToken, requireRole('admin'), async (req, res
     }
     if (role !== undefined) existingUser.role = role;
     if (accessScope !== undefined) existingUser.accessScope = normalizeAccessScope(accessScope);
+    if (notificationEmail !== undefined) existingUser.notification_email = normalizeNotificationEmail(notificationEmail);
     Object.assign(existingUser, updateAuditedJsonRecord(existingUser, {}, getRequestActorUserId(req)));
 
     if (!writeDb(dbData)) {
@@ -4505,10 +4524,24 @@ app.post('/public-submissions/:type', async (req, res) => {
       createdCommissions.push(createdCommission);
     }
 
-    // Fire-and-forget email notifications. Errors are logged inside notifyPublicSubmission
-    // so a slow or failing SMTP server never blocks the form response.
-    notifyPublicSubmission({ type, entity: createdEntity, commissions: createdCommissions })
-      .catch((err) => console.error('[email] notifyPublicSubmission rejected:', err?.message || err));
+    try {
+      const userResult = await db.query("SELECT notification_email FROM users WHERE notification_email IS NOT NULL AND notification_email <> ''");
+      const recipients = getNotificationRecipientsFromUsers(userResult.rows);
+      const notificationResult = await sendPublicSubmissionNotification({
+        recipients,
+        type,
+        entity: createdEntity,
+        commissions: createdCommissions,
+        entityId: createdEntity?.entity_id || null,
+        commissionIds: createdCommissions.map((item) => item?.commission_id).filter(Boolean)
+      });
+
+      if (!notificationResult?.sent && notificationResult?.skipped) {
+        console.warn('Public submission notification skipped:', notificationResult.skipped);
+      }
+    } catch (notificationError) {
+      console.error('Failed to send public submission notification:', notificationError);
+    }
 
     return res.status(201).json({
       entity: createdEntity,

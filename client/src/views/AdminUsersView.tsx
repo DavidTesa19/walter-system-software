@@ -14,6 +14,7 @@ interface ManagedUser {
   username: string;
   role: UserRole;
   accessScope: AccessScope;
+  notificationEmail?: string | null;
   createdAt?: string | null;
   updatedAt?: string | null;
 }
@@ -23,6 +24,7 @@ interface CreateUserFormState {
   password: string;
   role: UserRole;
   accessScope: AccessScope;
+  notificationEmail: string;
 }
 
 const ROLE_OPTIONS: Array<{ value: UserRole; label: string; description: string }> = [
@@ -59,7 +61,10 @@ const INITIAL_CREATE_FORM: CreateUserFormState = {
   password: '',
   role: 'viewer',
   accessScope: 'all',
+  notificationEmail: '',
 };
+
+const normalizeNotificationEmailInput = (value: string | null | undefined): string => value?.trim() ?? '';
 
 export default function AdminUsersView() {
   const { user } = useAuth();
@@ -67,6 +72,7 @@ export default function AdminUsersView() {
   const [users, setUsers] = useState<ManagedUser[]>([]);
   const [draftRoles, setDraftRoles] = useState<Record<number, UserRole>>({});
   const [draftScopes, setDraftScopes] = useState<Record<number, AccessScope>>({});
+  const [draftNotificationEmails, setDraftNotificationEmails] = useState<Record<number, string>>({});
   const [passwordDrafts, setPasswordDrafts] = useState<Record<number, string>>({});
   const [createForm, setCreateForm] = useState<CreateUserFormState>(INITIAL_CREATE_FORM);
   const [isLoading, setIsLoading] = useState(true);
@@ -98,6 +104,12 @@ export default function AdminUsersView() {
       setDraftScopes(
         rows.reduce<Record<number, AccessScope>>((accumulator, row) => {
           accumulator[row.id] = row.accessScope;
+          return accumulator;
+        }, {})
+      );
+      setDraftNotificationEmails(
+        rows.reduce<Record<number, string>>((accumulator, row) => {
+          accumulator[row.id] = normalizeNotificationEmailInput(row.notificationEmail);
           return accumulator;
         }, {})
       );
@@ -155,6 +167,14 @@ export default function AdminUsersView() {
     setSuccessMessage(null);
   };
 
+  const handleNotificationEmailChange = (userId: number, nextEmail: string) => {
+    setDraftNotificationEmails((current) => ({
+      ...current,
+      [userId]: nextEmail,
+    }));
+    setSuccessMessage(null);
+  };
+
   const handleCreateFormChange = <K extends keyof CreateUserFormState>(field: K, value: CreateUserFormState[K]) => {
     setCreateForm((current) => ({
       ...current,
@@ -166,7 +186,13 @@ export default function AdminUsersView() {
   const handleSave = async (managedUser: ManagedUser) => {
     const nextRole = draftRoles[managedUser.id] ?? managedUser.role;
     const nextScope = draftScopes[managedUser.id] ?? managedUser.accessScope;
-    if (nextRole === managedUser.role && nextScope === managedUser.accessScope) {
+    const nextNotificationEmail = normalizeNotificationEmailInput(draftNotificationEmails[managedUser.id]);
+    const currentNotificationEmail = normalizeNotificationEmailInput(managedUser.notificationEmail);
+    if (
+      nextRole === managedUser.role
+      && nextScope === managedUser.accessScope
+      && nextNotificationEmail === currentNotificationEmail
+    ) {
       return;
     }
 
@@ -178,6 +204,7 @@ export default function AdminUsersView() {
       const updatedUser = await apiPatch<ManagedUser>(`/users/${managedUser.id}`, {
         role: nextRole,
         accessScope: nextScope,
+        notificationEmail: nextNotificationEmail,
       });
       setUsers((current) => current.map((entry) => (entry.id === managedUser.id ? updatedUser : entry)));
       setDraftRoles((current) => ({
@@ -187,6 +214,10 @@ export default function AdminUsersView() {
       setDraftScopes((current) => ({
         ...current,
         [managedUser.id]: updatedUser.accessScope,
+      }));
+      setDraftNotificationEmails((current) => ({
+        ...current,
+        [managedUser.id]: normalizeNotificationEmailInput(updatedUser.notificationEmail),
       }));
       markItemSeen(ADMIN_USERS_RECORD_SCOPE, updatedUser.id, updatedUser.updatedAt ?? updatedUser.createdAt ?? null);
       setSuccessMessage(`Uživatel ${managedUser.username} byl upraven.`);
@@ -217,11 +248,16 @@ export default function AdminUsersView() {
         password,
         role: createForm.role,
         accessScope: createForm.accessScope,
+        notificationEmail: normalizeNotificationEmailInput(createForm.notificationEmail),
       });
 
       setUsers((current) => [createdUser, ...current]);
       setDraftRoles((current) => ({ ...current, [createdUser.id]: createdUser.role }));
       setDraftScopes((current) => ({ ...current, [createdUser.id]: createdUser.accessScope }));
+      setDraftNotificationEmails((current) => ({
+        ...current,
+        [createdUser.id]: normalizeNotificationEmailInput(createdUser.notificationEmail),
+      }));
       setPasswordDrafts((current) => ({ ...current, [createdUser.id]: '' }));
       setCreateForm(INITIAL_CREATE_FORM);
       markItemSeen(ADMIN_USERS_RECORD_SCOPE, createdUser.id, createdUser.updatedAt ?? createdUser.createdAt ?? null);
@@ -367,6 +403,16 @@ export default function AdminUsersView() {
               ))}
             </select>
           </label>
+          <label className="admin-users-scope-field">
+            <span>Notifikační e-mail</span>
+            <input
+              type="email"
+              value={createForm.notificationEmail}
+              onChange={(event) => handleCreateFormChange('notificationEmail', event.target.value)}
+              placeholder="napr. upozorneni@firma.cz"
+              autoComplete="email"
+            />
+          </label>
         </div>
         <div className="admin-users-create-actions">
           <span className="admin-users-inline-note">
@@ -403,6 +449,7 @@ export default function AdminUsersView() {
                   <th>Uživatel</th>
                   <th>Role</th>
                   <th>Přístup</th>
+                  <th>Notifikační e-mail</th>
                   <th>Vytvořen</th>
                   <th>Aktualizován</th>
                   <th>Akce</th>
@@ -412,8 +459,11 @@ export default function AdminUsersView() {
                 {users.map((managedUser) => {
                   const draftRole = draftRoles[managedUser.id] ?? managedUser.role;
                   const draftScope = draftScopes[managedUser.id] ?? managedUser.accessScope;
+                  const draftNotificationEmail = draftNotificationEmails[managedUser.id] ?? normalizeNotificationEmailInput(managedUser.notificationEmail);
                   const passwordDraft = passwordDrafts[managedUser.id] ?? '';
-                  const isDirty = draftRole !== managedUser.role || draftScope !== managedUser.accessScope;
+                  const isDirty = draftRole !== managedUser.role
+                    || draftScope !== managedUser.accessScope
+                    || normalizeNotificationEmailInput(draftNotificationEmail) !== normalizeNotificationEmailInput(managedUser.notificationEmail);
                   const isSaving = savingById[managedUser.id] === true;
                   const isCurrentUser = managedUser.id === user.id;
                   const isAdminUser = managedUser.role === 'admin';
@@ -471,6 +521,19 @@ export default function AdminUsersView() {
                           <span>{ACCESS_SCOPE_OPTIONS.find((option) => option.value === draftScope)?.description}</span>
                         </label>
                       </td>
+                      <td>
+                        <label className="admin-users-scope-field">
+                          <input
+                            type="email"
+                            value={draftNotificationEmail}
+                            onChange={(event) => handleNotificationEmailChange(managedUser.id, event.target.value)}
+                            placeholder="bez notifikací"
+                            autoComplete="email"
+                            disabled={isSaving}
+                          />
+                          <span>Vyplněná adresa dostane e-mail po novém veřejném odeslání formuláře.</span>
+                        </label>
+                      </td>
                       <td>{formatDateTime(managedUser.createdAt)}</td>
                       <td>{formatDateTime(managedUser.updatedAt)}</td>
                       <td>
@@ -479,7 +542,7 @@ export default function AdminUsersView() {
                             type="button"
                             className="admin-users-save"
                             onClick={() => handleSave(managedUser)}
-                            disabled={!isDirty || isSaving || isCurrentUser || isAdminUser}
+                            disabled={!isDirty || isSaving}
                           >
                             {isSaving ? 'Ukládám…' : 'Uložit'}
                           </button>
@@ -502,8 +565,8 @@ export default function AdminUsersView() {
                           >
                             {isSaving ? 'Ukládám…' : 'Nastavit heslo'}
                           </button>
-                          {isCurrentUser && <div className="admin-users-inline-note">Vlastní roli ani přístup zde nelze měnit.</div>}
-                          {!isCurrentUser && isAdminUser && <div className="admin-users-inline-note">Role a přístup Admina nelze měnit.</div>}
+                          {isCurrentUser && <div className="admin-users-inline-note">Vlastní roli ani přístup zde nelze měnit, ale notifikační e-mail ano.</div>}
+                          {!isCurrentUser && isAdminUser && <div className="admin-users-inline-note">Role a přístup Admina nelze měnit, ale notifikační e-mail ano.</div>}
                         </div>
                       </td>
                     </tr>
