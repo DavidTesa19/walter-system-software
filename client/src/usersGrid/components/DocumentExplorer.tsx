@@ -42,9 +42,9 @@ const CANVAS_POSITIONS_STORAGE_KEY = "ec-documents-canvas-positions";
 const DEFAULT_NEW_FOLDER_NAME = "Nová složka";
 
 const ZOOM_SCALES: Record<ZoomLevel, number> = {
-  small: 0.78,
+  small: 0.62,
   normal: 1,
-  big: 1.34
+  big: 1.5
 };
 
 const ZOOM_VALUE_TO_LEVEL: Record<number, ZoomLevel> = {
@@ -73,7 +73,7 @@ const FOLDER_COLOR_OPTIONS: Array<{ value: DocumentLabelColor | null; label: str
   { value: "red", label: "Červená", color: "#ef4444" },
   { value: "yellow", label: "Žlutá", color: "#f5b301" },
   { value: "green", label: "Zelená", color: "#22c55e" },
-  { value: "blue", label: "Modrá", color: "#3b82f6" },
+  { value: "blue", label: "Tmavě modrá", color: "#1e3a8a" },
   { value: "purple", label: "Fialová", color: "#a855f7" }
 ];
 
@@ -83,7 +83,7 @@ const FOLDER_COLOR_PALETTE: Record<DocumentLabelColor, { top: string; body: stri
   red: { top: "#E07472", body: "#F08C8B", shade: "#C5524F" },
   yellow: { top: "#E8B43B", body: "#F5C658", shade: "#C8941D" },
   green: { top: "#5BB97A", body: "#7AD295", shade: "#3F9B5C" },
-  blue: { top: "#6FB3E0", body: "#7EC4ED", shade: "#5FA1CE" },
+  blue: { top: "#1E40AF", body: "#2952C8", shade: "#152F86" },
   purple: { top: "#9C7AD6", body: "#B594E5", shade: "#7B5BB7" }
 };
 
@@ -1159,10 +1159,22 @@ const DocumentExplorer: React.FC<DocumentExplorerProps> = ({
             setSelectedItemIds([item.id]);
             setLastSelectedId(item.id);
           }
+          const currentTileEl = event.currentTarget as HTMLElement;
           const initial: Record<number, { x: number; y: number }> = {};
           for (const id of movingIds) {
             const pos = canvasPositions[String(id)];
-            initial[id] = pos ? { ...pos } : { x: 16, y: 16 };
+            if (pos) {
+              initial[id] = { ...pos };
+              continue;
+            }
+            const el = id === item.id
+              ? currentTileEl
+              : (document.querySelector(`[data-document-id="${id}"]`) as HTMLElement | null);
+            if (el) {
+              initial[id] = { x: el.offsetLeft, y: el.offsetTop };
+            } else {
+              initial[id] = { x: 16, y: 16 };
+            }
           }
           setCanvasDrag({
             itemIds: movingIds,
