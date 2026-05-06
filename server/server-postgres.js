@@ -17,6 +17,7 @@ import {
   normalizeFieldOptionScope,
   normalizeFieldOptionValue,
 } from "./field-options.js";
+import { notifyPublicSubmission } from "./email.js";
 
 dotenv.config();
 
@@ -4503,6 +4504,11 @@ app.post('/public-submissions/:type', async (req, res) => {
       const createdCommission = await createCommission(createdEntity.id, { ...commission, status: 'pending' });
       createdCommissions.push(createdCommission);
     }
+
+    // Fire-and-forget email notifications. Errors are logged inside notifyPublicSubmission
+    // so a slow or failing SMTP server never blocks the form response.
+    notifyPublicSubmission({ type, entity: createdEntity, commissions: createdCommissions })
+      .catch((err) => console.error('[email] notifyPublicSubmission rejected:', err?.message || err));
 
     return res.status(201).json({
       entity: createdEntity,

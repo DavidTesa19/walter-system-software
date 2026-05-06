@@ -19,6 +19,7 @@ import {
   normalizeFieldOptionValue,
   REMOVED_FIELD_OPTION_LABEL,
 } from "./field-options.js";
+import { notifyPublicSubmission } from "./email.js";
 
 // Load environment variables
 dotenv.config();
@@ -4378,6 +4379,11 @@ app.post('/public-submissions/:type', (req, res) => {
     };
 
     if (!writeDb(db)) return res.status(500).json({ error: 'Failed to persist' });
+
+    // Fire-and-forget email notifications. Errors are logged inside notifyPublicSubmission
+    // so a slow or failing SMTP server never blocks the form response.
+    notifyPublicSubmission({ type, entity: result.entity, commissions: result.commissions })
+      .catch((err) => console.error('[email] notifyPublicSubmission rejected:', err?.message || err));
 
     return res.status(201).json({
       entity: result.entity,
