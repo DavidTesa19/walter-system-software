@@ -1431,7 +1431,7 @@ const DocumentExplorer: React.FC<DocumentExplorerProps> = ({
         key="add-folder"
         type="button"
         className="ec-fs-tile ec-fs-add-tile"
-        onClick={startDraftFolder}
+        onClick={() => startDraftFolder()}
         title="Nová složka"
       >
         <span className="ec-fs-add-icon" aria-hidden="true">+</span>
@@ -1487,7 +1487,7 @@ const DocumentExplorer: React.FC<DocumentExplorerProps> = ({
         key="add-folder-row"
         type="button"
         className="ec-fs-row ec-fs-add-row"
-        onClick={startDraftFolder}
+        onClick={() => startDraftFolder()}
         title="Nová složka"
       >
         <span className="ec-fs-row-icon">
@@ -1625,7 +1625,7 @@ const DocumentExplorer: React.FC<DocumentExplorerProps> = ({
             <button
               type="button"
               className="ec-doc-toolbar-btn secondary"
-              onClick={startDraftFolder}
+              onClick={() => startDraftFolder()}
               disabled={draftFolderName !== null || isApplyingBulkAction}
             >
               Nová složka
