@@ -221,6 +221,7 @@ export async function initDatabase() {
         data BYTEA NOT NULL,
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
         updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        label_color VARCHAR(32) DEFAULT NULL,
         archived_at TIMESTAMP DEFAULT NULL
       )
     `);
@@ -243,6 +244,11 @@ export async function initDatabase() {
     await client.query(`
       ALTER TABLE documents
       ADD COLUMN IF NOT EXISTS parent_id INTEGER DEFAULT NULL
+    `);
+
+    await client.query(`
+      ALTER TABLE documents
+      ADD COLUMN IF NOT EXISTS label_color VARCHAR(32) DEFAULT NULL
     `);
 
     await client.query(`
@@ -1104,7 +1110,9 @@ function toDocumentResponse(row, { includeData = false } = {}) {
     mimeType: row.mime_type,
     sizeBytes: typeof row.size_bytes === 'number' ? row.size_bytes : Number(row.size_bytes),
     createdAt: row.created_at,
+    updatedAt: row.updated_at ?? null,
     archivedAt: row.archived_at ?? null,
+    labelColor: row.label_color ?? row.labelColor ?? null,
     noteId: row.note_id ?? null
   };
 
@@ -1585,7 +1593,7 @@ export const db = {
 
     const archivedFilter = includeArchived ? '' : ' AND archived_at IS NULL';
     const result = await pool.query(
-      `SELECT id, entity_type, entity_id, item_kind, parent_id, filename, mime_type, size_bytes, created_at, archived_at, note_id
+      `SELECT id, entity_type, entity_id, item_kind, parent_id, filename, mime_type, size_bytes, created_at, updated_at, archived_at, label_color, note_id
          FROM documents
         WHERE entity_type = $1 AND entity_id = $2${archivedFilter}
         ORDER BY CASE WHEN item_kind = 'folder' THEN 0 ELSE 1 END, LOWER(filename) ASC, created_at DESC`,
@@ -1599,8 +1607,8 @@ export const db = {
     if (!USE_POSTGRES) return null;
 
     const columns = includeData
-      ? 'id, entity_type, entity_id, item_kind, parent_id, filename, mime_type, size_bytes, created_at, archived_at, note_id, data'
-      : 'id, entity_type, entity_id, item_kind, parent_id, filename, mime_type, size_bytes, created_at, archived_at, note_id';
+      ? 'id, entity_type, entity_id, item_kind, parent_id, filename, mime_type, size_bytes, created_at, updated_at, archived_at, label_color, note_id, data'
+      : 'id, entity_type, entity_id, item_kind, parent_id, filename, mime_type, size_bytes, created_at, updated_at, archived_at, label_color, note_id';
 
     const result = await pool.query(
       `SELECT ${columns} FROM documents WHERE id = $1`,
@@ -1616,7 +1624,7 @@ export const db = {
     const result = await pool.query(
       `INSERT INTO documents (entity_type, entity_id, item_kind, parent_id, filename, mime_type, size_bytes, data, note_id)
        VALUES ($1, $2, 'file', $3, $4, $5, $6, $7, $8)
-       RETURNING id, entity_type, entity_id, item_kind, parent_id, filename, mime_type, size_bytes, created_at, archived_at, note_id`,
+       RETURNING id, entity_type, entity_id, item_kind, parent_id, filename, mime_type, size_bytes, created_at, updated_at, archived_at, label_color, note_id`,
       [entityType, entityId, parentId ?? null, filename, mimeType, sizeBytes, buffer, noteId || null]
     );
 
@@ -1631,7 +1639,7 @@ export const db = {
     const result = await pool.query(
       `INSERT INTO documents (entity_type, entity_id, item_kind, parent_id, filename, mime_type, size_bytes, data)
        VALUES ($1, $2, 'folder', $3, $4, 'inode/directory', 0, $5)
-       RETURNING id, entity_type, entity_id, item_kind, parent_id, filename, mime_type, size_bytes, created_at, archived_at, note_id`,
+       RETURNING id, entity_type, entity_id, item_kind, parent_id, filename, mime_type, size_bytes, created_at, updated_at, archived_at, label_color, note_id`,
       [entityType, entityId, parentId ?? null, name, Buffer.alloc(0)]
     );
 
@@ -1640,7 +1648,7 @@ export const db = {
     return toDocumentResponse(result.rows[0]);
   },
 
-  async updateDocumentItem(id, { filename, parentId }) {
+  async updateDocumentItem(id, { filename, parentId, labelColor }) {
     if (!USE_POSTGRES) return null;
 
     const updates = [];
@@ -1656,6 +1664,11 @@ export const db = {
       updates.push(`parent_id = $${values.length}`);
     }
 
+    if (labelColor !== undefined) {
+      values.push(labelColor);
+      updates.push(`label_color = $${values.length}`);
+    }
+
     if (updates.length === 0) {
       return this.getDocumentById(id);
     }
@@ -1666,7 +1679,7 @@ export const db = {
       `UPDATE documents
           SET ${updates.join(', ')}, updated_at = CURRENT_TIMESTAMP
         WHERE id = $${values.length}
-    RETURNING id, entity_type, entity_id, item_kind, parent_id, filename, mime_type, size_bytes, created_at, archived_at, note_id`,
+    RETURNING id, entity_type, entity_id, item_kind, parent_id, filename, mime_type, size_bytes, created_at, updated_at, archived_at, label_color, note_id`,
       values
     );
 
@@ -1706,17 +1719,17 @@ export const db = {
 
     const result = await pool.query(
       `WITH RECURSIVE document_tree AS (
-         SELECT id, entity_type, entity_id, item_kind, parent_id, filename, mime_type, size_bytes, created_at, archived_at, note_id
+         SELECT id, entity_type, entity_id, item_kind, parent_id, filename, mime_type, size_bytes, created_at, updated_at, archived_at, label_color, note_id
            FROM documents
           WHERE id = $1
          UNION ALL
-         SELECT d.id, d.entity_type, d.entity_id, d.item_kind, d.parent_id, d.filename, d.mime_type, d.size_bytes, d.created_at, d.archived_at, d.note_id
+         SELECT d.id, d.entity_type, d.entity_id, d.item_kind, d.parent_id, d.filename, d.mime_type, d.size_bytes, d.created_at, d.updated_at, d.archived_at, d.label_color, d.note_id
            FROM documents d
            INNER JOIN document_tree dt ON d.parent_id = dt.id
        )
        DELETE FROM documents
         WHERE id IN (SELECT id FROM document_tree)
-    RETURNING id, entity_type, entity_id, item_kind, parent_id, filename, mime_type, size_bytes, created_at, archived_at, note_id`,
+    RETURNING id, entity_type, entity_id, item_kind, parent_id, filename, mime_type, size_bytes, created_at, updated_at, archived_at, label_color, note_id`,
       [id]
     );
 
@@ -1735,7 +1748,7 @@ export const db = {
       `UPDATE documents
          SET archived_at = CURRENT_TIMESTAMP, updated_at = CURRENT_TIMESTAMP
        WHERE id = $1 AND archived_at IS NULL
-   RETURNING id, entity_type, entity_id, item_kind, parent_id, filename, mime_type, size_bytes, created_at, archived_at, note_id`,
+   RETURNING id, entity_type, entity_id, item_kind, parent_id, filename, mime_type, size_bytes, created_at, updated_at, archived_at, label_color, note_id`,
       [id]
     );
 
@@ -1754,7 +1767,7 @@ export const db = {
       `UPDATE documents
          SET archived_at = NULL, updated_at = CURRENT_TIMESTAMP
        WHERE id = $1 AND archived_at IS NOT NULL
-   RETURNING id, entity_type, entity_id, item_kind, parent_id, filename, mime_type, size_bytes, created_at, archived_at, note_id`,
+   RETURNING id, entity_type, entity_id, item_kind, parent_id, filename, mime_type, size_bytes, created_at, updated_at, archived_at, label_color, note_id`,
       [id]
     );
 
@@ -1782,7 +1795,7 @@ export const db = {
     let docsByNoteId = {};
     if (noteIds.length > 0) {
       const docsResult = await pool.query(
-        `SELECT id, entity_type, entity_id, item_kind, parent_id, filename, mime_type, size_bytes, created_at, archived_at, note_id
+        `SELECT id, entity_type, entity_id, item_kind, parent_id, filename, mime_type, size_bytes, created_at, updated_at, archived_at, label_color, note_id
            FROM documents
           WHERE note_id = ANY($1::int[])`,
         [noteIds]
@@ -1849,7 +1862,7 @@ export const db = {
     await touchEntityActivityRecords(row.entity_type, row.entity_id);
 
     const docsResult = await pool.query(
-      `SELECT id, entity_type, entity_id, item_kind, parent_id, filename, mime_type, size_bytes, created_at, archived_at, note_id
+      `SELECT id, entity_type, entity_id, item_kind, parent_id, filename, mime_type, size_bytes, created_at, updated_at, archived_at, label_color, note_id
          FROM documents
         WHERE note_id = $1`,
       [id]

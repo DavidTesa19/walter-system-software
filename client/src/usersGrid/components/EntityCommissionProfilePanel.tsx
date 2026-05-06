@@ -80,6 +80,7 @@ interface EntityCommissionProfilePanelProps {
   onUploadDocuments?: (files: File[]) => Promise<void> | void;
   onCreateFolder?: (name: string) => Promise<void> | void;
   onRenameDocument?: (documentId: number, filename: string) => Promise<boolean | void> | boolean | void;
+  onUpdateDocumentColor?: (documentId: number, labelColor: string | null) => Promise<boolean | void> | boolean | void;
   onDeleteDocument?: (documentId: number) => Promise<boolean | void> | boolean | void;
   onArchiveDocument?: (documentId: number) => Promise<boolean | void> | boolean | void;
   onUnarchiveDocument?: (documentId: number) => Promise<boolean | void> | boolean | void;
@@ -443,13 +444,14 @@ const EntityCommissionProfilePanel: React.FC<EntityCommissionProfilePanelProps> 
   onUploadDocuments,
   onCreateFolder,
   onRenameDocument,
+  onUpdateDocumentColor,
   onDeleteDocument,
   onArchiveDocument,
   onUnarchiveDocument,
   onMoveDocument,
   currentDocumentFolderId = null,
-  documentBreadcrumbs = [{ id: null, label: "Kořen" }],
-  documentFolderOptions = [{ id: null, label: "Kořen" }],
+  documentBreadcrumbs = [{ id: null, label: "Hlavní Složka" }],
+  documentFolderOptions = [{ id: null, label: "Hlavní Složka" }],
   onOpenDocumentFolder,
   onGoToDocumentFolder,
   onGoBackDocumentFolder,
@@ -888,6 +890,7 @@ const EntityCommissionProfilePanel: React.FC<EntityCommissionProfilePanelProps> 
               onUploadDocuments={onUploadDocuments}
               onCreateFolder={onCreateFolder}
               onRenameDocument={onRenameDocument}
+              onUpdateDocumentColor={onUpdateDocumentColor}
               onDeleteDocument={onDeleteDocument}
               onArchiveDocument={onArchiveDocument}
               onUnarchiveDocument={onUnarchiveDocument}

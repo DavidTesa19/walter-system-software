@@ -431,6 +431,25 @@ const parseDocumentParentId = (value) => {
   return { parentId: parsed };
 };
 
+const DOCUMENT_LABEL_COLORS = new Set(["red", "yellow", "green", "blue", "purple"]);
+
+const parseDocumentLabelColor = (value) => {
+  if (value === null || value === undefined || value === "") {
+    return { labelColor: null };
+  }
+
+  if (typeof value !== "string") {
+    return { error: "Invalid document label color" };
+  }
+
+  const normalized = value.trim().toLowerCase();
+  if (!DOCUMENT_LABEL_COLORS.has(normalized)) {
+    return { error: "Invalid document label color" };
+  }
+
+  return { labelColor: normalized };
+};
+
 const isFolderDocument = (doc) => getDocumentItemKind(doc) === "folder";
 
 const stripDocumentData = (doc) => {
@@ -448,7 +467,9 @@ const stripDocumentData = (doc) => {
     mimeType: doc.mimeType ?? doc.mime_type,
     sizeBytes: Number(doc.sizeBytes ?? doc.size_bytes ?? 0),
     createdAt: doc.createdAt ?? doc.created_at,
+    updatedAt: doc.updatedAt ?? doc.updated_at ?? null,
     archivedAt: doc.archivedAt ?? doc.archived_at ?? null,
+    labelColor: doc.labelColor ?? doc.label_color ?? null,
     noteId: doc.noteId ?? doc.note_id ?? null
   };
 };
@@ -2548,6 +2569,14 @@ app.patch("/documents/:documentId", authenticateToken, async (req, res) => {
         updates.filename = sanitizeFilename(req.body.filename);
       }
 
+      if (Object.prototype.hasOwnProperty.call(req.body ?? {}, 'labelColor')) {
+        const { labelColor, error: labelColorError } = parseDocumentLabelColor(req.body.labelColor);
+        if (labelColorError) {
+          return res.status(400).json({ error: labelColorError });
+        }
+        updates.labelColor = labelColor;
+      }
+
       const updated = await db.updateDocumentItem(documentId, updates);
       return res.json(updated);
     }
@@ -2575,6 +2604,16 @@ app.patch("/documents/:documentId", authenticateToken, async (req, res) => {
     if (typeof req.body?.filename === 'string' && req.body.filename.trim()) {
       doc.filename = sanitizeFilename(req.body.filename);
     }
+
+    if (Object.prototype.hasOwnProperty.call(req.body ?? {}, 'labelColor')) {
+      const { labelColor, error: labelColorError } = parseDocumentLabelColor(req.body.labelColor);
+      if (labelColorError) {
+        return res.status(400).json({ error: labelColorError });
+      }
+      doc.labelColor = labelColor;
+    }
+
+    doc.updatedAt = new Date().toISOString();
 
     if (!writeDb(store)) {
       return res.status(500).json({ error: "Failed to persist document update" });

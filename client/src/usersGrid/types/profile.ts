@@ -29,7 +29,9 @@ export interface ProfileDocument {
   mimeType: string;
   sizeBytes: number;
   createdAt: string;
+  updatedAt?: string | null;
   archivedAt?: string | null;
+  labelColor?: string | null;
   noteId?: number | null;
 }
 

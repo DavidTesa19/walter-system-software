@@ -27,6 +27,7 @@ interface ProfilePanelProps {
   onDeleteDocument?: (documentId: number) => Promise<boolean | void> | boolean | void;
   onArchiveDocument?: (documentId: number) => Promise<boolean | void> | boolean | void;
   onUnarchiveDocument?: (documentId: number) => Promise<boolean | void> | boolean | void;
+  onUpdateDocumentColor?: (documentId: number, labelColor: string | null) => Promise<boolean | void> | boolean | void;
   archivedDocuments?: ProfileDocument[];
   documentDownloadBaseUrl?: string;
   notes?: ProfileNote[];

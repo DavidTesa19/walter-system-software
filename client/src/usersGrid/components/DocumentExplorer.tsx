@@ -18,6 +18,7 @@ type DocumentExplorerProps = {
   onUploadDocuments?: (files: File[]) => Promise<void> | void;
   onCreateFolder?: (name: string) => Promise<void> | void;
   onRenameDocument?: (documentId: number, filename: string) => Promise<boolean | void> | boolean | void;
+  onUpdateDocumentColor?: (documentId: number, labelColor: string | null) => Promise<boolean | void> | boolean | void;
   onDeleteDocument?: (documentId: number) => Promise<boolean | void> | boolean | void;
   onArchiveDocument?: (documentId: number) => Promise<boolean | void> | boolean | void;
   onUnarchiveDocument?: (documentId: number) => Promise<boolean | void> | boolean | void;
@@ -31,9 +32,19 @@ type DocumentExplorerProps = {
 };
 
 type ViewMode = "grid" | "list";
+type DocumentLabelColor = "red" | "yellow" | "green" | "blue" | "purple";
 
 const VIEW_MODE_STORAGE_KEY = "ec-documents-view-mode";
 const DEFAULT_NEW_FOLDER_NAME = "Nová složka";
+
+const DOCUMENT_LABEL_COLORS: Array<{ value: DocumentLabelColor | null; label: string; color?: string }> = [
+  { value: null, label: "Bez barvy" },
+  { value: "red", label: "Červená", color: "#ef4444" },
+  { value: "yellow", label: "Žlutá", color: "#facc15" },
+  { value: "green", label: "Zelená", color: "#22c55e" },
+  { value: "blue", label: "Modrá", color: "#3b82f6" },
+  { value: "purple", label: "Fialová", color: "#a855f7" }
+];
 
 const formatFileSize = (bytes: number) => {
   if (!Number.isFinite(bytes) || bytes <= 0) {
@@ -93,6 +104,10 @@ const getFileKind = (filename: string): FileKind => {
   if (["js", "jsx", "ts", "tsx", "json", "html", "css", "py", "java", "go", "rs", "c", "cpp", "h", "rb", "php", "sh"].includes(ext)) return "code";
   if (["txt", "md", "log"].includes(ext)) return "text";
   return "generic";
+};
+
+const getDocumentLabelColor = (item: ProfileDocument) => {
+  return DOCUMENT_LABEL_COLORS.find((entry) => entry.value === item.labelColor) ?? DOCUMENT_LABEL_COLORS[0];
 };
 
 const FolderGlyph: React.FC<{ small?: boolean }> = ({ small }) => (
@@ -216,6 +231,7 @@ const DocumentExplorer: React.FC<DocumentExplorerProps> = ({
   onUploadDocuments,
   onCreateFolder,
   onRenameDocument,
+  onUpdateDocumentColor,
   onDeleteDocument,
   onArchiveDocument,
   onUnarchiveDocument,
@@ -236,6 +252,7 @@ const DocumentExplorer: React.FC<DocumentExplorerProps> = ({
   const dragSelectBaseIdsRef = useRef<number[]>([]);
   const didDragSelectRef = useRef(false);
   const draftFolderCommitInFlightRef = useRef(false);
+  const wasDraftFolderActiveRef = useRef(false);
 
   const [searchQuery, setSearchQuery] = useState("");
   const [selectedItemIds, setSelectedItemIds] = useState<number[]>([]);
@@ -383,10 +400,12 @@ const DocumentExplorer: React.FC<DocumentExplorerProps> = ({
   }, [renamingItemId]);
 
   useLayoutEffect(() => {
-    if (draftFolderName !== null && draftFolderInputRef.current) {
+    const isDraftFolderActive = draftFolderName !== null;
+    if (isDraftFolderActive && !wasDraftFolderActiveRef.current && draftFolderInputRef.current) {
       draftFolderInputRef.current.focus();
       draftFolderInputRef.current.select();
     }
+    wasDraftFolderActiveRef.current = isDraftFolderActive;
   }, [draftFolderName]);
 
   useEffect(() => {
@@ -755,6 +774,21 @@ const DocumentExplorer: React.FC<DocumentExplorerProps> = ({
     setLastSelectedId(filteredItems[filteredItems.length - 1]?.id ?? null);
   };
 
+  const handleColorItems = async (targetItems: ProfileDocument[], labelColor: DocumentLabelColor | null) => {
+    if (!onUpdateDocumentColor || targetItems.length === 0) {
+      return;
+    }
+
+    setIsApplyingBulkAction(true);
+    try {
+      for (const item of targetItems) {
+        await Promise.resolve(onUpdateDocumentColor(item.id, labelColor));
+      }
+    } finally {
+      setIsApplyingBulkAction(false);
+    }
+  };
+
   const handleSelectionSurfaceMouseDown = (event: React.MouseEvent<HTMLDivElement>) => {
     if (
       event.button !== 0 ||
@@ -802,7 +836,7 @@ const DocumentExplorer: React.FC<DocumentExplorerProps> = ({
   const inspectorChangedAt = inspectorMetadata?.updatedAt ?? inspectorMetadata?.modifiedAt ?? inspectorMetadata?.createdAt ?? null;
   const inspectorCreatedBy = inspectorMetadata?.createdBy ?? inspectorMetadata?.uploadedBy ?? inspectorMetadata?.author ?? null;
   const inspectorChangedBy = inspectorMetadata?.updatedBy ?? inspectorMetadata?.modifiedBy ?? inspectorCreatedBy;
-  const inspectorPath = inspectorItem ? getDocumentPath(inspectorItem.id) || "Kořen" : breadcrumbs.map((crumb) => crumb.label).join(" / ");
+  const inspectorPath = inspectorItem ? getDocumentPath(inspectorItem.id) || "Hlavní Složka" : breadcrumbs.map((crumb) => crumb.label).join(" / ");
   const inspectorStorageText = inspectorItem
     ? inspectorItem.itemKind === "folder"
       ? `${getFolderItemCount(inspectorItem.id)} položek`
@@ -837,6 +871,7 @@ const DocumentExplorer: React.FC<DocumentExplorerProps> = ({
     const folderItemCount = isFolder ? getFolderItemCount(item.id) : 0;
     const ext = getFileExtension(item.filename);
     const fileKind = isFolder ? "generic" : getFileKind(item.filename);
+    const labelColor = getDocumentLabelColor(item);
 
     const tileClassNames = [
       "ec-fs-tile",
@@ -906,7 +941,10 @@ const DocumentExplorer: React.FC<DocumentExplorerProps> = ({
             onBlur={() => void handleRenameSubmit(item)}
           />
         ) : (
-          <div className="ec-fs-tile-name">{item.filename}</div>
+          <div className="ec-fs-tile-name-wrap">
+            {labelColor.value ? <span className="ec-fs-label-dot" style={{ backgroundColor: labelColor.color }} /> : null}
+            <div className="ec-fs-tile-name">{item.filename}</div>
+          </div>
         )}
         <div className="ec-fs-tile-meta">
           {isFolder
@@ -926,6 +964,7 @@ const DocumentExplorer: React.FC<DocumentExplorerProps> = ({
     const folderItemCount = isFolder ? getFolderItemCount(item.id) : 0;
     const ext = getFileExtension(item.filename);
     const fileKind = isFolder ? "generic" : getFileKind(item.filename);
+    const labelColor = getDocumentLabelColor(item);
 
     const rowClassNames = [
       "ec-fs-row",
@@ -996,7 +1035,10 @@ const DocumentExplorer: React.FC<DocumentExplorerProps> = ({
               onBlur={() => void handleRenameSubmit(item)}
             />
           ) : (
-            <span className="ec-fs-row-name">{item.filename}</span>
+            <span className="ec-fs-row-name">
+              {labelColor.value ? <span className="ec-fs-label-dot" style={{ backgroundColor: labelColor.color }} /> : null}
+              <span>{item.filename}</span>
+            </span>
           )}
         </div>
         <div className="ec-fs-row-meta">
@@ -1126,7 +1168,9 @@ const DocumentExplorer: React.FC<DocumentExplorerProps> = ({
 
   return (
     <section className="ec-documents-section">
-      <div className="ec-documents-header ec-documents-header--explorer">
+      <div className="ec-fs-workspace">
+        <div className="ec-fs-main-column">
+          <div className="ec-documents-header ec-documents-header--explorer">
         <div>
           <h3 className="ec-section-title">Dokumenty</h3>
           <div className="ec-documents-breadcrumbs" aria-label="Cesta složek">
@@ -1241,7 +1285,6 @@ const DocumentExplorer: React.FC<DocumentExplorerProps> = ({
         </span>
       </div>
 
-      <div className="ec-fs-workspace">
         <div className="ec-fs-browser-area">
           {isLoading ? (
             <p className="ec-empty-text">Načítám dokumenty…</p>
@@ -1310,6 +1353,7 @@ const DocumentExplorer: React.FC<DocumentExplorerProps> = ({
             <p className="ec-empty-text">Tato složka je prázdná.</p>
           )}
         </div>
+        </div>
 
         <aside className="ec-fs-inspector" aria-label="Akce a informace">
           <div className="ec-fs-inspector-summary">
@@ -1364,10 +1408,28 @@ const DocumentExplorer: React.FC<DocumentExplorerProps> = ({
             ) : null}
           </div>
 
+          {onUpdateDocumentColor ? (
+            <div className="ec-fs-color-strip" aria-label="Barva označení">
+              {DOCUMENT_LABEL_COLORS.map((entry) => (
+                <button
+                  key={`inspector-color-${entry.value ?? "none"}`}
+                  type="button"
+                  className={`ec-fs-color-dot-btn ${selectedItems.length > 0 && selectedItems.every((item) => (item.labelColor ?? null) === entry.value) ? "is-active" : ""}`}
+                  title={entry.label}
+                  aria-label={entry.label}
+                  onClick={() => void handleColorItems(selectedItems, entry.value)}
+                  disabled={selectedItems.length === 0 || isApplyingBulkAction}
+                >
+                  <span className={`ec-fs-color-dot ${entry.value ? "" : "is-empty"}`} style={entry.color ? { backgroundColor: entry.color } : undefined} />
+                </button>
+              ))}
+            </div>
+          ) : null}
+
           <div className="ec-fs-inspector-details">
             <div className="ec-fs-inspector-title">
               <span>{inspectorItem ? (inspectorItem.itemKind === "folder" ? "Složka" : "Soubor") : selectedItems.length > 1 ? "Více položek" : "Aktuální složka"}</span>
-              <strong>{inspectorItem?.filename ?? (selectedItems.length > 1 ? `${selectedItems.length} vybraných položek` : breadcrumbs[breadcrumbs.length - 1]?.label ?? "Kořen")}</strong>
+              <strong>{inspectorItem?.filename ?? (selectedItems.length > 1 ? `${selectedItems.length} vybraných položek` : breadcrumbs[breadcrumbs.length - 1]?.label ?? "Hlavní Složka")}</strong>
             </div>
             <dl className="ec-fs-meta-list">
               <div>
@@ -1416,7 +1478,7 @@ const DocumentExplorer: React.FC<DocumentExplorerProps> = ({
                     <span className="ec-document-name">{item.filename}</span>
                     <span className="ec-document-meta">
                       {item.itemKind === "folder" ? "Složka" : formatFileSize(item.sizeBytes)}
-                      {` · ${getDocumentPath(item.id) || "Kořen"}`}
+                      {` · ${getDocumentPath(item.id) || "Hlavní Složka"}`}
                       {` · archivováno ${formatDate(item.archivedAt ?? item.createdAt)}`}
                     </span>
                   </div>
@@ -1530,6 +1592,31 @@ const DocumentExplorer: React.FC<DocumentExplorerProps> = ({
             >
               Přejmenovat
             </button>
+          ) : null}
+          {onUpdateDocumentColor ? (
+            <>
+              <div className="ec-fs-context-separator" />
+              <div className="ec-fs-context-label-title">Barva</div>
+              <div className="ec-fs-context-color-row" role="group" aria-label="Barva položky">
+                {DOCUMENT_LABEL_COLORS.map((entry) => (
+                  <button
+                    key={`context-color-${entry.value ?? "none"}`}
+                    type="button"
+                    className={`ec-fs-color-dot-btn ${contextMenuTargets.every((item) => (item.labelColor ?? null) === entry.value) ? "is-active" : ""}`}
+                    title={entry.label}
+                    aria-label={entry.label}
+                    onClick={() => {
+                      const targets = contextMenuTargets;
+                      closeContextMenu();
+                      void handleColorItems(targets, entry.value);
+                    }}
+                    disabled={isApplyingBulkAction}
+                  >
+                    <span className={`ec-fs-color-dot ${entry.value ? "" : "is-empty"}`} style={entry.color ? { backgroundColor: entry.color } : undefined} />
+                  </button>
+                ))}
+              </div>
+            </>
           ) : null}
           {onArchiveDocument && contextMenuTargets.some((it) => it.itemKind === "file") ? (
             <button

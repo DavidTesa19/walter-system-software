@@ -24,6 +24,7 @@ type UseProfileDocumentsResult = {
   uploadDocuments: (files: Iterable<File>) => Promise<void>;
   createFolder: (name: string) => Promise<void>;
   renameDocument: (documentId: number, filename: string) => Promise<boolean>;
+  updateDocumentColor: (documentId: number, labelColor: string | null) => Promise<boolean>;
   deleteDocument: (documentId: number) => Promise<boolean>;
   archiveDocument: (documentId: number) => Promise<boolean>;
   unarchiveDocument: (documentId: number) => Promise<boolean>;
@@ -49,7 +50,8 @@ const normalizeDocument = (item: ProfileDocument): ProfileDocument => ({
   itemKind: item.itemKind ?? (item.mimeType === 'inode/directory' ? 'folder' : 'file'),
   parentId: item.parentId ?? null,
   noteId: item.noteId ?? null,
-  archivedAt: item.archivedAt ?? null
+  archivedAt: item.archivedAt ?? null,
+  labelColor: item.labelColor ?? null
 });
 
 const buildDocumentPath = (itemsById: Map<number, ProfileDocument>, itemId: number): string => {
@@ -129,7 +131,7 @@ export const useProfileDocuments = (resource: DocumentResource, entityId: number
   );
 
   const breadcrumbs = useMemo(() => {
-    const trail: DocumentBreadcrumb[] = [{ id: null, label: "Kořen" }];
+    const trail: DocumentBreadcrumb[] = [{ id: null, label: "Hlavní Složka" }];
 
     let current = currentFolderId ? activeDocumentMap.get(currentFolderId) ?? null : null;
     const parents: DocumentBreadcrumb[] = [];
@@ -149,7 +151,7 @@ export const useProfileDocuments = (resource: DocumentResource, entityId: number
       .sort(sortDocumentItems)
       .map((item) => ({ id: item.id, label: buildDocumentPath(activeDocumentMap, item.id) }));
 
-    return [{ id: null, label: "Kořen" }, ...folders];
+    return [{ id: null, label: "Hlavní Složka" }, ...folders];
   }, [activeDocumentMap, documents]);
 
   const uploadDocuments = useCallback(async (files: Iterable<File>) => {
@@ -215,6 +217,18 @@ export const useProfileDocuments = (resource: DocumentResource, entityId: number
     } catch (error) {
       console.error("Error renaming document:", error);
       alert("Nepodařilo se přejmenovat položku. Zkuste to prosím znovu.");
+      return false;
+    }
+  }, [fetchDocuments]);
+
+  const updateDocumentColor = useCallback(async (documentId: number, labelColor: string | null) => {
+    try {
+      await apiPatch(`/documents/${documentId}`, { labelColor });
+      await fetchDocuments();
+      return true;
+    } catch (error) {
+      console.error("Error updating document color:", error);
+      alert("Nepodařilo se změnit barvu položky. Zkuste to prosím znovu.");
       return false;
     }
   }, [fetchDocuments]);
@@ -328,6 +342,7 @@ export const useProfileDocuments = (resource: DocumentResource, entityId: number
     uploadDocuments,
     createFolder,
     renameDocument,
+    updateDocumentColor,
     deleteDocument,
     archiveDocument,
     unarchiveDocument,

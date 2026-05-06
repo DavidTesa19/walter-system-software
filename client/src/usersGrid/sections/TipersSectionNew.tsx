@@ -1559,6 +1559,7 @@ const TipersSectionNew: React.FC<SectionProps> = ({
         onUploadDocuments={documentManager.uploadDocuments}
         onCreateFolder={documentManager.createFolder}
         onRenameDocument={documentManager.renameDocument}
+        onUpdateDocumentColor={documentManager.updateDocumentColor}
         onDeleteDocument={documentManager.deleteDocument}
         onArchiveDocument={documentManager.archiveDocument}
         onUnarchiveDocument={documentManager.unarchiveDocument}

@@ -900,6 +900,7 @@ const ClientsSection: React.FC<SectionProps> = ({
         onDeleteDocument={documentManager.deleteDocument}
         onArchiveDocument={documentManager.archiveDocument}
         onUnarchiveDocument={documentManager.unarchiveDocument}
+        onUpdateDocumentColor={documentManager.updateDocumentColor}
         archivedDocuments={documentManager.archivedDocuments}
         notes={notesManager.notes}
         notesLoading={notesManager.isLoading}

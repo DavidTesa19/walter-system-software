@@ -171,6 +171,25 @@ const parseDocumentParentId = (value) => {
   return { parentId: parsed };
 };
 
+const DOCUMENT_LABEL_COLORS = new Set(["red", "yellow", "green", "blue", "purple"]);
+
+const parseDocumentLabelColor = (value) => {
+  if (value === null || value === undefined || value === "") {
+    return { labelColor: null };
+  }
+
+  if (typeof value !== "string") {
+    return { error: "Invalid document label color" };
+  }
+
+  const normalized = value.trim().toLowerCase();
+  if (!DOCUMENT_LABEL_COLORS.has(normalized)) {
+    return { error: "Invalid document label color" };
+  }
+
+  return { labelColor: normalized };
+};
+
 const isFolderDocument = (doc) => getDocumentItemKind(doc) === "folder";
 
 const stripDocumentData = (doc) => {
@@ -188,7 +207,9 @@ const stripDocumentData = (doc) => {
     mimeType: doc.mimeType,
     sizeBytes: Number(doc.sizeBytes ?? 0),
     createdAt: doc.createdAt,
+    updatedAt: doc.updatedAt ?? null,
     archivedAt: doc.archivedAt ?? null,
+    labelColor: doc.labelColor ?? null,
     noteId: doc.noteId ?? null
   };
 };
@@ -2265,6 +2286,16 @@ app.patch("/documents/:documentId", authenticateToken, (req, res) => {
     if (typeof req.body?.filename === 'string' && req.body.filename.trim()) {
       doc.filename = sanitizeFilename(req.body.filename);
     }
+
+    if (Object.prototype.hasOwnProperty.call(req.body ?? {}, 'labelColor')) {
+      const { labelColor, error: labelColorError } = parseDocumentLabelColor(req.body.labelColor);
+      if (labelColorError) {
+        return res.status(400).json({ error: labelColorError });
+      }
+      doc.labelColor = labelColor;
+    }
+
+    doc.updatedAt = new Date().toISOString();
 
     touchEntityParentsInStore(store, doc.entityType, doc.entityId);
 
