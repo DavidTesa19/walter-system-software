@@ -482,7 +482,7 @@ const ClientsSectionNew: React.FC<SectionProps> = ({
       setEntities(entitiesList);
       setCommissions(commissionsList);
 
-      if (status === 'accepted') {
+      if (sectionKind === "subjects") {
         const commissionsByEntity = new Map<number, ClientCommission[]>();
         for (const commission of commissionsList) {
           const current = commissionsByEntity.get(commission.client_entity_id) || [];
@@ -561,44 +561,48 @@ const ClientsSectionNew: React.FC<SectionProps> = ({
         };
       });
 
-      const entityOnlyRows: ClientGridRow[] = entitiesList
-        .filter((entity) => !entityIdsWithCommission.has(entity.id))
-        .map((entity) => ({
-          id: -entity.id,
-          commission_id: `${entity.entity_id}-000`,
-          client_entity_id: entity.id,
-          status: entity.status,
-          assigned_to: null,
-          assigned_user_ids: entity.assigned_user_ids ?? [],
-          priority: null,
-          notes: null,
-          deadline: null,
-          state: null,
-          commission_value: null,
-          project_name: null,
-          position: null,
-          budget: null,
-          service_position: null,
-          field: entity.field || '',
-          location: entity.location || '',
-          category: null,
-          phone: entity.mobile || null,
-          created_at: entity.created_at,
-          updated_at: entity.updated_at,
-          entityOnly: true,
-          entity_id: entity.entity_id,
-          name: entity.name || '',
-          company: entity.company || '',
-          mobile: entity.mobile || '',
-          email: entity.email || '',
-          commission_count: 0,
-          primaryCommissionId: null,
-          activity_scope: subjectActivityScope,
-          activity_item_id: entity.id,
-          activity_latest_at: entity.updated_at ?? entity.created_at,
-          activity_created_at: entity.created_at,
-          entity: entity || null
-        }));
+      // Include entity-only rows only in non-active views (preserves the pending/archived
+      // approval workflow where entities without commissions still need to be visible).
+      const entityOnlyRows: ClientGridRow[] = status !== "accepted"
+        ? entitiesList
+            .filter((entity) => !entityIdsWithCommission.has(entity.id))
+            .map((entity) => ({
+              id: -entity.id,
+              commission_id: `${entity.entity_id}-000`,
+              client_entity_id: entity.id,
+              status: entity.status,
+              assigned_to: null,
+              assigned_user_ids: entity.assigned_user_ids ?? [],
+              priority: null,
+              notes: null,
+              deadline: null,
+              state: null,
+              commission_value: null,
+              project_name: null,
+              position: null,
+              budget: null,
+              service_position: null,
+              field: entity.field || '',
+              location: entity.location || '',
+              category: null,
+              phone: entity.mobile || null,
+              created_at: entity.created_at,
+              updated_at: entity.updated_at,
+              entityOnly: true,
+              entity_id: entity.entity_id,
+              name: entity.name || '',
+              company: entity.company || '',
+              mobile: entity.mobile || '',
+              email: entity.email || '',
+              commission_count: 0,
+              primaryCommissionId: null,
+              activity_scope: subjectActivityScope,
+              activity_item_id: entity.id,
+              activity_latest_at: entity.updated_at ?? entity.created_at,
+              activity_created_at: entity.created_at,
+              entity: entity || null
+            }))
+        : [];
 
       const rows = [...commissionRows, ...entityOnlyRows];
 
@@ -613,7 +617,7 @@ const ClientsSectionNew: React.FC<SectionProps> = ({
     } finally {
       setIsLoading(false);
     }
-  }, [commissionActivityScope, commissionApiBase, entityApiBase, status, subjectActivityScope]);
+  }, [commissionActivityScope, commissionApiBase, entityApiBase, sectionKind, status, subjectActivityScope]);
 
   const handleCreateFieldOption = useCallback((value: string) => createFieldOption(value), [createFieldOption]);
 
@@ -824,12 +828,59 @@ const ClientsSectionNew: React.FC<SectionProps> = ({
     }
   }, [commissionApiBase, entityApiBase, fetchData, gridData, systemNamespace, updateProjectClusterStatus]);
 
-  const handleDelete = useCallback(async (id: number) => {
+  const archiveOrDeleteSingleCommission = useCallback(async (commissionId: number) => {
+    const commission = commissions.find(c => c.id === commissionId);
+    if (!commission) return;
+
+    const isArchived = commission.status === "archived";
+    const isPending = commission.status === "pending";
+    const label = commission.position || commission.commission_id || `#${commission.id}`;
+
+    let confirmMessage: string;
+    if (isArchived) {
+      confirmMessage = `Opravdu chcete TRVALE SMAZAT tuto zakázku z databáze?\n\nZakázka: ${label}\n\nTato akce je NEzvratná!`;
+    } else if (isPending) {
+      confirmMessage = `Opravdu chcete zamítnout tuto zakázku?\n\nZakázka: ${label}`;
+    } else {
+      confirmMessage = `Opravdu chcete přesunout tuto zakázku do archivu?\n\nZakázka: ${label}`;
+    }
+
+    if (!confirm(confirmMessage)) return;
+
+    try {
+      if (isArchived || isPending) {
+        await apiDelete(`${commissionApiBase}/${commissionId}`);
+      } else {
+        await apiPost(`${commissionApiBase}/${commissionId}/archive`);
+      }
+      fetchData();
+    } catch (error) {
+      console.error("Error archiving commission:", error);
+      alert("Chyba při provádění akce");
+    }
+  }, [commissionApiBase, commissions, fetchData]);
+
+  const handleDelete = useCallback(async (id: number, options: { commissionOnly?: boolean } = {}) => {
+    // Profile-panel "Odebrat zakázku" path: archive only the selected commission,
+    // never the whole subject cluster.
+    if (options.commissionOnly) {
+      await archiveOrDeleteSingleCommission(id);
+      return;
+    }
+
     if (viewMode === "active") {
       const commission = commissions.find(c => c.id === id);
-      const row = commission ? gridData.find(r => r.entity?.id === commission.client_entity_id) : gridData.find(r => r.id === id);
+      // Prefer direct id match (works for both subject rows and commission rows in the grid).
+      // Fall back to entity-based lookup for legacy callers passing a commission id.
+      const row = gridData.find(r => r.id === id) ?? (commission ? gridData.find(r => r.entity?.id === commission.client_entity_id && r.subjectRow) : null);
       const entityId = row?.entity?.id ?? null;
       if (!row || entityId === null) return;
+
+      // Commission row in active grid: archive only that commission, regardless of namespace.
+      if (!row.subjectRow && !row.entityOnly) {
+        await archiveOrDeleteSingleCommission(id);
+        return;
+      }
 
       if (systemNamespace === "projects") {
         const linkedCount = row.commission_count ?? 0;
@@ -872,11 +923,21 @@ const ClientsSectionNew: React.FC<SectionProps> = ({
 
     const commission = commissions.find(c => c.id === id);
     const row = gridData.find(r => r.id === id);
-    if (row?.entityOnly && row.entity) {
+    // Subject row or entity-only row in non-active view: entity-level operation.
+    if (row?.entity && (row.subjectRow || row.entityOnly)) {
       const isArchivedEntity = row.status === "archived";
-      const confirmMessage = isArchivedEntity
-        ? `Opravdu chcete TRVALE SMAZAT tohoto klienta z databáze?\n\nKlient: ${row.name || row.company || row.entity_id}\nID: ${row.entity_id}\n\nTato akce je NEzvratná!`
-        : `Opravdu chcete zamítnout tohoto klienta?\n\nKlient: ${row.name || row.company || row.entity_id}\nID: ${row.entity_id}`;
+      const linkedCount = row.commission_count ?? 0;
+      const subjectLabel = row.name || row.company || row.entity_id;
+      let confirmMessage: string;
+      if (isArchivedEntity) {
+        confirmMessage = linkedCount > 0
+          ? `Opravdu chcete TRVALE SMAZAT tohoto klienta a všech ${linkedCount} navázaných zakázek?\n\nKlient: ${subjectLabel}\nID: ${row.entity_id}\n\nTato akce je NEzvratná!`
+          : `Opravdu chcete TRVALE SMAZAT tohoto klienta z databáze?\n\nKlient: ${subjectLabel}\nID: ${row.entity_id}\n\nTato akce je NEzvratná!`;
+      } else {
+        confirmMessage = linkedCount > 0
+          ? `Opravdu chcete zamítnout tohoto klienta a všech ${linkedCount} navázaných zakázek?\n\nKlient: ${subjectLabel}\nID: ${row.entity_id}`
+          : `Opravdu chcete zamítnout tohoto klienta?\n\nKlient: ${subjectLabel}\nID: ${row.entity_id}`;
+      }
 
       if (!confirm(confirmMessage)) return;
 
@@ -917,7 +978,7 @@ const ClientsSectionNew: React.FC<SectionProps> = ({
       console.error("Error performing action:", error);
       alert("Chyba při provádění akce");
     }
-  }, [closeProfile, commissionApiBase, commissions, entityApiBase, fetchData, gridData, selectedEntityId, systemNamespace, updateProjectClusterStatus, viewMode]);
+  }, [archiveOrDeleteSingleCommission, closeProfile, commissionApiBase, commissions, entityApiBase, fetchData, gridData, selectedEntityId, systemNamespace, updateProjectClusterStatus, viewMode]);
 
   const handleCreateWithCommission = useCallback(async () => {
     setIsCreating(true);
@@ -1596,7 +1657,7 @@ const ClientsSectionNew: React.FC<SectionProps> = ({
         onDuplicateEntityCommission={handleDuplicateEntityCommission}
         onDuplicateCommission={handleDuplicateCommission}
         onCreateCommission={selectedEntity ? handleCreateFirstCommission : undefined}
-        onRemoveCommission={selectedCommission ? () => void handleDelete(selectedCommission.id) : undefined}
+        onRemoveCommission={selectedCommission ? () => void handleDelete(selectedCommission.id, { commissionOnly: true }) : undefined}
         onClose={closeProfile}
         onUpdateEntity={handleUpdateEntity}
         onUpdateCommission={handleUpdateCommission}
