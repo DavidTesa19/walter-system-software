@@ -1358,6 +1358,27 @@
   cursor: grabbing;
 }
 
+.ec-fs-tile.is-being-dragged {
+  opacity: 0.45;
+  transition: opacity 0.1s;
+}
+
+.ec-drag-ghost {
+  position: fixed;
+  top: -1000px;
+  left: -1000px;
+  background: var(--color-primary, #3b82f6);
+  color: #fff;
+  font-size: 13px;
+  font-weight: 700;
+  line-height: 1;
+  padding: 5px 10px;
+  border-radius: 12px;
+  pointer-events: none;
+  white-space: nowrap;
+  box-shadow: 0 2px 6px rgba(0,0,0,0.25);
+}
+
 .ec-fs-tile-icon {
   width: calc(64px * var(--ec-fs-zoom, 1));
   height: calc(64px * var(--ec-fs-zoom, 1));
@@ -1532,6 +1553,11 @@
 
 .ec-fs-row[draggable="true"]:active {
   cursor: grabbing;
+}
+
+.ec-fs-row.is-being-dragged {
+  opacity: 0.45;
+  transition: opacity 0.1s;
 }
 
 .ec-fs-row-icon {

@@ -387,6 +387,7 @@ const DocumentExplorer: React.FC<DocumentExplorerProps> = ({
   const prevItemIdsRef = useRef<Set<number>>(new Set());
   const draftFolderCommitInFlightRef = useRef(false);
   const wasDraftFolderActiveRef = useRef(false);
+  const dragJustEndedRef = useRef(false);
 
   const [searchQuery, setSearchQuery] = useState("");
   const [selectedItemIds, setSelectedItemIds] = useState<number[]>([]);
@@ -840,6 +841,10 @@ const DocumentExplorer: React.FC<DocumentExplorerProps> = ({
   };
 
   const handleTileClick = (item: ProfileDocument, event: React.MouseEvent) => {
+    if (dragJustEndedRef.current) {
+      dragJustEndedRef.current = false;
+      return;
+    }
     if (renamingItemId === item.id) {
       return;
     }
@@ -1156,11 +1161,13 @@ const DocumentExplorer: React.FC<DocumentExplorerProps> = ({
     const labelColor = getDocumentLabelColor(item);
     const folderColor = getFolderColorFor(item);
 
+    const isDragSource = draggedItemId !== null && isSelected && selectedItemIds.includes(draggedItemId);
     const tileClassNames = [
       "ec-fs-tile",
       `ec-fs-tile--${item.itemKind}`,
       isCanvas ? "ec-fs-tile--canvas" : "",
       isSelected ? "is-selected" : "",
+      isDragSource ? "is-being-dragged" : "",
       isDropTarget ? "is-drop-target" : "",
       isRenaming ? "is-renaming" : ""
     ].filter(Boolean).join(" ");
@@ -1237,8 +1244,20 @@ const DocumentExplorer: React.FC<DocumentExplorerProps> = ({
           event.dataTransfer.effectAllowed = "move";
           event.dataTransfer.setData("text/plain", String(item.id));
           setDraggedItemId(item.id);
+          const draggedIds = selectedItemIds.includes(item.id) ? selectedItemIds : [item.id];
+          if (draggedIds.length > 1) {
+            const ghost = document.createElement("div");
+            ghost.className = "ec-drag-ghost";
+            ghost.textContent = String(draggedIds.length);
+            document.body.appendChild(ghost);
+            event.dataTransfer.setDragImage(ghost, 20, 20);
+            setTimeout(() => { if (document.body.contains(ghost)) document.body.removeChild(ghost); }, 0);
+          }
         }}
-        onDragEnd={() => resetInteractionState()}
+        onDragEnd={() => {
+          dragJustEndedRef.current = true;
+          resetInteractionState();
+        }}
         onDragOver={(event) => {
           if (!isFolder || !canDropDraggedItemsTo(item.id)) {
             return;
@@ -1309,10 +1328,12 @@ const DocumentExplorer: React.FC<DocumentExplorerProps> = ({
     const labelColor = getDocumentLabelColor(item);
     const folderColor = getFolderColorFor(item);
 
+    const isDragSource = draggedItemId !== null && isSelected && selectedItemIds.includes(draggedItemId);
     const rowClassNames = [
       "ec-fs-row",
       `ec-fs-row--${item.itemKind}`,
       isSelected ? "is-selected" : "",
+      isDragSource ? "is-being-dragged" : "",
       isDropTarget ? "is-drop-target" : "",
       isRenaming ? "is-renaming" : ""
     ].filter(Boolean).join(" ");
@@ -1331,8 +1352,20 @@ const DocumentExplorer: React.FC<DocumentExplorerProps> = ({
           event.dataTransfer.effectAllowed = "move";
           event.dataTransfer.setData("text/plain", String(item.id));
           setDraggedItemId(item.id);
+          const draggedIds = selectedItemIds.includes(item.id) ? selectedItemIds : [item.id];
+          if (draggedIds.length > 1) {
+            const ghost = document.createElement("div");
+            ghost.className = "ec-drag-ghost";
+            ghost.textContent = String(draggedIds.length);
+            document.body.appendChild(ghost);
+            event.dataTransfer.setDragImage(ghost, 20, 20);
+            setTimeout(() => { if (document.body.contains(ghost)) document.body.removeChild(ghost); }, 0);
+          }
         }}
-        onDragEnd={() => resetInteractionState()}
+        onDragEnd={() => {
+          dragJustEndedRef.current = true;
+          resetInteractionState();
+        }}
         onDragOver={(event) => {
           if (!isFolder || !canDropDraggedItemsTo(item.id)) {
             return;
