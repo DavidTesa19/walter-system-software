@@ -736,7 +736,8 @@ const PartnersSectionNew: React.FC<SectionProps> = ({ viewMode, isActive, system
 
   const handleDelete = useCallback(async (id: number) => {
     if (viewMode === "active") {
-      const row = gridData.find((item) => item.id === id);
+      const commission = commissions.find(item => item.id === id);
+      const row = commission ? gridData.find(item => item.entity?.id === commission.partner_entity_id) : gridData.find(item => item.id === id);
       const entityId = row?.entity?.id ?? null;
       if (!row || entityId === null) return;
 

@@ -798,7 +798,8 @@ const TipersSectionNew: React.FC<SectionProps> = ({
 
   const handleDelete = useCallback(async (id: number) => {
     if (viewMode === "active") {
-      const row = gridData.find(r => r.id === id);
+      const commission = commissions.find(c => c.id === id);
+      const row = commission ? gridData.find(r => r.entity?.id === commission.tiper_entity_id) : gridData.find(r => r.id === id);
       const entityId = row?.entity?.id ?? null;
       if (!row || entityId === null) return;
 
