@@ -22,6 +22,7 @@ type UseProfileDocumentsResult = {
   downloadBaseUrl: string;
   uploadDocument: (file: File) => Promise<void>;
   uploadDocuments: (files: Iterable<File>) => Promise<void>;
+  uploadFolderTree: (files: Iterable<File>) => Promise<void>;
   createFolder: (name: string) => Promise<void>;
   renameDocument: (documentId: number, filename: string) => Promise<boolean>;
   updateDocumentColor: (documentId: number, labelColor: string | null) => Promise<boolean>;
@@ -29,6 +30,7 @@ type UseProfileDocumentsResult = {
   archiveDocument: (documentId: number) => Promise<boolean>;
   unarchiveDocument: (documentId: number) => Promise<boolean>;
   moveDocument: (documentId: number, parentId: number | null) => Promise<boolean>;
+  extractZipDocument: (documentId: number) => Promise<boolean>;
   openFolder: (folderId: number) => void;
   goToFolder: (folderId: number | null) => void;
   goBack: () => void;
@@ -204,6 +206,81 @@ export const useProfileDocuments = (resource: DocumentResource, entityId: number
     }
   }, [currentFolderId, entityId, fetchDocuments, resource]);
 
+  const uploadFolderTree = useCallback(async (files: Iterable<File>) => {
+    if (!entityId) {
+      return;
+    }
+
+    type RelativeFile = { file: File; segments: string[] };
+    const relativeFiles: RelativeFile[] = [];
+    for (const file of files) {
+      const rawPath = (file as File & { webkitRelativePath?: string }).webkitRelativePath || file.name;
+      const segments = rawPath
+        .replace(/\\/g, "/")
+        .split("/")
+        .map((part) => part.trim())
+        .filter((part) => part.length > 0 && part !== "." && part !== "..");
+      if (segments.length > 0) {
+        relativeFiles.push({ file, segments });
+      }
+    }
+
+    if (relativeFiles.length === 0) {
+      return;
+    }
+
+    setIsUploading(true);
+    try {
+      const folderIdByPath = new Map<string, number>();
+      folderIdByPath.set("", currentFolderId ?? -1);
+
+      const ensureFolderPath = async (segments: string[]): Promise<number | null> => {
+        let parentId: number | null = currentFolderId;
+        let currentPath = "";
+        for (const segment of segments) {
+          currentPath = currentPath ? `${currentPath}/${segment}` : segment;
+          const cached = folderIdByPath.get(currentPath);
+          if (cached !== undefined && cached !== -1) {
+            parentId = cached;
+            continue;
+          }
+          const created = await apiPost<ProfileDocument>(`/${resource}/${entityId}/document-folders`, {
+            name: segment,
+            parentId
+          });
+          const newId = Number(created?.id);
+          if (!Number.isFinite(newId)) {
+            throw new Error("Folder creation returned no id");
+          }
+          folderIdByPath.set(currentPath, newId);
+          parentId = newId;
+        }
+        return parentId;
+      };
+
+      for (const { file, segments } of relativeFiles) {
+        const folderSegments = segments.slice(0, -1);
+        const targetParentId = folderSegments.length > 0
+          ? await ensureFolderPath(folderSegments)
+          : currentFolderId;
+
+        const formData = new FormData();
+        formData.append("file", file, segments[segments.length - 1] ?? file.name);
+        if (targetParentId !== null && targetParentId !== undefined) {
+          formData.append("parentId", String(targetParentId));
+        }
+        await apiUpload(`/${resource}/${entityId}/documents`, formData);
+      }
+
+      await fetchDocuments();
+    } catch (error) {
+      console.error(`Error uploading ${resource} folder tree:`, error);
+      alert("Nepodařilo se nahrát celou složku. Zkuste to prosím znovu.");
+    } finally {
+      setIsUploading(false);
+    }
+  }, [currentFolderId, entityId, fetchDocuments, resource]);
+
   const renameDocument = useCallback(async (documentId: number, filename: string) => {
     const nextFilename = filename.trim();
     if (!nextFilename) {
@@ -281,6 +358,19 @@ export const useProfileDocuments = (resource: DocumentResource, entityId: number
     }
   }, [fetchDocuments]);
 
+  const extractZipDocument = useCallback(async (documentId: number) => {
+    try {
+      await apiPost(`/documents/${documentId}/extract`);
+      await fetchDocuments();
+      return true;
+    } catch (error) {
+      console.error("Error extracting ZIP document:", error);
+      const message = error instanceof Error ? error.message : "";
+      alert(message || "Nepodařilo se rozbalit archiv. Zkuste to prosím znovu.");
+      return false;
+    }
+  }, [fetchDocuments]);
+
   const openFolder = useCallback((folderId: number) => {
     setCurrentFolderId(folderId);
   }, []);
@@ -340,6 +430,7 @@ export const useProfileDocuments = (resource: DocumentResource, entityId: number
     downloadBaseUrl,
     uploadDocument,
     uploadDocuments,
+    uploadFolderTree,
     createFolder,
     renameDocument,
     updateDocumentColor,
@@ -347,6 +438,7 @@ export const useProfileDocuments = (resource: DocumentResource, entityId: number
     archiveDocument,
     unarchiveDocument,
     moveDocument,
+    extractZipDocument,
     openFolder,
     goToFolder,
     goBack,

@@ -78,6 +78,8 @@ interface EntityCommissionProfilePanelProps {
   documentsUploading?: boolean;
   onUploadDocument?: (file: File) => Promise<void> | void;
   onUploadDocuments?: (files: File[]) => Promise<void> | void;
+  onUploadFolderTree?: (files: File[]) => Promise<void> | void;
+  onExtractZipDocument?: (documentId: number) => Promise<boolean | void> | boolean | void;
   onCreateFolder?: (name: string) => Promise<void> | void;
   onRenameDocument?: (documentId: number, filename: string) => Promise<boolean | void> | boolean | void;
   onUpdateDocumentColor?: (documentId: number, labelColor: string | null) => Promise<boolean | void> | boolean | void;
@@ -442,6 +444,8 @@ const EntityCommissionProfilePanel: React.FC<EntityCommissionProfilePanelProps> 
   documentsUploading = false,
   onUploadDocument,
   onUploadDocuments,
+  onUploadFolderTree,
+  onExtractZipDocument,
   onCreateFolder,
   onRenameDocument,
   onUpdateDocumentColor,
@@ -888,6 +892,8 @@ const EntityCommissionProfilePanel: React.FC<EntityCommissionProfilePanelProps> 
               downloadBaseUrl={documentDownloadBaseUrl}
               onUploadDocument={onUploadDocument}
               onUploadDocuments={onUploadDocuments}
+              onUploadFolderTree={onUploadFolderTree}
+              onExtractZipDocument={onExtractZipDocument}
               onCreateFolder={onCreateFolder}
               onRenameDocument={onRenameDocument}
               onUpdateDocumentColor={onUpdateDocumentColor}

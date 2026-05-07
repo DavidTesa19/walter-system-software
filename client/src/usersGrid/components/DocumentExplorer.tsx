@@ -16,6 +16,8 @@ type DocumentExplorerProps = {
   downloadBaseUrl?: string;
   onUploadDocument?: (file: File) => Promise<void> | void;
   onUploadDocuments?: (files: File[]) => Promise<void> | void;
+  onUploadFolderTree?: (files: File[]) => Promise<void> | void;
+  onExtractZipDocument?: (documentId: number) => Promise<boolean | void> | boolean | void;
   onCreateFolder?: (name: string) => Promise<void> | void;
   onRenameDocument?: (documentId: number, filename: string) => Promise<boolean | void> | boolean | void;
   onUpdateDocumentColor?: (documentId: number, labelColor: string | null) => Promise<boolean | void> | boolean | void;
@@ -360,6 +362,8 @@ const DocumentExplorer: React.FC<DocumentExplorerProps> = ({
   downloadBaseUrl,
   onUploadDocument,
   onUploadDocuments,
+  onUploadFolderTree,
+  onExtractZipDocument,
   onCreateFolder,
   onRenameDocument,
   onUpdateDocumentColor,
@@ -375,6 +379,7 @@ const DocumentExplorer: React.FC<DocumentExplorerProps> = ({
   getFolderItemCount
 }) => {
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const folderInputRef = useRef<HTMLInputElement>(null);
   const contextMenuRef = useRef<HTMLDivElement>(null);
   const blankContextMenuRef = useRef<HTMLDivElement>(null);
   const movePopupRef = useRef<HTMLDivElement>(null);
@@ -893,6 +898,28 @@ const DocumentExplorer: React.FC<DocumentExplorerProps> = ({
         fileInputRef.current.value = "";
       }
     }
+  };
+
+  const handleFolderChange = async (event: React.ChangeEvent<HTMLInputElement>) => {
+    const files = Array.from(event.target.files ?? []);
+    if (files.length === 0) {
+      return;
+    }
+
+    try {
+      if (onUploadFolderTree) {
+        await Promise.resolve(onUploadFolderTree(files));
+      }
+    } finally {
+      if (folderInputRef.current) {
+        folderInputRef.current.value = "";
+      }
+    }
+  };
+
+  const handleExtractZip = async (item: ProfileDocument) => {
+    if (!onExtractZipDocument) return;
+    await Promise.resolve(onExtractZipDocument(item.id));
   };
 
   const startDraftFolder = (canvasPos?: { x: number; y: number }) => {
@@ -1811,6 +1838,19 @@ const DocumentExplorer: React.FC<DocumentExplorerProps> = ({
               <span>{isUploading ? "Nahrávám..." : "+ Přidat soubory"}</span>
             </label>
           ) : null}
+          {onUploadFolderTree ? (
+            <label className="ec-upload-btn">
+              <input
+                ref={folderInputRef}
+                type="file"
+                multiple
+                onChange={handleFolderChange}
+                disabled={isUploading || isApplyingBulkAction}
+                {...({ webkitdirectory: "", directory: "", mozdirectory: "" } as Record<string, string>)}
+              />
+              <span>{isUploading ? "Nahrávám..." : "+ Přidat složku"}</span>
+            </label>
+          ) : null}
         </div>
       </div>
 
@@ -2175,6 +2215,19 @@ const DocumentExplorer: React.FC<DocumentExplorerProps> = ({
               Stáhnout
             </button>
           ) : null}
+          {onExtractZipDocument && contextMenuItem.itemKind === "file" && /\.zip$/i.test(contextMenuItem.filename) ? (
+            <button
+              type="button"
+              className="ec-fs-context-item"
+              onClick={() => {
+                const target = contextMenuItem;
+                closeContextMenu();
+                void handleExtractZip(target);
+              }}
+            >
+              Rozbalit
+            </button>
+          ) : null}
           {onMoveDocument ? (
             <button
               type="button"
@@ -2321,6 +2374,18 @@ const DocumentExplorer: React.FC<DocumentExplorerProps> = ({
               }}
             >
               Přidat soubory
+            </button>
+          ) : null}
+          {onUploadFolderTree ? (
+            <button
+              type="button"
+              className="ec-fs-context-item"
+              onClick={() => {
+                closeBlankContextMenu();
+                folderInputRef.current?.click();
+              }}
+            >
+              Přidat složku
             </button>
           ) : null}
         </div>

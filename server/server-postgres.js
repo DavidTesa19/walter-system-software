@@ -10,6 +10,7 @@ import multer from "multer";
 import bcrypt from "bcryptjs";
 import jwt from "jsonwebtoken";
 import crypto from "crypto";
+import AdmZip from "adm-zip";
 import db, { initDatabase } from "./db.js";
 import {
   normalizeNotificationEmail,
@@ -2728,6 +2729,258 @@ app.post("/documents/:documentId/unarchive", authenticateToken, async (req, res)
   } catch (error) {
     console.error("Error unarchiving document:", error);
     res.status(500).json({ error: "Failed to unarchive document" });
+  }
+});
+
+const stripZipExtension = (filename) => {
+  if (typeof filename !== "string") {
+    return "Archive";
+  }
+  const trimmed = filename.replace(/\.zip$/i, "").trim();
+  return trimmed.length > 0 ? trimmed : "Archive";
+};
+
+const sanitizePathSegment = (segment) => sanitizeFilename(segment).replace(/[\\/]/g, "_");
+
+const splitZipEntryPath = (entryName) => {
+  if (typeof entryName !== "string") {
+    return [];
+  }
+  return entryName
+    .replace(/\\/g, "/")
+    .split("/")
+    .map((part) => part.trim())
+    .filter((part) => part.length > 0 && part !== "." && part !== "..")
+    .map((part) => sanitizePathSegment(part));
+};
+
+const guessMimeTypeFromName = (filename) => {
+  const lower = String(filename || "").toLowerCase();
+  const map = {
+    pdf: "application/pdf",
+    png: "image/png",
+    jpg: "image/jpeg",
+    jpeg: "image/jpeg",
+    gif: "image/gif",
+    webp: "image/webp",
+    svg: "image/svg+xml",
+    txt: "text/plain",
+    csv: "text/csv",
+    json: "application/json",
+    xml: "application/xml",
+    html: "text/html",
+    htm: "text/html",
+    md: "text/markdown",
+    zip: "application/zip",
+    doc: "application/msword",
+    docx: "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+    xls: "application/vnd.ms-excel",
+    xlsx: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+    ppt: "application/vnd.ms-powerpoint",
+    pptx: "application/vnd.openxmlformats-officedocument.presentationml.presentation",
+    mp3: "audio/mpeg",
+    mp4: "video/mp4",
+    mov: "video/quicktime"
+  };
+  const ext = lower.includes(".") ? lower.split(".").pop() : "";
+  return map[ext] || "application/octet-stream";
+};
+
+app.post("/documents/:documentId/extract", authenticateToken, async (req, res) => {
+  const documentId = Number(req.params.documentId);
+  if (Number.isNaN(documentId)) {
+    return res.status(400).json({ error: "Invalid document id" });
+  }
+
+  try {
+    let zipBuffer = null;
+    let parentEntity = null;
+    let parentEntityId = null;
+    let parentFolderId = null;
+    let baseFilename = "Archive";
+
+    if (db.isPostgres()) {
+      const doc = await db.getDocumentById(documentId, { includeData: true });
+      if (!doc) {
+        return res.status(404).json({ error: "Document not found" });
+      }
+      if (doc.itemKind === "folder") {
+        return res.status(400).json({ error: "Cannot extract a folder" });
+      }
+      if (!/\.zip$/i.test(doc.filename || "")) {
+        return res.status(400).json({ error: "Only .zip files can be extracted" });
+      }
+      zipBuffer = Buffer.isBuffer(doc.data) ? doc.data : Buffer.from(doc.data);
+      parentEntity = doc.entityType;
+      parentEntityId = Number(doc.entityId);
+      parentFolderId = doc.parentId ?? null;
+      baseFilename = doc.filename;
+    } else {
+      const store = readDb();
+      const doc = findDocumentInStore(store, documentId);
+      if (!doc) {
+        return res.status(404).json({ error: "Document not found" });
+      }
+      if (isFolderDocument(doc)) {
+        return res.status(400).json({ error: "Cannot extract a folder" });
+      }
+      if (!/\.zip$/i.test(doc.filename || "")) {
+        return res.status(400).json({ error: "Only .zip files can be extracted" });
+      }
+      zipBuffer = Buffer.from(doc.data || "", "base64");
+      parentEntity = doc.entityType;
+      parentEntityId = Number(doc.entityId);
+      parentFolderId = doc.parentId ?? null;
+      baseFilename = doc.filename;
+    }
+
+    let zip;
+    try {
+      zip = new AdmZip(zipBuffer);
+    } catch (zipError) {
+      console.error("Invalid ZIP file:", zipError);
+      return res.status(400).json({ error: "Soubor není platný ZIP archiv" });
+    }
+
+    const entries = zip.getEntries();
+    if (!entries.length) {
+      return res.status(400).json({ error: "ZIP archiv je prázdný" });
+    }
+
+    // Reject extracts whose total uncompressed size exceeds the per-file limit (zip-bomb guard).
+    let totalUncompressed = 0;
+    for (const entry of entries) {
+      if (!entry.isDirectory) {
+        totalUncompressed += Number(entry.header.size || 0);
+      }
+      if (totalUncompressed > MAX_DOCUMENT_SIZE_BYTES * 4) {
+        return res.status(413).json({ error: `Obsah archivu přesahuje povolený limit ${Math.round(MAX_DOCUMENT_SIZE_BYTES * 4 / (1024 * 1024))} MB.` });
+      }
+    }
+
+    const baseFolderName = stripZipExtension(baseFilename);
+
+    const ensureFolder = async (parentId, name) => {
+      if (db.isPostgres()) {
+        const created = await db.createDocumentFolder(parentEntity, parentEntityId, {
+          name: sanitizePathSegment(name),
+          parentId
+        });
+        return Number(created.id);
+      }
+
+      const store = readDb();
+      ensureDocumentsCollection(store);
+      const entry = {
+        id: nextDocumentId(store),
+        entityType: parentEntity,
+        entityId: parentEntityId,
+        itemKind: "folder",
+        parentId,
+        filename: sanitizePathSegment(name),
+        mimeType: DIRECTORY_MIME_TYPE,
+        sizeBytes: 0,
+        createdAt: new Date().toISOString(),
+        data: "",
+        noteId: null,
+        archivedAt: null
+      };
+      store.documents.push(entry);
+      if (!writeDb(store)) {
+        throw new Error("Failed to persist extracted folder");
+      }
+      return Number(entry.id);
+    };
+
+    const writeFile = async (parentId, name, buffer) => {
+      const filename = sanitizePathSegment(name);
+      const mimeType = guessMimeTypeFromName(filename);
+      if (db.isPostgres()) {
+        await db.createDocument(parentEntity, parentEntityId, {
+          filename,
+          mimeType,
+          sizeBytes: buffer.length,
+          buffer,
+          noteId: null,
+          parentId
+        });
+        return;
+      }
+
+      const store = readDb();
+      ensureDocumentsCollection(store);
+      const entry = {
+        id: nextDocumentId(store),
+        entityType: parentEntity,
+        entityId: parentEntityId,
+        itemKind: "file",
+        parentId,
+        filename,
+        mimeType,
+        sizeBytes: buffer.length,
+        createdAt: new Date().toISOString(),
+        data: buffer.toString("base64"),
+        noteId: null
+      };
+      store.documents.push(entry);
+      if (!writeDb(store)) {
+        throw new Error("Failed to persist extracted file");
+      }
+    };
+
+    // Build the wrapper folder for the extraction
+    const rootExtractFolderId = await ensureFolder(parentFolderId, baseFolderName);
+
+    // Track folders we have created by their relative path inside the archive
+    const folderIdByPath = new Map();
+    folderIdByPath.set("", rootExtractFolderId);
+
+    const ensurePathFolders = async (segments) => {
+      let currentParentId = rootExtractFolderId;
+      let currentPath = "";
+      for (const segment of segments) {
+        currentPath = currentPath ? `${currentPath}/${segment}` : segment;
+        if (folderIdByPath.has(currentPath)) {
+          currentParentId = folderIdByPath.get(currentPath);
+          continue;
+        }
+        const newId = await ensureFolder(currentParentId, segment);
+        folderIdByPath.set(currentPath, newId);
+        currentParentId = newId;
+      }
+      return currentParentId;
+    };
+
+    for (const entry of entries) {
+      const segments = splitZipEntryPath(entry.entryName);
+      if (!segments.length) {
+        continue;
+      }
+
+      if (entry.isDirectory) {
+        await ensurePathFolders(segments);
+        continue;
+      }
+
+      const fileSegment = segments[segments.length - 1];
+      const folderSegments = segments.slice(0, -1);
+      const targetParentId = folderSegments.length > 0
+        ? await ensurePathFolders(folderSegments)
+        : rootExtractFolderId;
+
+      const fileBuffer = entry.getData();
+      if (fileBuffer.length > MAX_DOCUMENT_SIZE_BYTES) {
+        // Skip overly large extracted file but continue with the rest
+        console.warn(`Skipping ${entry.entryName}: exceeds max size`);
+        continue;
+      }
+      await writeFile(targetParentId, fileSegment, fileBuffer);
+    }
+
+    return res.status(201).json({ ok: true, folderId: rootExtractFolderId });
+  } catch (error) {
+    console.error("Error extracting ZIP document:", error);
+    res.status(500).json({ error: "Failed to extract archive" });
   }
 });
 
