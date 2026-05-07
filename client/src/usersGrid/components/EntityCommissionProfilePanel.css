@@ -1352,6 +1352,8 @@
 
 .ec-fs-tile[draggable="true"] {
   cursor: grab;
+  user-select: none;
+  -webkit-user-drag: element;
 }
 
 .ec-fs-tile[draggable="true"]:active {
@@ -1549,6 +1551,8 @@
 
 .ec-fs-row[draggable="true"] {
   cursor: grab;
+  user-select: none;
+  -webkit-user-drag: element;
 }
 
 .ec-fs-row[draggable="true"]:active {

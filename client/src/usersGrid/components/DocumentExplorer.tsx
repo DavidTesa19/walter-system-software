@@ -388,6 +388,7 @@ const DocumentExplorer: React.FC<DocumentExplorerProps> = ({
   const draftFolderCommitInFlightRef = useRef(false);
   const wasDraftFolderActiveRef = useRef(false);
   const dragJustEndedRef = useRef(false);
+  const draggedItemIdRef = useRef<number | null>(null);
 
   const [searchQuery, setSearchQuery] = useState("");
   const [selectedItemIds, setSelectedItemIds] = useState<number[]>([]);
@@ -742,15 +743,17 @@ const DocumentExplorer: React.FC<DocumentExplorerProps> = ({
   };
 
   const resetInteractionState = () => {
+    draggedItemIdRef.current = null;
     setDraggedItemId(null);
     setDropTargetKey(null);
   };
 
   const canDropDraggedItemsTo = (parentId: number | null) => {
-    if (draggedItemId === null) {
+    const currentDraggedId = draggedItemIdRef.current;
+    if (currentDraggedId === null) {
       return false;
     }
-    return getDraggedItemIds(draggedItemId).some((id) => canMoveDocumentTo(id, parentId));
+    return getDraggedItemIds(currentDraggedId).some((id) => canMoveDocumentTo(id, parentId));
   };
 
   const handleFileChange = async (event: React.ChangeEvent<HTMLInputElement>) => {
@@ -1032,11 +1035,12 @@ const DocumentExplorer: React.FC<DocumentExplorerProps> = ({
   };
 
   const handleDropToFolder = async (parentId: number | null) => {
-    if (!onMoveDocument || draggedItemId === null) {
+    const currentDraggedId = draggedItemIdRef.current;
+    if (!onMoveDocument || currentDraggedId === null) {
       return;
     }
 
-    const movingIds = getDraggedItemIds(draggedItemId).filter((id) => canMoveDocumentTo(id, parentId));
+    const movingIds = getDraggedItemIds(currentDraggedId).filter((id) => canMoveDocumentTo(id, parentId));
     if (movingIds.length === 0) {
       resetInteractionState();
       return;
@@ -1241,6 +1245,7 @@ const DocumentExplorer: React.FC<DocumentExplorerProps> = ({
             event.preventDefault();
             return;
           }
+          draggedItemIdRef.current = item.id;
           event.dataTransfer.effectAllowed = "move";
           event.dataTransfer.setData("text/plain", String(item.id));
           setDraggedItemId(item.id);
@@ -1349,6 +1354,7 @@ const DocumentExplorer: React.FC<DocumentExplorerProps> = ({
         onDoubleClick={() => handleTileDoubleClick(item)}
         onContextMenu={(event) => handleTileContextMenu(item, event)}
         onDragStart={(event) => {
+          draggedItemIdRef.current = item.id;
           event.dataTransfer.effectAllowed = "move";
           event.dataTransfer.setData("text/plain", String(item.id));
           setDraggedItemId(item.id);
