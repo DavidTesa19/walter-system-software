@@ -389,6 +389,7 @@ const DocumentExplorer: React.FC<DocumentExplorerProps> = ({
   const wasDraftFolderActiveRef = useRef(false);
   const dragJustEndedRef = useRef(false);
   const draggedItemIdRef = useRef<number | null>(null);
+  const draggedItemIdsRef = useRef<number[]>([]);
 
   const [searchQuery, setSearchQuery] = useState("");
   const [selectedItemIds, setSelectedItemIds] = useState<number[]>([]);
@@ -655,10 +656,23 @@ const DocumentExplorer: React.FC<DocumentExplorerProps> = ({
         }
         return next;
       });
+
+      const hoverTarget = findDropTargetFromElement(document.elementFromPoint(event.clientX, event.clientY));
+      if (hoverTarget && canvasDrag.itemIds.some((id) => canMoveDocumentTo(id, hoverTarget.parentId))) {
+        setDropTargetKey(hoverTarget.key);
+      } else {
+        setDropTargetKey(null);
+      }
     };
 
-    const handleUp = () => {
+    const handleUp = (event: MouseEvent) => {
+      const hoverTarget = findDropTargetFromElement(document.elementFromPoint(event.clientX, event.clientY));
       setCanvasDrag(null);
+      if (hoverTarget && canvasDrag.itemIds.some((id) => canMoveDocumentTo(id, hoverTarget.parentId))) {
+        void handleDropToFolder(hoverTarget.parentId);
+        return;
+      }
+      resetInteractionState();
     };
 
     window.addEventListener("mousemove", handleMove);
@@ -667,7 +681,7 @@ const DocumentExplorer: React.FC<DocumentExplorerProps> = ({
       window.removeEventListener("mousemove", handleMove);
       window.removeEventListener("mouseup", handleUp);
     };
-  }, [canvasDrag]);
+  }, [canvasDrag, canMoveDocumentTo, findDropTargetFromElement, handleDropToFolder]);
 
   useEffect(() => {
     if (!selectionBox) {
@@ -735,25 +749,67 @@ const DocumentExplorer: React.FC<DocumentExplorerProps> = ({
     };
   }, [selectionBox]);
 
-  const getDraggedItemIds = (anchorItemId: number) => {
+  function getDraggedItemIds(anchorItemId: number) {
     if (selectedItemIds.includes(anchorItemId)) {
       return [...selectedItemIds];
     }
     return [anchorItemId];
-  };
+  }
+
+  function getActiveDraggedItemIds() {
+    if (draggedItemIdsRef.current.length > 0) {
+      return [...draggedItemIdsRef.current];
+    }
+    if (draggedItemId !== null) {
+      return getDraggedItemIds(draggedItemId);
+    }
+    return [];
+  }
+
+  function findDropTargetFromElement(element: Element | null) {
+    if (!element) {
+      return null;
+    }
+
+    const folderTarget = element.closest<HTMLElement>("[data-folder-drop-id]");
+    if (folderTarget) {
+      const rawFolderId = Number(folderTarget.dataset.folderDropId);
+      if (Number.isFinite(rawFolderId)) {
+        return {
+          parentId: rawFolderId,
+          key: `folder:${rawFolderId}`
+        };
+      }
+    }
+
+    const breadcrumbTarget = element.closest<HTMLElement>("[data-breadcrumb-drop-id]");
+    if (breadcrumbTarget) {
+      const rawBreadcrumbId = breadcrumbTarget.dataset.breadcrumbDropId;
+      const parentId = rawBreadcrumbId === "root" ? null : Number(rawBreadcrumbId);
+      if (rawBreadcrumbId === "root" || Number.isFinite(parentId)) {
+        return {
+          parentId,
+          key: `breadcrumb:${rawBreadcrumbId}`
+        };
+      }
+    }
+
+    return null;
+  }
 
   const resetInteractionState = () => {
     draggedItemIdRef.current = null;
+    draggedItemIdsRef.current = [];
     setDraggedItemId(null);
     setDropTargetKey(null);
   };
 
   const canDropDraggedItemsTo = (parentId: number | null) => {
-    const currentDraggedId = draggedItemIdRef.current;
-    if (currentDraggedId === null) {
+    const draggedIds = getActiveDraggedItemIds();
+    if (draggedIds.length === 0) {
       return false;
     }
-    return getDraggedItemIds(currentDraggedId).some((id) => canMoveDocumentTo(id, parentId));
+    return draggedIds.some((id) => canMoveDocumentTo(id, parentId));
   };
 
   const handleFileChange = async (event: React.ChangeEvent<HTMLInputElement>) => {
@@ -1034,13 +1090,12 @@ const DocumentExplorer: React.FC<DocumentExplorerProps> = ({
     }
   };
 
-  const handleDropToFolder = async (parentId: number | null) => {
-    const currentDraggedId = draggedItemIdRef.current;
-    if (!onMoveDocument || currentDraggedId === null) {
+  async function handleDropToFolder(parentId: number | null) {
+    if (!onMoveDocument) {
       return;
     }
 
-    const movingIds = getDraggedItemIds(currentDraggedId).filter((id) => canMoveDocumentTo(id, parentId));
+    const movingIds = getActiveDraggedItemIds().filter((id) => canMoveDocumentTo(id, parentId));
     if (movingIds.length === 0) {
       resetInteractionState();
       return;
@@ -1053,7 +1108,7 @@ const DocumentExplorer: React.FC<DocumentExplorerProps> = ({
     setSelectedItemIds([]);
     setLastSelectedId(null);
     resetInteractionState();
-  };
+  }
 
   const handleSelectAll = () => {
     if (filteredItems.length === 0) {
@@ -1194,6 +1249,7 @@ const DocumentExplorer: React.FC<DocumentExplorerProps> = ({
       <div
         key={item.id}
         data-document-id={item.id}
+        data-folder-drop-id={isFolder ? String(item.id) : undefined}
         className={tileClassNames}
         title={item.filename}
         style={tileStyle}
@@ -1214,6 +1270,8 @@ const DocumentExplorer: React.FC<DocumentExplorerProps> = ({
             setSelectedItemIds([item.id]);
             setLastSelectedId(item.id);
           }
+          draggedItemIdsRef.current = movingIds;
+          setDraggedItemId(item.id);
           const currentTileEl = event.currentTarget as HTMLElement;
           const initial: Record<number, { x: number; y: number }> = {};
           for (const id of movingIds) {
@@ -1248,6 +1306,7 @@ const DocumentExplorer: React.FC<DocumentExplorerProps> = ({
           draggedItemIdRef.current = item.id;
           event.dataTransfer.effectAllowed = "move";
           event.dataTransfer.setData("text/plain", String(item.id));
+          draggedItemIdsRef.current = getDraggedItemIds(item.id);
           setDraggedItemId(item.id);
           const draggedIds = selectedItemIds.includes(item.id) ? selectedItemIds : [item.id];
           if (draggedIds.length > 1) {
@@ -1347,6 +1406,7 @@ const DocumentExplorer: React.FC<DocumentExplorerProps> = ({
       <div
         key={item.id}
         data-document-id={item.id}
+        data-folder-drop-id={isFolder ? String(item.id) : undefined}
         className={rowClassNames}
         title={item.filename}
         draggable={!isRenaming && !isApplyingBulkAction}
@@ -1357,6 +1417,7 @@ const DocumentExplorer: React.FC<DocumentExplorerProps> = ({
           draggedItemIdRef.current = item.id;
           event.dataTransfer.effectAllowed = "move";
           event.dataTransfer.setData("text/plain", String(item.id));
+          draggedItemIdsRef.current = getDraggedItemIds(item.id);
           setDraggedItemId(item.id);
           const draggedIds = selectedItemIds.includes(item.id) ? selectedItemIds : [item.id];
           if (draggedIds.length > 1) {
@@ -1568,6 +1629,7 @@ const DocumentExplorer: React.FC<DocumentExplorerProps> = ({
                 <React.Fragment key={`${crumb.id ?? "root"}-${index}`}>
                   <button
                     type="button"
+                    data-breadcrumb-drop-id={crumb.id === null ? "root" : String(crumb.id)}
                     className={`ec-breadcrumb ${isCurrent ? "is-current" : ""} ${dropTargetKey === crumbKey ? "is-drop-target" : ""}`}
                     onClick={() => onGoToFolder(crumb.id)}
                     disabled={isCurrent}
