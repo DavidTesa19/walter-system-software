@@ -1415,13 +1415,12 @@ const TipersSectionNew: React.FC<SectionProps> = ({
       menuTabs: []
     });
 
-    // ID column - show commission_id for commission rows, entity_id for entity-only rows
     cols.push({
       headerName: "ID",
       colId: "display_id",
       valueGetter: (params) => {
         const row = params.data as TiperGridRow;
-        if (row.entityOnly) return row.entity_id;
+        if (sectionKind === "subjects" || row.entityOnly) return row.entity_id;
         return row.commission_id;
       },
       flex: 0.7,

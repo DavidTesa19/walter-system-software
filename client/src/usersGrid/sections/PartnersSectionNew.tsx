@@ -1270,7 +1270,7 @@ const PartnersSectionNew: React.FC<SectionProps> = ({ viewMode, isActive, system
         colId: "display_id",
         valueGetter: (params) => {
           const row = params.data as PartnerGridRow;
-          if (row.entityOnly) return row.entity_id;
+          if (sectionKind === "subjects" || row.entityOnly) return row.entity_id;
           return row.commission_id;
         },
         flex: 0.75,
