@@ -657,7 +657,7 @@ const DocumentExplorer: React.FC<DocumentExplorerProps> = ({
         return next;
       });
 
-      const hoverTarget = findDropTargetFromElement(document.elementFromPoint(event.clientX, event.clientY));
+      const hoverTarget = findDropTargetAtPoint(event.clientX, event.clientY, canvasDrag.itemIds);
       if (hoverTarget && canvasDrag.itemIds.some((id) => canMoveDocumentTo(id, hoverTarget.parentId))) {
         setDropTargetKey(hoverTarget.key);
       } else {
@@ -666,7 +666,7 @@ const DocumentExplorer: React.FC<DocumentExplorerProps> = ({
     };
 
     const handleUp = (event: MouseEvent) => {
-      const hoverTarget = findDropTargetFromElement(document.elementFromPoint(event.clientX, event.clientY));
+      const hoverTarget = findDropTargetAtPoint(event.clientX, event.clientY, canvasDrag.itemIds);
       setCanvasDrag(null);
       if (hoverTarget && canvasDrag.itemIds.some((id) => canMoveDocumentTo(id, hoverTarget.parentId))) {
         void handleDropToFolder(hoverTarget.parentId);
@@ -766,6 +766,28 @@ const DocumentExplorer: React.FC<DocumentExplorerProps> = ({
     return [];
   }
 
+  function findDropTargetAtPoint(clientX: number, clientY: number, excludedItemIds: number[] = []) {
+    const excludedIds = new Set(excludedItemIds);
+    const elements = typeof document.elementsFromPoint === "function"
+      ? document.elementsFromPoint(clientX, clientY)
+      : [document.elementFromPoint(clientX, clientY)].filter(Boolean) as Element[];
+
+    for (const element of elements) {
+      const documentItem = element.closest<HTMLElement>("[data-document-id]");
+      const documentId = documentItem ? Number(documentItem.dataset.documentId) : null;
+      if (documentId !== null && Number.isFinite(documentId) && excludedIds.has(documentId)) {
+        continue;
+      }
+
+      const target = findDropTargetFromElement(element);
+      if (target) {
+        return target;
+      }
+    }
+
+    return findDropTargetByBounds(clientX, clientY, excludedIds);
+  }
+
   function findDropTargetFromElement(element: Element | null) {
     if (!element) {
       return null;
@@ -787,6 +809,46 @@ const DocumentExplorer: React.FC<DocumentExplorerProps> = ({
       const rawBreadcrumbId = breadcrumbTarget.dataset.breadcrumbDropId;
       const parentId = rawBreadcrumbId === "root" ? null : Number(rawBreadcrumbId);
       if (rawBreadcrumbId === "root" || Number.isFinite(parentId)) {
+        return {
+          parentId,
+          key: `breadcrumb:${rawBreadcrumbId}`
+        };
+      }
+    }
+
+    return null;
+  }
+
+  function findDropTargetByBounds(clientX: number, clientY: number, excludedIds: Set<number>) {
+    const folderTargets = Array.from(document.querySelectorAll<HTMLElement>("[data-folder-drop-id]"));
+    for (const folderTarget of folderTargets) {
+      const rawFolderId = Number(folderTarget.dataset.folderDropId);
+      if (!Number.isFinite(rawFolderId) || excludedIds.has(rawFolderId)) {
+        continue;
+      }
+
+      const rect = folderTarget.getBoundingClientRect();
+      if (clientX >= rect.left && clientX <= rect.right && clientY >= rect.top && clientY <= rect.bottom) {
+        return {
+          parentId: rawFolderId,
+          key: `folder:${rawFolderId}`
+        };
+      }
+    }
+
+    const breadcrumbTargets = Array.from(document.querySelectorAll<HTMLElement>("[data-breadcrumb-drop-id]"));
+    for (const breadcrumbTarget of breadcrumbTargets) {
+      const rawBreadcrumbId = breadcrumbTarget.dataset.breadcrumbDropId;
+      const parentId = rawBreadcrumbId === "root" ? null : Number(rawBreadcrumbId);
+      if (
+        rawBreadcrumbId !== "root" &&
+        (typeof parentId !== "number" || !Number.isFinite(parentId) || excludedIds.has(parentId))
+      ) {
+        continue;
+      }
+
+      const rect = breadcrumbTarget.getBoundingClientRect();
+      if (clientX >= rect.left && clientX <= rect.right && clientY >= rect.top && clientY <= rect.bottom) {
         return {
           parentId,
           key: `breadcrumb:${rawBreadcrumbId}`
