@@ -1452,16 +1452,14 @@ const ClientsSectionNew: React.FC<SectionProps> = ({
       menuTabs: []
     });
 
-    // ID column - show combined entity_id + commission_id
+    // ID column - show commission_id for commission rows, entity_id for entity-only rows
     cols.push({
       headerName: "ID",
       colId: "display_id",
       valueGetter: (params) => {
         const row = params.data as ClientGridRow;
-        if (viewMode === "active" || row.entityOnly) return row.entity_id;
-        const entityCode = row.entity_id || row.commission_id.split('-')[0] || '';
-        const commissionPart = row.commission_id.split('-')[1] || row.commission_id;
-        return `${entityCode}-${commissionPart}`;
+        if (row.entityOnly) return row.entity_id;
+        return row.commission_id;
       },
       flex: 0.7,
       minWidth: 90,

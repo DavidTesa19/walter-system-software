@@ -1270,10 +1270,8 @@ const PartnersSectionNew: React.FC<SectionProps> = ({ viewMode, isActive, system
         colId: "display_id",
         valueGetter: (params) => {
           const row = params.data as PartnerGridRow;
-          if (viewMode === "active" || row.entityOnly) return row.entity_id;
-          const entityCode = row.entity_id || row.commission_id.split("-")[0] || "";
-          const commissionPart = row.commission_id.split("-")[1] || row.commission_id;
-          return `${entityCode}-${commissionPart}`;
+          if (row.entityOnly) return row.entity_id;
+          return row.commission_id;
         },
         flex: 0.75,
         minWidth: 100,
