@@ -1427,7 +1427,6 @@
 .ec-fs-label-dots {
   display: inline-flex;
   align-items: center;
-  gap: 2px;
   flex: 0 0 auto;
 }
 
@@ -1436,7 +1435,12 @@
   height: 7px;
   border-radius: 999px;
   flex: 0 0 auto;
-  box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.9), 0 0 0 2px rgba(15, 23, 42, 0.08);
+  box-shadow: 0 0 0 1.5px rgba(255, 255, 255, 0.95), 0 0 0 2.5px rgba(15, 23, 42, 0.06);
+  margin-left: -2px;
+}
+
+.ec-fs-label-dots .ec-fs-label-dot:first-child {
+  margin-left: 0;
 }
 
 .ec-fs-tile.is-selected .ec-fs-tile-name {
