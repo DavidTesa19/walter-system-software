@@ -438,16 +438,37 @@ const parseDocumentLabelColor = (value) => {
     return { labelColor: null };
   }
 
-  if (typeof value !== "string") {
+  let entries;
+  if (Array.isArray(value)) {
+    entries = value;
+  } else if (typeof value === "string") {
+    entries = value.split(",");
+  } else {
     return { error: "Invalid document label color" };
   }
 
-  const normalized = value.trim().toLowerCase();
-  if (!DOCUMENT_LABEL_COLORS.has(normalized)) {
-    return { error: "Invalid document label color" };
+  const normalized = [];
+  for (const entry of entries) {
+    if (typeof entry !== "string") {
+      return { error: "Invalid document label color" };
+    }
+    const trimmed = entry.trim().toLowerCase();
+    if (!trimmed) {
+      continue;
+    }
+    if (!DOCUMENT_LABEL_COLORS.has(trimmed)) {
+      return { error: "Invalid document label color" };
+    }
+    if (!normalized.includes(trimmed)) {
+      normalized.push(trimmed);
+    }
   }
 
-  return { labelColor: normalized };
+  if (normalized.length === 0) {
+    return { labelColor: null };
+  }
+
+  return { labelColor: normalized.join(",") };
 };
 
 const isFolderDocument = (doc) => getDocumentItemKind(doc) === "folder";

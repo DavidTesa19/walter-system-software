@@ -1424,6 +1424,13 @@
   min-width: 0;
 }
 
+.ec-fs-label-dots {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  flex: 0 0 auto;
+}
+
 .ec-fs-label-dot {
   width: 7px;
   height: 7px;

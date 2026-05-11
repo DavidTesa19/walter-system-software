@@ -196,8 +196,51 @@ const getFileKind = (filename: string): FileKind => {
   return "generic";
 };
 
-const getDocumentLabelColor = (item: ProfileDocument) => {
-  return DOCUMENT_LABEL_COLORS.find((entry) => entry.value === item.labelColor) ?? DOCUMENT_LABEL_COLORS[0];
+const DOCUMENT_LABEL_COLOR_VALUES = new Set(
+  DOCUMENT_LABEL_COLORS.map((entry) => entry.value).filter((value): value is DocumentLabelColor => value !== null)
+);
+
+const DOCUMENT_LABEL_COLOR_LOOKUP: Record<DocumentLabelColor, { value: DocumentLabelColor; label: string; color: string }> = (() => {
+  const acc = {} as Record<DocumentLabelColor, { value: DocumentLabelColor; label: string; color: string }>;
+  for (const entry of DOCUMENT_LABEL_COLORS) {
+    if (entry.value && entry.color) {
+      acc[entry.value] = { value: entry.value, label: entry.label, color: entry.color };
+    }
+  }
+  return acc;
+})();
+
+const parseDocumentLabelColors = (value: string | null | undefined): DocumentLabelColor[] => {
+  if (!value) {
+    return [];
+  }
+  const seen = new Set<DocumentLabelColor>();
+  const result: DocumentLabelColor[] = [];
+  for (const part of String(value).split(",")) {
+    const trimmed = part.trim().toLowerCase();
+    if (!trimmed) {
+      continue;
+    }
+    if (DOCUMENT_LABEL_COLOR_VALUES.has(trimmed as DocumentLabelColor) && !seen.has(trimmed as DocumentLabelColor)) {
+      seen.add(trimmed as DocumentLabelColor);
+      result.push(trimmed as DocumentLabelColor);
+    }
+  }
+  return result;
+};
+
+const serializeDocumentLabelColors = (colors: DocumentLabelColor[]): string | null => {
+  if (colors.length === 0) {
+    return null;
+  }
+  const order = DOCUMENT_LABEL_COLORS
+    .map((entry) => entry.value)
+    .filter((value): value is DocumentLabelColor => value !== null);
+  return order.filter((color) => colors.includes(color)).join(",");
+};
+
+const getDocumentLabelColors = (item: ProfileDocument): DocumentLabelColor[] => {
+  return parseDocumentLabelColors(item.labelColor);
 };
 
 const getFolderPalette = (color: DocumentLabelColor | null | undefined) => {
@@ -1214,8 +1257,26 @@ const DocumentExplorer: React.FC<DocumentExplorerProps> = ({
 
     setIsApplyingBulkAction(true);
     try {
+      if (labelColor === null) {
+        for (const item of targetItems) {
+          await Promise.resolve(onUpdateDocumentColor(item.id, null));
+        }
+        return;
+      }
+
+      const allHaveColor = targetItems.every((item) => getDocumentLabelColors(item).includes(labelColor));
+
       for (const item of targetItems) {
-        await Promise.resolve(onUpdateDocumentColor(item.id, labelColor));
+        const current = getDocumentLabelColors(item);
+        let next: DocumentLabelColor[];
+        if (allHaveColor) {
+          next = current.filter((color) => color !== labelColor);
+        } else if (current.includes(labelColor)) {
+          next = current;
+        } else {
+          next = [...current, labelColor];
+        }
+        await Promise.resolve(onUpdateDocumentColor(item.id, serializeDocumentLabelColors(next)));
       }
     } finally {
       setIsApplyingBulkAction(false);
@@ -1306,7 +1367,7 @@ const DocumentExplorer: React.FC<DocumentExplorerProps> = ({
     const folderItemCount = isFolder ? getFolderItemCount(item.id) : 0;
     const ext = getFileExtension(item.filename);
     const fileKind = isFolder ? "generic" : getFileKind(item.filename);
-    const labelColor = getDocumentLabelColor(item);
+    const labelColors = getDocumentLabelColors(item);
     const folderColor = getFolderColorFor(item);
 
     const isDragSource = draggedItemId !== null && isSelected && selectedItemIds.includes(draggedItemId);
@@ -1456,7 +1517,17 @@ const DocumentExplorer: React.FC<DocumentExplorerProps> = ({
           />
         ) : (
           <div className="ec-fs-tile-name-wrap">
-            {labelColor.value ? <span className="ec-fs-label-dot" style={{ backgroundColor: labelColor.color }} /> : null}
+            {labelColors.length > 0 ? (
+              <span className="ec-fs-label-dots" aria-hidden="true">
+                {labelColors.map((color) => (
+                  <span
+                    key={`tile-dot-${item.id}-${color}`}
+                    className="ec-fs-label-dot"
+                    style={{ backgroundColor: DOCUMENT_LABEL_COLOR_LOOKUP[color]?.color }}
+                  />
+                ))}
+              </span>
+            ) : null}
             <div className="ec-fs-tile-name">{item.filename}</div>
           </div>
         )}
@@ -1478,7 +1549,7 @@ const DocumentExplorer: React.FC<DocumentExplorerProps> = ({
     const folderItemCount = isFolder ? getFolderItemCount(item.id) : 0;
     const ext = getFileExtension(item.filename);
     const fileKind = isFolder ? "generic" : getFileKind(item.filename);
-    const labelColor = getDocumentLabelColor(item);
+    const labelColors = getDocumentLabelColors(item);
     const folderColor = getFolderColorFor(item);
 
     const isDragSource = draggedItemId !== null && isSelected && selectedItemIds.includes(draggedItemId);
@@ -1568,7 +1639,17 @@ const DocumentExplorer: React.FC<DocumentExplorerProps> = ({
             />
           ) : (
             <span className="ec-fs-row-name">
-              {labelColor.value ? <span className="ec-fs-label-dot" style={{ backgroundColor: labelColor.color }} /> : null}
+              {labelColors.length > 0 ? (
+                <span className="ec-fs-label-dots" aria-hidden="true">
+                  {labelColors.map((color) => (
+                    <span
+                      key={`row-dot-${item.id}-${color}`}
+                      className="ec-fs-label-dot"
+                      style={{ backgroundColor: DOCUMENT_LABEL_COLOR_LOOKUP[color]?.color }}
+                    />
+                  ))}
+                </span>
+              ) : null}
               <span>{item.filename}</span>
             </span>
           )}
@@ -2036,19 +2117,26 @@ const DocumentExplorer: React.FC<DocumentExplorerProps> = ({
             <div className="ec-fs-color-section">
               <div className="ec-fs-color-section-label">Tečka</div>
               <div className="ec-fs-color-strip" aria-label="Barva tečky">
-                {DOCUMENT_LABEL_COLORS.map((entry) => (
-                  <button
-                    key={`inspector-color-${entry.value ?? "none"}`}
-                    type="button"
-                    className={`ec-fs-color-dot-btn ${selectedItems.length > 0 && selectedItems.every((item) => (item.labelColor ?? null) === entry.value) ? "is-active" : ""}`}
-                    title={entry.label}
-                    aria-label={entry.label}
-                    onClick={() => void handleColorItems(selectedItems, entry.value)}
-                    disabled={selectedItems.length === 0 || isApplyingBulkAction}
-                  >
-                    <span className={`ec-fs-color-dot ${entry.value ? "" : "is-empty"}`} style={entry.color ? { backgroundColor: entry.color } : undefined} />
-                  </button>
-                ))}
+                {DOCUMENT_LABEL_COLORS.map((entry) => {
+                  const isActive = selectedItems.length > 0 && (
+                    entry.value === null
+                      ? selectedItems.every((item) => getDocumentLabelColors(item).length === 0)
+                      : selectedItems.every((item) => getDocumentLabelColors(item).includes(entry.value as DocumentLabelColor))
+                  );
+                  return (
+                    <button
+                      key={`inspector-color-${entry.value ?? "none"}`}
+                      type="button"
+                      className={`ec-fs-color-dot-btn ${isActive ? "is-active" : ""}`}
+                      title={entry.label}
+                      aria-label={entry.label}
+                      onClick={() => void handleColorItems(selectedItems, entry.value)}
+                      disabled={selectedItems.length === 0 || isApplyingBulkAction}
+                    >
+                      <span className={`ec-fs-color-dot ${entry.value ? "" : "is-empty"}`} style={entry.color ? { backgroundColor: entry.color } : undefined} />
+                    </button>
+                  );
+                })}
               </div>
             </div>
           ) : null}
@@ -2261,23 +2349,32 @@ const DocumentExplorer: React.FC<DocumentExplorerProps> = ({
               <div className="ec-fs-context-separator" />
               <div className="ec-fs-context-label-title">Tečka</div>
               <div className="ec-fs-context-color-row" role="group" aria-label="Barva tečky">
-                {DOCUMENT_LABEL_COLORS.map((entry) => (
-                  <button
-                    key={`context-color-${entry.value ?? "none"}`}
-                    type="button"
-                    className={`ec-fs-color-dot-btn ${contextMenuTargets.every((item) => (item.labelColor ?? null) === entry.value) ? "is-active" : ""}`}
-                    title={entry.label}
-                    aria-label={entry.label}
-                    onClick={() => {
-                      const targets = contextMenuTargets;
-                      closeContextMenu();
-                      void handleColorItems(targets, entry.value);
-                    }}
-                    disabled={isApplyingBulkAction}
-                  >
-                    <span className={`ec-fs-color-dot ${entry.value ? "" : "is-empty"}`} style={entry.color ? { backgroundColor: entry.color } : undefined} />
-                  </button>
-                ))}
+                {DOCUMENT_LABEL_COLORS.map((entry) => {
+                  const isActive = contextMenuTargets.length > 0 && (
+                    entry.value === null
+                      ? contextMenuTargets.every((item) => getDocumentLabelColors(item).length === 0)
+                      : contextMenuTargets.every((item) => getDocumentLabelColors(item).includes(entry.value as DocumentLabelColor))
+                  );
+                  return (
+                    <button
+                      key={`context-color-${entry.value ?? "none"}`}
+                      type="button"
+                      className={`ec-fs-color-dot-btn ${isActive ? "is-active" : ""}`}
+                      title={entry.label}
+                      aria-label={entry.label}
+                      onClick={() => {
+                        const targets = contextMenuTargets;
+                        if (entry.value === null) {
+                          closeContextMenu();
+                        }
+                        void handleColorItems(targets, entry.value);
+                      }}
+                      disabled={isApplyingBulkAction}
+                    >
+                      <span className={`ec-fs-color-dot ${entry.value ? "" : "is-empty"}`} style={entry.color ? { backgroundColor: entry.color } : undefined} />
+                    </button>
+                  );
+                })}
               </div>
             </>
           ) : null}

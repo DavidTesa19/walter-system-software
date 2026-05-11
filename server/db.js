@@ -221,7 +221,7 @@ export async function initDatabase() {
         data BYTEA NOT NULL,
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
         updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-        label_color VARCHAR(32) DEFAULT NULL,
+        label_color VARCHAR(128) DEFAULT NULL,
         archived_at TIMESTAMP DEFAULT NULL
       )
     `);
@@ -248,7 +248,12 @@ export async function initDatabase() {
 
     await client.query(`
       ALTER TABLE documents
-      ADD COLUMN IF NOT EXISTS label_color VARCHAR(32) DEFAULT NULL
+      ADD COLUMN IF NOT EXISTS label_color VARCHAR(128) DEFAULT NULL
+    `);
+
+    await client.query(`
+      ALTER TABLE documents
+      ALTER COLUMN label_color TYPE VARCHAR(128)
     `);
 
     await client.query(`
