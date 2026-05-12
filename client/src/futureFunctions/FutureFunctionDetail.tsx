@@ -662,10 +662,10 @@ const FutureFunctionDetail: React.FC<FutureFunctionDetailProps> = ({
 
   const handleNoteFileSelect = useCallback(
     (e: React.ChangeEvent<HTMLInputElement>) => {
-      if (e.target.files?.length) {
-        setPendingNoteFiles((prev) => [...prev, ...Array.from(e.target.files!)]);
-        e.target.value = "";
-      }
+      const selected = e.target.files ? Array.from(e.target.files) : [];
+      e.target.value = "";
+      if (selected.length === 0) return;
+      setPendingNoteFiles((prev) => [...prev, ...selected]);
     },
     []
   );
