@@ -1209,15 +1209,20 @@ const FutureFunctionDetail: React.FC<FutureFunctionDetailProps> = ({
                           }}
                         />
                         <div className="ff-notes-input-actions">
-                          <button
-                            type="button"
-                            className="ff-note-attach-btn"
-                            onClick={() => noteFileInputRef.current?.click()}
+                          <label
+                            className={`ff-note-attach-btn${editingNote ? " ff-note-attach-btn--disabled" : ""}`}
                             title="Přiložit soubor"
-                            disabled={Boolean(editingNote)}
                           >
-                            📎
-                          </button>
+                            <span aria-hidden="true">📎</span>
+                            <input
+                              ref={noteFileInputRef}
+                              type="file"
+                              className="ff-upload-input"
+                              multiple
+                              onChange={handleNoteFileSelect}
+                              disabled={Boolean(editingNote)}
+                            />
+                          </label>
                           <button
                             type="button"
                             className="ff-note-submit-btn"
@@ -1231,13 +1236,6 @@ const FutureFunctionDetail: React.FC<FutureFunctionDetailProps> = ({
                             {editingNote ? (noteUpdating ? "Ukládám..." : "Uložit") : noteSending ? "Odesílám..." : "Přidat"}
                           </button>
                         </div>
-                        <input
-                          ref={noteFileInputRef}
-                          type="file"
-                          className="ff-upload-input"
-                          multiple
-                          onChange={handleNoteFileSelect}
-                        />
                       </div>
 
                       {/* Staged files preview */}
@@ -1412,10 +1410,16 @@ const FutureFunctionDetail: React.FC<FutureFunctionDetailProps> = ({
                       onDragOver={handleDragOver}
                       onDrop={handleDrop}
                     >
-                      <div
+                      <label
                         className={`ff-upload-zone${dragging ? " dragging" : ""}`}
-                        onClick={() => fileInputRef.current?.click()}
                       >
+                        <input
+                          ref={fileInputRef}
+                          type="file"
+                          className="ff-upload-input"
+                          multiple
+                          onChange={handleFileSelect}
+                        />
                         <div className="ff-upload-icon">📂</div>
                         <p className="ff-upload-text">
                           Přetáhněte soubory sem nebo{" "}
@@ -1430,14 +1434,7 @@ const FutureFunctionDetail: React.FC<FutureFunctionDetailProps> = ({
                             Nahrávám...
                           </p>
                         )}
-                      </div>
-                      <input
-                        ref={fileInputRef}
-                        type="file"
-                        className="ff-upload-input"
-                        multiple
-                        onChange={handleFileSelect}
-                      />
+                      </label>
                     </div>
                     )}
 
