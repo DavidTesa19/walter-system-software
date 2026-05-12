@@ -908,60 +908,60 @@
 }
 
 /* ============================================================
-   Creation-style view (alternative layout)
+   Creation-style view — narrow modal, single scrollable column
    ============================================================ */
 
+/* Shrink to match the create-modal width */
+.ff-detail-modal--creation {
+  max-width: min(760px, 100%);
+}
+
+/* Body: single scrollable column */
 .ff-detail-body--creation {
   flex-direction: column;
-  gap: 0;
+  overflow-y: auto;
+  overflow-x: hidden;
 }
 
-.ff-detail-info-panel--creation {
-  width: 100%;
-  min-width: 0;
-  max-width: none;
-  border-right: none;
-  border-bottom: 1px solid var(--color-border, #e0e0e0);
-  padding: 22px 28px 24px;
+/* Profile section wrapper (replaces info-panel sidebar entirely) */
+.ff-detail-creation-profile {
   flex-shrink: 0;
+  padding: 24px 28px;
+  border-bottom: 1px solid var(--color-border, #e0e0e0);
 }
 
-.ff-detail-info-panel--creation .ff-create-profile-card {
+.ff-detail-creation-profile .ff-create-profile-card {
   width: 100%;
-  margin: 0;
+  box-sizing: border-box;
 }
 
-.ff-info-panel-header--creation {
-  margin-bottom: 18px;
-}
-
-.ff-detail-modal--creation .ff-detail-content-panel {
-  flex: 1;
-  min-height: 0;
-}
-
-.ff-detail-info-panel--creation .ff-info-value {
-  font-size: 0.95rem;
-  padding: 10px 14px;
-  min-height: 40px;
-  border-radius: 14px;
-}
-
-.ff-detail-info-panel--creation .ff-info-value.info-text {
-  min-height: 110px;
-  max-height: 220px;
-  font-size: 0.92rem;
-}
-
-.ff-detail-info-panel--creation .ff-info-edit-status {
+.ff-detail-creation-profile .ff-create-profile-grid {
+  min-width: 0;
   width: 100%;
+}
+
+.ff-detail-creation-profile .ff-create-profile-grid > * {
+  min-width: 0;
+}
+
+/* Header row inside the profile card */
+.ff-detail-creation-profile-header {
   display: flex;
   align-items: center;
+  justify-content: space-between;
   gap: 12px;
+  margin-bottom: 14px;
 }
 
-.ff-detail-info-panel--creation .ff-info-edit-status select {
-  flex: 1;
+/* Notes + attachments section stacks below */
+.ff-detail-body--creation .ff-detail-content-panel {
+  flex: none;
+  min-height: 380px;
+}
+
+.ff-detail-body--creation .ff-content-body {
+  overflow-y: visible;
+  height: auto;
 }
 
 /* ============================================================

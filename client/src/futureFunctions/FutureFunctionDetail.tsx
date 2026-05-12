@@ -156,13 +156,13 @@ const CreationModeInfo: React.FC<CreationModeInfoProps> = ({
 }) => {
   return (
     <div
-      className="ff-detail-info-panel ff-detail-info-panel--creation"
+      className="ff-detail-creation-profile"
       ref={panelRef}
       onBlurCapture={onBlur}
     >
-      <section className="ff-create-profile-card ff-create-field-wide" aria-label="Profil funkce">
-        <div className="ff-info-panel-header ff-info-panel-header--creation">
-          <h3 className="ff-info-section-title">Profil funkce</h3>
+      <section className="ff-create-profile-card" aria-label="Profil funkce">
+        <div className="ff-detail-creation-profile-header">
+          <span className="ff-create-kicker">Profil funkce</span>
           {!readOnly && (
             <button
               type="button"
@@ -195,7 +195,6 @@ const CreationModeInfo: React.FC<CreationModeInfoProps> = ({
             onFieldKeyDown={noopFieldKeyDown}
             readOnly={readOnly}
             disabled={isSavingDetails}
-            navFieldClassName="ff-detail-nav-field"
             namePlaceholder="Název funkce"
             infoPlaceholder="Popis nebo poznámky k funkci"
             archivedLabel="Archivováno"
@@ -203,9 +202,6 @@ const CreationModeInfo: React.FC<CreationModeInfoProps> = ({
             createdAtDisplay={createdAtDisplay}
             showCompletedAt
             statusColor={statusColor}
-            staticFieldClassName="ff-info-value"
-            staticTextClassName="info-text"
-            statusEditorClassName="ff-info-edit-status"
           />
         </div>
       </section>
