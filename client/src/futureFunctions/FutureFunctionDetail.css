@@ -899,6 +899,128 @@
   z-index: 2;
 }
 
+/* ============================================================
+   View-mode toggle (icon button) — uses theme-toggle styles
+   ============================================================ */
+
+.ff-view-toggle-button {
+  display: inline-flex;
+}
+
+/* ============================================================
+   Creation-style view (alternative layout)
+   ============================================================ */
+
+.ff-detail-body--creation {
+  flex-direction: column;
+  gap: 0;
+}
+
+.ff-detail-info-panel--creation {
+  width: 100%;
+  min-width: 0;
+  max-width: none;
+  border-right: none;
+  border-bottom: 1px solid var(--color-border, #e0e0e0);
+  padding: 22px 28px 24px;
+  flex-shrink: 0;
+}
+
+.ff-detail-info-panel--creation .ff-create-profile-card {
+  width: 100%;
+  margin: 0;
+}
+
+.ff-info-panel-header--creation {
+  margin-bottom: 18px;
+}
+
+.ff-detail-modal--creation .ff-detail-content-panel {
+  flex: 1;
+  min-height: 0;
+}
+
+.ff-detail-info-panel--creation .ff-info-value {
+  font-size: 0.95rem;
+  padding: 10px 14px;
+  min-height: 40px;
+  border-radius: 14px;
+}
+
+.ff-detail-info-panel--creation .ff-info-value.info-text {
+  min-height: 110px;
+  max-height: 220px;
+  font-size: 0.92rem;
+}
+
+.ff-detail-info-panel--creation .ff-info-edit-status {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.ff-detail-info-panel--creation .ff-info-edit-status select {
+  flex: 1;
+}
+
+/* ============================================================
+   Inline media preview for pending (staged) note files
+   ============================================================ */
+
+.ff-pending-file-media {
+  position: relative;
+  width: 160px;
+  max-width: 100%;
+  border: 1px solid var(--color-border, #ddd);
+  border-radius: 10px;
+  overflow: hidden;
+  background: var(--color-surface, #fff);
+  display: flex;
+  flex-direction: column;
+}
+
+.ff-pending-file-media img,
+.ff-pending-file-media video {
+  width: 100%;
+  height: 110px;
+  object-fit: cover;
+  display: block;
+  background: #000;
+}
+
+.ff-pending-file-media-name {
+  padding: 4px 8px;
+  font-size: 0.72rem;
+  color: var(--color-text-muted, #666);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.ff-pending-file-media-remove {
+  position: absolute;
+  top: 4px;
+  right: 4px;
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  border: none;
+  background: rgba(0, 0, 0, 0.55);
+  color: #fff;
+  font-size: 14px;
+  line-height: 1;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+}
+
+.ff-pending-file-media-remove:hover {
+  background: #ef4444;
+}
+
 /* Responsive: stack on small screens */
 @media (max-width: 800px) {
   .ff-detail-body {

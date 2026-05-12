@@ -3,9 +3,39 @@ import { apiGet, apiPost, apiDelete, apiUpload, apiDownload, apiGetBlob, apiPut 
 import { useAuth } from "../auth/AuthContext";
 import DocumentViewerModal from "../components/DocumentViewerModal";
 import ThemeToggleButton from "../components/ThemeToggleButton";
-import type { FutureFunction } from "./futureFunction.interface";
+import FutureFunctionProfileFields from "./FutureFunctionProfileFields";
+import type { FutureFunction, FutureFunctionDraft } from "./futureFunction.interface";
 import { formatProfileDate } from "../usersGrid/utils/profileUtils";
 import "./FutureFunctionDetail.css";
+import "./FutureFunctionCreateModal.css";
+
+type DetailViewMode = "classic" | "creation";
+const VIEW_MODE_STORAGE_KEY = "ff-detail-view-mode";
+
+const readInitialViewMode = (): DetailViewMode => {
+  if (typeof window === "undefined") return "classic";
+  try {
+    const stored = window.localStorage.getItem(VIEW_MODE_STORAGE_KEY);
+    return stored === "creation" ? "creation" : "classic";
+  } catch {
+    return "classic";
+  }
+};
+
+const ClassicLayoutIcon: React.FC = () => (
+  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+    <rect x="3" y="4" width="18" height="16" rx="2" />
+    <line x1="10" y1="4" x2="10" y2="20" />
+  </svg>
+);
+
+const CreationLayoutIcon: React.FC = () => (
+  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+    <rect x="3" y="4" width="18" height="16" rx="2" />
+    <line x1="3" y1="10" x2="21" y2="10" />
+    <line x1="12" y1="10" x2="12" y2="20" />
+  </svg>
+);
 
 /* ------------------------------------------------------------------ */
 /* Types                                                               */
@@ -90,6 +120,100 @@ const isVideo = (mime: string) => mime.startsWith("video/");
 const ENTITY = "future-functions";
 
 /* ------------------------------------------------------------------ */
+/* Creation-style info panel (alternative view)                        */
+/* ------------------------------------------------------------------ */
+
+type CreationModeFieldKey = keyof FutureFunctionDraft | "created_at" | "completedAt";
+
+interface CreationModeInfoProps {
+  draft: FutureFunction;
+  readOnly?: boolean;
+  isSavingDetails: boolean;
+  isDetailDirty: boolean;
+  statusColor: string;
+  onSave: () => void;
+  onFieldChange: (key: CreationModeFieldKey, value: string | boolean | null | undefined) => void;
+  onBlur: (event: React.FocusEvent<HTMLDivElement>) => void;
+  panelRef: React.RefObject<HTMLDivElement | null>;
+  createdAtDisplay: React.ReactNode;
+}
+
+const noopFieldKeyDown = () => {
+  /* no-op: arrow keys do default caret movement in the new layout */
+};
+
+const CreationModeInfo: React.FC<CreationModeInfoProps> = ({
+  draft,
+  readOnly,
+  isSavingDetails,
+  isDetailDirty,
+  statusColor,
+  onSave,
+  onFieldChange,
+  onBlur,
+  panelRef,
+  createdAtDisplay
+}) => {
+  return (
+    <div
+      className="ff-detail-info-panel ff-detail-info-panel--creation"
+      ref={panelRef}
+      onBlurCapture={onBlur}
+    >
+      <section className="ff-create-profile-card ff-create-field-wide" aria-label="Profil funkce">
+        <div className="ff-info-panel-header ff-info-panel-header--creation">
+          <h3 className="ff-info-section-title">Profil funkce</h3>
+          {!readOnly && (
+            <button
+              type="button"
+              className="ff-info-save-btn"
+              onClick={onSave}
+              disabled={!isDetailDirty || isSavingDetails}
+            >
+              {isSavingDetails ? "Ukládám..." : "Uložit"}
+            </button>
+          )}
+        </div>
+        <div className="ff-create-profile-grid">
+          <FutureFunctionProfileFields
+            values={{
+              name: draft.name,
+              priority: draft.priority,
+              complexity: draft.complexity,
+              phase: draft.phase,
+              info: draft.info,
+              status: draft.status,
+              archived: draft.archived,
+              created_at: draft.created_at ?? null,
+              completedAt: draft.completedAt ?? null,
+            }}
+            priorityOptions={PRIORITY_OPTIONS}
+            complexityOptions={COMPLEXITY_OPTIONS}
+            phaseOptions={PHASE_OPTIONS}
+            statusOptions={STATUS_OPTIONS}
+            onFieldChange={onFieldChange}
+            onFieldKeyDown={noopFieldKeyDown}
+            readOnly={readOnly}
+            disabled={isSavingDetails}
+            navFieldClassName="ff-detail-nav-field"
+            namePlaceholder="Název funkce"
+            infoPlaceholder="Popis nebo poznámky k funkci"
+            archivedLabel="Archivováno"
+            showCreatedAt
+            createdAtDisplay={createdAtDisplay}
+            showCompletedAt
+            statusColor={statusColor}
+            staticFieldClassName="ff-info-value"
+            staticTextClassName="info-text"
+            statusEditorClassName="ff-info-edit-status"
+          />
+        </div>
+      </section>
+    </div>
+  );
+};
+
+/* ------------------------------------------------------------------ */
 /* Component                                                           */
 /* ------------------------------------------------------------------ */
 
@@ -104,6 +228,20 @@ const FutureFunctionDetail: React.FC<FutureFunctionDetailProps> = ({
   const [draft, setDraft] = useState<FutureFunction>(func);
   const [savedDraft, setSavedDraft] = useState<FutureFunction>(func);
   const [isSavingDetails, setIsSavingDetails] = useState(false);
+  const [viewMode, setViewMode] = useState<DetailViewMode>(() => readInitialViewMode());
+
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    try {
+      window.localStorage.setItem(VIEW_MODE_STORAGE_KEY, viewMode);
+    } catch {
+      /* ignore */
+    }
+  }, [viewMode]);
+
+  const toggleViewMode = useCallback(() => {
+    setViewMode((current) => (current === "classic" ? "creation" : "classic"));
+  }, []);
 
   // Notes state
   const [notes, setNotes] = useState<Note[]>([]);
@@ -129,6 +267,9 @@ const FutureFunctionDetail: React.FC<FutureFunctionDetailProps> = ({
 
   // Thumbnail cache: attachmentId → blobUrl
   const [thumbnails, setThumbnails] = useState<Record<number, string>>({});
+
+  // Object URLs for pending (staged) note files, keyed by stable id
+  const [pendingPreviews, setPendingPreviews] = useState<string[]>([]);
 
   const fileInputRef = useRef<HTMLInputElement>(null);
   const noteFileInputRef = useRef<HTMLInputElement>(null);
@@ -418,6 +559,19 @@ const FutureFunctionDetail: React.FC<FutureFunctionDetailProps> = ({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
+  // Build / refresh object-URLs for pending note files (image/video previews)
+  useEffect(() => {
+    const next = pendingNoteFiles.map((file) =>
+      isImage(file.type) || isVideo(file.type) ? URL.createObjectURL(file) : ""
+    );
+    setPendingPreviews(next);
+    return () => {
+      next.forEach((url) => {
+        if (url) URL.revokeObjectURL(url);
+      });
+    };
+  }, [pendingNoteFiles]);
+
   /* ---- Notes CRUD ---- */
 
   const handleAddNote = useCallback(async () => {
@@ -606,6 +760,44 @@ const FutureFunctionDetail: React.FC<FutureFunctionDetailProps> = ({
 
   /* ---- Clipboard paste ---- */
 
+  // Extract files from a clipboard event (image/video/etc.)
+  const extractClipboardFiles = useCallback((data: DataTransfer | null): File[] => {
+    if (!data) return [];
+    const items = data.items;
+    const out: File[] = [];
+    if (items && items.length) {
+      for (let i = 0; i < items.length; i++) {
+        const item = items[i];
+        if (item.kind === "file") {
+          const file = item.getAsFile();
+          if (file) {
+            const ext = file.type.split("/")[1] || "png";
+            const name = file.name && file.name !== "image.png"
+              ? file.name
+              : `paste-${Date.now()}.${ext}`;
+            out.push(new File([file], name, { type: file.type }));
+          }
+        }
+      }
+    }
+    if (out.length === 0 && data.files && data.files.length) {
+      for (let i = 0; i < data.files.length; i++) {
+        out.push(data.files[i]);
+      }
+    }
+    return out;
+  }, []);
+
+  const handleNotesTextareaPaste = useCallback((event: React.ClipboardEvent<HTMLTextAreaElement>) => {
+    const files = extractClipboardFiles(event.clipboardData);
+    if (files.length === 0) return;
+    event.preventDefault();
+    event.stopPropagation();
+    setPendingNoteFiles((prev) => [...prev, ...files]);
+    setPasteToast(true);
+    setTimeout(() => setPasteToast(false), 2000);
+  }, [extractClipboardFiles]);
+
   useEffect(() => {
     const handlePaste = (e: ClipboardEvent) => {
       const items = e.clipboardData?.items;
@@ -713,7 +905,7 @@ const FutureFunctionDetail: React.FC<FutureFunctionDetailProps> = ({
     <>
       <div className="ff-detail-overlay" onClick={onClose}>
         <div
-          className="ff-detail-modal"
+          className={`ff-detail-modal ff-detail-modal--${viewMode}`}
           onClick={(e) => e.stopPropagation()}
         >
           {/* Header */}
@@ -723,6 +915,17 @@ const FutureFunctionDetail: React.FC<FutureFunctionDetailProps> = ({
               <h2 className="ff-detail-title">{draft.name}</h2>
             </div>
             <div className="ff-detail-header-actions">
+              <button
+                type="button"
+                className="theme-toggle-button theme-toggle-button--icon ff-view-toggle-button"
+                onClick={toggleViewMode}
+                aria-label={viewMode === "classic" ? "Přepnout na styl vytvoření" : "Přepnout na klasický styl"}
+                title={viewMode === "classic" ? "Přepnout na styl vytvoření funkce" : "Přepnout na klasický rozvržení"}
+              >
+                <span className="theme-toggle-button__icon">
+                  {viewMode === "classic" ? <CreationLayoutIcon /> : <ClassicLayoutIcon />}
+                </span>
+              </button>
               <ThemeToggleButton variant="icon" />
               <button
                 className="ff-detail-close"
@@ -735,8 +938,29 @@ const FutureFunctionDetail: React.FC<FutureFunctionDetailProps> = ({
           </div>
 
           {/* Body */}
-          <div className="ff-detail-body">
-            {/* Left panel: Info */}
+          <div className={`ff-detail-body ff-detail-body--${viewMode}`}>
+            {viewMode === "creation" ? (
+              <CreationModeInfo
+                draft={draft}
+                readOnly={readOnly}
+                isSavingDetails={isSavingDetails}
+                isDetailDirty={isDetailDirty}
+                statusColor={statusColor}
+                onSave={() => void handleSaveDetails()}
+                onFieldChange={(key, value) => {
+                  if (key === "created_at" || key === "completedAt") {
+                    if (key === "completedAt") {
+                      updateDraftField("completedAt", (value as string | null) ?? null);
+                    }
+                    return;
+                  }
+                  updateDraftField(key as keyof FutureFunction, value as FutureFunction[keyof FutureFunction]);
+                }}
+                onBlur={handleDetailPanelBlur}
+                panelRef={detailsPanelRef}
+                createdAtDisplay={formatShortDate(draft.created_at)}
+              />
+            ) : (
             <div className="ff-detail-info-panel" ref={detailsPanelRef} onBlurCapture={handleDetailPanelBlur}>
               <div className="ff-info-panel-header">
                 <h3 className="ff-info-section-title">Přehled</h3>
@@ -932,6 +1156,7 @@ const FutureFunctionDetail: React.FC<FutureFunctionDetailProps> = ({
                 </div>
               </div>
             </div>
+            )}
 
             {/* Right panel: Notes + Attachments */}
             <div className="ff-detail-content-panel">
@@ -976,9 +1201,10 @@ const FutureFunctionDetail: React.FC<FutureFunctionDetailProps> = ({
                       )}
                       <div className="ff-notes-input-row">
                         <textarea
-                          placeholder="Napište poznámku nebo aktualizaci..."
+                          placeholder="Napište poznámku nebo aktualizaci... (Ctrl+V pro vložení obrázku)"
                           value={noteText}
                           onChange={(e) => setNoteText(e.target.value)}
+                          onPaste={handleNotesTextareaPaste}
                           onKeyDown={(e) => {
                             if (e.key === "Enter" && !e.shiftKey) {
                               e.preventDefault();
@@ -1021,23 +1247,50 @@ const FutureFunctionDetail: React.FC<FutureFunctionDetailProps> = ({
                       {/* Staged files preview */}
                       {pendingNoteFiles.length > 0 && !editingNote && (
                         <div className="ff-pending-files">
-                          {pendingNoteFiles.map((file, idx) => (
-                            <div key={idx} className="ff-pending-file-chip">
-                              <span className="ff-pending-file-icon">
-                                {getFileIcon(file.type, file.name)}
-                              </span>
-                              <span className="ff-pending-file-name">
-                                {file.name}
-                              </span>
-                              <button
-                                type="button"
-                                className="ff-pending-file-remove"
-                                onClick={() => removePendingFile(idx)}
-                              >
-                                ×
-                              </button>
-                            </div>
-                          ))}
+                          {pendingNoteFiles.map((file, idx) => {
+                            const previewUrl = pendingPreviews[idx];
+                            const isImg = isImage(file.type);
+                            const isVid = isVideo(file.type);
+                            if ((isImg || isVid) && previewUrl) {
+                              return (
+                                <div key={idx} className="ff-pending-file-media">
+                                  {isImg ? (
+                                    <img src={previewUrl} alt={file.name} />
+                                  ) : (
+                                    <video src={previewUrl} muted controls />
+                                  )}
+                                  <button
+                                    type="button"
+                                    className="ff-pending-file-media-remove"
+                                    onClick={() => removePendingFile(idx)}
+                                    title="Odebrat"
+                                  >
+                                    ×
+                                  </button>
+                                  <span className="ff-pending-file-media-name" title={file.name}>
+                                    {file.name}
+                                  </span>
+                                </div>
+                              );
+                            }
+                            return (
+                              <div key={idx} className="ff-pending-file-chip">
+                                <span className="ff-pending-file-icon">
+                                  {getFileIcon(file.type, file.name)}
+                                </span>
+                                <span className="ff-pending-file-name">
+                                  {file.name}
+                                </span>
+                                <button
+                                  type="button"
+                                  className="ff-pending-file-remove"
+                                  onClick={() => removePendingFile(idx)}
+                                >
+                                  ×
+                                </button>
+                              </div>
+                            );
+                          })}
                         </div>
                       )}
 
