@@ -21,6 +21,9 @@ interface FieldCellParams {
 
 const REMOVED_FIELD_LABEL = "Odstraněno";
 
+// Ensures only one field dropdown is open at a time
+let activeFieldCleanup: (() => void) | null = null;
+
 const FieldCellRenderer: React.FC<FieldCellParams> = (params) => {
   const availableFieldOptions = params.fieldOptions ?? defaultFieldOptions;
   const availableGroupedFieldOptions = params.groupedFieldOptions ?? defaultGroupedFieldOptions;
@@ -48,6 +51,12 @@ const FieldCellRenderer: React.FC<FieldCellParams> = (params) => {
 
     e.stopPropagation();
     e.preventDefault();
+
+    // Close any existing field dropdown before opening a new one
+    if (activeFieldCleanup) {
+      activeFieldCleanup();
+      activeFieldCleanup = null;
+    }
 
     const isDark = document.documentElement.getAttribute("data-theme") === "dark";
     const cellRect = (e.target as HTMLElement).closest(".ag-cell")?.getBoundingClientRect();
@@ -516,7 +525,9 @@ const FieldCellRenderer: React.FC<FieldCellParams> = (params) => {
       }
       document.removeEventListener("click", handleClickOutside);
       document.removeEventListener("keydown", handleKeyDown);
+      if (activeFieldCleanup === cleanup) activeFieldCleanup = null;
     };
+    activeFieldCleanup = cleanup;
 
     const handleClickOutside = (event: MouseEvent) => {
       if (!dropdown.contains(event.target as Node)) {
