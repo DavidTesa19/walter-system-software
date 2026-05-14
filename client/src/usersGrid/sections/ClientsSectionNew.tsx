@@ -438,17 +438,12 @@ const ClientsSectionNew: React.FC<SectionProps> = ({
   
   const gridRef = useRef<AgGridReact<ClientGridRow>>(null);
 
-  // Workflow state checkbox filter
-  const [activeStateFilters, setActiveStateFilters] = useState<Set<string>>(() => new Set(WORKFLOW_STATUS_VALUES));
+  // Workflow state checkbox filter — use a ref so column defs stay stable when filter changes
   const activeStateFiltersRef = useRef<Set<string>>(new Set(WORKFLOW_STATUS_VALUES));
 
-  useEffect(() => {
-    activeStateFiltersRef.current = activeStateFilters;
-    gridRef.current?.api?.onFilterChanged();
-  }, [activeStateFilters]);
-
   const handleStateFilterChange = useCallback((newSet: Set<string>) => {
-    setActiveStateFilters(new Set(newSet));
+    activeStateFiltersRef.current = new Set(newSet);
+    gridRef.current?.api?.onFilterChanged();
   }, []);
 
   // Get status from viewMode
@@ -1388,7 +1383,7 @@ const ClientsSectionNew: React.FC<SectionProps> = ({
       onCellClicked: onStatusCellClicked,
       headerComponent: StatusFilterHeader,
       headerComponentParams: {
-        activeFilters: activeStateFilters,
+        filterRef: activeStateFiltersRef,
         onFilterChange: handleStateFilterChange,
       },
     };
@@ -1630,7 +1625,7 @@ const ClientsSectionNew: React.FC<SectionProps> = ({
     }
 
     return cols;
-  }, [activeStateFilters, assignableUsers, fieldOptionChoices, groupedFieldOptionChoices, handleCreateFieldOption, handleDeleteFieldOption, handleStateFilterChange, onStatusCellClicked, projectStatusOptions, readOnly, systemNamespace, viewMode]);
+  }, [assignableUsers, fieldOptionChoices, groupedFieldOptionChoices, handleCreateFieldOption, handleDeleteFieldOption, handleStateFilterChange, onStatusCellClicked, projectStatusOptions, readOnly, systemNamespace, viewMode]);
 
   const isExternalFilterPresent = useCallback(() => {
     return activeStateFiltersRef.current.size < WORKFLOW_STATUS_VALUES.length;

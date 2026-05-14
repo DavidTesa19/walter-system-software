@@ -6,7 +6,7 @@ import { WORKFLOW_STATUS_OPTIONS } from "../workflowStatus";
 const ALL_STATUS_VALUES = WORKFLOW_STATUS_OPTIONS.map((o) => o.value);
 
 export interface StatusFilterHeaderParams extends IHeaderParams {
-  activeFilters: Set<string>;
+  filterRef: React.MutableRefObject<Set<string>>;
   onFilterChange: (newSet: Set<string>) => void;
 }
 
@@ -17,7 +17,7 @@ interface DropdownPos {
 }
 
 const StatusFilterHeader = forwardRef<any, StatusFilterHeaderParams>((props, ref) => {
-  const [localFilters, setLocalFilters] = useState<Set<string>>(() => new Set(props.activeFilters));
+  const [localFilters, setLocalFilters] = useState<Set<string>>(() => new Set(props.filterRef.current));
   const [isOpen, setIsOpen] = useState(false);
   const [sortDir, setSortDir] = useState<"asc" | "desc" | null>(null);
   const [dropdownPos, setDropdownPos] = useState<DropdownPos>({ top: 0, left: 0 });
@@ -26,7 +26,7 @@ const StatusFilterHeader = forwardRef<any, StatusFilterHeaderParams>((props, ref
 
   useImperativeHandle(ref, () => ({
     refresh(newParams: StatusFilterHeaderParams) {
-      setLocalFilters(new Set(newParams.activeFilters));
+      setLocalFilters(new Set(newParams.filterRef.current));
       return true;
     },
   }));
@@ -107,11 +107,12 @@ const StatusFilterHeader = forwardRef<any, StatusFilterHeaderParams>((props, ref
   const isFilterActive = localFilters.size > 0 && localFilters.size < ALL_STATUS_VALUES.length;
   const isDark = document.documentElement.getAttribute("data-theme") === "dark";
 
-  const iconColor = isFilterActive ? "#793bf6" : isDark ? "#9ca3af" : "#8b9cb3";
+  // Icon color: purple when active, otherwise inherit AG-Grid's white header text color
+  const iconColor = isFilterActive ? "#793bf6" : "var(--ag-header-foreground-color, rgba(255,255,255,0.65))";
   const iconBg = isFilterActive
     ? isDark
-      ? "rgba(121,59,246,0.2)"
-      : "rgba(121,59,246,0.1)"
+      ? "rgba(121,59,246,0.25)"
+      : "rgba(121,59,246,0.15)"
     : "transparent";
 
   return (
@@ -131,6 +132,7 @@ const StatusFilterHeader = forwardRef<any, StatusFilterHeaderParams>((props, ref
           flex: 1,
           display: "flex",
           alignItems: "center",
+          justifyContent: "center",
           gap: "4px",
           cursor: "pointer",
           minWidth: 0,
@@ -144,7 +146,7 @@ const StatusFilterHeader = forwardRef<any, StatusFilterHeaderParams>((props, ref
             whiteSpace: "nowrap",
             overflow: "hidden",
             textOverflow: "ellipsis",
-            color: isDark ? "#e2e8f0" : "#1e293b",
+            color: "inherit",
           }}
         >
           {props.displayName}
@@ -154,7 +156,8 @@ const StatusFilterHeader = forwardRef<any, StatusFilterHeaderParams>((props, ref
             style={{
               fontSize: "9px",
               flexShrink: 0,
-              color: isDark ? "#9ca3af" : "#6b7280",
+              color: "inherit",
+              opacity: 0.75,
               lineHeight: 1,
             }}
           >
@@ -166,7 +169,11 @@ const StatusFilterHeader = forwardRef<any, StatusFilterHeaderParams>((props, ref
       <button
         ref={buttonRef}
         onClick={openDropdown}
-        title={isFilterActive ? `Filtr aktivní (${localFilters.size}/${ALL_STATUS_VALUES.length})` : "Filtrovat stavy"}
+        title={
+          isFilterActive
+            ? `Filtr aktivní (${localFilters.size}/${ALL_STATUS_VALUES.length})`
+            : "Filtrovat stavy"
+        }
         style={{
           background: iconBg,
           border: "none",
@@ -183,7 +190,7 @@ const StatusFilterHeader = forwardRef<any, StatusFilterHeaderParams>((props, ref
         }}
         onMouseEnter={(e) => {
           if (!isFilterActive) {
-            (e.currentTarget as HTMLElement).style.background = isDark ? "rgba(255,255,255,0.06)" : "rgba(0,0,0,0.06)";
+            (e.currentTarget as HTMLElement).style.background = "rgba(255,255,255,0.12)";
           }
         }}
         onMouseLeave={(e) => {
@@ -215,6 +222,7 @@ const StatusFilterHeader = forwardRef<any, StatusFilterHeaderParams>((props, ref
               fontFamily: "var(--font-body, 'Inter', system-ui, sans-serif)",
               overflow: "hidden",
             }}
+            onMouseDown={(e) => e.stopPropagation()}
             onClick={(e) => e.stopPropagation()}
           >
             <div
@@ -239,6 +247,7 @@ const StatusFilterHeader = forwardRef<any, StatusFilterHeaderParams>((props, ref
               </span>
               <div style={{ display: "flex", gap: "10px" }}>
                 <button
+                  onMouseDown={(e) => e.stopPropagation()}
                   onClick={selectAll}
                   style={{
                     background: "none",
@@ -254,6 +263,7 @@ const StatusFilterHeader = forwardRef<any, StatusFilterHeaderParams>((props, ref
                   Vše
                 </button>
                 <button
+                  onMouseDown={(e) => e.stopPropagation()}
                   onClick={clearAll}
                   style={{
                     background: "none",
@@ -277,6 +287,7 @@ const StatusFilterHeader = forwardRef<any, StatusFilterHeaderParams>((props, ref
                 return (
                   <div
                     key={option.value}
+                    onMouseDown={(e) => e.stopPropagation()}
                     onClick={() => toggle(option.value)}
                     style={{
                       display: "flex",
@@ -298,6 +309,7 @@ const StatusFilterHeader = forwardRef<any, StatusFilterHeaderParams>((props, ref
                       type="checkbox"
                       checked={checked}
                       onChange={() => toggle(option.value)}
+                      onMouseDown={(e) => e.stopPropagation()}
                       onClick={(e) => e.stopPropagation()}
                       style={{
                         cursor: "pointer",

@@ -396,17 +396,12 @@ const PartnersSectionNew: React.FC<SectionProps> = ({ viewMode, isActive, system
 
   const gridRef = useRef<AgGridReact<PartnerGridRow>>(null);
 
-  // Workflow state checkbox filter
-  const [activeStateFilters, setActiveStateFilters] = useState<Set<string>>(() => new Set(WORKFLOW_STATUS_VALUES));
+  // Workflow state checkbox filter — use a ref so column defs stay stable when filter changes
   const activeStateFiltersRef = useRef<Set<string>>(new Set(WORKFLOW_STATUS_VALUES));
 
-  useEffect(() => {
-    activeStateFiltersRef.current = activeStateFilters;
-    gridRef.current?.api?.onFilterChanged();
-  }, [activeStateFilters]);
-
   const handleStateFilterChange = useCallback((newSet: Set<string>) => {
-    setActiveStateFilters(new Set(newSet));
+    activeStateFiltersRef.current = new Set(newSet);
+    gridRef.current?.api?.onFilterChanged();
   }, []);
 
   const status = useMemo(() => mapViewToStatus(viewMode), [viewMode]);
@@ -1257,7 +1252,7 @@ const PartnersSectionNew: React.FC<SectionProps> = ({ viewMode, isActive, system
       onCellClicked: onStatusCellClicked,
       headerComponent: StatusFilterHeader,
       headerComponentParams: {
-        activeFilters: activeStateFilters,
+        filterRef: activeStateFiltersRef,
         onFilterChange: handleStateFilterChange,
       },
     };
@@ -1322,7 +1317,7 @@ const PartnersSectionNew: React.FC<SectionProps> = ({ viewMode, isActive, system
     );
 
     return cols;
-  }, [activeStateFilters, assignableUsers, fieldOptionChoices, groupedFieldOptionChoices, handleCreateFieldOption, handleDeleteFieldOption, handleStateFilterChange, onStatusCellClicked, projectStatusOptions, readOnly, systemNamespace, viewMode]);
+  }, [assignableUsers, fieldOptionChoices, groupedFieldOptionChoices, handleCreateFieldOption, handleDeleteFieldOption, handleStateFilterChange, onStatusCellClicked, projectStatusOptions, readOnly, systemNamespace, viewMode]);
 
   const isExternalFilterPresent = useCallback(() => {
     return activeStateFiltersRef.current.size < WORKFLOW_STATUS_VALUES.length;
