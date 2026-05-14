@@ -660,6 +660,33 @@ const DocumentExplorer: React.FC<DocumentExplorerProps> = ({
     };
   }, [blankContextMenu, closeBlankContextMenu, closeContextMenu, closeMovePopup, contextMenu, movePopup]);
 
+  // Paste files from OS clipboard (Ctrl+V while not focused in a text field)
+  useEffect(() => {
+    if (!onUploadDocuments && !onUploadDocument) return;
+
+    const handlePaste = (event: ClipboardEvent) => {
+      const active = document.activeElement;
+      if (active && (active.tagName === "INPUT" || active.tagName === "TEXTAREA")) return;
+
+      const files = Array.from(event.clipboardData?.files ?? []);
+      if (files.length === 0) return;
+      if (isUploading || isApplyingBulkAction) return;
+
+      event.preventDefault();
+
+      if (onUploadDocuments) {
+        void Promise.resolve(onUploadDocuments(files));
+      } else if (onUploadDocument) {
+        for (const file of files) {
+          void Promise.resolve(onUploadDocument(file));
+        }
+      }
+    };
+
+    window.addEventListener("paste", handlePaste);
+    return () => window.removeEventListener("paste", handlePaste);
+  }, [onUploadDocuments, onUploadDocument, isUploading, isApplyingBulkAction]);
+
   // Focus rename input when renaming starts
   useLayoutEffect(() => {
     if (renamingItemId !== null && renameInputRef.current) {
