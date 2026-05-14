@@ -925,13 +925,8 @@
 }
 
 /* ============================================================
-   Creation-style view — narrow modal, single scrollable column
+   Creation-style view — single scrollable column
    ============================================================ */
-
-/* Shrink to match the create-modal width */
-.ff-detail-modal--creation {
-  max-width: min(760px, 100%);
-}
 
 /* Body: single scrollable column */
 .ff-detail-body--creation {
