@@ -1315,6 +1315,15 @@ const PartnersSectionNew: React.FC<SectionProps> = ({ viewMode, isActive, system
             rowData={gridData}
             columnDefs={columnDefs}
             popupParent={typeof document !== "undefined" ? document.body : undefined}
+            postProcessPopup={(params) => {
+              const el = params.ePopup as HTMLElement;
+              if (!el) return;
+              const rect = el.getBoundingClientRect();
+              const overflow = rect.bottom - window.innerHeight;
+              if (overflow > 0) {
+                el.style.top = `${parseFloat(el.style.top || "0") - overflow - 8}px`;
+              }
+            }}
             domLayout={useContentHeightLayout ? 'autoHeight' : 'normal'}
             onCellValueChanged={onCellValueChanged}
             onCellEditingStarted={readOnly ? (params) => params.api.stopEditing(true) : undefined}
