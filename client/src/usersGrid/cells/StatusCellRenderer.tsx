@@ -32,6 +32,7 @@ const StatusCellRenderer: React.FC<any> = (params) => {
       box-shadow: 0 4px 16px rgba(0,0,0,${isDark ? "0.5" : "0.12"});
       padding: 4px 0;
       overflow: hidden;
+      visibility: hidden;
     `;
 
     const cleanup = () => {
@@ -88,6 +89,14 @@ const StatusCellRenderer: React.FC<any> = (params) => {
     });
 
     document.body.appendChild(dropdown);
+
+    // Flip upward if the dropdown would overflow the bottom of the viewport
+    const dropdownHeight = dropdown.offsetHeight;
+    const spaceBelow = window.innerHeight - cellRect.bottom - 4;
+    if (dropdownHeight > spaceBelow) {
+      dropdown.style.top = `${cellRect.top - dropdownHeight - 4}px`;
+    }
+    dropdown.style.visibility = "visible";
 
     const onOutside = (ev: MouseEvent) => {
       if (!dropdown.contains(ev.target as Node)) cleanup();
