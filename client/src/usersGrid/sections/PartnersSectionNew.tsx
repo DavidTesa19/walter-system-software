@@ -1,6 +1,6 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { AgGridReact } from "ag-grid-react";
-import type { ColDef } from "ag-grid-community";
+import type { ColDef, IRowNode } from "ag-grid-community";
 import type { PartnerEntity, PartnerCommission, PartnerGridRow } from "../types/entities";
 import ProfileCellRenderer from "../cells/ProfileCellRenderer";
 import AssignedUsersCellRenderer from "../cells/AssignedUsersCellRenderer";
@@ -32,6 +32,7 @@ import ActivityCellRenderer from "../../activity/ActivityCellRenderer";
 import { useActivity } from "../../activity/ActivityContext";
 import { buildCommissionsRecordScope, buildSubjectsRecordScope, getActivitySystem } from "../../activity/activityKeys";
 import OptionSelectEditor from "../../futureFunctions/cells/OptionSelectEditor";
+import StatusFilterHeader from "../cells/StatusFilterHeader";
 
 type PartnerEntityApi = {
   id: number;
@@ -394,6 +395,20 @@ const PartnersSectionNew: React.FC<SectionProps> = ({ viewMode, isActive, system
   const [selectedCommissionId, setSelectedCommissionId] = useState<number | null>(null);
 
   const gridRef = useRef<AgGridReact<PartnerGridRow>>(null);
+
+  // Workflow state checkbox filter
+  const [activeStateFilters, setActiveStateFilters] = useState<Set<string>>(() => new Set(WORKFLOW_STATUS_VALUES));
+  const activeStateFiltersRef = useRef<Set<string>>(new Set(WORKFLOW_STATUS_VALUES));
+
+  useEffect(() => {
+    activeStateFiltersRef.current = activeStateFilters;
+    gridRef.current?.api?.onFilterChanged();
+  }, [activeStateFilters]);
+
+  const handleStateFilterChange = useCallback((newSet: Set<string>) => {
+    setActiveStateFilters(new Set(newSet));
+  }, []);
+
   const status = useMemo(() => mapViewToStatus(viewMode), [viewMode]);
   const resourceKey = systemNamespace ? "project-partners" : "partners";
   const {
@@ -1239,7 +1254,12 @@ const PartnersSectionNew: React.FC<SectionProps> = ({ viewMode, isActive, system
       cellEditor: OptionSelectEditor,
       cellEditorPopup: true,
       cellEditorParams: { values: [...WORKFLOW_STATUS_VALUES], colorMap: WORKFLOW_STATUS_COLOR_MAP },
-      onCellClicked: onStatusCellClicked
+      onCellClicked: onStatusCellClicked,
+      headerComponent: StatusFilterHeader,
+      headerComponentParams: {
+        activeFilters: activeStateFilters,
+        onFilterChange: handleStateFilterChange,
+      },
     };
     const activeSubjectCols: ColDef<PartnerGridRow>[] = [
       ...(showApprovalStatusColumn ? [approvalStatusCol] : []),
@@ -1302,7 +1322,19 @@ const PartnersSectionNew: React.FC<SectionProps> = ({ viewMode, isActive, system
     );
 
     return cols;
-  }, [assignableUsers, fieldOptionChoices, groupedFieldOptionChoices, handleCreateFieldOption, handleDeleteFieldOption, onStatusCellClicked, projectStatusOptions, readOnly, systemNamespace, viewMode]);
+  }, [activeStateFilters, assignableUsers, fieldOptionChoices, groupedFieldOptionChoices, handleCreateFieldOption, handleDeleteFieldOption, handleStateFilterChange, onStatusCellClicked, projectStatusOptions, readOnly, systemNamespace, viewMode]);
+
+  const isExternalFilterPresent = useCallback(() => {
+    return activeStateFiltersRef.current.size < WORKFLOW_STATUS_VALUES.length;
+  }, []);
+
+  const doesExternalFilterPass = useCallback((node: IRowNode<PartnerGridRow>) => {
+    const set = activeStateFiltersRef.current;
+    if (set.size === 0) return false;
+    if (set.size >= WORKFLOW_STATUS_VALUES.length) return true;
+    const state = getNormalizedWorkflowStatus(node.data?.state);
+    return set.has(state);
+  }, []);
 
   const useContentHeightLayout = gridData.length <= 8;
 
@@ -1331,6 +1363,8 @@ const PartnersSectionNew: React.FC<SectionProps> = ({ viewMode, isActive, system
             suppressRowClickSelection={true}
             loading={isLoading}
             context={gridContext}
+            isExternalFilterPresent={isExternalFilterPresent}
+            doesExternalFilterPass={doesExternalFilterPass}
           />
         </div>
       </div>
