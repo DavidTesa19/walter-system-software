@@ -4836,10 +4836,23 @@ app.post('/public-submissions/:type', async (req, res) => {
       createdCommissions.push(createdCommission);
     }
 
+    let notificationUsers = [];
+    try {
+      if (db.isPostgres()) {
+        const usersResult = await db.query(
+          "SELECT notification_email FROM users WHERE notification_email IS NOT NULL AND notification_email <> ''"
+        );
+        notificationUsers = usersResult.rows;
+      }
+    } catch (userFetchError) {
+      console.error('Error fetching user notification emails:', userFetchError);
+    }
+
     await notifyPublicSubmission({
       type,
       entity: createdEntity,
       commissions: createdCommissions,
+      users: notificationUsers,
     });
 
     return res.status(201).json({

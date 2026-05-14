@@ -194,7 +194,23 @@ const sendBrevoEmail = async ({ to, subject, htmlContent, textContent }) => {
   );
 };
 
-export const notifyPublicSubmission = async ({ type, entity, commissions = [] }) => {
+const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+
+const normalizeEmailAddress = (value) => {
+  if (typeof value !== 'string') return null;
+  const trimmed = value.trim().toLowerCase();
+  if (!trimmed) return null;
+  return EMAIL_PATTERN.test(trimmed) ? trimmed : null;
+};
+
+const collectUserNotificationEmails = (users) => {
+  if (!Array.isArray(users)) return [];
+  return users
+    .map((user) => normalizeEmailAddress(user?.notification_email ?? user?.notificationEmail))
+    .filter(Boolean);
+};
+
+export const notifyPublicSubmission = async ({ type, entity, commissions = [], users = [] }) => {
   if (!isEmailConfigured()) {
     if (!configWarningLogged) {
       console.warn('[email] BREVO_API_KEY is not set — email notifications are disabled.');
@@ -205,7 +221,12 @@ export const notifyPublicSubmission = async ({ type, entity, commissions = [] })
 
   const tasks = [];
 
-  const adminRecipients = parseRecipientList(process.env.PUBLIC_SUBMISSION_NOTIFY_TO);
+  const envRecipients = parseRecipientList(process.env.PUBLIC_SUBMISSION_NOTIFY_TO)
+    .map(normalizeEmailAddress)
+    .filter(Boolean);
+  const userRecipients = collectUserNotificationEmails(users);
+  const adminRecipients = [...new Set([...envRecipients, ...userRecipients])];
+
   if (adminRecipients.length > 0) {
     const message = buildAdminMessage({ type, entity, commissions });
     tasks.push(
@@ -218,7 +239,7 @@ export const notifyPublicSubmission = async ({ type, entity, commissions = [] })
       ),
     );
   } else {
-    console.warn('[email] PUBLIC_SUBMISSION_NOTIFY_TO is not set — skipping admin notification.');
+    console.warn('[email] No admin recipients configured (PUBLIC_SUBMISSION_NOTIFY_TO env var empty and no users have notification_email set) — skipping admin notification.');
   }
 
   const submitterEmail = typeof entity?.email === 'string' ? entity.email.trim() : '';

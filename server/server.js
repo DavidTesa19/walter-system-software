@@ -4647,10 +4647,13 @@ app.post('/public-submissions/:type', (req, res) => {
 
     if (!writeDb(db)) return res.status(500).json({ error: 'Failed to persist' });
 
+    const notificationUsers = Array.isArray(db.users) ? db.users : [];
+
     void notifyPublicSubmission({
       type,
       entity: result.entity,
       commissions: result.commissions,
+      users: notificationUsers,
     });
 
     return res.status(201).json({
