@@ -489,11 +489,12 @@ const FieldCellRenderer: React.FC<FieldCellParams> = (params) => {
     // Initial render
     render();
 
-    // Flip upward if the dropdown would overflow the bottom of the viewport
+    // Position so the dropdown is always fully visible in the viewport
     const dropdownHeight = dropdown.offsetHeight;
     const spaceBelow = window.innerHeight - cellRect.bottom - 2;
     if (dropdownHeight > spaceBelow) {
-      dropdown.style.top = `${cellRect.top - dropdownHeight - 2}px`;
+      const flippedTop = cellRect.top - dropdownHeight - 2;
+      dropdown.style.top = `${Math.max(8, flippedTop)}px`;
     }
     dropdown.style.visibility = "visible";
 
