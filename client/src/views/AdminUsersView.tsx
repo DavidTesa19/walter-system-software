@@ -201,11 +201,12 @@ export default function AdminUsersView() {
     setSuccessMessage(null);
 
     try {
-      const updatedUser = await apiPatch<ManagedUser>(`/users/${managedUser.id}`, {
-        role: nextRole,
-        accessScope: nextScope,
-        notificationEmail: nextNotificationEmail,
-      });
+      const payload: Record<string, unknown> = {};
+      if (nextRole !== managedUser.role) payload.role = nextRole;
+      if (nextScope !== managedUser.accessScope) payload.accessScope = nextScope;
+      if (nextNotificationEmail !== currentNotificationEmail) payload.notificationEmail = nextNotificationEmail;
+
+      const updatedUser = await apiPatch<ManagedUser>(`/users/${managedUser.id}`, payload);
       setUsers((current) => current.map((entry) => (entry.id === managedUser.id ? updatedUser : entry)));
       setDraftRoles((current) => ({
         ...current,

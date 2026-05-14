@@ -44,7 +44,7 @@ const createHeaders = (additionalHeaders: Record<string, string> = {}): Record<s
  * Handle API response - check for auth errors and parse JSON
  */
 const handleResponse = async <T>(response: Response): Promise<T> => {
-  if (response.status === 401 || response.status === 403) {
+  if (response.status === 401) {
     // Token expired or invalid - clear auth and redirect to login
     localStorage.removeItem('walterUser');
     localStorage.removeItem('walterSessionStart');
@@ -167,7 +167,7 @@ export const apiDownload = async (endpoint: string, filename: string): Promise<v
     headers,
   });
 
-  if (response.status === 401 || response.status === 403) {
+  if (response.status === 401) {
     localStorage.removeItem('walterUser');
     localStorage.removeItem('walterSessionStart');
     clearStoredTableViews();
@@ -207,7 +207,7 @@ export const apiGetBlob = async (endpoint: string): Promise<Blob> => {
     headers,
   });
 
-  if (response.status === 401 || response.status === 403) {
+  if (response.status === 401) {
     localStorage.removeItem('walterUser');
     localStorage.removeItem('walterSessionStart');
     clearStoredTableViews();
@@ -239,7 +239,7 @@ export const apiView = async (endpoint: string): Promise<void> => {
     headers,
   });
 
-  if (response.status === 401 || response.status === 403) {
+  if (response.status === 401) {
     localStorage.removeItem('walterUser');
     localStorage.removeItem('walterSessionStart');
     clearStoredTableViews();

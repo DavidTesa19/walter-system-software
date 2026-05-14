@@ -1687,8 +1687,13 @@ app.put("/users/:id", authenticateToken, requireRole('admin'), (req, res) => {
   const db = readDb();
   const idx = db.users.findIndex((u) => u.id === id);
   if (idx === -1) return res.status(404).json({ error: "Not found" });
-  if (db.users[idx].role === 'admin' && (req.body.role !== 'admin' || req.body.accessScope !== db.users[idx].accessScope)) {
-    return res.status(403).json({ error: "Cannot change role or access scope of an admin user" });
+  if (db.users[idx].role === 'admin') {
+    const currentScope = normalizeAccessScope(db.users[idx].accessScope);
+    const roleChanging = req.body.role !== undefined && req.body.role !== db.users[idx].role;
+    const scopeChanging = req.body.accessScope !== undefined && normalizeAccessScope(req.body.accessScope) !== currentScope;
+    if (roleChanging || scopeChanging) {
+      return res.status(403).json({ error: "Cannot change role or access scope of an admin user" });
+    }
   }
   const updated = updateAuditedJsonRecord(
     db.users[idx],
@@ -1712,11 +1717,12 @@ app.patch("/users/:id", authenticateToken, requireRole('admin'), (req, res) => {
   const db = readDb();
   const idx = db.users.findIndex((u) => u.id === id);
   if (idx === -1) return res.status(404).json({ error: "Not found" });
-  if (db.users[idx].role === 'admin' && (req.body.role !== undefined || req.body.accessScope !== undefined)) {
-    if (req.body.role !== undefined && req.body.role !== 'admin') {
+  if (db.users[idx].role === 'admin') {
+    const currentScope = normalizeAccessScope(db.users[idx].accessScope);
+    if (req.body.role !== undefined && req.body.role !== db.users[idx].role) {
       return res.status(403).json({ error: "Cannot change role of an admin user" });
     }
-    if (req.body.accessScope !== undefined) {
+    if (req.body.accessScope !== undefined && normalizeAccessScope(req.body.accessScope) !== currentScope) {
       return res.status(403).json({ error: "Cannot change access scope of an admin user" });
     }
   }

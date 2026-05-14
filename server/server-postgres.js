@@ -3542,13 +3542,19 @@ app.put("/users/:id", authenticateToken, requireRole('admin'), async (req, res) 
   const { username, password, role, accessScope, notificationEmail } = req.body;
 
   try {
-    // Prevent changing an admin user's role or access scope
+    // Prevent changing an admin user's role or access scope.
+    // Only block when the incoming value would actually CHANGE the existing value.
     const dbCheck = db.isPostgres()
-      ? (await db.query('SELECT role FROM users WHERE id = $1', [userId])).rows[0]
+      ? (await db.query('SELECT role, access_scope FROM users WHERE id = $1', [userId])).rows[0]
       : readDb().users.find(u => String(u.id) === String(userId));
-    const existingRole = dbCheck?.role ?? dbCheck?.role;
+    const existingRole = dbCheck?.role;
     if (existingRole === 'admin' && (role !== undefined || accessScope !== undefined)) {
-      return res.status(403).json({ error: 'Cannot change role or access scope of an admin user' });
+      const currentScope = normalizeAccessScope(dbCheck?.access_scope ?? dbCheck?.accessScope);
+      const roleChanging = role !== undefined && role !== existingRole;
+      const scopeChanging = accessScope !== undefined && normalizeAccessScope(accessScope) !== currentScope;
+      if (roleChanging || scopeChanging) {
+        return res.status(403).json({ error: 'Cannot change role or access scope of an admin user' });
+      }
     }
 
     if (db.isPostgres()) {
@@ -3629,13 +3635,20 @@ app.patch("/users/:id", authenticateToken, requireRole('admin'), async (req, res
   const { username, password, role, accessScope, notificationEmail } = req.body;
 
   try {
-    // Prevent changing an admin user's role or access scope
+    // Prevent changing an admin user's role or access scope.
+    // Only block when the incoming value would actually CHANGE the existing value —
+    // resubmitting the same role/scope (e.g. from a UI that always sends them) is fine.
     if (role !== undefined || accessScope !== undefined) {
       const dbCheck = db.isPostgres()
-        ? (await db.query('SELECT role FROM users WHERE id = $1', [userId])).rows[0]
+        ? (await db.query('SELECT role, access_scope FROM users WHERE id = $1', [userId])).rows[0]
         : readDb().users.find(u => String(u.id) === String(userId));
       if (dbCheck?.role === 'admin') {
-        return res.status(403).json({ error: 'Cannot change role or access scope of an admin user' });
+        const currentScope = normalizeAccessScope(dbCheck?.access_scope ?? dbCheck?.accessScope);
+        const roleChanging = role !== undefined && role !== dbCheck.role;
+        const scopeChanging = accessScope !== undefined && normalizeAccessScope(accessScope) !== currentScope;
+        if (roleChanging || scopeChanging) {
+          return res.status(403).json({ error: 'Cannot change role or access scope of an admin user' });
+        }
       }
     }
 
