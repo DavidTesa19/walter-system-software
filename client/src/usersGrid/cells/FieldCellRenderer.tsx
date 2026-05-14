@@ -78,6 +78,7 @@ const FieldCellRenderer: React.FC<FieldCellParams> = (params) => {
     dropdown.style.flexDirection = "column";
     dropdown.style.fontFamily = "var(--font-body)";
     dropdown.style.overflow = "hidden"; // Container handles overflow
+    dropdown.style.visibility = "hidden";
 
     // Search input container (sticky top)
     const searchContainer = document.createElement("div");
@@ -487,6 +488,14 @@ const FieldCellRenderer: React.FC<FieldCellParams> = (params) => {
 
     // Initial render
     render();
+
+    // Flip upward if the dropdown would overflow the bottom of the viewport
+    const dropdownHeight = dropdown.offsetHeight;
+    const spaceBelow = window.innerHeight - cellRect.bottom - 2;
+    if (dropdownHeight > spaceBelow) {
+      dropdown.style.top = `${cellRect.top - dropdownHeight - 2}px`;
+    }
+    dropdown.style.visibility = "visible";
 
     // Event Listeners
     searchInput.addEventListener("input", (e) => {
