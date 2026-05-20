@@ -1797,68 +1797,103 @@ app.post("/api/chat/stream", authenticateToken, async (req, res) => {
 // CHAT CONVERSATION MANAGEMENT
 // ============================================
 
-app.get("/api/conversations", authenticateToken, (_req, res) => {
-  const store = readDb();
-  res.json(store.conversations || []);
-});
-
-app.get("/api/conversations/:id", authenticateToken, (req, res) => {
-  const store = readDb();
-  const conversation = store.conversations?.find(c => c.id === req.params.id);
-  if (!conversation) {
-    return res.status(404).json({ error: "Conversation not found" });
+app.get("/api/conversations", authenticateToken, async (_req, res) => {
+  try {
+    if (db.isPostgres()) {
+      const conversations = await db.getConversations();
+      return res.json(conversations);
+    }
+    const store = readDb();
+    res.json(store.conversations || []);
+  } catch (error) {
+    console.error("Error fetching conversations:", error);
+    res.status(500).json({ error: "Failed to fetch conversations" });
   }
-  res.json(conversation);
 });
 
-app.post("/api/conversations", authenticateToken, (req, res) => {
-  const store = readDb();
-  if (!Array.isArray(store.conversations)) store.conversations = [];
-
-  const conversation = {
-    id: `conv_${Date.now()}`,
-    title: req.body.title || "New Conversation",
-    messages: req.body.messages || [],
-    createdAt: new Date().toISOString(),
-    updatedAt: new Date().toISOString()
-  };
-
-  store.conversations.unshift(conversation);
-  if (!writeDb(store)) return res.status(500).json({ error: "Failed to save" });
-  res.json(conversation);
-});
-
-app.put("/api/conversations/:id", authenticateToken, (req, res) => {
-  const store = readDb();
-  if (!Array.isArray(store.conversations)) store.conversations = [];
-
-  const index = store.conversations.findIndex(c => c.id === req.params.id);
-  if (index === -1) {
-    return res.status(404).json({ error: "Conversation not found" });
+app.get("/api/conversations/:id", authenticateToken, async (req, res) => {
+  try {
+    if (db.isPostgres()) {
+      const conversation = await db.getConversationById(req.params.id);
+      if (!conversation) return res.status(404).json({ error: "Conversation not found" });
+      return res.json(conversation);
+    }
+    const store = readDb();
+    const conversation = store.conversations?.find(c => c.id === req.params.id);
+    if (!conversation) return res.status(404).json({ error: "Conversation not found" });
+    res.json(conversation);
+  } catch (error) {
+    console.error("Error fetching conversation:", error);
+    res.status(500).json({ error: "Failed to fetch conversation" });
   }
-
-  store.conversations[index] = {
-    ...store.conversations[index],
-    ...req.body,
-    updatedAt: new Date().toISOString()
-  };
-
-  if (!writeDb(store)) return res.status(500).json({ error: "Failed to save" });
-  res.json(store.conversations[index]);
 });
 
-app.delete("/api/conversations/:id", authenticateToken, (req, res) => {
-  const store = readDb();
-  if (!Array.isArray(store.conversations)) store.conversations = [];
+app.post("/api/conversations", authenticateToken, async (req, res) => {
+  try {
+    const conversation = {
+      id: `conv_${Date.now()}`,
+      title: req.body.title || "New Conversation",
+      messages: req.body.messages || [],
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString()
+    };
 
-  const index = store.conversations.findIndex(c => c.id === req.params.id);
-  if (index === -1) {
-    return res.status(404).json({ error: "Conversation not found" });
+    if (db.isPostgres()) {
+      const created = await db.createConversation(conversation);
+      return res.json(created);
+    }
+
+    const store = readDb();
+    if (!Array.isArray(store.conversations)) store.conversations = [];
+    store.conversations.unshift(conversation);
+    if (!writeDb(store)) return res.status(500).json({ error: "Failed to save" });
+    res.json(conversation);
+  } catch (error) {
+    console.error("Error creating conversation:", error);
+    res.status(500).json({ error: "Failed to create conversation" });
   }
+});
 
-  store.conversations.splice(index, 1);
-  if (!writeDb(store)) return res.status(500).json({ error: "Failed to delete" });
-  res.status(204).end();
+app.put("/api/conversations/:id", authenticateToken, async (req, res) => {
+  try {
+    if (db.isPostgres()) {
+      const updated = await db.updateConversation(req.params.id, req.body);
+      if (!updated) return res.status(404).json({ error: "Conversation not found" });
+      return res.json(updated);
+    }
+
+    const store = readDb();
+    if (!Array.isArray(store.conversations)) store.conversations = [];
+    const index = store.conversations.findIndex(c => c.id === req.params.id);
+    if (index === -1) return res.status(404).json({ error: "Conversation not found" });
+    store.conversations[index] = { ...store.conversations[index], ...req.body, updatedAt: new Date().toISOString() };
+    if (!writeDb(store)) return res.status(500).json({ error: "Failed to save" });
+    res.json(store.conversations[index]);
+  } catch (error) {
+    console.error("Error updating conversation:", error);
+    res.status(500).json({ error: "Failed to update conversation" });
+  }
+});
+
+app.delete("/api/conversations/:id", authenticateToken, async (req, res) => {
+  try {
+    if (db.isPostgres()) {
+      const deleted = await db.deleteConversation(req.params.id);
+      if (!deleted) return res.status(404).json({ error: "Conversation not found" });
+      return res.status(204).end();
+    }
+
+    const store = readDb();
+    if (!Array.isArray(store.conversations)) store.conversations = [];
+    const index = store.conversations.findIndex(c => c.id === req.params.id);
+    if (index === -1) return res.status(404).json({ error: "Conversation not found" });
+    store.conversations.splice(index, 1);
+    if (!writeDb(store)) return res.status(500).json({ error: "Failed to delete" });
+    res.status(204).end();
+  } catch (error) {
+    console.error("Error deleting conversation:", error);
+    res.status(500).json({ error: "Failed to delete conversation" });
+  }
 });
 
 app.get("/field-options", authenticateToken, async (req, res) => {

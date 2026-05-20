@@ -531,6 +531,17 @@ export async function initDatabase() {
         ON analytics_events (user_id, created_at)
     `);
 
+    // Create conversations table for AI chat history
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS conversations (
+        id VARCHAR(50) PRIMARY KEY,
+        title VARCHAR(500) NOT NULL DEFAULT 'New Conversation',
+        messages JSONB NOT NULL DEFAULT '[]',
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+      )
+    `);
+
     // Counter table for sequential entity IDs (P001, K001, T001)
     await client.query(`
       CREATE TABLE IF NOT EXISTS entity_counters (
@@ -2857,6 +2868,56 @@ export const db = {
   /**
    * Create a new tiper with their first commission
    */
+  async getConversations() {
+    if (!USE_POSTGRES) return null;
+    const result = await pool.query('SELECT * FROM conversations ORDER BY updated_at DESC');
+    return result.rows.map(r => ({ id: r.id, title: r.title, messages: r.messages, createdAt: r.created_at, updatedAt: r.updated_at }));
+  },
+
+  async getConversationById(id) {
+    if (!USE_POSTGRES) return null;
+    const result = await pool.query('SELECT * FROM conversations WHERE id = $1', [id]);
+    if (!result.rows[0]) return null;
+    const r = result.rows[0];
+    return { id: r.id, title: r.title, messages: r.messages, createdAt: r.created_at, updatedAt: r.updated_at };
+  },
+
+  async createConversation(data) {
+    if (!USE_POSTGRES) return null;
+    const { id, title, messages } = data;
+    const result = await pool.query(
+      'INSERT INTO conversations (id, title, messages) VALUES ($1, $2, $3) RETURNING *',
+      [id, title, JSON.stringify(messages ?? [])]
+    );
+    const r = result.rows[0];
+    return { id: r.id, title: r.title, messages: r.messages, createdAt: r.created_at, updatedAt: r.updated_at };
+  },
+
+  async updateConversation(id, data) {
+    if (!USE_POSTGRES) return null;
+    const fields = [];
+    const values = [];
+    let idx = 1;
+    if (data.title !== undefined) { fields.push(`title = $${idx++}`); values.push(data.title); }
+    if (data.messages !== undefined) { fields.push(`messages = $${idx++}`); values.push(JSON.stringify(data.messages)); }
+    fields.push(`updated_at = $${idx++}`);
+    values.push(new Date());
+    values.push(id);
+    const result = await pool.query(
+      `UPDATE conversations SET ${fields.join(', ')} WHERE id = $${idx} RETURNING *`,
+      values
+    );
+    if (!result.rows[0]) return null;
+    const r = result.rows[0];
+    return { id: r.id, title: r.title, messages: r.messages, createdAt: r.created_at, updatedAt: r.updated_at };
+  },
+
+  async deleteConversation(id) {
+    if (!USE_POSTGRES) return null;
+    const result = await pool.query('DELETE FROM conversations WHERE id = $1', [id]);
+    return result.rowCount > 0;
+  },
+
   async createTiperWithCommission(entityData, commissionData) {
     if (!USE_POSTGRES) return null;
 
