@@ -15,13 +15,14 @@ interface DropdownPos {
   top?: number;
   bottom?: number;
   left: number;
+  maxHeight: number;
 }
 
 const FieldFilterHeader = forwardRef<any, FieldFilterHeaderParams>((props, ref) => {
   const [localFilters, setLocalFilters] = useState<Set<string> | null>(() => props.filterRef.current);
   const [isOpen, setIsOpen] = useState(false);
   const [sortDir, setSortDir] = useState<"asc" | "desc" | null>(null);
-  const [dropdownPos, setDropdownPos] = useState<DropdownPos>({ top: 0, left: 0 });
+  const [dropdownPos, setDropdownPos] = useState<DropdownPos>({ top: 0, left: 0, maxHeight: 400 });
   const buttonRef = useRef<HTMLButtonElement>(null);
   const dropdownRef = useRef<HTMLDivElement>(null);
 
@@ -70,15 +71,25 @@ const FieldFilterHeader = forwardRef<any, FieldFilterHeaderParams>((props, ref) 
     e.stopPropagation();
     if (!buttonRef.current) return;
     const rect = buttonRef.current.getBoundingClientRect();
-    const estimatedHeight = Math.min(40 + allValues.length * 32, 380);
-    const spaceBelow = window.innerHeight - rect.bottom - 8;
-    const maxLeft = window.innerWidth - 210;
+    const MARGIN = 12;
+    const MIN_HEIGHT = 180;
+    const spaceBelow = window.innerHeight - rect.bottom - MARGIN;
+    const spaceAbove = rect.top - MARGIN;
+    const maxLeft = window.innerWidth - 220;
     const left = Math.min(rect.left, maxLeft);
 
-    if (spaceBelow >= estimatedHeight || rect.top < estimatedHeight) {
-      setDropdownPos({ top: rect.bottom + 4, left });
+    if (spaceBelow >= spaceAbove || spaceBelow >= MIN_HEIGHT) {
+      setDropdownPos({
+        top: rect.bottom + 4,
+        left,
+        maxHeight: Math.max(spaceBelow, MIN_HEIGHT),
+      });
     } else {
-      setDropdownPos({ bottom: window.innerHeight - rect.top + 4, left });
+      setDropdownPos({
+        bottom: window.innerHeight - rect.top + 4,
+        left,
+        maxHeight: Math.max(spaceAbove, MIN_HEIGHT),
+      });
     }
     setIsOpen((prev) => !prev);
   };
@@ -231,31 +242,29 @@ const FieldFilterHeader = forwardRef<any, FieldFilterHeaderParams>((props, ref) 
               top: dropdownPos.top,
               bottom: dropdownPos.bottom,
               left: dropdownPos.left,
-              minWidth: "200px",
-              maxHeight: "380px",
-              overflowY: "auto",
+              minWidth: "210px",
+              maxHeight: `${dropdownPos.maxHeight}px`,
               zIndex: 10001,
               background: isDark ? "#1e2333" : "#ffffff",
               border: `1px solid ${isDark ? "#2d3550" : "#e2e8f0"}`,
               borderRadius: "8px",
               boxShadow: `0 4px 20px rgba(0,0,0,${isDark ? "0.55" : "0.14"})`,
               fontFamily: "var(--font-body, 'Inter', system-ui, sans-serif)",
-              overflow: "hidden",
+              display: "flex",
+              flexDirection: "column",
             }}
             onMouseDown={(e) => e.stopPropagation()}
             onClick={(e) => e.stopPropagation()}
           >
+            {/* Fixed header — never scrolls away */}
             <div
               style={{
-                position: "sticky",
-                top: 0,
+                flexShrink: 0,
                 display: "flex",
                 justifyContent: "space-between",
                 alignItems: "center",
                 padding: "9px 12px 8px",
                 borderBottom: `1px solid ${isDark ? "#2d3550" : "#f0f4f8"}`,
-                background: isDark ? "#1e2333" : "#ffffff",
-                zIndex: 1,
               }}
             >
               <span
@@ -305,7 +314,8 @@ const FieldFilterHeader = forwardRef<any, FieldFilterHeaderParams>((props, ref) 
               </div>
             </div>
 
-            <div style={{ padding: "4px 0", overflowY: "auto" }}>
+            {/* Scrollable list — takes all remaining height */}
+            <div style={{ flex: 1, overflowY: "auto", padding: "4px 0" }}>
               {props.fieldOptions.map((value) => {
                 const checked = getChecked(value);
                 return (
@@ -356,7 +366,8 @@ const FieldFilterHeader = forwardRef<any, FieldFilterHeaderParams>((props, ref) 
                   </div>
                 );
               })}
-              {/* Empty-value option */}
+
+              {/* Empty-value option — separated by a thin rule */}
               <div
                 onMouseDown={(e) => e.stopPropagation()}
                 onClick={() => toggle(EMPTY_VALUE)}
