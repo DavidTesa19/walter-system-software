@@ -36,6 +36,7 @@ import { useActivity } from "../../activity/ActivityContext";
 import { buildCommissionsRecordScope, buildSubjectsRecordScope, getActivitySystem } from "../../activity/activityKeys";
 import OptionSelectEditor from "../../futureFunctions/cells/OptionSelectEditor";
 import StatusFilterHeader from "../cells/StatusFilterHeader";
+import FieldFilterHeader from "../cells/FieldFilterHeader";
 
 type ClientEntityApi = {
   id: number;
@@ -443,6 +444,14 @@ const ClientsSectionNew: React.FC<SectionProps> = ({
 
   const handleStateFilterChange = useCallback((newSet: Set<string>) => {
     activeStateFiltersRef.current = new Set(newSet);
+    gridRef.current?.api?.onFilterChanged();
+  }, []);
+
+  // Field (Obor) checkbox filter — null means "show all"
+  const activeFieldFiltersRef = useRef<Set<string> | null>(null);
+
+  const handleFieldFilterChange = useCallback((newSet: Set<string> | null) => {
+    activeFieldFiltersRef.current = newSet === null ? null : new Set(newSet);
     gridRef.current?.api?.onFilterChanged();
   }, []);
 
@@ -1521,7 +1530,13 @@ const ClientsSectionNew: React.FC<SectionProps> = ({
           onCreateFieldOption: readOnly ? undefined : handleCreateFieldOption,
           onDeleteFieldOption: readOnly ? undefined : handleDeleteFieldOption,
           disabled: readOnly,
-        }
+        },
+        headerComponent: FieldFilterHeader,
+        headerComponentParams: {
+          filterRef: activeFieldFiltersRef,
+          onFilterChange: handleFieldFilterChange,
+          fieldOptions: fieldOptionsArray,
+        },
       },
       {
         field: "location",
@@ -1625,18 +1640,27 @@ const ClientsSectionNew: React.FC<SectionProps> = ({
     }
 
     return cols;
-  }, [assignableUsers, fieldOptionChoices, groupedFieldOptionChoices, handleCreateFieldOption, handleDeleteFieldOption, handleStateFilterChange, onStatusCellClicked, projectStatusOptions, readOnly, systemNamespace, viewMode]);
+  }, [assignableUsers, fieldOptionChoices, fieldOptionsArray, groupedFieldOptionChoices, handleCreateFieldOption, handleDeleteFieldOption, handleFieldFilterChange, handleStateFilterChange, onStatusCellClicked, projectStatusOptions, readOnly, systemNamespace, viewMode]);
 
   const isExternalFilterPresent = useCallback(() => {
-    return activeStateFiltersRef.current.size < WORKFLOW_STATUS_VALUES.length;
+    return activeStateFiltersRef.current.size < WORKFLOW_STATUS_VALUES.length ||
+      activeFieldFiltersRef.current !== null;
   }, []);
 
   const doesExternalFilterPass = useCallback((node: IRowNode<ClientGridRow>) => {
-    const set = activeStateFiltersRef.current;
-    if (set.size === 0) return false;
-    if (set.size >= WORKFLOW_STATUS_VALUES.length) return true;
-    const state = getNormalizedWorkflowStatus(node.data?.state);
-    return set.has(state);
+    const stateSet = activeStateFiltersRef.current;
+    if (stateSet.size === 0) return false;
+    if (stateSet.size < WORKFLOW_STATUS_VALUES.length) {
+      const state = getNormalizedWorkflowStatus(node.data?.state);
+      if (!stateSet.has(state)) return false;
+    }
+    const fieldSet = activeFieldFiltersRef.current;
+    if (fieldSet !== null) {
+      if (fieldSet.size === 0) return false;
+      const fieldValue = node.data?.field ?? "";
+      if (!fieldSet.has(fieldValue)) return false;
+    }
+    return true;
   }, []);
 
   const useContentHeightLayout = gridData.length <= 8;
