@@ -26,6 +26,27 @@ ModuleRegistry.registerModules([AllCommunityModule]);
 
 const cloneRecord = (r: any) => JSON.parse(JSON.stringify(r));
 
+// Rows carry these display-only fields for the activity dots (see withActivity below).
+// They must never round-trip into a create/update payload — the table has no matching
+// columns, and sending them breaks the write.
+const ACTIVITY_DISPLAY_KEYS = [
+  "activity_scope",
+  "activity_item_id",
+  "activity_latest_at",
+  "activity_created_at",
+  "activity_updated_by_user_id",
+  "activity_created_by_user_id",
+  "activity_field_activity",
+] as const;
+
+const stripActivityFields = (row: FutureFunction): FutureFunction => {
+  const clean: any = { ...row };
+  for (const key of ACTIVITY_DISPLAY_KEYS) {
+    delete clean[key];
+  }
+  return clean;
+};
+
 const PRIORITY_OPTIONS = ["Nízká", "Střední", "Vysoká"] as const;
 const COMPLEXITY_OPTIONS = ["Jednoduchá", "Středně složitá", "Složitá"] as const;
 const PHASE_OPTIONS = ["Urgentní", "Střednědobé", "Před spuštěním", "Po spuštění"] as const;
@@ -238,7 +259,7 @@ const FutureFunctionsGrid: React.FC = () => {
         return;
       }
 
-      const snapshot = cloneRecord(func);
+      const snapshot = cloneRecord(stripActivityFields(func));
       try {
         setIsLoading(true);
         await apiDelete(`/future-functions/${func.id}`);
@@ -261,16 +282,17 @@ const FutureFunctionsGrid: React.FC = () => {
 
   const handleArchiveFunction = useCallback(
     async (func: FutureFunction) => {
-      const snapshot = cloneRecord(func);
+      const cleanFunc = stripActivityFields(func);
+      const snapshot = cloneRecord(cleanFunc);
       try {
         setIsLoading(true);
-        await apiPut(`/future-functions/${func.id}`, { ...func, archived: true });
+        await apiPut(`/future-functions/${func.id}`, { ...cleanFunc, archived: true });
         await fetchFutureFunctions();
         pushAction({
           label: `Archivace funkce #${func.id}`,
           resource: "future-functions",
           undo: async () => { await apiPut(`/future-functions/${func.id}`, snapshot); },
-          redo: async () => { await apiPut(`/future-functions/${func.id}`, { ...func, archived: true }); }
+          redo: async () => { await apiPut(`/future-functions/${func.id}`, { ...cleanFunc, archived: true }); }
         });
       } catch (error) {
         console.error("Error archiving future function:", error);
@@ -285,20 +307,21 @@ const FutureFunctionsGrid: React.FC = () => {
   const handleRestoreFunction = useCallback(
     async (func: FutureFunction) => {
       if (!func) return;
-      const snapshot = cloneRecord(func);
+      const cleanFunc = stripActivityFields(func);
+      const snapshot = cloneRecord(cleanFunc);
 
       try {
         setIsLoading(true);
         const newStatus = (AUTO_ARCHIVE_STATUSES as readonly string[]).includes(func.status)
           ? "Plánováno"
           : func.status;
-        await apiPut(`/future-functions/${func.id}`, { ...func, archived: false, status: newStatus });
+        await apiPut(`/future-functions/${func.id}`, { ...cleanFunc, archived: false, status: newStatus });
         await fetchFutureFunctions();
         pushAction({
           label: `Obnovení funkce #${func.id}`,
           resource: "future-functions",
           undo: async () => { await apiPut(`/future-functions/${func.id}`, snapshot); },
-          redo: async () => { await apiPut(`/future-functions/${func.id}`, { ...func, archived: false, status: newStatus }); }
+          redo: async () => { await apiPut(`/future-functions/${func.id}`, { ...cleanFunc, archived: false, status: newStatus }); }
         });
       } catch (error) {
         console.error("Error restoring future function:", error);
@@ -316,7 +339,7 @@ const FutureFunctionsGrid: React.FC = () => {
         return;
       }
 
-      const data = { ...params.data };
+      const data = stripActivityFields(params.data);
 
       // Auto-archive when status changes to Odloženo or Zrušeno
       if (params.column.getColId() === "status") {
@@ -817,7 +840,7 @@ const FutureFunctionsGrid: React.FC = () => {
         return;
       }
 
-      const data = { ...params.data };
+      const data = stripActivityFields(params.data);
 
       // If status changed to an active-only status, un-archive automatically
       if (params.column.getColId() === "status") {
@@ -1069,7 +1092,7 @@ const FutureFunctionsGrid: React.FC = () => {
               suppressRowClickSelection={true}
               onCellEditingStarted={(e: any) => {
                 if (e.data?.id != null) {
-                  editSnapshotRef.current[e.data.id] = cloneRecord(e.data);
+                  editSnapshotRef.current[e.data.id] = cloneRecord(stripActivityFields(e.data));
                 }
               }}
               onCellValueChanged={currentOnCellValueChanged}

@@ -1405,9 +1405,11 @@ const createAuditedJsonRecord = (data, actorUserId, explicitCreatedAt) => {
   };
 };
 
+// `status` is intentionally trackable — it's a real editable field (Future Functions'
+// Stav, projects' Schválení column), not just row-lifecycle bookkeeping.
 const ACTIVITY_FIELD_META_KEYS = new Set([
   'id', 'entity_id', 'entity_code', 'commission_id', 'created_at', 'updated_at',
-  'field_activity', 'created_by_user_id', 'updated_by_user_id', 'status',
+  'field_activity', 'created_by_user_id', 'updated_by_user_id',
 ]);
 
 const isBlankActivityValue = (value) =>
