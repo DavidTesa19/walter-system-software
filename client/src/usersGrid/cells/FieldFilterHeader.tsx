@@ -9,6 +9,10 @@ export interface FieldFilterHeaderParams extends IHeaderParams {
   filterRef: React.MutableRefObject<Set<string> | null>;
   onFilterChange: (newSet: Set<string> | null) => void;
   fieldOptions: string[];
+  // Optional wording overrides so the same component can filter other columns
+  // (e.g. "Kraj"). Default to the "Obor" wording.
+  filterButtonTitle?: string;
+  filterPanelLabel?: string;
 }
 
 interface DropdownPos {
@@ -201,7 +205,7 @@ const FieldFilterHeader = forwardRef<any, FieldFilterHeaderParams>((props, ref) 
         title={
           isFilterActive
             ? `Filtr aktivní (${activeCount}/${allValues.length})`
-            : "Filtrovat obory"
+            : (props.filterButtonTitle ?? "Filtrovat obory")
         }
         style={{
           background: iconBg,
@@ -276,7 +280,7 @@ const FieldFilterHeader = forwardRef<any, FieldFilterHeaderParams>((props, ref) 
                   letterSpacing: "0.06em",
                 }}
               >
-                Filtrovat obor
+                {props.filterPanelLabel ?? "Filtrovat obor"}
               </span>
               <div style={{ display: "flex", gap: "10px" }}>
                 <button

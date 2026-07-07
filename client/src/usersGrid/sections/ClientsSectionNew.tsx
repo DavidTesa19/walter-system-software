@@ -37,6 +37,7 @@ import { buildCommissionsRecordScope, buildSubjectsRecordScope, getActivitySyste
 import OptionSelectEditor from "../../futureFunctions/cells/OptionSelectEditor";
 import StatusFilterHeader from "../cells/StatusFilterHeader";
 import FieldFilterHeader from "../cells/FieldFilterHeader";
+import { REGION_OPTIONS } from "../regions";
 
 type ClientEntityApi = {
   id: number;
@@ -48,6 +49,7 @@ type ClientEntityApi = {
   field?: string | null;
   service?: string | null;
   budget?: string | null;
+  region?: string | null;
   location?: string | null;
   info?: string | null;
   first_name?: string | null;
@@ -86,6 +88,7 @@ type ClientCommissionApi = {
   entity_field?: string | null;
   entity_service?: string | null;
   entity_budget?: string | null;
+  entity_region?: string | null;
   entity_location?: string | null;
   entity_info?: string | null;
   entity_phone?: string | null;
@@ -110,6 +113,7 @@ type ClientCreateDraft = {
     mobile: string;
     email: string;
     website: string;
+    region: string;
     location: string;
     info: string;
     assigned_user_ids: string[];
@@ -143,6 +147,7 @@ const createDefaultClientDraft = (): ClientCreateDraft => ({
     mobile: "",
     email: "",
     website: "",
+    region: "",
     location: "",
     info: "",
     assigned_user_ids: []
@@ -172,6 +177,7 @@ const normalizeClientEntity = (entity: ClientEntityApi): ClientEntity => ({
   field: entity.field ?? null,
   service: entity.service ?? null,
   budget: entity.budget ?? null,
+  region: entity.region ?? null,
   location: entity.location ?? null,
   address: null,
   mobile: entity.phone ?? null,
@@ -217,7 +223,7 @@ const mapClientEntityUpdates = (updates: Record<string, unknown>) => {
     else if (key === "mobile") mapped.phone = value;
     else if (key === "assigned_user_ids") mapped.assigned_user_ids = value;
     else if (key === "status") mapped.status = value;
-    else if (["field", "service", "budget", "location", "email", "website", "info"].includes(key)) mapped[key] = value;
+    else if (["field", "service", "budget", "region", "location", "email", "website", "info"].includes(key)) mapped[key] = value;
   }
   return mapped;
 };
@@ -235,6 +241,7 @@ const deriveClientEntityFromCommission = (commission: ClientCommissionApi): Clie
     field: commission.entity_field ?? null,
     service: commission.entity_service ?? null,
     budget: commission.entity_budget ?? null,
+    region: commission.entity_region ?? null,
     location: commission.entity_location ?? null,
     address: null,
     mobile: commission.entity_phone ?? null,
@@ -281,6 +288,7 @@ const buildEntityData = (entity: ClientEntity | null, assignmentOptions: Array<s
       title: "Informace o klientovi",
       color: "gray",
       fields: [
+        { key: "region", label: "Kraj", value: entity.region, type: "select", options: REGION_OPTIONS },
         { key: "location", label: "Lokalita", value: entity.location, type: "text" },
         { key: "info", label: "Popis / Poznámky", value: entity.info, type: "textarea", isMultiline: true },
       ]
@@ -365,6 +373,7 @@ const buildClientDraftEntityData = (draft: ClientCreateDraft, assignmentOptions:
     field: draft.entity.field,
     service: draft.entity.service,
     budget: draft.entity.budget,
+    region: draft.entity.region,
     location: draft.entity.location,
     address: null,
     mobile: draft.entity.mobile,
@@ -455,6 +464,14 @@ const ClientsSectionNew: React.FC<SectionProps> = ({
     gridRef.current?.api?.onFilterChanged();
   }, []);
 
+  // Region (Kraj) checkbox filter — null means "show all"
+  const activeRegionFiltersRef = useRef<Set<string> | null>(null);
+
+  const handleRegionFilterChange = useCallback((newSet: Set<string> | null) => {
+    activeRegionFiltersRef.current = newSet === null ? null : new Set(newSet);
+    gridRef.current?.api?.onFilterChanged();
+  }, []);
+
   // Get status from viewMode
   const status = useMemo(() => mapViewToStatus(viewMode), [viewMode]);
   const resourceKey = systemNamespace ? "project-clients" : "clients";
@@ -529,6 +546,7 @@ const ClientsSectionNew: React.FC<SectionProps> = ({
             budget: primaryCommission?.budget ?? null,
             service_position: primaryCommission?.service_position ?? null,
             field: entity.field || primaryCommission?.field || '',
+            region: entity.region || '',
             location: entity.location || primaryCommission?.location || '',
             category: primaryCommission?.category ?? null,
             phone: entity.mobile ?? primaryCommission?.phone ?? null,
@@ -568,6 +586,7 @@ const ClientsSectionNew: React.FC<SectionProps> = ({
           name: entity?.name || getCommissionEntityName(rawCommission),
           company: entity?.company || rawCommission?.entity_company_name || '',
           field: entity?.field || rawCommission?.entity_field || commission.field || '',
+          region: entity?.region || rawCommission?.entity_region || '',
           location: entity?.location || rawCommission?.entity_location || commission.location || '',
           mobile: entity?.mobile || rawCommission?.entity_phone || commission.phone || '',
           email: entity?.email || rawCommission?.entity_email || '',
@@ -601,6 +620,7 @@ const ClientsSectionNew: React.FC<SectionProps> = ({
               budget: null,
               service_position: null,
               field: entity.field || '',
+              region: entity.region || '',
               location: entity.location || '',
               category: null,
               phone: entity.mobile || null,
@@ -1012,6 +1032,7 @@ const ClientsSectionNew: React.FC<SectionProps> = ({
           phone: emptyToNull(createDraft.entity.mobile),
           email: emptyToNull(createDraft.entity.email),
           website: emptyToNull(createDraft.entity.website),
+          region: emptyToNull(createDraft.entity.region),
           location: emptyToNull(createDraft.entity.location),
           info: emptyToNull(createDraft.entity.info),
           assigned_user_ids: fromAssignmentDraftValue(createDraft.entity.assigned_user_ids)
@@ -1065,6 +1086,7 @@ const ClientsSectionNew: React.FC<SectionProps> = ({
         phone: emptyToNull(createDraft.entity.mobile),
         email: emptyToNull(createDraft.entity.email),
         website: emptyToNull(createDraft.entity.website),
+        region: emptyToNull(createDraft.entity.region),
         location: emptyToNull(createDraft.entity.location),
         info: emptyToNull(createDraft.entity.info),
         assigned_user_ids: fromAssignmentDraftValue(createDraft.entity.assigned_user_ids)
@@ -1113,6 +1135,7 @@ const ClientsSectionNew: React.FC<SectionProps> = ({
         mobile: selectedEntity.mobile ?? "",
         email: selectedEntity.email ?? "",
         website: selectedEntity.website ?? "",
+        region: selectedEntity.region ?? "",
         location: selectedEntity.location ?? "",
         info: selectedEntity.info ?? "",
         assigned_user_ids: toAssignmentDraftValue(selectedEntity.assigned_user_ids)
@@ -1279,8 +1302,14 @@ const ClientsSectionNew: React.FC<SectionProps> = ({
         return;
       }
 
+      // Kraj is an entity-only attribute — always route to the subject, never a commission.
+      if (field === "region") {
+        if (row.entity) await handleUpdateEntity(row.entity.id, { region: newValue });
+        return;
+      }
+
       const entityFields = ['name', 'company', 'field', 'location', 'mobile', 'email'];
-      
+
       if (entityFields.includes(field) && row.entity) {
         await handleUpdateEntity(row.entity.id, { [field]: newValue });
       } else if (!row.entityOnly) {
@@ -1539,6 +1568,24 @@ const ClientsSectionNew: React.FC<SectionProps> = ({
         },
       },
       {
+        field: "region",
+        headerName: "Kraj",
+        filter: true,
+        editable: true,
+        flex: 1,
+        minWidth: 130,
+        cellEditor: "agSelectCellEditor",
+        cellEditorParams: { values: ["", ...REGION_OPTIONS] },
+        headerComponent: FieldFilterHeader,
+        headerComponentParams: {
+          filterRef: activeRegionFiltersRef,
+          onFilterChange: handleRegionFilterChange,
+          fieldOptions: REGION_OPTIONS,
+          filterButtonTitle: "Filtrovat kraje",
+          filterPanelLabel: "Filtrovat kraj",
+        },
+      },
+      {
         field: "location",
         headerName: "Lokalita",
         filter: true,
@@ -1640,11 +1687,12 @@ const ClientsSectionNew: React.FC<SectionProps> = ({
     }
 
     return cols;
-  }, [assignableUsers, fieldOptionChoices, fieldOptionsArray, groupedFieldOptionChoices, handleCreateFieldOption, handleDeleteFieldOption, handleFieldFilterChange, handleStateFilterChange, onStatusCellClicked, projectStatusOptions, readOnly, systemNamespace, viewMode]);
+  }, [assignableUsers, fieldOptionChoices, fieldOptionsArray, groupedFieldOptionChoices, handleCreateFieldOption, handleDeleteFieldOption, handleFieldFilterChange, handleRegionFilterChange, handleStateFilterChange, onStatusCellClicked, projectStatusOptions, readOnly, systemNamespace, viewMode]);
 
   const isExternalFilterPresent = useCallback(() => {
     return activeStateFiltersRef.current.size < WORKFLOW_STATUS_VALUES.length ||
-      activeFieldFiltersRef.current !== null;
+      activeFieldFiltersRef.current !== null ||
+      activeRegionFiltersRef.current !== null;
   }, []);
 
   const doesExternalFilterPass = useCallback((node: IRowNode<ClientGridRow>) => {
@@ -1659,6 +1707,12 @@ const ClientsSectionNew: React.FC<SectionProps> = ({
       if (fieldSet.size === 0) return false;
       const fieldValue = node.data?.field ?? "";
       if (!fieldSet.has(fieldValue)) return false;
+    }
+    const regionSet = activeRegionFiltersRef.current;
+    if (regionSet !== null) {
+      if (regionSet.size === 0) return false;
+      const regionValue = node.data?.region ?? "";
+      if (!regionSet.has(regionValue)) return false;
     }
     return true;
   }, []);

@@ -34,6 +34,7 @@ import { buildCommissionsRecordScope, buildSubjectsRecordScope, getActivitySyste
 import OptionSelectEditor from "../../futureFunctions/cells/OptionSelectEditor";
 import StatusFilterHeader from "../cells/StatusFilterHeader";
 import FieldFilterHeader from "../cells/FieldFilterHeader";
+import { REGION_OPTIONS } from "../regions";
 
 type TiperEntityApi = {
   id: number;
@@ -43,6 +44,7 @@ type TiperEntityApi = {
   assigned_user_ids?: number[] | null;
   company_name?: string | null;
   field?: string | null;
+  region?: string | null;
   location?: string | null;
   info?: string | null;
   first_name?: string | null;
@@ -77,6 +79,7 @@ type TiperCommissionApi = {
   entity_first_name?: string | null;
   entity_last_name?: string | null;
   entity_field?: string | null;
+  entity_region?: string | null;
   entity_location?: string | null;
   entity_info?: string | null;
   entity_phone?: string | null;
@@ -99,6 +102,7 @@ type TiperCreateDraft = {
     mobile: string;
     email: string;
     website: string;
+    region: string;
     location: string;
     info: string;
     assigned_user_ids: string[];
@@ -129,6 +133,7 @@ const createDefaultTiperDraft = (): TiperCreateDraft => ({
     mobile: "",
     email: "",
     website: "",
+    region: "",
     location: "",
     info: "",
     assigned_user_ids: []
@@ -155,6 +160,7 @@ const normalizeTiperEntity = (entity: TiperEntityApi): TiperEntity => ({
   name: joinName(entity.first_name, entity.last_name) || entity.company_name || entity.entity_id,
   company: entity.company_name ?? null,
   field: entity.field ?? null,
+  region: entity.region ?? null,
   location: entity.location ?? null,
   address: null,
   mobile: entity.phone ?? null,
@@ -199,7 +205,7 @@ const mapTiperEntityUpdates = (updates: Record<string, unknown>) => {
     else if (key === "mobile") mapped.phone = value;
     else if (key === "assigned_user_ids") mapped.assigned_user_ids = value;
     else if (key === "status") mapped.status = value;
-    else if (["field", "location", "email", "website", "info"].includes(key)) mapped[key] = value;
+    else if (["field", "region", "location", "email", "website", "info"].includes(key)) mapped[key] = value;
   }
   return mapped;
 };
@@ -215,6 +221,7 @@ const deriveTiperEntityFromCommission = (commission: TiperCommissionApi): TiperE
     name: joinName(commission.entity_first_name, commission.entity_last_name) || commission.entity_company_name || commission.commission_id.split('-')[0] || String(entityId),
     company: commission.entity_company_name ?? null,
     field: commission.entity_field ?? null,
+    region: commission.entity_region ?? null,
     location: commission.entity_location ?? null,
     address: null,
     mobile: commission.entity_phone ?? null,
@@ -259,6 +266,7 @@ const buildEntityData = (entity: TiperEntity | null, assignmentOptions: Array<st
       title: "Informace o tipařovi",
       color: "gray",
       fields: [
+        { key: "region", label: "Kraj", value: entity.region, type: "select", options: REGION_OPTIONS },
         { key: "location", label: "Lokalita", value: entity.location, type: "text" },
         { key: "info", label: "Popis / Poznámky", value: entity.info, type: "textarea", isMultiline: true },
       ]
@@ -343,6 +351,7 @@ const buildTiperDraftEntityData = (draft: TiperCreateDraft, assignmentOptions: A
     name: draft.entity.name,
     company: draft.entity.company,
     field: draft.entity.field,
+    region: draft.entity.region,
     location: draft.entity.location,
     address: null,
     mobile: draft.entity.mobile,
@@ -432,6 +441,14 @@ const TipersSectionNew: React.FC<SectionProps> = ({
     gridRef.current?.api?.onFilterChanged();
   }, []);
 
+  // Region (Kraj) checkbox filter — null means "show all"
+  const activeRegionFiltersRef = useRef<Set<string> | null>(null);
+
+  const handleRegionFilterChange = useCallback((newSet: Set<string> | null) => {
+    activeRegionFiltersRef.current = newSet === null ? null : new Set(newSet);
+    gridRef.current?.api?.onFilterChanged();
+  }, []);
+
   // Get status from viewMode
   const status = useMemo(() => mapViewToStatus(viewMode), [viewMode]);
   const resourceKey = systemNamespace ? "project-tipers" : "tipers";
@@ -505,6 +522,7 @@ const TipersSectionNew: React.FC<SectionProps> = ({
             budget: primaryCommission?.budget ?? null,
             service_position: primaryCommission?.service_position ?? null,
             field: entity.field || primaryCommission?.field || '',
+            region: entity.region || '',
             location: entity.location || primaryCommission?.location || '',
             category: primaryCommission?.category ?? null,
             phone: entity.mobile ?? primaryCommission?.phone ?? null,
@@ -544,6 +562,7 @@ const TipersSectionNew: React.FC<SectionProps> = ({
           name: entity?.name || getCommissionEntityName(rawCommission),
           company: entity?.company || rawCommission?.entity_company_name || '',
           field: entity?.field || rawCommission?.entity_field || commission.field || '',
+          region: entity?.region || rawCommission?.entity_region || '',
           location: entity?.location || rawCommission?.entity_location || commission.location || '',
           mobile: entity?.mobile || rawCommission?.entity_phone || commission.phone || '',
           email: entity?.email || rawCommission?.entity_email || '',
@@ -576,6 +595,7 @@ const TipersSectionNew: React.FC<SectionProps> = ({
               budget: null,
               service_position: null,
               field: entity.field || '',
+              region: entity.region || '',
               location: entity.location || '',
               category: null,
               phone: entity.mobile || null,
@@ -980,6 +1000,7 @@ const TipersSectionNew: React.FC<SectionProps> = ({
           phone: emptyToNull(createDraft.entity.mobile),
           email: emptyToNull(createDraft.entity.email),
           website: emptyToNull(createDraft.entity.website),
+          region: emptyToNull(createDraft.entity.region),
           location: emptyToNull(createDraft.entity.location),
           info: emptyToNull(createDraft.entity.info),
           assigned_user_ids: fromAssignmentDraftValue(createDraft.entity.assigned_user_ids)
@@ -1031,6 +1052,7 @@ const TipersSectionNew: React.FC<SectionProps> = ({
         phone: emptyToNull(createDraft.entity.mobile),
         email: emptyToNull(createDraft.entity.email),
         website: emptyToNull(createDraft.entity.website),
+        region: emptyToNull(createDraft.entity.region),
         location: emptyToNull(createDraft.entity.location),
         info: emptyToNull(createDraft.entity.info),
         assigned_user_ids: fromAssignmentDraftValue(createDraft.entity.assigned_user_ids)
@@ -1077,6 +1099,7 @@ const TipersSectionNew: React.FC<SectionProps> = ({
         mobile: selectedEntity.mobile ?? "",
         email: selectedEntity.email ?? "",
         website: selectedEntity.website ?? "",
+        region: selectedEntity.region ?? "",
         location: selectedEntity.location ?? "",
         info: selectedEntity.info ?? "",
         assigned_user_ids: toAssignmentDraftValue(selectedEntity.assigned_user_ids)
@@ -1242,8 +1265,14 @@ const TipersSectionNew: React.FC<SectionProps> = ({
         return;
       }
 
+      // Kraj is an entity-only attribute — always route to the subject, never a commission.
+      if (field === "region") {
+        if (row.entity) await handleUpdateEntity(row.entity.id, { region: newValue });
+        return;
+      }
+
       const entityFields = ['name', 'company', 'field', 'location', 'mobile', 'email'];
-      
+
       if (entityFields.includes(field) && row.entity) {
         await handleUpdateEntity(row.entity.id, { [field]: params.newValue });
       } else if (!row.entityOnly) {
@@ -1495,6 +1524,24 @@ const TipersSectionNew: React.FC<SectionProps> = ({
         },
       },
       {
+        field: "region",
+        headerName: "Kraj",
+        filter: true,
+        editable: true,
+        flex: 1,
+        minWidth: 130,
+        cellEditor: "agSelectCellEditor",
+        cellEditorParams: { values: ["", ...REGION_OPTIONS] },
+        headerComponent: FieldFilterHeader,
+        headerComponentParams: {
+          filterRef: activeRegionFiltersRef,
+          onFilterChange: handleRegionFilterChange,
+          fieldOptions: REGION_OPTIONS,
+          filterButtonTitle: "Filtrovat kraje",
+          filterPanelLabel: "Filtrovat kraj",
+        },
+      },
+      {
         field: "location",
         headerName: "Lokalita",
         filter: true,
@@ -1589,11 +1636,12 @@ const TipersSectionNew: React.FC<SectionProps> = ({
     }
 
     return cols;
-  }, [assignableUsers, fieldOptionChoices, fieldOptionsArray, groupedFieldOptionChoices, handleCreateFieldOption, handleDeleteFieldOption, handleFieldFilterChange, handleStateFilterChange, onStatusCellClicked, projectStatusOptions, readOnly, systemNamespace, viewMode]);
+  }, [assignableUsers, fieldOptionChoices, fieldOptionsArray, groupedFieldOptionChoices, handleCreateFieldOption, handleDeleteFieldOption, handleFieldFilterChange, handleRegionFilterChange, handleStateFilterChange, onStatusCellClicked, projectStatusOptions, readOnly, systemNamespace, viewMode]);
 
   const isExternalFilterPresent = useCallback(() => {
     return activeStateFiltersRef.current.size < WORKFLOW_STATUS_VALUES.length ||
-      activeFieldFiltersRef.current !== null;
+      activeFieldFiltersRef.current !== null ||
+      activeRegionFiltersRef.current !== null;
   }, []);
 
   const doesExternalFilterPass = useCallback((node: IRowNode<TiperGridRow>) => {
@@ -1608,6 +1656,12 @@ const TipersSectionNew: React.FC<SectionProps> = ({
       if (fieldSet.size === 0) return false;
       const fieldValue = node.data?.field ?? "";
       if (!fieldSet.has(fieldValue)) return false;
+    }
+    const regionSet = activeRegionFiltersRef.current;
+    if (regionSet !== null) {
+      if (regionSet.size === 0) return false;
+      const regionValue = node.data?.region ?? "";
+      if (!regionSet.has(regionValue)) return false;
     }
     return true;
   }, []);

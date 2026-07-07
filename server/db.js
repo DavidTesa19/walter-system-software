@@ -870,6 +870,21 @@ export async function initDatabase() {
       )
     `);
 
+    // Kraj (region) — entity-level column added after the entity tables exist,
+    // so both fresh installs and existing deployments get it.
+    const regionColumnTables = [
+      'partner_entities',
+      'client_entities',
+      'tiper_entities',
+      'project_partner_entities',
+      'project_client_entities',
+      'project_tiper_entities',
+    ];
+
+    for (const tableName of regionColumnTables) {
+      await client.query(`ALTER TABLE ${tableName} ADD COLUMN IF NOT EXISTS region VARCHAR(255)`);
+    }
+
     const activityActorColumnTables = [
       'partners',
       'clients',
@@ -2106,10 +2121,10 @@ export const db = {
 
     const entityId = await this.getNextEntityId('partner');
     const { rows } = await pool.query(
-      `INSERT INTO partner_entities (entity_id, status, company_name, field, location, info, category, first_name, last_name, email, phone, website, assigned_to, assigned_user_ids)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14)
+      `INSERT INTO partner_entities (entity_id, status, company_name, field, location, region, info, category, first_name, last_name, email, phone, website, assigned_to, assigned_user_ids)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15)
        RETURNING *`,
-      [entityId, data.status || 'accepted', data.company_name, data.field, data.location, data.info, data.category, data.first_name, data.last_name, data.email, data.phone, data.website, data.assigned_to ?? null, data.assigned_user_ids ?? []]
+      [entityId, data.status || 'accepted', data.company_name, data.field, data.location, data.region ?? null, data.info, data.category, data.first_name, data.last_name, data.email, data.phone, data.website, data.assigned_to ?? null, data.assigned_user_ids ?? []]
     );
     return rows[0];
   },
@@ -2150,6 +2165,7 @@ export const db = {
         e.company_name as e_company_name,
         e.field as e_field,
         e.location as e_location,
+        e.region as e_region,
         e.info as e_info,
         e.category as e_category,
         e.first_name as e_first_name,
@@ -2198,6 +2214,7 @@ export const db = {
       entity_company_name: row.e_company_name,
       entity_field: row.e_field,
       entity_location: row.e_location,
+      entity_region: row.e_region,
       entity_info: row.e_info,
       entity_category: row.e_category,
       entity_first_name: row.e_first_name,
@@ -2218,6 +2235,7 @@ export const db = {
         e.company_name as e_company_name,
         e.field as e_field,
         e.location as e_location,
+        e.region as e_region,
         e.info as e_info,
         e.category as e_category,
         e.first_name as e_first_name,
@@ -2261,6 +2279,7 @@ export const db = {
       entity_company_name: row.e_company_name,
       entity_field: row.e_field,
       entity_location: row.e_location,
+      entity_region: row.e_region,
       entity_info: row.e_info,
       entity_category: row.e_category,
       entity_first_name: row.e_first_name,
@@ -2350,10 +2369,10 @@ export const db = {
 
     const entityId = await this.getNextEntityId('client');
     const { rows } = await pool.query(
-      `INSERT INTO client_entities (entity_id, status, company_name, field, service, location, info, category, budget, first_name, last_name, email, phone, website, assigned_to, assigned_user_ids)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16)
+      `INSERT INTO client_entities (entity_id, status, company_name, field, service, location, region, info, category, budget, first_name, last_name, email, phone, website, assigned_to, assigned_user_ids)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17)
        RETURNING *`,
-      [entityId, data.status || 'accepted', data.company_name, data.field, data.service, data.location, data.info, data.category, data.budget, data.first_name, data.last_name, data.email, data.phone, data.website, data.assigned_to ?? null, data.assigned_user_ids ?? []]
+      [entityId, data.status || 'accepted', data.company_name, data.field, data.service, data.location, data.region ?? null, data.info, data.category, data.budget, data.first_name, data.last_name, data.email, data.phone, data.website, data.assigned_to ?? null, data.assigned_user_ids ?? []]
     );
     return rows[0];
   },
@@ -2395,6 +2414,7 @@ export const db = {
         e.field as e_field,
         e.service as e_service,
         e.location as e_location,
+        e.region as e_region,
         e.info as e_info,
         e.category as e_category,
         e.budget as e_budget,
@@ -2443,6 +2463,7 @@ export const db = {
       entity_field: row.e_field,
       entity_service: row.e_service,
       entity_location: row.e_location,
+      entity_region: row.e_region,
       entity_info: row.e_info,
       entity_category: row.e_category,
       entity_budget: row.e_budget,
@@ -2465,6 +2486,7 @@ export const db = {
         e.field as e_field,
         e.service as e_service,
         e.location as e_location,
+        e.region as e_region,
         e.info as e_info,
         e.category as e_category,
         e.budget as e_budget,
@@ -2510,6 +2532,7 @@ export const db = {
       entity_field: row.e_field,
       entity_service: row.e_service,
       entity_location: row.e_location,
+      entity_region: row.e_region,
       entity_info: row.e_info,
       entity_category: row.e_category,
       entity_budget: row.e_budget,
@@ -2599,10 +2622,10 @@ export const db = {
 
     const entityId = await this.getNextEntityId('tiper');
     const { rows } = await pool.query(
-      `INSERT INTO tiper_entities (entity_id, status, company_name, first_name, last_name, field, location, info, category, email, phone, website, assigned_to, assigned_user_ids)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14)
+      `INSERT INTO tiper_entities (entity_id, status, company_name, first_name, last_name, field, location, region, info, category, email, phone, website, assigned_to, assigned_user_ids)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15)
        RETURNING *`,
-      [entityId, data.status || 'accepted', data.company_name, data.first_name, data.last_name, data.field, data.location, data.info, data.category, data.email, data.phone, data.website, data.assigned_to ?? null, data.assigned_user_ids ?? []]
+      [entityId, data.status || 'accepted', data.company_name, data.first_name, data.last_name, data.field, data.location, data.region ?? null, data.info, data.category, data.email, data.phone, data.website, data.assigned_to ?? null, data.assigned_user_ids ?? []]
     );
     return rows[0];
   },
@@ -2645,6 +2668,7 @@ export const db = {
         e.last_name as e_last_name,
         e.field as e_field,
         e.location as e_location,
+        e.region as e_region,
         e.info as e_info,
         e.category as e_category,
         e.email as e_email,
@@ -2691,6 +2715,7 @@ export const db = {
       entity_last_name: row.e_last_name,
       entity_field: row.e_field,
       entity_location: row.e_location,
+      entity_region: row.e_region,
       entity_info: row.e_info,
       entity_category: row.e_category,
       entity_email: row.e_email,
@@ -2711,6 +2736,7 @@ export const db = {
         e.last_name as e_last_name,
         e.field as e_field,
         e.location as e_location,
+        e.region as e_region,
         e.info as e_info,
         e.category as e_category,
         e.email as e_email,
@@ -2754,6 +2780,7 @@ export const db = {
       entity_last_name: row.e_last_name,
       entity_field: row.e_field,
       entity_location: row.e_location,
+      entity_region: row.e_region,
       entity_info: row.e_info,
       entity_category: row.e_category,
       entity_email: row.e_email,

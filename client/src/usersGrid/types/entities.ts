@@ -22,6 +22,7 @@ export interface PartnerEntity extends BaseEntity {
   name: string;
   company: string | null;
   field: string | null;
+  region: string | null;
   location: string | null;
   address: string | null;
   mobile: string | null;
@@ -39,6 +40,7 @@ export interface ClientEntity extends BaseEntity {
   field: string | null;
   service: string | null;
   budget: string | null;
+  region: string | null;
   location: string | null;
   address: string | null;
   mobile: string | null;
@@ -54,6 +56,7 @@ export interface TiperEntity extends BaseEntity {
   name: string;
   company: string | null;
   field: string | null;
+  region: string | null;
   location: string | null;
   address: string | null;
   mobile: string | null;
@@ -152,6 +155,7 @@ export interface PartnerGridRow extends PartnerCommission {
   name: string;
   company: string;
   field: string;
+  region: string;
   location: string;
   mobile: string;
   email: string;
@@ -175,6 +179,7 @@ export interface ClientGridRow extends ClientCommission {
   name: string;
   company: string;
   field: string;
+  region: string;
   location: string;
   mobile: string;
   email: string;
@@ -198,6 +203,7 @@ export interface TiperGridRow extends TiperCommission {
   name: string;
   company: string;
   field: string;
+  region: string;
   location: string;
   mobile: string;
   email: string;

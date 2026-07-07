@@ -113,6 +113,7 @@ export function createPartnerEntity(db, data) {
     company_name: data.company_name || 'Nová společnost',
     field: data.field || null,
     location: data.location || null,
+    region: data.region || null,
     info: data.info || null,
     category: data.category || null,
     first_name: data.first_name || null,
@@ -125,7 +126,7 @@ export function createPartnerEntity(db, data) {
     created_at: new Date().toISOString(),
     updated_at: new Date().toISOString()
   };
-  
+
   db.partner_entities.push(entity);
   return entity;
 }
@@ -178,6 +179,7 @@ export function getPartnerCommissions(db, filters = {}) {
       entity_company_name: entity?.company_name || null,
       entity_field: entity?.field || null,
       entity_location: entity?.location || null,
+      entity_region: entity?.region || null,
       entity_info: entity?.info || null,
       entity_category: entity?.category || null,
       entity_first_name: entity?.first_name || null,
@@ -200,6 +202,7 @@ export function getPartnerCommissionById(db, id) {
     entity_company_name: entity?.company_name || null,
     entity_field: entity?.field || null,
     entity_location: entity?.location || null,
+    entity_region: entity?.region || null,
     entity_info: entity?.info || null,
     entity_category: entity?.category || null,
     entity_first_name: entity?.first_name || null,
@@ -323,6 +326,7 @@ export function createClientEntity(db, data) {
     field: data.field || null,
     service: data.service || null,
     location: data.location || null,
+    region: data.region || null,
     info: data.info || null,
     category: data.category || null,
     budget: data.budget || null,
@@ -391,6 +395,7 @@ export function getClientCommissions(db, filters = {}) {
       entity_field: entity?.field || null,
       entity_service: entity?.service || null,
       entity_location: entity?.location || null,
+      entity_region: entity?.region || null,
       entity_info: entity?.info || null,
       entity_category: entity?.category || null,
       entity_budget: entity?.budget || null,
@@ -417,6 +422,7 @@ export function getClientCommissionById(db, id) {
     entity_field: entity?.field || null,
     entity_service: entity?.service || null,
     entity_location: entity?.location || null,
+    entity_region: entity?.region || null,
     entity_info: entity?.info || null,
     entity_category: entity?.category || null,
     entity_budget: entity?.budget || null,
@@ -542,6 +548,7 @@ export function createTiperEntity(db, data) {
     last_name: data.last_name || null,
     field: data.field || null,
     location: data.location || null,
+    region: data.region || null,
     info: data.info || null,
     category: data.category || null,
     email: data.email || null,
@@ -552,7 +559,7 @@ export function createTiperEntity(db, data) {
     created_at: new Date().toISOString(),
     updated_at: new Date().toISOString()
   };
-  
+
   db.tiper_entities.push(entity);
   return entity;
 }
@@ -606,6 +613,7 @@ export function getTiperCommissions(db, filters = {}) {
       entity_last_name: entity?.last_name || null,
       entity_field: entity?.field || null,
       entity_location: entity?.location || null,
+      entity_region: entity?.region || null,
       entity_info: entity?.info || null,
       entity_category: entity?.category || null,
       entity_email: entity?.email || null,
@@ -628,6 +636,7 @@ export function getTiperCommissionById(db, id) {
     entity_last_name: entity?.last_name || null,
     entity_field: entity?.field || null,
     entity_location: entity?.location || null,
+    entity_region: entity?.region || null,
     entity_info: entity?.info || null,
     entity_category: entity?.category || null,
     entity_email: entity?.email || null,

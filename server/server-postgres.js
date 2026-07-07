@@ -4445,7 +4445,7 @@ const PROJECT_ROUTE_CONFIG = {
     counterKey: 'project_partner',
     commissionKey: 'project_partner',
     entityDefaults: { company_name: 'Nová společnost' },
-    entityFields: ['status', 'company_name', 'field', 'location', 'info', 'category', 'first_name', 'last_name', 'email', 'phone', 'website', 'assigned_to', 'assigned_user_ids'],
+    entityFields: ['status', 'company_name', 'field', 'location', 'region', 'info', 'category', 'first_name', 'last_name', 'email', 'phone', 'website', 'assigned_to', 'assigned_user_ids'],
     commissionFields: ['status', 'position', 'budget', 'state', 'assigned_to', 'assigned_user_ids', 'field', 'service_position', 'location', 'info', 'category', 'deadline', 'priority', 'phone', 'commission_value', 'is_tipped', 'notes']
   },
   client: {
@@ -4454,7 +4454,7 @@ const PROJECT_ROUTE_CONFIG = {
     counterKey: 'project_client',
     commissionKey: 'project_client',
     entityDefaults: { company_name: 'Nová společnost' },
-    entityFields: ['status', 'company_name', 'field', 'service', 'location', 'info', 'category', 'budget', 'first_name', 'last_name', 'email', 'phone', 'website', 'assigned_to', 'assigned_user_ids'],
+    entityFields: ['status', 'company_name', 'field', 'service', 'location', 'region', 'info', 'category', 'budget', 'first_name', 'last_name', 'email', 'phone', 'website', 'assigned_to', 'assigned_user_ids'],
     commissionFields: ['status', 'position', 'budget', 'state', 'assigned_to', 'assigned_user_ids', 'field', 'service_position', 'location', 'info', 'category', 'deadline', 'priority', 'phone', 'commission_value', 'is_tipped', 'notes']
   },
   tiper: {
@@ -4463,7 +4463,7 @@ const PROJECT_ROUTE_CONFIG = {
     counterKey: 'project_tiper',
     commissionKey: 'project_tiper',
     entityDefaults: {},
-    entityFields: ['status', 'company_name', 'field', 'location', 'info', 'category', 'first_name', 'last_name', 'email', 'phone', 'website', 'assigned_to', 'assigned_user_ids'],
+    entityFields: ['status', 'company_name', 'field', 'location', 'region', 'info', 'category', 'first_name', 'last_name', 'email', 'phone', 'website', 'assigned_to', 'assigned_user_ids'],
     commissionFields: ['status', 'position', 'budget', 'state', 'assigned_to', 'assigned_user_ids', 'field', 'service_position', 'location', 'info', 'category', 'deadline', 'priority', 'phone', 'linked_entity_type', 'linked_commission_id', 'commission_value', 'is_tipped', 'notes']
   }
 };
@@ -4508,6 +4508,7 @@ const buildProjectCommissionResponse = (type, commission, entity) => {
     entity_company_name: entity?.company_name ?? null,
     entity_field: entity?.field ?? null,
     entity_location: entity?.location ?? null,
+    entity_region: entity?.region ?? null,
     entity_info: entity?.info ?? null,
     entity_category: entity?.category ?? null,
     entity_first_name: entity?.first_name ?? null,
