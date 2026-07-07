@@ -104,16 +104,6 @@ export const getActivityState = ({
   return "updated";
 };
 
-export const countUnseenRecords = (
-  records: Array<Record<string, unknown>>,
-  seenAt?: string | null,
-  currentUserId?: number | null,
-): number => {
-  return records.reduce((count, record) => {
-    return getRecordActivityState(record, seenAt, currentUserId) === "none" ? count : count + 1;
-  }, 0);
-};
-
 // ===========================================================================
 // PER-FIELD (CELL) ACTIVITY
 // ===========================================================================

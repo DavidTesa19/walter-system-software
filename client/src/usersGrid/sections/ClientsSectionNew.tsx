@@ -32,13 +32,7 @@ import { compareApprovalStatuses } from "../utils/approvalStatus";
 import { compareWorkflowStatuses, DEFAULT_WORKFLOW_STATUS, getNormalizedWorkflowStatus, WORKFLOW_STATUS_COLOR_MAP, WORKFLOW_STATUS_VALUES } from "../workflowStatus";
 import useAssignableUsers from "../hooks/useAssignableUsers";
 import { useActivity } from "../../activity/ActivityContext";
-import {
-  buildCommissionsCollectionKey,
-  buildCommissionsRecordScope,
-  buildSubjectsCollectionKey,
-  buildSubjectsRecordScope,
-  getActivitySystem,
-} from "../../activity/activityKeys";
+import { buildCommissionsRecordScope, buildSubjectsRecordScope, getActivitySystem } from "../../activity/activityKeys";
 import { buildActivityColumn, makeActivityCellClassRules, remapFieldActivity } from "../../activity/gridActivity";
 import ActivityConfirmAllButton from "../../activity/ActivityConfirmAllButton";
 import type { FieldActivityMap } from "../../activity/activityUtils";
@@ -462,7 +456,7 @@ const ClientsSectionNew: React.FC<SectionProps> = ({
   readOnly = false
 }) => {
   const { users: assignableUsers, options: assignmentOptions } = useAssignableUsers();
-  const { markItemSeen, markItemsSeen, markCollectionSeen, getItemActivity, getFieldActivity } = useActivity();
+  const { markItemSeen, markItemsSeen, getItemActivity, getFieldActivity } = useActivity();
 
   // Keep the latest field-activity resolver in a ref so the memoised cellClassRules
   // (built once) always read current seen/actor state without rebuilding column defs.
@@ -533,8 +527,6 @@ const ClientsSectionNew: React.FC<SectionProps> = ({
   const activitySystem = useMemo(() => getActivitySystem(systemNamespace), [systemNamespace]);
   const subjectActivityScope = useMemo(() => buildSubjectsRecordScope(activitySystem, "clients"), [activitySystem]);
   const commissionActivityScope = useMemo(() => buildCommissionsRecordScope(activitySystem, "clients"), [activitySystem]);
-  const subjectCollectionKey = useMemo(() => buildSubjectsCollectionKey(activitySystem, viewMode, "clients"), [activitySystem, viewMode]);
-  const commissionCollectionKey = useMemo(() => buildCommissionsCollectionKey(activitySystem, viewMode, "clients"), [activitySystem, viewMode]);
   const entityApiBase = systemNamespace ? `/api/${systemNamespace}/client-entities` : "/api/client-entities";
   const commissionApiBase = systemNamespace ? `/api/${systemNamespace}/client-commissions` : "/api/client-commissions";
 
@@ -1842,10 +1834,8 @@ const ClientsSectionNew: React.FC<SectionProps> = ({
         seenAt: row.activity_latest_at ?? null,
       }));
     markItemsSeen(entries);
-    markCollectionSeen(subjectCollectionKey);
-    markCollectionSeen(commissionCollectionKey);
     gridRef.current?.api?.refreshCells({ force: true });
-  }, [commissionCollectionKey, gridData, markCollectionSeen, markItemsSeen, subjectCollectionKey]);
+  }, [gridData, markItemsSeen]);
 
   // ==========================================================================
   // RENDER

@@ -29,13 +29,7 @@ import { formatAssignedUsernames, fromAssignmentDraftValue, toAssignmentDraftVal
 import { compareWorkflowStatuses, DEFAULT_WORKFLOW_STATUS, getNormalizedWorkflowStatus, WORKFLOW_STATUS_COLOR_MAP, WORKFLOW_STATUS_VALUES } from "../workflowStatus";
 import useAssignableUsers from "../hooks/useAssignableUsers";
 import { useActivity } from "../../activity/ActivityContext";
-import {
-  buildCommissionsCollectionKey,
-  buildCommissionsRecordScope,
-  buildSubjectsCollectionKey,
-  buildSubjectsRecordScope,
-  getActivitySystem,
-} from "../../activity/activityKeys";
+import { buildCommissionsRecordScope, buildSubjectsRecordScope, getActivitySystem } from "../../activity/activityKeys";
 import { buildActivityColumn, makeActivityCellClassRules, remapFieldActivity } from "../../activity/gridActivity";
 import ActivityConfirmAllButton from "../../activity/ActivityConfirmAllButton";
 import type { FieldActivityMap } from "../../activity/activityUtils";
@@ -422,7 +416,7 @@ const buildPartnerDraftCommissionData = (draft: PartnerCreateDraft, status: Part
 
 const PartnersSectionNew: React.FC<SectionProps> = ({ viewMode, isActive, systemNamespace, sectionKind, onRegisterAddHandler, onLoadingChange, readOnly = false }) => {
   const { users: assignableUsers, options: assignmentOptions } = useAssignableUsers();
-  const { markItemSeen, markItemsSeen, markCollectionSeen, getItemActivity, getFieldActivity } = useActivity();
+  const { markItemSeen, markItemsSeen, getItemActivity, getFieldActivity } = useActivity();
 
   const getFieldActivityRef = useRef(getFieldActivity);
   getFieldActivityRef.current = getFieldActivity;
@@ -487,8 +481,6 @@ const PartnersSectionNew: React.FC<SectionProps> = ({ viewMode, isActive, system
   const activitySystem = useMemo(() => getActivitySystem(systemNamespace), [systemNamespace]);
   const subjectActivityScope = useMemo(() => buildSubjectsRecordScope(activitySystem, "partners"), [activitySystem]);
   const commissionActivityScope = useMemo(() => buildCommissionsRecordScope(activitySystem, "partners"), [activitySystem]);
-  const subjectCollectionKey = useMemo(() => buildSubjectsCollectionKey(activitySystem, viewMode, "partners"), [activitySystem, viewMode]);
-  const commissionCollectionKey = useMemo(() => buildCommissionsCollectionKey(activitySystem, viewMode, "partners"), [activitySystem, viewMode]);
   const entityApiBase = systemNamespace ? `/api/${systemNamespace}/partner-entities` : "/api/partner-entities";
   const commissionApiBase = systemNamespace ? `/api/${systemNamespace}/partner-commissions` : "/api/partner-commissions";
   const documentManager = useProfileDocuments(resourceKey, selectedEntityId);
@@ -1521,10 +1513,8 @@ const PartnersSectionNew: React.FC<SectionProps> = ({ viewMode, isActive, system
         seenAt: row.activity_latest_at ?? null,
       }));
     markItemsSeen(entries);
-    markCollectionSeen(subjectCollectionKey);
-    markCollectionSeen(commissionCollectionKey);
     gridRef.current?.api?.refreshCells({ force: true });
-  }, [commissionCollectionKey, gridData, markCollectionSeen, markItemsSeen, subjectCollectionKey]);
+  }, [gridData, markItemsSeen]);
 
   return (
     <>

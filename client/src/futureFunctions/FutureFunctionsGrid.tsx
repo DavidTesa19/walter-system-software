@@ -18,11 +18,7 @@ import type { ICellRendererParams } from "ag-grid-community";
 import { formatProfileDate } from "../usersGrid/utils/profileUtils";
 import { getStoredFutureFunctionsView, setStoredFutureFunctionsView } from "../utils/navigationState";
 import { useActivity } from "../activity/ActivityContext";
-import {
-  FUTURE_FUNCTIONS_ACTIVE_COLLECTION_KEY,
-  FUTURE_FUNCTIONS_ARCHIVE_COLLECTION_KEY,
-  FUTURE_FUNCTIONS_RECORD_SCOPE,
-} from "../activity/activityKeys";
+import { FUTURE_FUNCTIONS_RECORD_SCOPE } from "../activity/activityKeys";
 import { buildActivityColumn, makeActivityCellClassRules } from "../activity/gridActivity";
 import ActivityConfirmAllButton from "../activity/ActivityConfirmAllButton";
 
@@ -106,7 +102,7 @@ const FutureFunctionsGrid: React.FC = () => {
   const editSnapshotRef = useRef<Record<number, any>>({});
   const gridApiRef = useRef<any>(null);
 
-  const { markItemsSeen, markCollectionSeen, getItemActivity, getFieldActivity } = useActivity();
+  const { markItemsSeen, getItemActivity, getFieldActivity } = useActivity();
   const getFieldActivityRef = useRef(getFieldActivity);
   getFieldActivityRef.current = getFieldActivity;
   const activityCellClassRules = useMemo(
@@ -904,9 +900,8 @@ const FutureFunctionsGrid: React.FC = () => {
         seenAt: row.activity_latest_at ?? null,
       }))
     );
-    markCollectionSeen(isArchiveView ? FUTURE_FUNCTIONS_ARCHIVE_COLLECTION_KEY : FUTURE_FUNCTIONS_ACTIVE_COLLECTION_KEY);
     gridApiRef.current?.refreshCells({ force: true });
-  }, [currentRowData, isArchiveView, markCollectionSeen, markItemsSeen]);
+  }, [currentRowData, markItemsSeen]);
 
   // Status counts for summary strip
   const statusSummary = useMemo(() => {

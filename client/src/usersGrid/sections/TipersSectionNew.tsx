@@ -29,13 +29,7 @@ import { formatAssignedUsernames, fromAssignmentDraftValue, toAssignmentDraftVal
 import { compareWorkflowStatuses, DEFAULT_WORKFLOW_STATUS, getNormalizedWorkflowStatus, WORKFLOW_STATUS_COLOR_MAP, WORKFLOW_STATUS_VALUES } from "../workflowStatus";
 import useAssignableUsers from "../hooks/useAssignableUsers";
 import { useActivity } from "../../activity/ActivityContext";
-import {
-  buildCommissionsCollectionKey,
-  buildCommissionsRecordScope,
-  buildSubjectsCollectionKey,
-  buildSubjectsRecordScope,
-  getActivitySystem,
-} from "../../activity/activityKeys";
+import { buildCommissionsRecordScope, buildSubjectsRecordScope, getActivitySystem } from "../../activity/activityKeys";
 import { buildActivityColumn, makeActivityCellClassRules, remapFieldActivity } from "../../activity/gridActivity";
 import ActivityConfirmAllButton from "../../activity/ActivityConfirmAllButton";
 import type { FieldActivityMap } from "../../activity/activityUtils";
@@ -438,7 +432,7 @@ const TipersSectionNew: React.FC<SectionProps> = ({
   readOnly = false
 }) => {
   const { users: assignableUsers, options: assignmentOptions } = useAssignableUsers();
-  const { markItemSeen, markItemsSeen, markCollectionSeen, getItemActivity, getFieldActivity } = useActivity();
+  const { markItemSeen, markItemsSeen, getItemActivity, getFieldActivity } = useActivity();
 
   const getFieldActivityRef = useRef(getFieldActivity);
   getFieldActivityRef.current = getFieldActivity;
@@ -507,8 +501,6 @@ const TipersSectionNew: React.FC<SectionProps> = ({
   const activitySystem = useMemo(() => getActivitySystem(systemNamespace), [systemNamespace]);
   const subjectActivityScope = useMemo(() => buildSubjectsRecordScope(activitySystem, "tipers"), [activitySystem]);
   const commissionActivityScope = useMemo(() => buildCommissionsRecordScope(activitySystem, "tipers"), [activitySystem]);
-  const subjectCollectionKey = useMemo(() => buildSubjectsCollectionKey(activitySystem, viewMode, "tipers"), [activitySystem, viewMode]);
-  const commissionCollectionKey = useMemo(() => buildCommissionsCollectionKey(activitySystem, viewMode, "tipers"), [activitySystem, viewMode]);
   const entityApiBase = systemNamespace ? `/api/${systemNamespace}/tiper-entities` : "/api/tiper-entities";
   const commissionApiBase = systemNamespace ? `/api/${systemNamespace}/tiper-commissions` : "/api/tiper-commissions";
 
@@ -1780,10 +1772,8 @@ const TipersSectionNew: React.FC<SectionProps> = ({
         seenAt: row.activity_latest_at ?? null,
       }));
     markItemsSeen(entries);
-    markCollectionSeen(subjectCollectionKey);
-    markCollectionSeen(commissionCollectionKey);
     gridRef.current?.api?.refreshCells({ force: true });
-  }, [commissionCollectionKey, gridData, markCollectionSeen, markItemsSeen, subjectCollectionKey]);
+  }, [gridData, markItemsSeen]);
 
   // ==========================================================================
   // RENDER
