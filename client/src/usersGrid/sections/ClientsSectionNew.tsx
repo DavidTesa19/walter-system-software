@@ -1521,7 +1521,7 @@ const ClientsSectionNew: React.FC<SectionProps> = ({
       field: "project_name",
       headerName: "Projekt",
       filter: true,
-      editable: true,
+      editable: (params) => !params.data?.entityOnly,
       flex: 1,
       minWidth: 120
     });
