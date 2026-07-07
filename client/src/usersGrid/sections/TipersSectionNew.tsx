@@ -21,14 +21,13 @@ import type { SectionProps } from "./SectionTypes";
 import useFieldOptions from "../hooks/useFieldOptions";
 import useProfileDocuments from "../hooks/useProfileDocuments";
 import useProfileNotes from "../hooks/useProfileNotes";
-import { ApproveRestoreCellRenderer, DeleteArchiveCellRenderer } from "../cells/RowActionCellRenderers";
+import { ApproveRestoreCellRenderer, DeleteArchiveCellRenderer, ArchiveCellRenderer } from "../cells/RowActionCellRenderers";
 import { fieldOptions } from "../fieldOptions";
 import { formatProfileDate } from "../utils/profileUtils";
 import { compareApprovalStatuses } from "../utils/approvalStatus";
 import { formatAssignedUsernames, fromAssignmentDraftValue, toAssignmentDraftValue } from "../assignmentUtils";
 import { compareWorkflowStatuses, DEFAULT_WORKFLOW_STATUS, getNormalizedWorkflowStatus, WORKFLOW_STATUS_COLOR_MAP, WORKFLOW_STATUS_VALUES } from "../workflowStatus";
 import useAssignableUsers from "../hooks/useAssignableUsers";
-import ActivityCellRenderer from "../../activity/ActivityCellRenderer";
 import { useActivity } from "../../activity/ActivityContext";
 import { buildCommissionsRecordScope, buildSubjectsRecordScope, getActivitySystem } from "../../activity/activityKeys";
 import OptionSelectEditor from "../../futureFunctions/cells/OptionSelectEditor";
@@ -884,26 +883,16 @@ const TipersSectionNew: React.FC<SectionProps> = ({
       const entityId = row?.entity?.id ?? null;
       if (!row || entityId === null) return;
 
-      // Commission row in active grid: archive only that commission, regardless of namespace.
+      // Commission row in active grid: delete only that commission.
       if (!row.subjectRow && !row.entityOnly) {
-        await archiveOrDeleteSingleCommission(id);
-        return;
-      }
-
-      if (systemNamespace === "projects") {
-        const linkedCount = row.commission_count ?? 0;
-        const label = row.name || row.company || row.entity_id;
-        const confirmMessage = linkedCount > 0
-          ? `Opravdu chcete přesunout tento subjekt a všech ${linkedCount} navázaných tipů do archivu?\n\nSubjekt: ${label}\nID: ${row.entity_id}`
-          : `Opravdu chcete přesunout tento subjekt do archivu?\n\nSubjekt: ${label}\nID: ${row.entity_id}`;
-
-        if (!confirm(confirmMessage)) return;
-
+        const label = commission?.position || commission?.commission_id || `#${id}`;
+        if (!confirm(`Opravdu chcete TRVALE SMAZAT tento tip z databáze?\n\nTip: ${label}\n\nTato akce je NEzvratná!`)) return;
         try {
-          await updateProjectClusterStatus(row, "archived");
+          await apiDelete(`${commissionApiBase}/${id}`);
+          fetchData();
         } catch (error) {
-          console.error("Error archiving tiper project cluster:", error);
-          alert("Chyba při archivaci subjektu");
+          console.error("Error deleting commission:", error);
+          alert("Chyba při mazání tipu");
         }
         return;
       }
@@ -986,7 +975,43 @@ const TipersSectionNew: React.FC<SectionProps> = ({
       console.error("Error performing action:", error);
       alert("Chyba při provádění akce");
     }
-  }, [archiveOrDeleteSingleCommission, closeProfile, commissionApiBase, commissions, entityApiBase, fetchData, gridData, selectedEntityId, systemNamespace, updateProjectClusterStatus, viewMode]);
+  }, [archiveOrDeleteSingleCommission, closeProfile, commissionApiBase, commissions, entityApiBase, fetchData, gridData, selectedEntityId, viewMode]);
+
+  const handleArchive = useCallback(async (id: number) => {
+    const commission = commissions.find(c => c.id === id);
+    const row = gridData.find(r => r.id === id) ?? (commission ? gridData.find(r => r.entity?.id === commission.tiper_entity_id && r.subjectRow) : null);
+    const entityId = row?.entity?.id ?? null;
+    if (!row || entityId === null) return;
+
+    // Commission row: archive only that commission.
+    if (!row.subjectRow && !row.entityOnly) {
+      const label = commission?.position || commission?.commission_id || `#${id}`;
+      if (!confirm(`Opravdu chcete přesunout tento tip do archivu?\n\nTip: ${label}`)) return;
+      try {
+        await apiPost(`${commissionApiBase}/${id}/archive`);
+        fetchData();
+      } catch (error) {
+        console.error("Error archiving commission:", error);
+        alert("Chyba při archivaci tipu");
+      }
+      return;
+    }
+
+    const linkedCount = row.commission_count ?? 0;
+    const label = row.name || row.company || row.entity_id;
+    const confirmMessage = linkedCount > 0
+      ? `Opravdu chcete přesunout tohoto tipaře a všech ${linkedCount} navázaných tipů / zakázek do archivu?\n\nTipař: ${label}\nID: ${row.entity_id}`
+      : `Opravdu chcete přesunout tohoto tipaře do archivu?\n\nTipař: ${label}\nID: ${row.entity_id}`;
+
+    if (!confirm(confirmMessage)) return;
+
+    try {
+      await updateProjectClusterStatus(row, "archived");
+    } catch (error) {
+      console.error("Error archiving tiper entity:", error);
+      alert("Chyba při archivaci tipaře");
+    }
+  }, [commissionApiBase, commissions, fetchData, gridData, updateProjectClusterStatus]);
 
   const handleCreateWithCommission = useCallback(async () => {
     setIsCreating(true);
@@ -1182,12 +1207,12 @@ const TipersSectionNew: React.FC<SectionProps> = ({
       viewMode,
       entityAccusative: viewMode === "active" ? "tipaře" : "tip",
       entityOnlyAccusative: "tipaře",
-      activeAction: systemNamespace === "projects" && viewMode === "active" ? "archive" : "delete",
       onApprove: handleApprove,
       onRestore: handleRestore,
-      onDelete: handleDelete
+      onDelete: handleDelete,
+      onArchive: handleArchive
     }
-  }), [openProfile, systemNamespace, viewMode, handleApprove, handleRestore, handleDelete]);
+  }), [openProfile, viewMode, handleApprove, handleRestore, handleDelete, handleArchive]);
 
   const onStatusCellClicked = useCallback((params: any) => {
     const field = params.colDef?.field as string | undefined;
@@ -1429,24 +1454,26 @@ const TipersSectionNew: React.FC<SectionProps> = ({
       cellRenderer: DeleteArchiveCellRenderer
     });
 
-    cols.push({
-      headerName: "",
-      colId: "activity",
-      pinned: "left",
-      width: 30,
-      minWidth: 30,
-      maxWidth: 30,
-      suppressMovable: true,
-      lockPosition: true,
-      sortable: false,
-      filter: false,
-      resizable: false,
-      editable: false,
-      menuTabs: [],
-      cellClass: "activity-cell",
-      headerClass: "activity-cell",
-      cellRenderer: ActivityCellRenderer
-    });
+    if (viewMode === "active") {
+      cols.push({
+        headerName: "",
+        colId: "archive",
+        pinned: "left",
+        width: 36,
+        minWidth: 36,
+        maxWidth: 36,
+        suppressMovable: true,
+        lockPosition: true,
+        sortable: false,
+        filter: false,
+        resizable: false,
+        editable: false,
+        menuTabs: [],
+        cellClass: "action-cell",
+        headerClass: "action-cell",
+        cellRenderer: ArchiveCellRenderer
+      });
+    }
 
     cols.push({
       headerName: "",

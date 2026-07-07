@@ -21,14 +21,13 @@ import type { SectionProps } from "./SectionTypes";
 import useFieldOptions from "../hooks/useFieldOptions";
 import useProfileDocuments from "../hooks/useProfileDocuments";
 import useProfileNotes from "../hooks/useProfileNotes";
-import { ApproveRestoreCellRenderer, DeleteArchiveCellRenderer } from "../cells/RowActionCellRenderers";
+import { ApproveRestoreCellRenderer, DeleteArchiveCellRenderer, ArchiveCellRenderer } from "../cells/RowActionCellRenderers";
 import { fieldOptions } from "../fieldOptions";
 import { formatProfileDate } from "../utils/profileUtils";
 import { compareApprovalStatuses } from "../utils/approvalStatus";
 import { formatAssignedUsernames, fromAssignmentDraftValue, toAssignmentDraftValue } from "../assignmentUtils";
 import { compareWorkflowStatuses, DEFAULT_WORKFLOW_STATUS, getNormalizedWorkflowStatus, WORKFLOW_STATUS_COLOR_MAP, WORKFLOW_STATUS_VALUES } from "../workflowStatus";
 import useAssignableUsers from "../hooks/useAssignableUsers";
-import ActivityCellRenderer from "../../activity/ActivityCellRenderer";
 import { useActivity } from "../../activity/ActivityContext";
 import { buildCommissionsRecordScope, buildSubjectsRecordScope, getActivitySystem } from "../../activity/activityKeys";
 import OptionSelectEditor from "../../futureFunctions/cells/OptionSelectEditor";
@@ -823,26 +822,16 @@ const PartnersSectionNew: React.FC<SectionProps> = ({ viewMode, isActive, system
       const entityId = row?.entity?.id ?? null;
       if (!row || entityId === null) return;
 
-      // Commission row in active grid: archive only that commission, regardless of namespace.
+      // Commission row in active grid: delete only that commission.
       if (!row.subjectRow && !row.entityOnly) {
-        await archiveOrDeleteSingleCommission(id);
-        return;
-      }
-
-      if (systemNamespace === "projects") {
-        const linkedCount = row.commission_count ?? 0;
-        const label = row.name || row.company || row.entity_id;
-        const confirmMessage = linkedCount > 0
-          ? `Opravdu chcete přesunout tento subjekt a všech ${linkedCount} navázaných zakázek do archivu?\n\nSubjekt: ${label}\nID: ${row.entity_id}`
-          : `Opravdu chcete přesunout tento subjekt do archivu?\n\nSubjekt: ${label}\nID: ${row.entity_id}`;
-
-        if (!window.confirm(confirmMessage)) return;
-
+        const label = commission?.position || commission?.commission_id || `#${id}`;
+        if (!window.confirm(`Opravdu chcete TRVALE SMAZAT tuto zakázku z databáze?\n\nZakázka: ${label}\n\nTato akce je NEzvratná!`)) return;
         try {
-          await updateProjectClusterStatus(row, "archived");
+          await apiDelete(`${commissionApiBase}/${id}`);
+          fetchData();
         } catch (error) {
-          console.error("Error archiving partner project cluster:", error);
-          alert("Chyba při archivaci subjektu");
+          console.error("Error deleting commission:", error);
+          alert("Chyba při mazání zakázky");
         }
         return;
       }
@@ -921,7 +910,43 @@ const PartnersSectionNew: React.FC<SectionProps> = ({ viewMode, isActive, system
       console.error("Error deleting or archiving partner commission:", error);
       alert("Chyba při provádění akce");
     }
-  }, [archiveOrDeleteSingleCommission, closeProfile, commissionApiBase, commissions, entityApiBase, fetchData, gridData, selectedEntityId, systemNamespace, updateProjectClusterStatus, viewMode]);
+  }, [archiveOrDeleteSingleCommission, closeProfile, commissionApiBase, commissions, entityApiBase, fetchData, gridData, selectedEntityId, viewMode]);
+
+  const handleArchive = useCallback(async (id: number) => {
+    const commission = commissions.find(item => item.id === id);
+    const row = gridData.find(item => item.id === id) ?? (commission ? gridData.find(item => item.entity?.id === commission.partner_entity_id && item.subjectRow) : null);
+    const entityId = row?.entity?.id ?? null;
+    if (!row || entityId === null) return;
+
+    // Commission row: archive only that commission.
+    if (!row.subjectRow && !row.entityOnly) {
+      const label = commission?.position || commission?.commission_id || `#${id}`;
+      if (!window.confirm(`Opravdu chcete přesunout tuto zakázku do archivu?\n\nZakázka: ${label}`)) return;
+      try {
+        await apiPost(`${commissionApiBase}/${id}/archive`);
+        fetchData();
+      } catch (error) {
+        console.error("Error archiving commission:", error);
+        alert("Chyba při archivaci zakázky");
+      }
+      return;
+    }
+
+    const linkedCount = row.commission_count ?? 0;
+    const label = row.name || row.company || row.entity_id;
+    const confirmMessage = linkedCount > 0
+      ? `Opravdu chcete přesunout tohoto partnera a všech ${linkedCount} navázaných zakázek do archivu?\n\nPartner: ${label}\nID: ${row.entity_id}`
+      : `Opravdu chcete přesunout tohoto partnera do archivu?\n\nPartner: ${label}\nID: ${row.entity_id}`;
+
+    if (!window.confirm(confirmMessage)) return;
+
+    try {
+      await updateProjectClusterStatus(row, "archived");
+    } catch (error) {
+      console.error("Error archiving partner entity:", error);
+      alert("Chyba při archivaci partnera");
+    }
+  }, [commissionApiBase, commissions, fetchData, gridData, updateProjectClusterStatus]);
 
   const handleCreateWithCommission = useCallback(async () => {
     setIsCreating(true);
@@ -1113,12 +1138,12 @@ const PartnersSectionNew: React.FC<SectionProps> = ({ viewMode, isActive, system
       viewMode,
       entityAccusative: viewMode === "active" ? "partnera" : "zakázku",
       entityOnlyAccusative: "partnera",
-      activeAction: systemNamespace === "projects" && viewMode === "active" ? "archive" : "delete",
       onApprove: handleApprove,
       onRestore: handleRestore,
-      onDelete: handleDelete
+      onDelete: handleDelete,
+      onArchive: handleArchive
     }
-  }), [handleApprove, handleDelete, handleRestore, openProfile, systemNamespace, viewMode]);
+  }), [handleApprove, handleDelete, handleArchive, handleRestore, openProfile, viewMode]);
 
   const onStatusCellClicked = useCallback((params: any) => {
     const field = params.colDef?.field as string | undefined;
@@ -1316,7 +1341,7 @@ const PartnersSectionNew: React.FC<SectionProps> = ({ viewMode, isActive, system
 
     cols.push(
       { headerName: "", colId: "delete", pinned: "left", width: 36, minWidth: 36, maxWidth: 36, suppressMovable: true, lockPosition: true, sortable: false, filter: false, resizable: false, editable: false, menuTabs: [], cellClass: "action-cell", headerClass: "action-cell", cellRenderer: DeleteArchiveCellRenderer },
-      { headerName: "", colId: "activity", pinned: "left", width: 30, minWidth: 30, maxWidth: 30, suppressMovable: true, lockPosition: true, sortable: false, filter: false, resizable: false, editable: false, menuTabs: [], cellClass: "activity-cell", headerClass: "activity-cell", cellRenderer: ActivityCellRenderer },
+      ...(viewMode === "active" ? [{ headerName: "", colId: "archive", pinned: "left" as const, width: 36, minWidth: 36, maxWidth: 36, suppressMovable: true, lockPosition: true, sortable: false, filter: false, resizable: false, editable: false, menuTabs: [], cellClass: "action-cell", headerClass: "action-cell", cellRenderer: ArchiveCellRenderer }] : []),
       { headerName: "", colId: "profile", pinned: "left", width: 60, minWidth: 60, maxWidth: 68, suppressMovable: true, lockPosition: true, sortable: false, filter: false, resizable: false, editable: false, menuTabs: [], cellClass: "profile-cell", headerClass: "profile-cell", cellRenderer: ProfileCellRenderer },
       {
         headerName: "ID",
