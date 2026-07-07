@@ -29,7 +29,16 @@ import { formatAssignedUsernames, fromAssignmentDraftValue, toAssignmentDraftVal
 import { compareWorkflowStatuses, DEFAULT_WORKFLOW_STATUS, getNormalizedWorkflowStatus, WORKFLOW_STATUS_COLOR_MAP, WORKFLOW_STATUS_VALUES } from "../workflowStatus";
 import useAssignableUsers from "../hooks/useAssignableUsers";
 import { useActivity } from "../../activity/ActivityContext";
-import { buildCommissionsRecordScope, buildSubjectsRecordScope, getActivitySystem } from "../../activity/activityKeys";
+import {
+  buildCommissionsCollectionKey,
+  buildCommissionsRecordScope,
+  buildSubjectsCollectionKey,
+  buildSubjectsRecordScope,
+  getActivitySystem,
+} from "../../activity/activityKeys";
+import { buildActivityColumn, makeActivityCellClassRules, remapFieldActivity } from "../../activity/gridActivity";
+import ActivityConfirmAllButton from "../../activity/ActivityConfirmAllButton";
+import type { FieldActivityMap } from "../../activity/activityUtils";
 import OptionSelectEditor from "../../futureFunctions/cells/OptionSelectEditor";
 import StatusFilterHeader from "../cells/StatusFilterHeader";
 import FieldFilterHeader from "../cells/FieldFilterHeader";
@@ -53,6 +62,9 @@ type TiperEntityApi = {
   website?: string | null;
   created_at?: string;
   updated_at?: string;
+  created_by_user_id?: number | null;
+  updated_by_user_id?: number | null;
+  field_activity?: FieldActivityMap | null;
 };
 
 type TiperCommissionApi = {
@@ -86,6 +98,17 @@ type TiperCommissionApi = {
   entity_website?: string | null;
   created_at?: string;
   updated_at?: string;
+  created_by_user_id?: number | null;
+  updated_by_user_id?: number | null;
+  field_activity?: FieldActivityMap | null;
+};
+
+// Server field-activity uses DB column names; map them to the grid's field names.
+const ENTITY_ACTIVITY_KEY_MAP: Record<string, string> = {
+  first_name: "name",
+  last_name: "name",
+  company_name: "company",
+  phone: "mobile",
 };
 
 const FIELD_OPTIONS_ARRAY = fieldOptions.map((opt) => opt.value);
@@ -167,7 +190,10 @@ const normalizeTiperEntity = (entity: TiperEntityApi): TiperEntity => ({
   website: entity.website ?? null,
   info: entity.info ?? null,
   created_at: entity.created_at,
-  updated_at: entity.updated_at
+  updated_at: entity.updated_at,
+  created_by_user_id: entity.created_by_user_id ?? null,
+  updated_by_user_id: entity.updated_by_user_id ?? null,
+  field_activity: entity.field_activity ?? null
 });
 
 const normalizeTiperCommission = (commission: TiperCommissionApi): TiperCommission => ({
@@ -190,7 +216,10 @@ const normalizeTiperCommission = (commission: TiperCommissionApi): TiperCommissi
   category: commission.category ?? null,
   phone: commission.phone ?? null,
   created_at: commission.created_at,
-  updated_at: commission.updated_at
+  updated_at: commission.updated_at,
+  created_by_user_id: commission.created_by_user_id ?? null,
+  updated_by_user_id: commission.updated_by_user_id ?? null,
+  field_activity: commission.field_activity ?? null
 });
 
 const getCommissionEntityName = (commission: TiperCommissionApi) =>
@@ -230,7 +259,10 @@ const deriveTiperEntityFromCommission = (commission: TiperCommissionApi): TiperE
     assigned_to: null,
     assigned_user_ids: [],
     created_at: undefined,
-    updated_at: undefined
+    updated_at: undefined,
+    created_by_user_id: null,
+    updated_by_user_id: null,
+    field_activity: null
   };
 };
 
@@ -406,7 +438,14 @@ const TipersSectionNew: React.FC<SectionProps> = ({
   readOnly = false
 }) => {
   const { users: assignableUsers, options: assignmentOptions } = useAssignableUsers();
-  const { markItemSeen } = useActivity();
+  const { markItemSeen, markItemsSeen, markCollectionSeen, getItemActivity, getFieldActivity } = useActivity();
+
+  const getFieldActivityRef = useRef(getFieldActivity);
+  getFieldActivityRef.current = getFieldActivity;
+  const activityCellClassRules = useMemo(
+    () => makeActivityCellClassRules((scope, itemId, entry) => getFieldActivityRef.current(scope, itemId, entry)),
+    []
+  );
   // State for entities and commissions
   const [entities, setEntities] = useState<TiperEntity[]>([]);
   const [commissions, setCommissions] = useState<TiperCommission[]>([]);
@@ -468,6 +507,8 @@ const TipersSectionNew: React.FC<SectionProps> = ({
   const activitySystem = useMemo(() => getActivitySystem(systemNamespace), [systemNamespace]);
   const subjectActivityScope = useMemo(() => buildSubjectsRecordScope(activitySystem, "tipers"), [activitySystem]);
   const commissionActivityScope = useMemo(() => buildCommissionsRecordScope(activitySystem, "tipers"), [activitySystem]);
+  const subjectCollectionKey = useMemo(() => buildSubjectsCollectionKey(activitySystem, viewMode, "tipers"), [activitySystem, viewMode]);
+  const commissionCollectionKey = useMemo(() => buildCommissionsCollectionKey(activitySystem, viewMode, "tipers"), [activitySystem, viewMode]);
   const entityApiBase = systemNamespace ? `/api/${systemNamespace}/tiper-entities` : "/api/tiper-entities";
   const commissionApiBase = systemNamespace ? `/api/${systemNamespace}/tiper-commissions` : "/api/tiper-commissions";
 
@@ -539,6 +580,12 @@ const TipersSectionNew: React.FC<SectionProps> = ({
             activity_item_id: entity.id,
             activity_latest_at: entity.updated_at ?? entity.created_at,
             activity_created_at: entity.created_at,
+            activity_updated_by_user_id: entity.updated_by_user_id ?? null,
+            activity_created_by_user_id: entity.created_by_user_id ?? null,
+            activity_field_activity: {
+              ...(primaryCommission?.field_activity ?? {}),
+              ...remapFieldActivity(entity.field_activity, ENTITY_ACTIVITY_KEY_MAP),
+            } as FieldActivityMap,
             entity
           };
         });
@@ -569,6 +616,12 @@ const TipersSectionNew: React.FC<SectionProps> = ({
           activity_item_id: commission.id,
           activity_latest_at: commission.updated_at ?? commission.created_at,
           activity_created_at: commission.created_at,
+          activity_updated_by_user_id: commission.updated_by_user_id ?? null,
+          activity_created_by_user_id: commission.created_by_user_id ?? null,
+          activity_field_activity: {
+            ...remapFieldActivity(entity?.field_activity, ENTITY_ACTIVITY_KEY_MAP),
+            ...(commission.field_activity ?? {}),
+          } as FieldActivityMap,
           entity: entity || null
         };
       });
@@ -612,6 +665,9 @@ const TipersSectionNew: React.FC<SectionProps> = ({
               activity_item_id: entity.id,
               activity_latest_at: entity.updated_at ?? entity.created_at,
               activity_created_at: entity.created_at,
+              activity_updated_by_user_id: entity.updated_by_user_id ?? null,
+              activity_created_by_user_id: entity.created_by_user_id ?? null,
+              activity_field_activity: remapFieldActivity(entity.field_activity, ENTITY_ACTIVITY_KEY_MAP),
               entity: entity || null
             }))
         : [];
@@ -1359,6 +1415,7 @@ const TipersSectionNew: React.FC<SectionProps> = ({
 
   const columnDefs = useMemo<ColDef<TiperGridRow>[]>(() => {
     const cols: ColDef<TiperGridRow>[] = [];
+    cols.push(buildActivityColumn<TiperGridRow>());
     const showApprovalStatusColumn = Boolean(systemNamespace);
     const approvalStatusCol: ColDef<TiperGridRow> = {
       field: "status",
@@ -1695,12 +1752,50 @@ const TipersSectionNew: React.FC<SectionProps> = ({
 
   const useContentHeightLayout = gridData.length <= 8;
 
+  useEffect(() => {
+    gridRef.current?.api?.refreshCells({ force: true });
+  }, [getFieldActivity]);
+
+  const unseenActivityCount = gridData.reduce((count, row) => {
+    if (!row.activity_scope || row.activity_item_id === null || row.activity_item_id === undefined) {
+      return count;
+    }
+    const state = getItemActivity(
+      row.activity_scope,
+      row.activity_item_id,
+      row.activity_latest_at ?? null,
+      row.activity_created_at ?? null,
+      row.activity_updated_by_user_id ?? null,
+      row.activity_created_by_user_id ?? null,
+    );
+    return state === "none" ? count : count + 1;
+  }, 0);
+
+  const handleConfirmAllActivity = useCallback(() => {
+    const entries = gridData
+      .filter((row) => row.activity_scope && row.activity_item_id !== null && row.activity_item_id !== undefined)
+      .map((row) => ({
+        scope: row.activity_scope as string,
+        itemId: row.activity_item_id as string | number,
+        seenAt: row.activity_latest_at ?? null,
+      }));
+    markItemsSeen(entries);
+    markCollectionSeen(subjectCollectionKey);
+    markCollectionSeen(commissionCollectionKey);
+    gridRef.current?.api?.refreshCells({ force: true });
+  }, [commissionCollectionKey, gridData, markCollectionSeen, markItemsSeen, subjectCollectionKey]);
+
   // ==========================================================================
   // RENDER
   // ==========================================================================
 
   return (
     <>
+      {unseenActivityCount > 0 && (
+        <div className="grid-activity-toolbar">
+          <ActivityConfirmAllButton count={unseenActivityCount} onConfirm={handleConfirmAllActivity} />
+        </div>
+      )}
       <div className={`grid-container${useContentHeightLayout ? ' grid-container--content-height' : ''}`}>
         <div className={`grid-wrapper ag-theme-quartz${useContentHeightLayout ? ' grid-wrapper--content-height' : ''}`}>
           <AgGridReact<TiperGridRow>
@@ -1722,7 +1817,8 @@ const TipersSectionNew: React.FC<SectionProps> = ({
             onCellEditingStarted={readOnly ? (params) => params.api.stopEditing(true) : undefined}
             defaultColDef={{
               resizable: true,
-              sortable: true
+              sortable: true,
+              cellClassRules: activityCellClassRules
             }}
             suppressRowClickSelection={true}
             loading={isLoading}

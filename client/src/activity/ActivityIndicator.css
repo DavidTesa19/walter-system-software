@@ -36,3 +36,115 @@
 .activity-indicator--muted {
   opacity: 0.88;
 }
+
+/* Clickable row dot inside the grid's activity column. */
+.activity-dot-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 20px;
+  height: 20px;
+  padding: 0;
+  margin: 0;
+  border: none;
+  border-radius: 999px;
+  background: transparent;
+  cursor: pointer;
+  transition: transform 0.12s ease, background 0.12s ease;
+}
+
+.activity-dot-button:hover {
+  transform: scale(1.15);
+  background: color-mix(in srgb, var(--color-primary) 12%, transparent);
+}
+
+.activity-cell .ag-cell-wrapper,
+.activity-cell.ag-cell {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding-left: 0;
+  padding-right: 0;
+}
+
+/* Per-cell change markers: a small dot in the top-right corner of a changed cell. */
+.cell-activity--added,
+.cell-activity--updated,
+.cell-activity--removed {
+  position: relative;
+}
+
+.cell-activity--added::after,
+.cell-activity--updated::after,
+.cell-activity--removed::after {
+  content: "";
+  position: absolute;
+  top: 4px;
+  right: 4px;
+  width: 7px;
+  height: 7px;
+  border-radius: 999px;
+  pointer-events: none;
+  box-shadow: 0 0 0 1.5px color-mix(in srgb, var(--color-surface, #fff) 85%, transparent);
+}
+
+.cell-activity--added::after {
+  background: linear-gradient(135deg, #14b8a6, #2dd4bf);
+}
+
+.cell-activity--updated::after {
+  background: linear-gradient(135deg, #f59e0b, #fbbf24);
+}
+
+.cell-activity--removed::after {
+  background: linear-gradient(135deg, #ef4444, #f87171);
+}
+
+/* Thin toolbar above a grid that hosts the confirm-all button. */
+.grid-activity-toolbar {
+  display: flex;
+  justify-content: flex-end;
+  padding: 0 0.25rem 0.5rem;
+}
+
+/* Confirm-all toolbar button. */
+.activity-confirm-all-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  padding: 0.4rem 0.7rem;
+  border: 1px solid color-mix(in srgb, var(--color-primary) 35%, transparent);
+  border-radius: 8px;
+  background: color-mix(in srgb, var(--color-primary) 8%, var(--color-surface, #fff));
+  color: var(--color-primary);
+  font-size: 0.8rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background 0.12s ease, border-color 0.12s ease;
+}
+
+.activity-confirm-all-btn:hover {
+  background: color-mix(in srgb, var(--color-primary) 16%, var(--color-surface, #fff));
+  border-color: var(--color-primary);
+}
+
+.activity-confirm-all-btn__dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 999px;
+  background: linear-gradient(135deg, #14b8a6, #f59e0b);
+}
+
+.activity-confirm-all-btn__count {
+  min-width: 1.1rem;
+  height: 1.1rem;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0 0.3rem;
+  border-radius: 999px;
+  background: var(--color-primary);
+  color: var(--color-primary-contrast);
+  font-size: 0.68rem;
+  font-weight: 700;
+}

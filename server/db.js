@@ -76,6 +76,68 @@ const withActivityActorFields = (table, data, actorUserId, isCreate = false) => 
   };
 };
 
+// Keys that are never treated as user-facing "fields" for per-cell change tracking.
+const ACTIVITY_FIELD_META_KEYS = new Set([
+  'id', 'entity_id', 'entity_code', 'commission_id', 'created_at', 'updated_at',
+  'field_activity', 'created_by_user_id', 'updated_by_user_id', 'status',
+]);
+
+const isBlankActivityValue = (value) =>
+  value == null || value === '' || (Array.isArray(value) && value.length === 0);
+
+const normalizeActivityCompareValue = (value) => {
+  if (isBlankActivityValue(value)) return '';
+  if (Array.isArray(value)) return JSON.stringify([...value].map((item) => String(item)).sort());
+  if (value instanceof Date) return value.toISOString();
+  if (typeof value === 'object') return JSON.stringify(value);
+  return String(value);
+};
+
+// Build a merged field-activity map recording which individual fields changed in this
+// write, when, by whom, and how (added / updated / removed). Merges onto the row's
+// existing map so previously-changed fields keep their marker until seen.
+const computeFieldActivity = (currentRow, incomingData, actorUserId) => {
+  const actor = toActivityActorUserId(actorUserId);
+  const existing = currentRow && currentRow.field_activity && typeof currentRow.field_activity === 'object' && !Array.isArray(currentRow.field_activity)
+    ? { ...currentRow.field_activity }
+    : {};
+  const at = new Date().toISOString();
+
+  for (const [key, newValue] of Object.entries(incomingData || {})) {
+    if (ACTIVITY_FIELD_META_KEYS.has(key) || key.startsWith('entity_')) continue;
+    const oldValue = currentRow ? currentRow[key] : undefined;
+    if (normalizeActivityCompareValue(oldValue) === normalizeActivityCompareValue(newValue)) continue;
+    const oldBlank = isBlankActivityValue(oldValue);
+    const newBlank = isBlankActivityValue(newValue);
+    const type = oldBlank && !newBlank ? 'added' : (!newBlank ? 'updated' : 'removed');
+    existing[key] = { at, by: actor, type };
+  }
+
+  return existing;
+};
+
+// Augment an update payload for an activity-tracked table with actor + field-activity
+// columns. Returns a new object; leaves non-tracked tables untouched.
+const withUpdateActivityFields = (table, currentRow, data, actorUserId) => {
+  if (!ACTIVITY_ACTOR_TABLES.has(table)) return data;
+  const next = { ...data, field_activity: computeFieldActivity(currentRow, data, actorUserId) };
+  const actor = toActivityActorUserId(actorUserId);
+  if (actor) next.updated_by_user_id = actor;
+  return next;
+};
+
+// Stamp the creating user onto a freshly inserted activity-tracked row. Kept as a
+// follow-up UPDATE so the many explicit INSERT column lists stay untouched.
+const applyCreateActor = async (table, row, actorUserId) => {
+  const actor = toActivityActorUserId(actorUserId);
+  if (!row || !actor || !ACTIVITY_ACTOR_TABLES.has(table)) return row;
+  const { rows } = await pool.query(
+    `UPDATE ${table} SET created_by_user_id = $1, updated_by_user_id = $1 WHERE id = $2 RETURNING *`,
+    [actor, row.id]
+  );
+  return rows[0] || row;
+};
+
 if (USE_POSTGRES) {
   pool = new Pool({
     connectionString: process.env.DATABASE_URL,
@@ -908,6 +970,7 @@ export async function initDatabase() {
     for (const tableName of activityActorColumnTables) {
       await client.query(`ALTER TABLE ${tableName} ADD COLUMN IF NOT EXISTS created_by_user_id INTEGER`);
       await client.query(`ALTER TABLE ${tableName} ADD COLUMN IF NOT EXISTS updated_by_user_id INTEGER`);
+      await client.query(`ALTER TABLE ${tableName} ADD COLUMN IF NOT EXISTS field_activity JSONB DEFAULT '{}'::jsonb`);
     }
 
     await ensureDefaultPalettes(client);
@@ -1287,8 +1350,12 @@ export const db = {
   async update(table, id, data, actorUserId) {
     if (!USE_POSTGRES) return null;
 
-    const nextData = withActivityActorFields(table, data, actorUserId);
-    
+    let nextData = withActivityActorFields(table, data, actorUserId);
+    if (ACTIVITY_ACTOR_TABLES.has(table)) {
+      const current = await this.getById(table, id);
+      nextData = { ...nextData, field_activity: computeFieldActivity(current, data, actorUserId) };
+    }
+
     // Filter out id and PostgreSQL metadata fields
     const fields = Object.keys(nextData).filter(k => k !== 'id' && k !== 'created_at' && k !== 'updated_at');
     const values = fields.map(f => nextData[f]);
@@ -2116,7 +2183,7 @@ export const db = {
     return rows[0] || null;
   },
 
-  async createPartnerEntity(data) {
+  async createPartnerEntity(data, actorUserId) {
     if (!USE_POSTGRES) return null;
 
     const entityId = await this.getNextEntityId('partner');
@@ -2126,12 +2193,13 @@ export const db = {
        RETURNING *`,
       [entityId, data.status || 'accepted', data.company_name, data.field, data.location, data.region ?? null, data.info, data.category, data.first_name, data.last_name, data.email, data.phone, data.website, data.assigned_to ?? null, data.assigned_user_ids ?? []]
     );
-    return rows[0];
+    return applyCreateActor('partner_entities', rows[0], actorUserId);
   },
 
-  async updatePartnerEntity(id, data) {
+  async updatePartnerEntity(id, data, actorUserId) {
     if (!USE_POSTGRES) return null;
 
+    data = withUpdateActivityFields('partner_entities', await this.getPartnerEntityById(id), data, actorUserId);
     const fields = Object.keys(data).filter(k => k !== 'id' && k !== 'entity_id' && k !== 'created_at' && k !== 'updated_at');
     if (fields.length === 0) return this.getPartnerEntityById(id);
 
@@ -2210,6 +2278,9 @@ export const db = {
       notes: row.notes,
       created_at: row.created_at,
       updated_at: row.updated_at,
+      created_by_user_id: row.created_by_user_id,
+      updated_by_user_id: row.updated_by_user_id,
+      field_activity: row.field_activity,
       // Entity data (prefixed)
       entity_company_name: row.e_company_name,
       entity_field: row.e_field,
@@ -2276,6 +2347,9 @@ export const db = {
       notes: row.notes,
       created_at: row.created_at,
       updated_at: row.updated_at,
+      created_by_user_id: row.created_by_user_id,
+      updated_by_user_id: row.updated_by_user_id,
+      field_activity: row.field_activity,
       entity_company_name: row.e_company_name,
       entity_field: row.e_field,
       entity_location: row.e_location,
@@ -2290,7 +2364,7 @@ export const db = {
     };
   },
 
-  async createPartnerCommission(entityInternalId, data) {
+  async createPartnerCommission(entityInternalId, data, actorUserId) {
     if (!USE_POSTGRES) return null;
 
     // Get entity code
@@ -2307,14 +2381,15 @@ export const db = {
        RETURNING *`,
       [commissionId, entityInternalId, entity.entity_id, data.status || 'pending', data.position, data.budget, data.state, data.assigned_to, data.assigned_user_ids ?? [], data.field, data.service_position, data.location, data.info, data.category, data.deadline, data.priority, data.phone, data.commission_value, data.is_tipped || false, data.notes]
     );
-    return rows[0];
+    return applyCreateActor('partner_commissions', rows[0], actorUserId);
   },
 
-  async updatePartnerCommission(id, data) {
+  async updatePartnerCommission(id, data, actorUserId) {
     if (!USE_POSTGRES) return null;
 
-    const fields = Object.keys(data).filter(k => 
-      k !== 'id' && k !== 'commission_id' && k !== 'entity_id' && k !== 'entity_code' && 
+    data = withUpdateActivityFields('partner_commissions', await this.getPartnerCommissionById(id), data, actorUserId);
+    const fields = Object.keys(data).filter(k =>
+      k !== 'id' && k !== 'commission_id' && k !== 'entity_id' && k !== 'entity_code' &&
       k !== 'created_at' && k !== 'updated_at' && !k.startsWith('entity_')
     );
     if (fields.length === 0) return this.getPartnerCommissionById(id);
@@ -2364,7 +2439,7 @@ export const db = {
     return rows[0] || null;
   },
 
-  async createClientEntity(data) {
+  async createClientEntity(data, actorUserId) {
     if (!USE_POSTGRES) return null;
 
     const entityId = await this.getNextEntityId('client');
@@ -2374,12 +2449,13 @@ export const db = {
        RETURNING *`,
       [entityId, data.status || 'accepted', data.company_name, data.field, data.service, data.location, data.region ?? null, data.info, data.category, data.budget, data.first_name, data.last_name, data.email, data.phone, data.website, data.assigned_to ?? null, data.assigned_user_ids ?? []]
     );
-    return rows[0];
+    return applyCreateActor('client_entities', rows[0], actorUserId);
   },
 
-  async updateClientEntity(id, data) {
+  async updateClientEntity(id, data, actorUserId) {
     if (!USE_POSTGRES) return null;
 
+    data = withUpdateActivityFields('client_entities', await this.getClientEntityById(id), data, actorUserId);
     const fields = Object.keys(data).filter(k => k !== 'id' && k !== 'entity_id' && k !== 'created_at' && k !== 'updated_at');
     if (fields.length === 0) return this.getClientEntityById(id);
 
@@ -2459,6 +2535,9 @@ export const db = {
       notes: row.notes,
       created_at: row.created_at,
       updated_at: row.updated_at,
+      created_by_user_id: row.created_by_user_id,
+      updated_by_user_id: row.updated_by_user_id,
+      field_activity: row.field_activity,
       entity_company_name: row.e_company_name,
       entity_field: row.e_field,
       entity_service: row.e_service,
@@ -2528,6 +2607,9 @@ export const db = {
       notes: row.notes,
       created_at: row.created_at,
       updated_at: row.updated_at,
+      created_by_user_id: row.created_by_user_id,
+      updated_by_user_id: row.updated_by_user_id,
+      field_activity: row.field_activity,
       entity_company_name: row.e_company_name,
       entity_field: row.e_field,
       entity_service: row.e_service,
@@ -2544,7 +2626,7 @@ export const db = {
     };
   },
 
-  async createClientCommission(entityInternalId, data) {
+  async createClientCommission(entityInternalId, data, actorUserId) {
     if (!USE_POSTGRES) return null;
 
     const entity = await this.getClientEntityById(entityInternalId);
@@ -2560,14 +2642,15 @@ export const db = {
        RETURNING *`,
       [commissionId, entityInternalId, entity.entity_id, data.status || 'pending', data.position, data.budget, data.state, data.assigned_to, data.assigned_user_ids ?? [], data.field, data.service_position, data.location, data.info, data.category, data.deadline, data.priority, data.phone, data.commission_value, data.is_tipped || false, data.notes]
     );
-    return rows[0];
+    return applyCreateActor('client_commissions', rows[0], actorUserId);
   },
 
-  async updateClientCommission(id, data) {
+  async updateClientCommission(id, data, actorUserId) {
     if (!USE_POSTGRES) return null;
 
-    const fields = Object.keys(data).filter(k => 
-      k !== 'id' && k !== 'commission_id' && k !== 'entity_id' && k !== 'entity_code' && 
+    data = withUpdateActivityFields('client_commissions', await this.getClientCommissionById(id), data, actorUserId);
+    const fields = Object.keys(data).filter(k =>
+      k !== 'id' && k !== 'commission_id' && k !== 'entity_id' && k !== 'entity_code' &&
       k !== 'created_at' && k !== 'updated_at' && !k.startsWith('entity_')
     );
     if (fields.length === 0) return this.getClientCommissionById(id);
@@ -2617,7 +2700,7 @@ export const db = {
     return rows[0] || null;
   },
 
-  async createTiperEntity(data) {
+  async createTiperEntity(data, actorUserId) {
     if (!USE_POSTGRES) return null;
 
     const entityId = await this.getNextEntityId('tiper');
@@ -2627,12 +2710,13 @@ export const db = {
        RETURNING *`,
       [entityId, data.status || 'accepted', data.company_name, data.first_name, data.last_name, data.field, data.location, data.region ?? null, data.info, data.category, data.email, data.phone, data.website, data.assigned_to ?? null, data.assigned_user_ids ?? []]
     );
-    return rows[0];
+    return applyCreateActor('tiper_entities', rows[0], actorUserId);
   },
 
-  async updateTiperEntity(id, data) {
+  async updateTiperEntity(id, data, actorUserId) {
     if (!USE_POSTGRES) return null;
 
+    data = withUpdateActivityFields('tiper_entities', await this.getTiperEntityById(id), data, actorUserId);
     const fields = Object.keys(data).filter(k => k !== 'id' && k !== 'entity_id' && k !== 'created_at' && k !== 'updated_at');
     if (fields.length === 0) return this.getTiperEntityById(id);
 
@@ -2710,6 +2794,9 @@ export const db = {
       notes: row.notes,
       created_at: row.created_at,
       updated_at: row.updated_at,
+      created_by_user_id: row.created_by_user_id,
+      updated_by_user_id: row.updated_by_user_id,
+      field_activity: row.field_activity,
       entity_company_name: row.e_company_name,
       entity_first_name: row.e_first_name,
       entity_last_name: row.e_last_name,
@@ -2775,6 +2862,9 @@ export const db = {
       notes: row.notes,
       created_at: row.created_at,
       updated_at: row.updated_at,
+      created_by_user_id: row.created_by_user_id,
+      updated_by_user_id: row.updated_by_user_id,
+      field_activity: row.field_activity,
       entity_company_name: row.e_company_name,
       entity_first_name: row.e_first_name,
       entity_last_name: row.e_last_name,
@@ -2789,7 +2879,7 @@ export const db = {
     };
   },
 
-  async createTiperCommission(entityInternalId, data) {
+  async createTiperCommission(entityInternalId, data, actorUserId) {
     if (!USE_POSTGRES) return null;
 
     const entity = await this.getTiperEntityById(entityInternalId);
@@ -2805,14 +2895,15 @@ export const db = {
        RETURNING *`,
       [commissionId, entityInternalId, entity.entity_id, data.status || 'pending', data.position, data.budget, data.state, data.assigned_to, data.assigned_user_ids ?? [], data.field, data.service_position, data.location, data.info, data.category, data.deadline, data.priority, data.phone, data.commission_value, data.is_tipped || false, data.notes]
     );
-    return rows[0];
+    return applyCreateActor('tiper_commissions', rows[0], actorUserId);
   },
 
-  async updateTiperCommission(id, data) {
+  async updateTiperCommission(id, data, actorUserId) {
     if (!USE_POSTGRES) return null;
 
-    const fields = Object.keys(data).filter(k => 
-      k !== 'id' && k !== 'commission_id' && k !== 'entity_id' && k !== 'entity_code' && 
+    data = withUpdateActivityFields('tiper_commissions', await this.getTiperCommissionById(id), data, actorUserId);
+    const fields = Object.keys(data).filter(k =>
+      k !== 'id' && k !== 'commission_id' && k !== 'entity_id' && k !== 'entity_code' &&
       k !== 'created_at' && k !== 'updated_at' && !k.startsWith('entity_')
     );
     if (fields.length === 0) return this.getTiperCommissionById(id);
@@ -2840,7 +2931,7 @@ export const db = {
   /**
    * Create a new partner with their first commission
    */
-  async createPartnerWithCommission(entityData, commissionData) {
+  async createPartnerWithCommission(entityData, commissionData, actorUserId) {
     if (!USE_POSTGRES) return null;
 
     const client = await pool.connect();
@@ -2851,10 +2942,10 @@ export const db = {
       const entity = await this.createPartnerEntity({
         ...entityData,
         status: entityData?.status || commissionData?.status || 'accepted'
-      });
+      }, actorUserId);
 
       // Create first commission
-      const commission = await this.createPartnerCommission(entity.id, commissionData);
+      const commission = await this.createPartnerCommission(entity.id, commissionData, actorUserId);
 
       await client.query('COMMIT');
       return { entity, commission };
@@ -2869,7 +2960,7 @@ export const db = {
   /**
    * Create a new client with their first commission
    */
-  async createClientWithCommission(entityData, commissionData) {
+  async createClientWithCommission(entityData, commissionData, actorUserId) {
     if (!USE_POSTGRES) return null;
 
     const client = await pool.connect();
@@ -2879,8 +2970,8 @@ export const db = {
       const entity = await this.createClientEntity({
         ...entityData,
         status: entityData?.status || commissionData?.status || 'accepted'
-      });
-      const commission = await this.createClientCommission(entity.id, commissionData);
+      }, actorUserId);
+      const commission = await this.createClientCommission(entity.id, commissionData, actorUserId);
 
       await client.query('COMMIT');
       return { entity, commission };
@@ -2945,7 +3036,7 @@ export const db = {
     return result.rowCount > 0;
   },
 
-  async createTiperWithCommission(entityData, commissionData) {
+  async createTiperWithCommission(entityData, commissionData, actorUserId) {
     if (!USE_POSTGRES) return null;
 
     const client = await pool.connect();
@@ -2955,8 +3046,8 @@ export const db = {
       const entity = await this.createTiperEntity({
         ...entityData,
         status: entityData?.status || commissionData?.status || 'accepted'
-      });
-      const commission = await this.createTiperCommission(entity.id, commissionData);
+      }, actorUserId);
+      const commission = await this.createTiperCommission(entity.id, commissionData, actorUserId);
 
       await client.query('COMMIT');
       return { entity, commission };

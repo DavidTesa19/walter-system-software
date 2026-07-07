@@ -1405,6 +1405,39 @@ const createAuditedJsonRecord = (data, actorUserId, explicitCreatedAt) => {
   };
 };
 
+const ACTIVITY_FIELD_META_KEYS = new Set([
+  'id', 'entity_id', 'entity_code', 'commission_id', 'created_at', 'updated_at',
+  'field_activity', 'created_by_user_id', 'updated_by_user_id', 'status',
+]);
+
+const isBlankActivityValue = (value) =>
+  value == null || value === '' || (Array.isArray(value) && value.length === 0);
+
+const normalizeActivityCompareValue = (value) => {
+  if (isBlankActivityValue(value)) return '';
+  if (Array.isArray(value)) return JSON.stringify([...value].map((item) => String(item)).sort());
+  if (typeof value === 'object') return JSON.stringify(value);
+  return String(value);
+};
+
+const computeJsonFieldActivity = (existing, updates, actorUserId) => {
+  const actor = toActivityActorUserId(actorUserId);
+  const map = existing && existing.field_activity && typeof existing.field_activity === 'object' && !Array.isArray(existing.field_activity)
+    ? { ...existing.field_activity }
+    : {};
+  const at = new Date().toISOString();
+  for (const [key, newValue] of Object.entries(updates || {})) {
+    if (ACTIVITY_FIELD_META_KEYS.has(key) || key.startsWith('entity_')) continue;
+    const oldValue = existing ? existing[key] : undefined;
+    if (normalizeActivityCompareValue(oldValue) === normalizeActivityCompareValue(newValue)) continue;
+    const oldBlank = isBlankActivityValue(oldValue);
+    const newBlank = isBlankActivityValue(newValue);
+    const type = oldBlank && !newBlank ? 'added' : (!newBlank ? 'updated' : 'removed');
+    map[key] = { at, by: actor, type };
+  }
+  return map;
+};
+
 const updateAuditedJsonRecord = (existing, updates, actorUserId) => {
   const normalizedActorUserId = toActivityActorUserId(actorUserId);
   return {
@@ -1412,6 +1445,7 @@ const updateAuditedJsonRecord = (existing, updates, actorUserId) => {
     ...updates,
     created_at: existing?.created_at ?? new Date().toISOString(),
     updated_at: new Date().toISOString(),
+    field_activity: computeJsonFieldActivity(existing, updates, actorUserId),
     ...(normalizedActorUserId ? {
       created_by_user_id: existing?.created_by_user_id ?? normalizedActorUserId,
       updated_by_user_id: normalizedActorUserId,

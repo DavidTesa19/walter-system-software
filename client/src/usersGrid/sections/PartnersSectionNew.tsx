@@ -29,7 +29,16 @@ import { formatAssignedUsernames, fromAssignmentDraftValue, toAssignmentDraftVal
 import { compareWorkflowStatuses, DEFAULT_WORKFLOW_STATUS, getNormalizedWorkflowStatus, WORKFLOW_STATUS_COLOR_MAP, WORKFLOW_STATUS_VALUES } from "../workflowStatus";
 import useAssignableUsers from "../hooks/useAssignableUsers";
 import { useActivity } from "../../activity/ActivityContext";
-import { buildCommissionsRecordScope, buildSubjectsRecordScope, getActivitySystem } from "../../activity/activityKeys";
+import {
+  buildCommissionsCollectionKey,
+  buildCommissionsRecordScope,
+  buildSubjectsCollectionKey,
+  buildSubjectsRecordScope,
+  getActivitySystem,
+} from "../../activity/activityKeys";
+import { buildActivityColumn, makeActivityCellClassRules, remapFieldActivity } from "../../activity/gridActivity";
+import ActivityConfirmAllButton from "../../activity/ActivityConfirmAllButton";
+import type { FieldActivityMap } from "../../activity/activityUtils";
 import OptionSelectEditor from "../../futureFunctions/cells/OptionSelectEditor";
 import StatusFilterHeader from "../cells/StatusFilterHeader";
 import FieldFilterHeader from "../cells/FieldFilterHeader";
@@ -53,6 +62,9 @@ type PartnerEntityApi = {
   website?: string | null;
   created_at?: string;
   updated_at?: string;
+  created_by_user_id?: number | null;
+  updated_by_user_id?: number | null;
+  field_activity?: FieldActivityMap | null;
 };
 
 type PartnerCommissionApi = {
@@ -86,6 +98,17 @@ type PartnerCommissionApi = {
   entity_website?: string | null;
   created_at?: string;
   updated_at?: string;
+  created_by_user_id?: number | null;
+  updated_by_user_id?: number | null;
+  field_activity?: FieldActivityMap | null;
+};
+
+// Server field-activity uses DB column names; map them to the grid's field names.
+const ENTITY_ACTIVITY_KEY_MAP: Record<string, string> = {
+  first_name: "name",
+  last_name: "name",
+  company_name: "company",
+  phone: "mobile",
 };
 
 const FIELD_OPTIONS_ARRAY = fieldOptions.map((opt) => opt.value);
@@ -169,7 +192,10 @@ const normalizePartnerEntity = (entity: PartnerEntityApi): PartnerEntity => ({
   website: entity.website ?? null,
   info: entity.info ?? null,
   created_at: entity.created_at,
-  updated_at: entity.updated_at
+  updated_at: entity.updated_at,
+  created_by_user_id: entity.created_by_user_id ?? null,
+  updated_by_user_id: entity.updated_by_user_id ?? null,
+  field_activity: entity.field_activity ?? null
 });
 
 const normalizePartnerCommission = (commission: PartnerCommissionApi): PartnerCommission => ({
@@ -192,7 +218,10 @@ const normalizePartnerCommission = (commission: PartnerCommissionApi): PartnerCo
   category: commission.category ?? null,
   phone: commission.phone ?? null,
   created_at: commission.created_at,
-  updated_at: commission.updated_at
+  updated_at: commission.updated_at,
+  created_by_user_id: commission.created_by_user_id ?? null,
+  updated_by_user_id: commission.updated_by_user_id ?? null,
+  field_activity: commission.field_activity ?? null
 });
 
 const getCommissionEntityName = (commission: PartnerCommissionApi) =>
@@ -234,7 +263,10 @@ const derivePartnerEntityFromCommission = (commission: PartnerCommissionApi): Pa
     assigned_to: null,
     assigned_user_ids: [],
     created_at: undefined,
-    updated_at: undefined
+    updated_at: undefined,
+    created_by_user_id: null,
+    updated_by_user_id: null,
+    field_activity: null
   };
 };
 
@@ -390,7 +422,14 @@ const buildPartnerDraftCommissionData = (draft: PartnerCreateDraft, status: Part
 
 const PartnersSectionNew: React.FC<SectionProps> = ({ viewMode, isActive, systemNamespace, sectionKind, onRegisterAddHandler, onLoadingChange, readOnly = false }) => {
   const { users: assignableUsers, options: assignmentOptions } = useAssignableUsers();
-  const { markItemSeen } = useActivity();
+  const { markItemSeen, markItemsSeen, markCollectionSeen, getItemActivity, getFieldActivity } = useActivity();
+
+  const getFieldActivityRef = useRef(getFieldActivity);
+  getFieldActivityRef.current = getFieldActivity;
+  const activityCellClassRules = useMemo(
+    () => makeActivityCellClassRules((scope, itemId, entry) => getFieldActivityRef.current(scope, itemId, entry)),
+    []
+  );
   const [entities, setEntities] = useState<PartnerEntity[]>([]);
   const [commissions, setCommissions] = useState<PartnerCommission[]>([]);
   const [gridData, setGridData] = useState<PartnerGridRow[]>([]);
@@ -448,6 +487,8 @@ const PartnersSectionNew: React.FC<SectionProps> = ({ viewMode, isActive, system
   const activitySystem = useMemo(() => getActivitySystem(systemNamespace), [systemNamespace]);
   const subjectActivityScope = useMemo(() => buildSubjectsRecordScope(activitySystem, "partners"), [activitySystem]);
   const commissionActivityScope = useMemo(() => buildCommissionsRecordScope(activitySystem, "partners"), [activitySystem]);
+  const subjectCollectionKey = useMemo(() => buildSubjectsCollectionKey(activitySystem, viewMode, "partners"), [activitySystem, viewMode]);
+  const commissionCollectionKey = useMemo(() => buildCommissionsCollectionKey(activitySystem, viewMode, "partners"), [activitySystem, viewMode]);
   const entityApiBase = systemNamespace ? `/api/${systemNamespace}/partner-entities` : "/api/partner-entities";
   const commissionApiBase = systemNamespace ? `/api/${systemNamespace}/partner-commissions` : "/api/partner-commissions";
   const documentManager = useProfileDocuments(resourceKey, selectedEntityId);
@@ -513,6 +554,12 @@ const PartnersSectionNew: React.FC<SectionProps> = ({ viewMode, isActive, system
             activity_item_id: entity.id,
             activity_latest_at: entity.updated_at ?? entity.created_at,
             activity_created_at: entity.created_at,
+            activity_updated_by_user_id: entity.updated_by_user_id ?? null,
+            activity_created_by_user_id: entity.created_by_user_id ?? null,
+            activity_field_activity: {
+              ...(primaryCommission?.field_activity ?? {}),
+              ...remapFieldActivity(entity.field_activity, ENTITY_ACTIVITY_KEY_MAP),
+            } as FieldActivityMap,
             entity
           };
         });
@@ -542,6 +589,12 @@ const PartnersSectionNew: React.FC<SectionProps> = ({ viewMode, isActive, system
           activity_item_id: commission.id,
           activity_latest_at: commission.updated_at ?? commission.created_at,
           activity_created_at: commission.created_at,
+          activity_updated_by_user_id: commission.updated_by_user_id ?? null,
+          activity_created_by_user_id: commission.created_by_user_id ?? null,
+          activity_field_activity: {
+            ...remapFieldActivity(entity?.field_activity, ENTITY_ACTIVITY_KEY_MAP),
+            ...(commission.field_activity ?? {}),
+          } as FieldActivityMap,
           entity
         };
       });
@@ -585,6 +638,9 @@ const PartnersSectionNew: React.FC<SectionProps> = ({ viewMode, isActive, system
               activity_item_id: entity.id,
               activity_latest_at: entity.updated_at ?? entity.created_at,
               activity_created_at: entity.created_at,
+              activity_updated_by_user_id: entity.updated_by_user_id ?? null,
+              activity_created_by_user_id: entity.created_by_user_id ?? null,
+              activity_field_activity: remapFieldActivity(entity.field_activity, ENTITY_ACTIVITY_KEY_MAP),
               entity
             }))
         : [];
@@ -1265,6 +1321,7 @@ const PartnersSectionNew: React.FC<SectionProps> = ({ viewMode, isActive, system
 
   const columnDefs = useMemo<ColDef<PartnerGridRow>[]>(() => {
     const cols: ColDef<PartnerGridRow>[] = [];
+    cols.push(buildActivityColumn<PartnerGridRow>());
     const showApprovalStatusColumn = Boolean(systemNamespace);
     const approvalStatusCol: ColDef<PartnerGridRow> = {
       field: "status",
@@ -1436,8 +1493,46 @@ const PartnersSectionNew: React.FC<SectionProps> = ({ viewMode, isActive, system
 
   const useContentHeightLayout = gridData.length <= 8;
 
+  useEffect(() => {
+    gridRef.current?.api?.refreshCells({ force: true });
+  }, [getFieldActivity]);
+
+  const unseenActivityCount = gridData.reduce((count, row) => {
+    if (!row.activity_scope || row.activity_item_id === null || row.activity_item_id === undefined) {
+      return count;
+    }
+    const state = getItemActivity(
+      row.activity_scope,
+      row.activity_item_id,
+      row.activity_latest_at ?? null,
+      row.activity_created_at ?? null,
+      row.activity_updated_by_user_id ?? null,
+      row.activity_created_by_user_id ?? null,
+    );
+    return state === "none" ? count : count + 1;
+  }, 0);
+
+  const handleConfirmAllActivity = useCallback(() => {
+    const entries = gridData
+      .filter((row) => row.activity_scope && row.activity_item_id !== null && row.activity_item_id !== undefined)
+      .map((row) => ({
+        scope: row.activity_scope as string,
+        itemId: row.activity_item_id as string | number,
+        seenAt: row.activity_latest_at ?? null,
+      }));
+    markItemsSeen(entries);
+    markCollectionSeen(subjectCollectionKey);
+    markCollectionSeen(commissionCollectionKey);
+    gridRef.current?.api?.refreshCells({ force: true });
+  }, [commissionCollectionKey, gridData, markCollectionSeen, markItemsSeen, subjectCollectionKey]);
+
   return (
     <>
+      {unseenActivityCount > 0 && (
+        <div className="grid-activity-toolbar">
+          <ActivityConfirmAllButton count={unseenActivityCount} onConfirm={handleConfirmAllActivity} />
+        </div>
+      )}
       <div className={`grid-container${useContentHeightLayout ? ' grid-container--content-height' : ''}`}>
         <div className={`grid-wrapper ag-theme-quartz${useContentHeightLayout ? ' grid-wrapper--content-height' : ''}`}>
           <AgGridReact<PartnerGridRow>
@@ -1457,7 +1552,7 @@ const PartnersSectionNew: React.FC<SectionProps> = ({ viewMode, isActive, system
             domLayout={useContentHeightLayout ? 'autoHeight' : 'normal'}
             onCellValueChanged={onCellValueChanged}
             onCellEditingStarted={readOnly ? (params) => params.api.stopEditing(true) : undefined}
-            defaultColDef={{ resizable: true, sortable: true }}
+            defaultColDef={{ resizable: true, sortable: true, cellClassRules: activityCellClassRules }}
             suppressRowClickSelection={true}
             loading={isLoading}
             context={gridContext}

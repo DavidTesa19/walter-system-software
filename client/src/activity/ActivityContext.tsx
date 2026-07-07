@@ -12,7 +12,15 @@ import {
   FUTURE_FUNCTIONS_ACTIVE_COLLECTION_KEY,
   FUTURE_FUNCTIONS_ARCHIVE_COLLECTION_KEY,
 } from "./activityKeys";
-import { countUnseenRecords, getActivityState, getActivityTimestampsFromRecord, type ActivityState } from "./activityUtils";
+import {
+  countUnseenRecords,
+  getActivityState,
+  getActivityTimestampsFromRecord,
+  getFieldActivityState,
+  type ActivityState,
+  type FieldActivityEntry,
+  type FieldActivityState,
+} from "./activityUtils";
 
 type StoredActivityState = {
   baselineAt: string;
@@ -26,13 +34,25 @@ type ActivitySnapshot = {
   collectionCounts: Record<string, number>;
 };
 
+export type MarkItemSeenEntry = { scope: string; itemId: string | number; seenAt?: string | null };
+
 interface ActivityContextValue {
+  currentUserId?: number;
   getViewCount: (view: AppView) => number;
   getCollectionCount: (collectionKey: string) => number;
-  getItemActivity: (scope: string, itemId: string | number, latestAt?: string | null, createdAt?: string | null) => ActivityState;
+  getItemActivity: (
+    scope: string,
+    itemId: string | number,
+    latestAt?: string | null,
+    createdAt?: string | null,
+    updatedByUserId?: number | null,
+    createdByUserId?: number | null,
+  ) => ActivityState;
+  getFieldActivity: (scope: string, itemId: string | number, entry: FieldActivityEntry | null | undefined) => FieldActivityState;
   markViewSeen: (view: AppView) => void;
   markCollectionSeen: (collectionKey: string) => void;
   markItemSeen: (scope: string, itemId: string | number, seenAt?: string | null) => void;
+  markItemsSeen: (entries: MarkItemSeenEntry[]) => void;
   refresh: () => Promise<void>;
 }
 
@@ -220,6 +240,20 @@ export const ActivityProvider: React.FC<ActivityProviderProps> = ({ userId, user
     }));
   }, []);
 
+  const markItemsSeen = useCallback((entries: MarkItemSeenEntry[]) => {
+    if (!entries.length) {
+      return;
+    }
+    const now = new Date().toISOString();
+    setActivityState((current) => {
+      const items = { ...current.items };
+      for (const entry of entries) {
+        items[getItemKey(entry.scope, entry.itemId)] = entry.seenAt ?? now;
+      }
+      return { ...current, items };
+    });
+  }, []);
+
   useEffect(() => {
     if (!userId) {
       return;
@@ -363,17 +397,27 @@ export const ActivityProvider: React.FC<ActivityProviderProps> = ({ userId, user
   }, [refresh]);
 
   const value = useMemo<ActivityContextValue>(() => ({
+    currentUserId: userId,
     getViewCount: (view) => snapshot.viewCounts[view] ?? 0,
     getCollectionCount: (collectionKey) => snapshot.collectionCounts[collectionKey] ?? 0,
-    getItemActivity: (scope, itemId, latestAt, createdAt) => {
+    getItemActivity: (scope, itemId, latestAt, createdAt, updatedByUserId, createdByUserId) => {
+      const latestActorUserId = updatedByUserId ?? createdByUserId ?? null;
+      if (userId && latestActorUserId === userId) {
+        return "none";
+      }
       const seenAt = activityState.items[getItemKey(scope, itemId)] ?? activityState.baselineAt;
       return getActivityState({ latestAt, createdAt, seenAt });
+    },
+    getFieldActivity: (scope, itemId, entry) => {
+      const seenAt = activityState.items[getItemKey(scope, itemId)] ?? activityState.baselineAt;
+      return getFieldActivityState(entry, seenAt, userId);
     },
     markViewSeen,
     markCollectionSeen,
     markItemSeen,
+    markItemsSeen,
     refresh,
-  }), [activityState.baselineAt, activityState.items, markCollectionSeen, markItemSeen, markViewSeen, refresh, snapshot.collectionCounts, snapshot.viewCounts]);
+  }), [activityState.baselineAt, activityState.items, markCollectionSeen, markItemSeen, markItemsSeen, markViewSeen, refresh, snapshot.collectionCounts, snapshot.viewCounts, userId]);
 
   return <ActivityContext.Provider value={value}>{children}</ActivityContext.Provider>;
 };

@@ -113,3 +113,56 @@ export const countUnseenRecords = (
     return getRecordActivityState(record, seenAt, currentUserId) === "none" ? count : count + 1;
   }, 0);
 };
+
+// ===========================================================================
+// PER-FIELD (CELL) ACTIVITY
+// ===========================================================================
+
+export type FieldActivityType = "added" | "updated" | "removed";
+export type FieldActivityState = "none" | FieldActivityType;
+
+export type FieldActivityEntry = {
+  at?: string | null;
+  by?: number | string | null;
+  type?: FieldActivityType | null;
+};
+
+export type FieldActivityMap = Record<string, FieldActivityEntry>;
+
+const toActorId = (value: unknown): number | null => {
+  const parsed = typeof value === "number" ? value : Number(value);
+  return Number.isInteger(parsed) && parsed > 0 ? parsed : null;
+};
+
+/**
+ * Resolve the visible state of a single field change. A change is only surfaced
+ * when it happened after the viewer last marked the record seen AND it was made
+ * by someone other than the viewer (so your own edits never light up for you).
+ */
+export const getFieldActivityState = (
+  entry: FieldActivityEntry | null | undefined,
+  seenAt?: string | null,
+  currentUserId?: number | null,
+): FieldActivityState => {
+  if (!entry || !entry.type) {
+    return "none";
+  }
+
+  const changedMs = toMs(entry.at);
+  if (changedMs === 0 || changedMs <= toMs(seenAt)) {
+    return "none";
+  }
+
+  if (currentUserId && toActorId(entry.by) === currentUserId) {
+    return "none";
+  }
+
+  return entry.type;
+};
+
+export const parseFieldActivityMap = (value: unknown): FieldActivityMap => {
+  if (!value || typeof value !== "object" || Array.isArray(value)) {
+    return {};
+  }
+  return value as FieldActivityMap;
+};

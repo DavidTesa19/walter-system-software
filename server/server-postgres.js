@@ -4204,7 +4204,7 @@ const createEntityCommissionRoutes = (entityTypes) => {
         const id = Number(req.params.id);
         const updateEntity = db[`update${Type}Entity`].bind(db);
         const payload = await applyAssignmentPayload(req.body || {});
-        const updated = await updateEntity(id, payload);
+        const updated = await updateEntity(id, payload, getRequestActorUserId(req));
         if (!updated) return res.status(404).json({ error: "Not found" });
         res.json(updated);
       } catch (error) {
@@ -4217,7 +4217,7 @@ const createEntityCommissionRoutes = (entityTypes) => {
       try {
         const createEntity = db[`create${Type}Entity`].bind(db);
         const payload = await applyAssignmentPayload(req.body || {});
-        const entity = await createEntity(payload);
+        const entity = await createEntity(payload, getRequestActorUserId(req));
         res.status(201).json(entity);
       } catch (error) {
         console.error(`Error creating ${type} entity:`, error);
@@ -4229,7 +4229,7 @@ const createEntityCommissionRoutes = (entityTypes) => {
       try {
         const id = Number(req.params.id);
         const updateEntity = db[`update${Type}Entity`].bind(db);
-        const updated = await updateEntity(id, { status: 'accepted' });
+        const updated = await updateEntity(id, { status: 'accepted' }, getRequestActorUserId(req));
         if (!updated) return res.status(404).json({ error: 'Not found' });
         res.json(updated);
       } catch (error) {
@@ -4242,7 +4242,7 @@ const createEntityCommissionRoutes = (entityTypes) => {
       try {
         const id = Number(req.params.id);
         const updateEntity = db[`update${Type}Entity`].bind(db);
-        const updated = await updateEntity(id, { status: 'archived' });
+        const updated = await updateEntity(id, { status: 'archived' }, getRequestActorUserId(req));
         if (!updated) return res.status(404).json({ error: 'Not found' });
         res.json(updated);
       } catch (error) {
@@ -4255,7 +4255,7 @@ const createEntityCommissionRoutes = (entityTypes) => {
       try {
         const id = Number(req.params.id);
         const updateEntity = db[`update${Type}Entity`].bind(db);
-        const updated = await updateEntity(id, { status: 'accepted' });
+        const updated = await updateEntity(id, { status: 'accepted' }, getRequestActorUserId(req));
         if (!updated) return res.status(404).json({ error: 'Not found' });
         res.json(updated);
       } catch (error) {
@@ -4287,7 +4287,7 @@ const createEntityCommissionRoutes = (entityTypes) => {
         const createWithCommission = db[`create${Type}WithCommission`].bind(db);
         const normalizedEntity = await applyAssignmentPayload(entity);
         const normalizedCommission = await applyAssignmentPayload(commission || {});
-        const result = await createWithCommission(normalizedEntity, normalizedCommission);
+        const result = await createWithCommission(normalizedEntity, normalizedCommission, getRequestActorUserId(req));
         res.status(201).json(result);
       } catch (error) {
         console.error(`Error creating ${type} with commission:`, error);
@@ -4329,13 +4329,13 @@ const createEntityCommissionRoutes = (entityTypes) => {
           const createWithCommission = db[`create${Type}WithCommission`].bind(db);
           const normalizedEntity = await applyAssignmentPayload(req.body.entity_data);
           const normalizedCommission = await applyAssignmentPayload(req.body.commission_data || {});
-          const result = await createWithCommission(normalizedEntity, normalizedCommission);
+          const result = await createWithCommission(normalizedEntity, normalizedCommission, getRequestActorUserId(req));
           return res.status(201).json(result.commission);
         }
 
         if (req.body?.entity_id) {
           const payload = await applyAssignmentPayload(req.body);
-          const newCommission = await createCommission(req.body.entity_id, payload);
+          const newCommission = await createCommission(req.body.entity_id, payload, getRequestActorUserId(req));
           return res.status(201).json(newCommission);
         }
 
@@ -4351,7 +4351,7 @@ const createEntityCommissionRoutes = (entityTypes) => {
         const id = Number(req.params.id);
         const updateCommission = db[`update${Type}Commission`].bind(db);
         const payload = await applyAssignmentPayload(req.body || {});
-        const updated = await updateCommission(id, payload);
+        const updated = await updateCommission(id, payload, getRequestActorUserId(req));
         if (!updated) return res.status(404).json({ error: "Not found" });
         res.json(updated);
       } catch (error) {
@@ -4365,7 +4365,7 @@ const createEntityCommissionRoutes = (entityTypes) => {
         const id = Number(req.params.id);
         const updateCommission = db[`update${Type}Commission`].bind(db);
         const payload = await applyAssignmentPayload(req.body || {});
-        const updated = await updateCommission(id, payload);
+        const updated = await updateCommission(id, payload, getRequestActorUserId(req));
         if (!updated) return res.status(404).json({ error: "Not found" });
         res.json(updated);
       } catch (error) {
@@ -4391,11 +4391,11 @@ const createEntityCommissionRoutes = (entityTypes) => {
       try {
         const id = Number(req.params.id);
         const updateCommission = db[`update${Type}Commission`].bind(db);
-        const updated = await updateCommission(id, { status: "accepted" });
+        const updated = await updateCommission(id, { status: "accepted" }, getRequestActorUserId(req));
         if (!updated) return res.status(404).json({ error: "Not found" });
         if (updated.entity_id) {
           const updateEntity = db[`update${Type}Entity`].bind(db);
-          await updateEntity(updated.entity_id, { status: 'accepted' });
+          await updateEntity(updated.entity_id, { status: 'accepted' }, getRequestActorUserId(req));
         }
         res.json(updated);
       } catch (error) {
@@ -4408,7 +4408,7 @@ const createEntityCommissionRoutes = (entityTypes) => {
       try {
         const id = Number(req.params.id);
         const updateCommission = db[`update${Type}Commission`].bind(db);
-        const updated = await updateCommission(id, { status: "archived" });
+        const updated = await updateCommission(id, { status: "archived" }, getRequestActorUserId(req));
         if (!updated) return res.status(404).json({ error: "Not found" });
         res.json(updated);
       } catch (error) {
@@ -4421,11 +4421,11 @@ const createEntityCommissionRoutes = (entityTypes) => {
       try {
         const id = Number(req.params.id);
         const updateCommission = db[`update${Type}Commission`].bind(db);
-        const updated = await updateCommission(id, { status: "accepted" });
+        const updated = await updateCommission(id, { status: "accepted" }, getRequestActorUserId(req));
         if (!updated) return res.status(404).json({ error: "Not found" });
         if (updated.entity_id) {
           const updateEntity = db[`update${Type}Entity`].bind(db);
-          await updateEntity(updated.entity_id, { status: 'accepted' });
+          await updateEntity(updated.entity_id, { status: 'accepted' }, getRequestActorUserId(req));
         }
         res.json(updated);
       } catch (error) {
@@ -4505,6 +4505,9 @@ const buildProjectCommissionResponse = (type, commission, entity) => {
     notes: commission.notes,
     created_at: commission.created_at,
     updated_at: commission.updated_at,
+    created_by_user_id: commission.created_by_user_id ?? null,
+    updated_by_user_id: commission.updated_by_user_id ?? null,
+    field_activity: commission.field_activity ?? {},
     entity_company_name: entity?.company_name ?? null,
     entity_field: entity?.field ?? null,
     entity_location: entity?.location ?? null,

@@ -1,11 +1,22 @@
+import type { FieldActivityMap } from "../../activity/activityUtils";
+
 // ============================================================================
 // ENTITY TYPES (Subjects) - The people/companies
 // ============================================================================
 
 /**
+ * Change-tracking fields carried on every entity/commission record.
+ */
+export interface ActivityAuditFields {
+  created_by_user_id?: number | null;
+  updated_by_user_id?: number | null;
+  field_activity?: FieldActivityMap | null;
+}
+
+/**
  * Base entity interface - common fields for all entities
  */
-export interface BaseEntity {
+export interface BaseEntity extends ActivityAuditFields {
   id: number;
   entity_id: string;  // P001, K001, T001
   status: 'pending' | 'accepted' | 'archived';
@@ -72,7 +83,7 @@ export interface TiperEntity extends BaseEntity {
 /**
  * Base commission interface - common fields for all commissions
  */
-export interface BaseCommission {
+export interface BaseCommission extends ActivityAuditFields {
   id: number;
   commission_id: string;      // P001-001, K001-001, etc.
   status: 'pending' | 'accepted' | 'archived';
@@ -150,6 +161,9 @@ export interface PartnerGridRow extends PartnerCommission {
   activity_item_id?: string | number;
   activity_latest_at?: string;
   activity_created_at?: string;
+  activity_updated_by_user_id?: number | null;
+  activity_created_by_user_id?: number | null;
+  activity_field_activity?: FieldActivityMap | null;
   // Entity info (from join)
   entity_id: string;
   name: string;
@@ -174,6 +188,9 @@ export interface ClientGridRow extends ClientCommission {
   activity_item_id?: string | number;
   activity_latest_at?: string;
   activity_created_at?: string;
+  activity_updated_by_user_id?: number | null;
+  activity_created_by_user_id?: number | null;
+  activity_field_activity?: FieldActivityMap | null;
   // Entity info (from join)
   entity_id: string;
   name: string;
@@ -198,6 +215,9 @@ export interface TiperGridRow extends TiperCommission {
   activity_item_id?: string | number;
   activity_latest_at?: string;
   activity_created_at?: string;
+  activity_updated_by_user_id?: number | null;
+  activity_created_by_user_id?: number | null;
+  activity_field_activity?: FieldActivityMap | null;
   // Entity info (from join)
   entity_id: string;
   name: string;

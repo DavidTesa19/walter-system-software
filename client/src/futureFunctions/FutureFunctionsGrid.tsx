@@ -17,6 +17,14 @@ import type { FutureFunction, FutureFunctionDraft } from "./futureFunction.inter
 import type { ICellRendererParams } from "ag-grid-community";
 import { formatProfileDate } from "../usersGrid/utils/profileUtils";
 import { getStoredFutureFunctionsView, setStoredFutureFunctionsView } from "../utils/navigationState";
+import { useActivity } from "../activity/ActivityContext";
+import {
+  FUTURE_FUNCTIONS_ACTIVE_COLLECTION_KEY,
+  FUTURE_FUNCTIONS_ARCHIVE_COLLECTION_KEY,
+  FUTURE_FUNCTIONS_RECORD_SCOPE,
+} from "../activity/activityKeys";
+import { buildActivityColumn, makeActivityCellClassRules } from "../activity/gridActivity";
+import ActivityConfirmAllButton from "../activity/ActivityConfirmAllButton";
 
 ModuleRegistry.registerModules([AllCommunityModule]);
 
@@ -96,6 +104,15 @@ const FutureFunctionsGrid: React.FC = () => {
   const { user } = useAuth();
   const isReadOnly = user?.role === 'salesman' || user?.role === 'viewer';
   const editSnapshotRef = useRef<Record<number, any>>({});
+  const gridApiRef = useRef<any>(null);
+
+  const { markItemsSeen, markCollectionSeen, getItemActivity, getFieldActivity } = useActivity();
+  const getFieldActivityRef = useRef(getFieldActivity);
+  getFieldActivityRef.current = getFieldActivity;
+  const activityCellClassRules = useMemo(
+    () => makeActivityCellClassRules((scope, itemId, entry) => getFieldActivityRef.current(scope, itemId, entry)),
+    []
+  );
 
   // Refetch when other views mutate the same resource
   useEffect(() => {
@@ -111,9 +128,10 @@ const FutureFunctionsGrid: React.FC = () => {
       resizable: true,
       sortable: true,
       filter: true,
-      flex: 1
+      flex: 1,
+      cellClassRules: activityCellClassRules
     }),
-    [isReadOnly]
+    [isReadOnly, activityCellClassRules]
   );
 
   const getRowId = useCallback((params: { data: FutureFunction }) => String(params.data.id), []);
@@ -474,6 +492,7 @@ const FutureFunctionsGrid: React.FC = () => {
 
   const activeColumnDefs = useMemo<ColDef<FutureFunction>[]>(
     () => ([
+      buildActivityColumn<FutureFunction>(),
       {
         headerName: "",
         colId: "delete",
@@ -642,6 +661,7 @@ const FutureFunctionsGrid: React.FC = () => {
 
   const archiveColumnDefs = useMemo<ColDef<FutureFunction>[]>(
     () => ([
+      buildActivityColumn<FutureFunction>(),
       {
         headerName: "",
         colId: "delete",
@@ -837,9 +857,56 @@ const FutureFunctionsGrid: React.FC = () => {
     [fetchFutureFunctions, pushAction]
   );
 
-  const currentRowData = isArchiveView ? archivedFunctions : activeFunctions;
+  const withActivity = useCallback(
+    (rows: FutureFunction[]): FutureFunction[] =>
+      rows.map((row) => ({
+        ...row,
+        activity_scope: FUTURE_FUNCTIONS_RECORD_SCOPE,
+        activity_item_id: row.id,
+        activity_latest_at: row.updated_at ?? row.created_at,
+        activity_created_at: row.created_at,
+        activity_updated_by_user_id: row.updated_by_user_id ?? null,
+        activity_created_by_user_id: row.created_by_user_id ?? null,
+        activity_field_activity: row.field_activity ?? null,
+      })),
+    []
+  );
+
+  const currentRowData = useMemo(
+    () => withActivity(isArchiveView ? archivedFunctions : activeFunctions),
+    [withActivity, isArchiveView, archivedFunctions, activeFunctions]
+  );
   const currentColumnDefs = isArchiveView ? archiveColumnDefs : activeColumnDefs;
   const currentOnCellValueChanged = isArchiveView ? onArchiveCellValueChanged : onCellValueChanged;
+
+  // Refresh per-cell dots whenever seen/actor state changes.
+  useEffect(() => {
+    gridApiRef.current?.refreshCells({ force: true });
+  }, [getFieldActivity]);
+
+  const unseenActivityCount = currentRowData.reduce((count, row) => {
+    const state = getItemActivity(
+      row.activity_scope as string,
+      row.activity_item_id as number,
+      row.activity_latest_at ?? null,
+      row.activity_created_at ?? null,
+      row.activity_updated_by_user_id ?? null,
+      row.activity_created_by_user_id ?? null,
+    );
+    return state === "none" ? count : count + 1;
+  }, 0);
+
+  const handleConfirmAllActivity = useCallback(() => {
+    markItemsSeen(
+      currentRowData.map((row) => ({
+        scope: FUTURE_FUNCTIONS_RECORD_SCOPE,
+        itemId: row.id,
+        seenAt: row.activity_latest_at ?? null,
+      }))
+    );
+    markCollectionSeen(isArchiveView ? FUTURE_FUNCTIONS_ARCHIVE_COLLECTION_KEY : FUTURE_FUNCTIONS_ACTIVE_COLLECTION_KEY);
+    gridApiRef.current?.refreshCells({ force: true });
+  }, [currentRowData, isArchiveView, markCollectionSeen, markItemsSeen]);
 
   // Status counts for summary strip
   const statusSummary = useMemo(() => {
@@ -978,6 +1045,12 @@ const FutureFunctionsGrid: React.FC = () => {
         ))}
       </div>
 
+      {unseenActivityCount > 0 && (
+        <div className="grid-activity-toolbar">
+          <ActivityConfirmAllButton count={unseenActivityCount} onConfirm={handleConfirmAllActivity} />
+        </div>
+      )}
+
       <div className="table-section future-functions-table-section">
         <div className="grid-container future-functions-grid-container">
           <div ref={activeWrapperRef} className="grid-wrapper ff-grid-wrapper ag-theme-quartz">
@@ -985,6 +1058,7 @@ const FutureFunctionsGrid: React.FC = () => {
               rowData={currentRowData}
               columnDefs={currentColumnDefs}
               defaultColDef={defaultColDef}
+              onGridReady={(e) => { gridApiRef.current = e.api; }}
               getRowId={getRowId}
               popupParent={typeof document !== "undefined" ? document.body : undefined}
               postProcessPopup={(params) => {
