@@ -319,7 +319,7 @@ const Sidebar: React.FC<SidebarProps> = ({
     },
     {
       id: 'projects',
-      label: 'Projekty',
+      label: 'Neveřejné',
       icon: <Icons.Tables />,
       sections: [
         {

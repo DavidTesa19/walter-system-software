@@ -1373,7 +1373,7 @@ const ClientsSectionNew: React.FC<SectionProps> = ({
         }
 
         if (!row.entityOnly) {
-          const targetCommissionId = viewMode === "active"
+          const targetCommissionId = sectionKind === "subjects" && viewMode === "active"
             ? (row.primaryCommissionId ?? null)
             : row.id;
 
@@ -1397,7 +1397,7 @@ const ClientsSectionNew: React.FC<SectionProps> = ({
       if (entityFields.includes(field) && row.entity) {
         await handleUpdateEntity(row.entity.id, { [field]: newValue });
       } else if (!row.entityOnly) {
-        const targetCommissionId = viewMode === "active"
+        const targetCommissionId = sectionKind === "subjects" && viewMode === "active"
           ? (row.primaryCommissionId ?? null)
           : row.id;
 
