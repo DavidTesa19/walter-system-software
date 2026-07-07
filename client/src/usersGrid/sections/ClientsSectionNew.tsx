@@ -1313,7 +1313,13 @@ const ClientsSectionNew: React.FC<SectionProps> = ({
       if (entityFields.includes(field) && row.entity) {
         await handleUpdateEntity(row.entity.id, { [field]: newValue });
       } else if (!row.entityOnly) {
-        await handleUpdateCommission(row.id, { [field]: newValue });
+        const targetCommissionId = viewMode === "active"
+          ? (row.primaryCommissionId ?? null)
+          : row.id;
+
+        if (targetCommissionId !== null) {
+          await handleUpdateCommission(targetCommissionId, { [field]: newValue });
+        }
       }
     } catch (error) {
       console.error("Error updating:", error);
