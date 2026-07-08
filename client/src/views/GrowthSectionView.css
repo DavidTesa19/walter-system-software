@@ -1,0 +1,20 @@
+.growth-section-view {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.growth-section-view__mode-bar {
+  display: flex;
+  justify-content: center;
+}
+
+.growth-section-view__mode-tabs {
+  justify-self: center;
+}
+
+@media (max-width: 900px) {
+  .growth-section-view__mode-bar {
+    justify-content: flex-start;
+  }
+}

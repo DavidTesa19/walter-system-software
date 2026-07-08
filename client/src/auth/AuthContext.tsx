@@ -8,12 +8,12 @@ import type { AppView } from '../types/appView';
 
 // Define available roles
 export type UserRole = 'admin' | 'manager' | 'salesman' | 'viewer';
-export type UserAccessScope = 'all' | 'standard' | 'projects';
+export type UserAccessScope = 'all' | 'standard' | 'projects' | 'growth';
 
 const DEFAULT_ACCESS_SCOPE: UserAccessScope = 'all';
 
 export const normalizeUserAccessScope = (value: unknown): UserAccessScope => {
-  if (value === 'standard' || value === 'projects' || value === 'all') {
+  if (value === 'standard' || value === 'projects' || value === 'growth' || value === 'all') {
     return value;
   }
 
@@ -28,6 +28,11 @@ export const canAccessStandardSystem = (scope: UserAccessScope | null | undefine
 export const canAccessProjectsSystem = (scope: UserAccessScope | null | undefined): boolean => {
   const normalizedScope = normalizeUserAccessScope(scope);
   return normalizedScope === 'all' || normalizedScope === 'projects';
+};
+
+export const canAccessGrowthSystem = (scope: UserAccessScope | null | undefined): boolean => {
+  const normalizedScope = normalizeUserAccessScope(scope);
+  return normalizedScope === 'all' || normalizedScope === 'growth';
 };
 
 export const isViewAllowedForScope = (
@@ -50,6 +55,14 @@ export const isViewAllowedForScope = (
     return canAccessProjectsSystem(scope);
   }
 
+  if (view === 'growth_active' || view === 'growth_pending' || view === 'growth_archived') {
+    return canAccessGrowthSystem(scope);
+  }
+
+  if (view === 'growth_subjects_active' || view === 'growth_subjects_pending' || view === 'growth_subjects_archived') {
+    return canAccessGrowthSystem(scope);
+  }
+
   return true;
 };
 
@@ -62,6 +75,10 @@ export const getDefaultViewForScope = (scope: UserAccessScope | null | undefined
     return 'projects_subjects_active';
   }
 
+  if (canAccessGrowthSystem(scope)) {
+    return 'growth_subjects_active';
+  }
+
   return 'teamchat';
 };
 
@@ -72,6 +89,8 @@ const SALESMAN_VIEWER_ALLOWED_VIEWS: AppView[] = [
   'entities_active', 'entities_pending', 'entities_archived',
   'projects_active', 'projects_pending', 'projects_archived',
   'projects_subjects_active', 'projects_subjects_pending', 'projects_subjects_archived',
+  'growth_active', 'growth_pending', 'growth_archived',
+  'growth_subjects_active', 'growth_subjects_pending', 'growth_subjects_archived',
   'teamchat', 'palettes',
 ];
 

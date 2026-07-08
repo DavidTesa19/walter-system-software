@@ -39,7 +39,7 @@ if (!JWT_SECRET && process.env.NODE_ENV === 'production') {
   process.exit(1);
 }
 const EFFECTIVE_JWT_SECRET = JWT_SECRET || 'walter-dev-secret-local-only';
-const VALID_ACCESS_SCOPES = new Set(['all', 'standard', 'projects']);
+const VALID_ACCESS_SCOPES = new Set(['all', 'standard', 'projects', 'growth']);
 
 const normalizeAccessScope = (value) => {
   if (VALID_ACCESS_SCOPES.has(value)) {
@@ -232,9 +232,9 @@ const canAccessFieldOptionScope = (user, scope) => {
     return true;
   }
 
-  return normalizedScope === 'standard'
-    ? accessScope === 'standard'
-    : accessScope === 'projects';
+  if (normalizedScope === 'standard') return accessScope === 'standard';
+  if (normalizedScope === 'growth') return accessScope === 'growth';
+  return accessScope === 'projects';
 };
 
 const requireFieldOptionScopeAccess = (req, res, scope, { write = false } = {}) => {
@@ -274,6 +274,7 @@ const requireFieldOptionScopeAccess = (req, res, scope, { write = false } = {}) 
 });
 
 app.use(/^\/api\/projects(\/|$)/, authenticateToken, requireAccessScope('all', 'projects'), rejectViewerWrites);
+app.use(/^\/api\/growth(\/|$)/, authenticateToken, requireAccessScope('all', 'growth'), rejectViewerWrites);
 
 // File-based storage (development mode)
 const DATA_DIR = process.env.DATA_DIR || path.resolve(process.cwd(), "data");
@@ -358,7 +359,10 @@ const DOCUMENT_ENTITY_TYPES = new Set([
   "future-functions",
   "project-clients",
   "project-partners",
-  "project-tipers"
+  "project-tipers",
+  "growth-clients",
+  "growth-partners",
+  "growth-tipers"
 ]);
 
 // Map URL entity names to JSON store keys / Postgres table names
@@ -375,7 +379,10 @@ const ENTITY_PARENT_TABLES = {
   "future-functions": ["future_functions"],
   "project-partners": ["project_partner_entities", "project_partner_commissions"],
   "project-clients": ["project_client_entities", "project_client_commissions"],
-  "project-tipers": ["project_tiper_entities", "project_tiper_commissions"]
+  "project-tipers": ["project_tiper_entities", "project_tiper_commissions"],
+  "growth-partners": ["growth_partner_entities", "growth_partner_commissions"],
+  "growth-clients": ["growth_client_entities", "growth_client_commissions"],
+  "growth-tipers": ["growth_tiper_entities", "growth_tiper_commissions"]
 };
 const ENTITY_PARENT_STORE_KEYS = {
   partners: ["partners", "partner_entities", "partner_commissions"],
@@ -384,7 +391,10 @@ const ENTITY_PARENT_STORE_KEYS = {
   "future-functions": ["futureFunctions"],
   "project-partners": ["project_partner_entities", "project_partner_commissions"],
   "project-clients": ["project_client_entities", "project_client_commissions"],
-  "project-tipers": ["project_tiper_entities", "project_tiper_commissions"]
+  "project-tipers": ["project_tiper_entities", "project_tiper_commissions"],
+  "growth-partners": ["growth_partner_entities", "growth_partner_commissions"],
+  "growth-clients": ["growth_client_entities", "growth_client_commissions"],
+  "growth-tipers": ["growth_tiper_entities", "growth_tiper_commissions"]
 };
 const getStoreKey = (entity) => ENTITY_STORE_KEY[entity] || entity;
 const getTableName = (entity) => ENTITY_TABLE_NAME[entity] || entity;
@@ -4468,6 +4478,36 @@ const PROJECT_ROUTE_CONFIG = {
   }
 };
 
+const GROWTH_ROUTE_CONFIG = {
+  partner: {
+    entityTable: 'growth_partner_entities',
+    commissionTable: 'growth_partner_commissions',
+    counterKey: 'growth_partner',
+    commissionKey: 'growth_partner',
+    entityDefaults: { company_name: 'Nová společnost' },
+    entityFields: ['status', 'company_name', 'field', 'location', 'region', 'info', 'category', 'first_name', 'last_name', 'email', 'phone', 'website', 'assigned_to', 'assigned_user_ids'],
+    commissionFields: ['status', 'position', 'budget', 'state', 'assigned_to', 'assigned_user_ids', 'field', 'service_position', 'location', 'info', 'category', 'deadline', 'priority', 'phone', 'commission_value', 'is_tipped', 'notes']
+  },
+  client: {
+    entityTable: 'growth_client_entities',
+    commissionTable: 'growth_client_commissions',
+    counterKey: 'growth_client',
+    commissionKey: 'growth_client',
+    entityDefaults: { company_name: 'Nová společnost' },
+    entityFields: ['status', 'company_name', 'field', 'service', 'location', 'region', 'info', 'category', 'budget', 'first_name', 'last_name', 'email', 'phone', 'website', 'assigned_to', 'assigned_user_ids'],
+    commissionFields: ['status', 'position', 'budget', 'state', 'assigned_to', 'assigned_user_ids', 'field', 'service_position', 'location', 'info', 'category', 'deadline', 'priority', 'phone', 'commission_value', 'is_tipped', 'notes']
+  },
+  tiper: {
+    entityTable: 'growth_tiper_entities',
+    commissionTable: 'growth_tiper_commissions',
+    counterKey: 'growth_tiper',
+    commissionKey: 'growth_tiper',
+    entityDefaults: {},
+    entityFields: ['status', 'company_name', 'field', 'location', 'region', 'info', 'category', 'first_name', 'last_name', 'email', 'phone', 'website', 'assigned_to', 'assigned_user_ids'],
+    commissionFields: ['status', 'position', 'budget', 'state', 'assigned_to', 'assigned_user_ids', 'field', 'service_position', 'location', 'info', 'category', 'deadline', 'priority', 'phone', 'linked_entity_type', 'linked_commission_id', 'commission_value', 'is_tipped', 'notes']
+  }
+};
+
 const pickDefinedFields = (source = {}, fields = []) => {
   const picked = {};
   for (const field of fields) {
@@ -4529,8 +4569,8 @@ const buildProjectCommissionResponse = (type, commission, entity) => {
   return payload;
 };
 
-const getProjectCommissionRows = async (type, filters = {}) => {
-  const config = PROJECT_ROUTE_CONFIG[type];
+const getNamespaceCommissionRows = async (routeConfig, type, filters = {}) => {
+  const config = routeConfig[type];
   const [commissions, entities] = await Promise.all([
     db.getAll(config.commissionTable, filters.status ? { status: filters.status } : {}),
     db.getAll(config.entityTable)
@@ -4542,8 +4582,8 @@ const getProjectCommissionRows = async (type, filters = {}) => {
     .sort((left, right) => String(left.commission_id).localeCompare(String(right.commission_id)));
 };
 
-const getProjectCommissionRecord = async (type, id) => {
-  const config = PROJECT_ROUTE_CONFIG[type];
+const getNamespaceCommissionRecord = async (routeConfig, type, id) => {
+  const config = routeConfig[type];
   const commission = await db.getById(config.commissionTable, id);
   if (!commission) {
     return null;
@@ -4552,8 +4592,8 @@ const getProjectCommissionRecord = async (type, id) => {
   return buildProjectCommissionResponse(type, commission, entity);
 };
 
-const createProjectEntityRecord = async (type, data = {}, actorUserId) => {
-  const config = PROJECT_ROUTE_CONFIG[type];
+const createNamespaceEntityRecord = async (routeConfig, type, data = {}, actorUserId) => {
+  const config = routeConfig[type];
   const entityId = await db.getNextEntityId(config.counterKey);
   return db.create(config.entityTable, {
     entity_id: entityId,
@@ -4563,8 +4603,8 @@ const createProjectEntityRecord = async (type, data = {}, actorUserId) => {
   }, actorUserId);
 };
 
-const createProjectCommissionRecord = async (type, entityInternalId, data = {}, actorUserId) => {
-  const config = PROJECT_ROUTE_CONFIG[type];
+const createNamespaceCommissionRecord = async (routeConfig, type, entityInternalId, data = {}, actorUserId) => {
+  const config = routeConfig[type];
   const entity = await db.getById(config.entityTable, Number(entityInternalId));
   if (!entity) {
     throw new Error('Entity not found');
@@ -4580,14 +4620,14 @@ const createProjectCommissionRecord = async (type, entityInternalId, data = {}, 
     ...pickDefinedFields(data, config.commissionFields.filter((field) => field !== 'status'))
   }, actorUserId);
 
-  return getProjectCommissionRecord(type, created.id);
+  return getNamespaceCommissionRecord(routeConfig, type, created.id);
 };
 
-const createProjectEntityCommissionRoutes = (entityTypes) => {
+const createNamespaceEntityCommissionRoutes = (routeConfig, apiPrefix, entityTypes) => {
   for (const type of entityTypes) {
-    const config = PROJECT_ROUTE_CONFIG[type];
-    const entitiesPath = `/api/projects/${type}-entities`;
-    const commissionsPath = `/api/projects/${type}-commissions`;
+    const config = routeConfig[type];
+    const entitiesPath = `/api/${apiPrefix}/${type}-entities`;
+    const commissionsPath = `/api/${apiPrefix}/${type}-commissions`;
 
     app.get(entitiesPath, authenticateToken, async (req, res) => {
       try {
@@ -4595,8 +4635,8 @@ const createProjectEntityCommissionRoutes = (entityTypes) => {
         const records = await db.getAll(config.entityTable, filters);
         res.json((records ?? []).sort((left, right) => String(left.entity_id).localeCompare(String(right.entity_id))));
       } catch (error) {
-        console.error(`Error fetching projects ${type} entities:`, error);
-        res.status(500).json({ error: `Failed to fetch projects ${type} entities` });
+        console.error(`Error fetching ${apiPrefix} ${type} entities:`, error);
+        res.status(500).json({ error: `Failed to fetch ${apiPrefix} ${type} entities` });
       }
     });
 
@@ -4609,19 +4649,19 @@ const createProjectEntityCommissionRoutes = (entityTypes) => {
         }
         res.json(record);
       } catch (error) {
-        console.error(`Error fetching projects ${type} entity:`, error);
-        res.status(500).json({ error: `Failed to fetch projects ${type} entity` });
+        console.error(`Error fetching ${apiPrefix} ${type} entity:`, error);
+        res.status(500).json({ error: `Failed to fetch ${apiPrefix} ${type} entity` });
       }
     });
 
     app.post(entitiesPath, authenticateToken, async (req, res) => {
       try {
         const payload = await applyAssignmentPayload(req.body || {});
-        const created = await createProjectEntityRecord(type, payload, getRequestActorUserId(req));
+        const created = await createNamespaceEntityRecord(routeConfig, type, payload, getRequestActorUserId(req));
         res.status(201).json(created);
       } catch (error) {
-        console.error(`Error creating projects ${type} entity:`, error);
-        res.status(500).json({ error: error.message || `Failed to create projects ${type} entity` });
+        console.error(`Error creating ${apiPrefix} ${type} entity:`, error);
+        res.status(500).json({ error: error.message || `Failed to create ${apiPrefix} ${type} entity` });
       }
     });
 
@@ -4635,8 +4675,8 @@ const createProjectEntityCommissionRoutes = (entityTypes) => {
         }
         res.json(updated);
       } catch (error) {
-        console.error(`Error updating projects ${type} entity:`, error);
-        res.status(500).json({ error: `Failed to update projects ${type} entity` });
+        console.error(`Error updating ${apiPrefix} ${type} entity:`, error);
+        res.status(500).json({ error: `Failed to update ${apiPrefix} ${type} entity` });
       }
     });
 
@@ -4649,8 +4689,8 @@ const createProjectEntityCommissionRoutes = (entityTypes) => {
         }
         res.json(updated);
       } catch (error) {
-        console.error(`Error approving projects ${type} entity:`, error);
-        res.status(500).json({ error: `Failed to approve projects ${type} entity` });
+        console.error(`Error approving ${apiPrefix} ${type} entity:`, error);
+        res.status(500).json({ error: `Failed to approve ${apiPrefix} ${type} entity` });
       }
     });
 
@@ -4663,8 +4703,8 @@ const createProjectEntityCommissionRoutes = (entityTypes) => {
         }
         res.json(updated);
       } catch (error) {
-        console.error(`Error archiving projects ${type} entity:`, error);
-        res.status(500).json({ error: `Failed to archive projects ${type} entity` });
+        console.error(`Error archiving ${apiPrefix} ${type} entity:`, error);
+        res.status(500).json({ error: `Failed to archive ${apiPrefix} ${type} entity` });
       }
     });
 
@@ -4677,8 +4717,8 @@ const createProjectEntityCommissionRoutes = (entityTypes) => {
         }
         res.json(updated);
       } catch (error) {
-        console.error(`Error restoring projects ${type} entity:`, error);
-        res.status(500).json({ error: `Failed to restore projects ${type} entity` });
+        console.error(`Error restoring ${apiPrefix} ${type} entity:`, error);
+        res.status(500).json({ error: `Failed to restore ${apiPrefix} ${type} entity` });
       }
     });
 
@@ -4691,8 +4731,8 @@ const createProjectEntityCommissionRoutes = (entityTypes) => {
         }
         res.status(204).end();
       } catch (error) {
-        console.error(`Error deleting projects ${type} entity:`, error);
-        res.status(500).json({ error: `Failed to delete projects ${type} entity` });
+        console.error(`Error deleting ${apiPrefix} ${type} entity:`, error);
+        res.status(500).json({ error: `Failed to delete ${apiPrefix} ${type} entity` });
       }
     });
 
@@ -4704,40 +4744,40 @@ const createProjectEntityCommissionRoutes = (entityTypes) => {
         }
         const normalizedEntity = await applyAssignmentPayload(entity);
         const normalizedCommission = await applyAssignmentPayload(commission || {});
-        const createdEntity = await createProjectEntityRecord(type, {
+        const createdEntity = await createNamespaceEntityRecord(routeConfig, type, {
           ...normalizedEntity,
           status: normalizedEntity?.status || normalizedCommission?.status || 'accepted'
         }, getRequestActorUserId(req));
-        const createdCommission = await createProjectCommissionRecord(type, createdEntity.id, normalizedCommission, getRequestActorUserId(req));
+        const createdCommission = await createNamespaceCommissionRecord(routeConfig, type, createdEntity.id, normalizedCommission, getRequestActorUserId(req));
         res.status(201).json({ entity: createdEntity, commission: createdCommission });
       } catch (error) {
-        console.error(`Error creating projects ${type} entity with commission:`, error);
-        res.status(500).json({ error: error.message || `Failed to create projects ${type} entity with commission` });
+        console.error(`Error creating ${apiPrefix} ${type} entity with commission:`, error);
+        res.status(500).json({ error: error.message || `Failed to create ${apiPrefix} ${type} entity with commission` });
       }
     });
 
     app.get(commissionsPath, authenticateToken, async (req, res) => {
       try {
         const filters = typeof req.query.status === 'string' ? { status: req.query.status } : {};
-        const records = await getProjectCommissionRows(type, filters);
+        const records = await getNamespaceCommissionRows(routeConfig, type, filters);
         res.json(records);
       } catch (error) {
-        console.error(`Error fetching projects ${type} commissions:`, error);
-        res.status(500).json({ error: `Failed to fetch projects ${type} commissions` });
+        console.error(`Error fetching ${apiPrefix} ${type} commissions:`, error);
+        res.status(500).json({ error: `Failed to fetch ${apiPrefix} ${type} commissions` });
       }
     });
 
     app.get(`${commissionsPath}/:id`, authenticateToken, async (req, res) => {
       try {
         const id = Number(req.params.id);
-        const record = await getProjectCommissionRecord(type, id);
+        const record = await getNamespaceCommissionRecord(routeConfig, type, id);
         if (!record) {
           return res.status(404).json({ error: 'Not found' });
         }
         res.json(record);
       } catch (error) {
-        console.error(`Error fetching projects ${type} commission:`, error);
-        res.status(500).json({ error: `Failed to fetch projects ${type} commission` });
+        console.error(`Error fetching ${apiPrefix} ${type} commission:`, error);
+        res.status(500).json({ error: `Failed to fetch ${apiPrefix} ${type} commission` });
       }
     });
 
@@ -4746,11 +4786,11 @@ const createProjectEntityCommissionRoutes = (entityTypes) => {
         if (req.body?.entity_data) {
           const normalizedEntity = await applyAssignmentPayload(req.body.entity_data);
           const normalizedCommission = await applyAssignmentPayload(req.body.commission_data || {});
-          const createdEntity = await createProjectEntityRecord(type, {
+          const createdEntity = await createNamespaceEntityRecord(routeConfig, type, {
             ...normalizedEntity,
             status: normalizedEntity?.status || normalizedCommission?.status || 'accepted'
           }, getRequestActorUserId(req));
-          const createdCommission = await createProjectCommissionRecord(type, createdEntity.id, normalizedCommission, getRequestActorUserId(req));
+          const createdCommission = await createNamespaceCommissionRecord(routeConfig, type, createdEntity.id, normalizedCommission, getRequestActorUserId(req));
           return res.status(201).json(createdCommission);
         }
 
@@ -4759,11 +4799,11 @@ const createProjectEntityCommissionRoutes = (entityTypes) => {
         }
 
         const payload = await applyAssignmentPayload(req.body);
-        const created = await createProjectCommissionRecord(type, req.body.entity_id, payload, getRequestActorUserId(req));
+        const created = await createNamespaceCommissionRecord(routeConfig, type, req.body.entity_id, payload, getRequestActorUserId(req));
         res.status(201).json(created);
       } catch (error) {
-        console.error(`Error creating projects ${type} commission:`, error);
-        res.status(500).json({ error: error.message || `Failed to create projects ${type} commission` });
+        console.error(`Error creating ${apiPrefix} ${type} commission:`, error);
+        res.status(500).json({ error: error.message || `Failed to create ${apiPrefix} ${type} commission` });
       }
     });
 
@@ -4775,10 +4815,10 @@ const createProjectEntityCommissionRoutes = (entityTypes) => {
         if (!updated) {
           return res.status(404).json({ error: 'Not found' });
         }
-        res.json(await getProjectCommissionRecord(type, id));
+        res.json(await getNamespaceCommissionRecord(routeConfig, type, id));
       } catch (error) {
-        console.error(`Error updating projects ${type} commission:`, error);
-        res.status(500).json({ error: `Failed to update projects ${type} commission` });
+        console.error(`Error updating ${apiPrefix} ${type} commission:`, error);
+        res.status(500).json({ error: `Failed to update ${apiPrefix} ${type} commission` });
       }
     });
 
@@ -4790,10 +4830,10 @@ const createProjectEntityCommissionRoutes = (entityTypes) => {
         if (!updated) {
           return res.status(404).json({ error: 'Not found' });
         }
-        res.json(await getProjectCommissionRecord(type, id));
+        res.json(await getNamespaceCommissionRecord(routeConfig, type, id));
       } catch (error) {
-        console.error(`Error patching projects ${type} commission:`, error);
-        res.status(500).json({ error: `Failed to update projects ${type} commission` });
+        console.error(`Error patching ${apiPrefix} ${type} commission:`, error);
+        res.status(500).json({ error: `Failed to update ${apiPrefix} ${type} commission` });
       }
     });
 
@@ -4806,8 +4846,8 @@ const createProjectEntityCommissionRoutes = (entityTypes) => {
         }
         res.status(204).end();
       } catch (error) {
-        console.error(`Error deleting projects ${type} commission:`, error);
-        res.status(500).json({ error: `Failed to delete projects ${type} commission` });
+        console.error(`Error deleting ${apiPrefix} ${type} commission:`, error);
+        res.status(500).json({ error: `Failed to delete ${apiPrefix} ${type} commission` });
       }
     });
 
@@ -4821,10 +4861,10 @@ const createProjectEntityCommissionRoutes = (entityTypes) => {
         if (updated.entity_id) {
           await db.update(config.entityTable, Number(updated.entity_id), { status: 'accepted' }, getRequestActorUserId(req));
         }
-        res.json(await getProjectCommissionRecord(type, id));
+        res.json(await getNamespaceCommissionRecord(routeConfig, type, id));
       } catch (error) {
-        console.error(`Error approving projects ${type} commission:`, error);
-        res.status(500).json({ error: `Failed to approve projects ${type} commission` });
+        console.error(`Error approving ${apiPrefix} ${type} commission:`, error);
+        res.status(500).json({ error: `Failed to approve ${apiPrefix} ${type} commission` });
       }
     });
 
@@ -4835,10 +4875,10 @@ const createProjectEntityCommissionRoutes = (entityTypes) => {
         if (!updated) {
           return res.status(404).json({ error: 'Not found' });
         }
-        res.json(await getProjectCommissionRecord(type, id));
+        res.json(await getNamespaceCommissionRecord(routeConfig, type, id));
       } catch (error) {
-        console.error(`Error archiving projects ${type} commission:`, error);
-        res.status(500).json({ error: `Failed to archive projects ${type} commission` });
+        console.error(`Error archiving ${apiPrefix} ${type} commission:`, error);
+        res.status(500).json({ error: `Failed to archive ${apiPrefix} ${type} commission` });
       }
     });
 
@@ -4852,16 +4892,17 @@ const createProjectEntityCommissionRoutes = (entityTypes) => {
         if (updated.entity_id) {
           await db.update(config.entityTable, Number(updated.entity_id), { status: 'accepted' }, getRequestActorUserId(req));
         }
-        res.json(await getProjectCommissionRecord(type, id));
+        res.json(await getNamespaceCommissionRecord(routeConfig, type, id));
       } catch (error) {
-        console.error(`Error restoring projects ${type} commission:`, error);
-        res.status(500).json({ error: `Failed to restore projects ${type} commission` });
+        console.error(`Error restoring ${apiPrefix} ${type} commission:`, error);
+        res.status(500).json({ error: `Failed to restore ${apiPrefix} ${type} commission` });
       }
     });
   }
 };
 
-createProjectEntityCommissionRoutes(['partner', 'client', 'tiper']);
+createNamespaceEntityCommissionRoutes(PROJECT_ROUTE_CONFIG, 'projects', ['partner', 'client', 'tiper']);
+createNamespaceEntityCommissionRoutes(GROWTH_ROUTE_CONFIG, 'growth', ['partner', 'client', 'tiper']);
 
 app.post('/public-submissions/:type', async (req, res) => {
   try {

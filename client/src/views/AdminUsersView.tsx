@@ -7,7 +7,7 @@ import { useActivity } from '../activity/ActivityContext';
 import { ADMIN_USERS_RECORD_SCOPE } from '../activity/activityKeys';
 import './AdminUsersView.css';
 
-type AccessScope = 'all' | 'standard' | 'projects';
+type AccessScope = 'all' | 'standard' | 'projects' | 'growth';
 
 interface ManagedUser {
   id: number;
@@ -35,9 +35,10 @@ const ROLE_OPTIONS: Array<{ value: UserRole; label: string; description: string 
 ];
 
 const ACCESS_SCOPE_OPTIONS: Array<{ value: AccessScope; label: string; description: string }> = [
-  { value: 'all', label: 'Obojí', description: 'Normální systém i Projekty' },
+  { value: 'all', label: 'Vše', description: 'Veřejné, Neveřejné i Growth Club' },
   { value: 'standard', label: 'Standard', description: 'Jen normální zakázky a subjekty' },
   { value: 'projects', label: 'Projekty', description: 'Jen Projekty zakázky a subjekty' },
+  { value: 'growth', label: 'Growth Club', description: 'Jen Growth Club zakázky a subjekty' },
 ];
 
 const formatDateTime = (value?: string | null): string => {
@@ -139,7 +140,7 @@ export default function AdminUsersView() {
         accumulator[currentUser.accessScope] += 1;
         return accumulator;
       },
-      { total: 0, all: 0, standard: 0, projects: 0 }
+      { total: 0, all: 0, standard: 0, projects: 0, growth: 0 }
     );
   }, [users]);
 
@@ -316,7 +317,7 @@ export default function AdminUsersView() {
         <div>
           <span className="admin-users-eyebrow">Admin</span>
           <h1>Správa uživatelů</h1>
-          <p>Nastavte roli uživatele a určete, jestli vidí standardní systém, Projekty, nebo obojí.</p>
+          <p>Nastavte roli uživatele a určete, jestli vidí Veřejné, Neveřejné, Growth Club, nebo vše.</p>
         </div>
         <button
           type="button"
@@ -344,6 +345,10 @@ export default function AdminUsersView() {
         <div className="admin-users-metric">
           <span className="admin-users-metric-value">{counts.projects}</span>
           <span className="admin-users-metric-label">Jen Projekty</span>
+        </div>
+        <div className="admin-users-metric">
+          <span className="admin-users-metric-value">{counts.growth}</span>
+          <span className="admin-users-metric-label">Jen Growth Club</span>
         </div>
       </div>
 

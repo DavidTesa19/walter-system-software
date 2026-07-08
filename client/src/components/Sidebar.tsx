@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { canAccessProjectsSystem, canAccessStandardSystem, isViewAllowedForRole, useAuth } from '../auth/AuthContext';
+import { canAccessGrowthSystem, canAccessProjectsSystem, canAccessStandardSystem, isViewAllowedForRole, useAuth } from '../auth/AuthContext';
 import ActivityIndicator from '../activity/ActivityIndicator';
 import { useActivity } from '../activity/ActivityContext';
 import { trackEvent } from '../utils/analytics';
@@ -161,6 +161,7 @@ const Sidebar: React.FC<SidebarProps> = ({
   const userRole = user?.role;
   const canAccessStandard = canAccessStandardSystem(accessScope);
   const canAccessProjects = canAccessProjectsSystem(accessScope);
+  const canAccessGrowth = canAccessGrowthSystem(accessScope);
   const [searchQuery, setSearchQuery] = useState('');
   const [searchResults, setSearchResults] = useState<GlobalSearchResult[]>([]);
   const [isSearching, setIsSearching] = useState(false);
@@ -173,10 +174,13 @@ const Sidebar: React.FC<SidebarProps> = ({
   const [expandedGroups, setExpandedGroups] = useState<Record<string, boolean>>({
     general: true,
     projects: true,
+    growth: true,
     general_subjects: true,
     general_commissions: true,
     projects_subjects: true,
     projects_commissions: true,
+    growth_subjects: true,
+    growth_commissions: true,
     calendar: true,
     teamchat: true,
     other: true
@@ -206,6 +210,14 @@ const Sidebar: React.FC<SidebarProps> = ({
         sections: [
           { id: 'projects_subjects', views: ['projects_subjects_active', 'projects_subjects_pending', 'projects_subjects_archived'] },
           { id: 'projects_commissions', views: ['projects_active', 'projects_pending', 'projects_archived'] }
+        ]
+      },
+      {
+        id: 'growth',
+        views: ['growth_active', 'growth_pending', 'growth_archived', 'growth_subjects_active', 'growth_subjects_pending', 'growth_subjects_archived'],
+        sections: [
+          { id: 'growth_subjects', views: ['growth_subjects_active', 'growth_subjects_pending', 'growth_subjects_archived'] },
+          { id: 'growth_commissions', views: ['growth_active', 'growth_pending', 'growth_archived'] }
         ]
       },
       { id: 'calendar', views: ['calendar'] },
@@ -290,6 +302,41 @@ const Sidebar: React.FC<SidebarProps> = ({
   };
 
   const sidebarGroups: SidebarGroup[] = [
+    {
+      id: 'growth',
+      label: 'Growth Club',
+      icon: <Icons.Tables />,
+      sections: [
+        {
+          id: 'growth_subjects',
+          label: 'Subjekty',
+          icon: <Icons.Tables />,
+          items: [
+            {
+              id: 'growth_subjects_active',
+              label: 'Subjekty',
+              icon: <Icons.Tables />,
+              activeViews: ['growth_subjects_active', 'growth_subjects_pending', 'growth_subjects_archived'],
+              countViews: ['growth_subjects_active', 'growth_subjects_pending', 'growth_subjects_archived']
+            }
+          ]
+        },
+        {
+          id: 'growth_commissions',
+          label: 'Zakázky',
+          icon: <Icons.Tables />,
+          items: [
+            {
+              id: 'growth_active',
+              label: 'Zakázky',
+              icon: <Icons.Tables />,
+              activeViews: ['growth_active', 'growth_pending', 'growth_archived'],
+              countViews: ['growth_active', 'growth_pending', 'growth_archived']
+            }
+          ]
+        }
+      ]
+    },
     {
       id: 'general',
       label: 'Veřejné',
@@ -405,6 +452,10 @@ const Sidebar: React.FC<SidebarProps> = ({
 
       if (group.id === 'projects') {
         return canAccessProjects;
+      }
+
+      if (group.id === 'growth') {
+        return canAccessGrowth;
       }
 
       return true;

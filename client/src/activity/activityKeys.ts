@@ -1,10 +1,13 @@
 import type { GridView } from "../types/appView";
 
 export type ActivityTable = "clients" | "partners" | "tipers";
-export type ActivitySystem = "standard" | "projects";
+export type ActivitySystem = "standard" | "projects" | "growth";
 
-export const getActivitySystem = (systemNamespace?: string): ActivitySystem =>
-  systemNamespace === "projects" ? "projects" : "standard";
+export const getActivitySystem = (systemNamespace?: string): ActivitySystem => {
+  if (systemNamespace === "projects") return "projects";
+  if (systemNamespace === "growth") return "growth";
+  return "standard";
+};
 
 export const buildSubjectsCollectionKey = (system: ActivitySystem, viewMode: GridView, table: ActivityTable): string =>
   `subjects:${system}:${viewMode}:${table}`;

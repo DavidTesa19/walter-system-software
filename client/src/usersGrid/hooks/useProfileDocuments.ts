@@ -2,7 +2,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { API_BASE, apiDelete, apiGet, apiPatch, apiPost, apiUpload } from "../../utils/api";
 import type { ProfileDocument } from "../types/profile";
 
-type DocumentResource = "clients" | "partners" | "tipers" | "project-clients" | "project-partners" | "project-tipers";
+type DocumentResource = "clients" | "partners" | "tipers" | "project-clients" | "project-partners" | "project-tipers" | "growth-clients" | "growth-partners" | "growth-tipers";
 
 export type DocumentBreadcrumb = {
   id: number | null;

@@ -6,6 +6,8 @@ export const USERS_GRID_TABLE_STORAGE_KEY = "walterUsersGrid.activeTable";
 export const ENTITIES_SYSTEM_TABLE_STORAGE_KEY = "walterEntitiesSystem.activeTable";
 export const PROJECTS_COMMISSIONS_TABLE_STORAGE_KEY = "walterProjectsCommissions.activeTable";
 export const PROJECTS_SUBJECTS_TABLE_STORAGE_KEY = "walterProjectsSubjects.activeTable";
+export const GROWTH_COMMISSIONS_TABLE_STORAGE_KEY = "walterGrowthCommissions.activeTable";
+export const GROWTH_SUBJECTS_TABLE_STORAGE_KEY = "walterGrowthSubjects.activeTable";
 
 export const getStoredTableView = (
   storageKey: string,
@@ -37,6 +39,8 @@ export const clearStoredTableViews = (): void => {
     localStorage.removeItem(ENTITIES_SYSTEM_TABLE_STORAGE_KEY);
     localStorage.removeItem(PROJECTS_COMMISSIONS_TABLE_STORAGE_KEY);
     localStorage.removeItem(PROJECTS_SUBJECTS_TABLE_STORAGE_KEY);
+    localStorage.removeItem(GROWTH_COMMISSIONS_TABLE_STORAGE_KEY);
+    localStorage.removeItem(GROWTH_SUBJECTS_TABLE_STORAGE_KEY);
   } catch {
     // Ignore storage access errors.
   }

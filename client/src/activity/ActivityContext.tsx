@@ -1,5 +1,5 @@
 import React, { createContext, useCallback, useContext, useEffect, useMemo, useState } from "react";
-import { canAccessProjectsSystem, canAccessStandardSystem, type UserAccessScope } from "../auth/AuthContext";
+import { canAccessGrowthSystem, canAccessProjectsSystem, canAccessStandardSystem, type UserAccessScope } from "../auth/AuthContext";
 import type { AppView, GridView } from "../types/appView";
 import { apiGet } from "../utils/api";
 import {
@@ -311,7 +311,7 @@ export const ActivityProvider: React.FC<ActivityProviderProps> = ({ userId, user
           queueTableCollections(
             tasks,
             entries,
-            (system === "projects" ? (`projects_${view.replace("entities_", "subjects_")}` as AppView) : (view as AppView)),
+            (namespacePrefix ? (`${namespacePrefix}_${view.replace("entities_", "subjects_")}` as AppView) : (view as AppView)),
             gridView as GridView,
             system,
             "subjects",
@@ -322,12 +322,12 @@ export const ActivityProvider: React.FC<ActivityProviderProps> = ({ userId, user
       });
 
       ([
-        [system === "projects" ? "projects_active" : "active", "active"],
-        [system === "projects" ? "projects_pending" : "pending", "pending"],
-        [system === "projects" ? "projects_archived" : "archived", "archived"],
+        [namespacePrefix ? `${namespacePrefix}_active` : "active", "active"],
+        [namespacePrefix ? `${namespacePrefix}_pending` : "pending", "pending"],
+        [namespacePrefix ? `${namespacePrefix}_archived` : "archived", "archived"],
       ] as const).forEach(([view, gridView]) => {
         STANDARD_TABLES.forEach((table) => {
-          const endpointBase = system === "projects" ? `${prefix}/${table.slice(0, -1)}-commissions` : `/${table}`;
+          const endpointBase = namespacePrefix ? `${prefix}/${table.slice(0, -1)}-commissions` : `/${table}`;
           queueTableCollections(
             tasks,
             entries,
@@ -348,6 +348,10 @@ export const ActivityProvider: React.FC<ActivityProviderProps> = ({ userId, user
 
     if (canAccessProjectsSystem(accessScope)) {
       queueDomain("projects", "projects");
+    }
+
+    if (canAccessGrowthSystem(accessScope)) {
+      queueDomain("growth", "growth");
     }
 
     tasks.push(

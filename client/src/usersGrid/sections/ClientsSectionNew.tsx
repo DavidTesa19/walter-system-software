@@ -509,7 +509,7 @@ const ClientsSectionNew: React.FC<SectionProps> = ({
 
   // Get status from viewMode
   const status = useMemo(() => mapViewToStatus(viewMode), [viewMode]);
-  const resourceKey = systemNamespace ? "project-clients" : "clients";
+  const resourceKey = systemNamespace === "growth" ? "growth-clients" : systemNamespace ? "project-clients" : "clients";
   const {
     fieldOptionsArray,
     fieldOptions: fieldOptionChoices,
@@ -1454,7 +1454,7 @@ const ClientsSectionNew: React.FC<SectionProps> = ({
   const columnDefs = useMemo<ColDef<ClientGridRow>[]>(() => {
     const cols: ColDef<ClientGridRow>[] = [];
     cols.push(buildActivityColumn<ClientGridRow>());
-    const showApprovalStatusColumn = Boolean(systemNamespace);
+    const showApprovalStatusColumn = systemNamespace === "projects";
     const approvalStatusCol: ColDef<ClientGridRow> = {
       field: "status",
       headerName: "Schválení",

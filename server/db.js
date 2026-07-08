@@ -4,7 +4,7 @@ import dotenv from 'dotenv';
 dotenv.config();
 const { Pool } = pkg;
 
-const FIELD_OPTION_SCOPES = new Set(['standard', 'project']);
+const FIELD_OPTION_SCOPES = new Set(['standard', 'project', 'growth']);
 const REMOVED_FIELD_OPTION_LABEL = 'Odstraněno';
 const FIELD_OPTION_REPLACEMENT_TABLES = {
   standard: [
@@ -25,6 +25,14 @@ const FIELD_OPTION_REPLACEMENT_TABLES = {
     'project_client_commissions',
     'project_tiper_entities',
     'project_tiper_commissions',
+  ],
+  growth: [
+    'growth_partner_entities',
+    'growth_partner_commissions',
+    'growth_client_entities',
+    'growth_client_commissions',
+    'growth_tiper_entities',
+    'growth_tiper_commissions',
   ],
 };
 
@@ -52,6 +60,12 @@ const ACTIVITY_ACTOR_TABLES = new Set([
   'project_client_commissions',
   'project_tiper_entities',
   'project_tiper_commissions',
+  'growth_partner_entities',
+  'growth_partner_commissions',
+  'growth_client_entities',
+  'growth_client_commissions',
+  'growth_tiper_entities',
+  'growth_tiper_commissions',
 ]);
 
 const toActivityActorUserId = (value) => {
@@ -444,11 +458,18 @@ export async function initDatabase() {
     await client.query(`
       CREATE TABLE IF NOT EXISTS field_options (
         id SERIAL PRIMARY KEY,
-        scope VARCHAR(20) NOT NULL CHECK (scope IN ('standard', 'project')),
+        scope VARCHAR(20) NOT NULL CHECK (scope IN ('standard', 'project', 'growth')),
         value VARCHAR(255) NOT NULL,
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
         updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
       )
+    `);
+
+    await client.query(`
+      ALTER TABLE field_options DROP CONSTRAINT IF EXISTS field_options_scope_check
+    `);
+    await client.query(`
+      ALTER TABLE field_options ADD CONSTRAINT field_options_scope_check CHECK (scope IN ('standard', 'project', 'growth'))
     `);
 
     await client.query(`
@@ -934,6 +955,163 @@ export async function initDatabase() {
       )
     `);
 
+    // Create growth_partner_entities and growth_partner_commissions
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS growth_partner_entities (
+        id SERIAL PRIMARY KEY,
+        entity_id VARCHAR(50) UNIQUE NOT NULL,
+        status VARCHAR(50) DEFAULT 'accepted',
+        company_name VARCHAR(255),
+        field VARCHAR(255),
+        location VARCHAR(255),
+        info TEXT,
+        category VARCHAR(100),
+        first_name VARCHAR(255),
+        last_name VARCHAR(255),
+        email VARCHAR(255),
+        phone VARCHAR(50),
+        website VARCHAR(255),
+        assigned_to TEXT,
+        assigned_user_ids INTEGER[] DEFAULT '{}',
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+      )
+    `);
+
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS growth_partner_commissions (
+        id SERIAL PRIMARY KEY,
+        commission_id VARCHAR(50) UNIQUE NOT NULL,
+        entity_id INTEGER REFERENCES growth_partner_entities(id) ON DELETE CASCADE,
+        entity_code VARCHAR(50),
+        status VARCHAR(50) DEFAULT 'pending',
+        position VARCHAR(255),
+        budget VARCHAR(100),
+        state VARCHAR(100),
+        assigned_to TEXT,
+        assigned_user_ids INTEGER[] DEFAULT '{}',
+        field VARCHAR(255),
+        service_position VARCHAR(255),
+        location VARCHAR(255),
+        info TEXT,
+        category VARCHAR(100),
+        deadline VARCHAR(100),
+        priority VARCHAR(50),
+        phone VARCHAR(50),
+        commission_value VARCHAR(100),
+        is_tipped BOOLEAN DEFAULT false,
+        notes TEXT,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+      )
+    `);
+
+    // Create growth_client_entities and growth_client_commissions
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS growth_client_entities (
+        id SERIAL PRIMARY KEY,
+        entity_id VARCHAR(50) UNIQUE NOT NULL,
+        status VARCHAR(50) DEFAULT 'accepted',
+        company_name VARCHAR(255),
+        field VARCHAR(255),
+        service VARCHAR(255),
+        location VARCHAR(255),
+        info TEXT,
+        category VARCHAR(100),
+        budget VARCHAR(100),
+        first_name VARCHAR(255),
+        last_name VARCHAR(255),
+        email VARCHAR(255),
+        phone VARCHAR(50),
+        website VARCHAR(255),
+        assigned_to TEXT,
+        assigned_user_ids INTEGER[] DEFAULT '{}',
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+      )
+    `);
+
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS growth_client_commissions (
+        id SERIAL PRIMARY KEY,
+        commission_id VARCHAR(50) UNIQUE NOT NULL,
+        entity_id INTEGER REFERENCES growth_client_entities(id) ON DELETE CASCADE,
+        entity_code VARCHAR(50),
+        status VARCHAR(50) DEFAULT 'pending',
+        position VARCHAR(255),
+        budget VARCHAR(100),
+        state VARCHAR(100),
+        assigned_to TEXT,
+        assigned_user_ids INTEGER[] DEFAULT '{}',
+        field VARCHAR(255),
+        service_position VARCHAR(255),
+        location VARCHAR(255),
+        info TEXT,
+        category VARCHAR(100),
+        deadline VARCHAR(100),
+        priority VARCHAR(50),
+        phone VARCHAR(50),
+        commission_value VARCHAR(100),
+        is_tipped BOOLEAN DEFAULT false,
+        notes TEXT,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+      )
+    `);
+
+    // Create growth_tiper_entities and growth_tiper_commissions
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS growth_tiper_entities (
+        id SERIAL PRIMARY KEY,
+        entity_id VARCHAR(50) UNIQUE NOT NULL,
+        status VARCHAR(50) DEFAULT 'accepted',
+        company_name VARCHAR(255),
+        field VARCHAR(255),
+        location VARCHAR(255),
+        info TEXT,
+        category VARCHAR(100),
+        first_name VARCHAR(255),
+        last_name VARCHAR(255),
+        email VARCHAR(255),
+        phone VARCHAR(50),
+        website VARCHAR(255),
+        assigned_to TEXT,
+        assigned_user_ids INTEGER[] DEFAULT '{}',
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+      )
+    `);
+
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS growth_tiper_commissions (
+        id SERIAL PRIMARY KEY,
+        commission_id VARCHAR(50) UNIQUE NOT NULL,
+        entity_id INTEGER REFERENCES growth_tiper_entities(id) ON DELETE CASCADE,
+        entity_code VARCHAR(50),
+        status VARCHAR(50) DEFAULT 'pending',
+        position VARCHAR(255),
+        budget VARCHAR(100),
+        state VARCHAR(100),
+        assigned_to TEXT,
+        assigned_user_ids INTEGER[] DEFAULT '{}',
+        field VARCHAR(255),
+        service_position VARCHAR(255),
+        location VARCHAR(255),
+        info TEXT,
+        category VARCHAR(100),
+        deadline VARCHAR(100),
+        priority VARCHAR(50),
+        phone VARCHAR(50),
+        linked_entity_type VARCHAR(50),
+        linked_commission_id VARCHAR(50),
+        commission_value VARCHAR(100),
+        is_tipped BOOLEAN DEFAULT false,
+        notes TEXT,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+      )
+    `);
+
     // Kraj (region) — entity-level column added after the entity tables exist,
     // so both fresh installs and existing deployments get it.
     const regionColumnTables = [
@@ -943,6 +1121,9 @@ export async function initDatabase() {
       'project_partner_entities',
       'project_client_entities',
       'project_tiper_entities',
+      'growth_partner_entities',
+      'growth_client_entities',
+      'growth_tiper_entities',
     ];
 
     for (const tableName of regionColumnTables) {
@@ -967,6 +1148,12 @@ export async function initDatabase() {
       'project_client_commissions',
       'project_tiper_entities',
       'project_tiper_commissions',
+      'growth_partner_entities',
+      'growth_partner_commissions',
+      'growth_client_entities',
+      'growth_client_commissions',
+      'growth_tiper_entities',
+      'growth_tiper_commissions',
     ];
 
     for (const tableName of activityActorColumnTables) {
@@ -1226,6 +1413,9 @@ const ENTITY_ACTIVITY_TABLES = {
   'project-clients': ['project_client_entities', 'project_client_commissions'],
   'project-partners': ['project_partner_entities', 'project_partner_commissions'],
   'project-tipers': ['project_tiper_entities', 'project_tiper_commissions'],
+  'growth-clients': ['growth_client_entities', 'growth_client_commissions'],
+  'growth-partners': ['growth_partner_entities', 'growth_partner_commissions'],
+  'growth-tipers': ['growth_tiper_entities', 'growth_tiper_commissions'],
   'future-functions': ['future_functions']
 };
 
@@ -2096,7 +2286,10 @@ export const db = {
       tiper: 'T',
       project_partner: 'PP',
       project_client: 'PK',
-      project_tiper: 'PT'
+      project_tiper: 'PT',
+      growth_partner: 'GP',
+      growth_client: 'GK',
+      growth_tiper: 'GT'
     };
     const prefix = prefixMap[entityType];
     if (!prefix) return null;

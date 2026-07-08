@@ -8,7 +8,7 @@ import {
 } from "../fieldOptions";
 import type { FieldCategory, FieldOption } from "../fieldOptions";
 
-type FieldOptionScope = "standard" | "project";
+type FieldOptionScope = "standard" | "project" | "growth";
 
 type FieldOptionApi = {
   id: number;
@@ -27,9 +27,11 @@ const toCustomFieldOption = (option: FieldOptionApi): FieldOption => ({
   isCustom: true,
 });
 
-const normalizeScope = (systemNamespace?: string): FieldOptionScope => (
-  systemNamespace === "projects" ? "project" : "standard"
-);
+const normalizeScope = (systemNamespace?: string): FieldOptionScope => {
+  if (systemNamespace === "projects") return "project";
+  if (systemNamespace === "growth") return "growth";
+  return "standard";
+};
 
 const buildGroupedFieldOptions = (
   scope: FieldOptionScope,

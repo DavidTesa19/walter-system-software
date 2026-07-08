@@ -463,7 +463,7 @@ const PartnersSectionNew: React.FC<SectionProps> = ({ viewMode, isActive, system
   }, []);
 
   const status = useMemo(() => mapViewToStatus(viewMode), [viewMode]);
-  const resourceKey = systemNamespace ? "project-partners" : "partners";
+  const resourceKey = systemNamespace === "growth" ? "growth-partners" : systemNamespace ? "project-partners" : "partners";
   const {
     fieldOptionsArray,
     fieldOptions: fieldOptionChoices,
@@ -1314,7 +1314,7 @@ const PartnersSectionNew: React.FC<SectionProps> = ({ viewMode, isActive, system
   const columnDefs = useMemo<ColDef<PartnerGridRow>[]>(() => {
     const cols: ColDef<PartnerGridRow>[] = [];
     cols.push(buildActivityColumn<PartnerGridRow>());
-    const showApprovalStatusColumn = Boolean(systemNamespace);
+    const showApprovalStatusColumn = systemNamespace === "projects";
     const approvalStatusCol: ColDef<PartnerGridRow> = {
       field: "status",
       headerName: "Schválení",

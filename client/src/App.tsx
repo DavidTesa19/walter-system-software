@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import {
   AuthProvider,
+  canAccessGrowthSystem,
   canAccessProjectsSystem,
   canAccessStandardSystem,
   getDefaultViewForScope,
@@ -22,6 +23,7 @@ import FullCalendarView from './views/FullCalendarView';
 import AnalyticsView from './views/AnalyticsView';
 import AdminUsersView from './views/AdminUsersView';
 import ProjectsSectionView from './views/ProjectsSectionView';
+import GrowthSectionView from './views/GrowthSectionView';
 import { trackEvent, trackSectionStart } from './utils/analytics';
 import type { AppView } from './types/appView';
 import type { GlobalSearchResult, GridSearchNavigationTarget, SearchTable } from './types/globalSearch';
@@ -92,7 +94,13 @@ const VIEW_LABELS: Record<AppView, string> = {
   projects_archived: 'Projekty - Zakázky - Archiv',
   projects_subjects_active: 'Projekty - Subjekty - Aktivní',
   projects_subjects_pending: 'Projekty - Subjekty - Ke schválení',
-  projects_subjects_archived: 'Projekty - Subjekty - Archiv'
+  projects_subjects_archived: 'Projekty - Subjekty - Archiv',
+  growth_active: 'Growth Club - Zakázky - Aktivní',
+  growth_pending: 'Growth Club - Zakázky - Ke schválení',
+  growth_archived: 'Growth Club - Zakázky - Archiv',
+  growth_subjects_active: 'Growth Club - Subjekty - Aktivní',
+  growth_subjects_pending: 'Growth Club - Subjekty - Ke schválení',
+  growth_subjects_archived: 'Growth Club - Subjekty - Archiv'
 };
 
 const TABLE_LABELS: Record<SearchTable, string> = {
@@ -128,17 +136,33 @@ const STATUS_TO_PROJECTS_SUBJECTS_VIEW: Record<SearchStatus, AppView> = {
   archived: 'projects_subjects_archived'
 };
 
+const STATUS_TO_GROWTH_VIEW: Record<SearchStatus, AppView> = {
+  accepted: 'growth_active',
+  pending: 'growth_pending',
+  archived: 'growth_archived'
+};
+
+const STATUS_TO_GROWTH_SUBJECTS_VIEW: Record<SearchStatus, AppView> = {
+  accepted: 'growth_subjects_active',
+  pending: 'growth_subjects_pending',
+  archived: 'growth_subjects_archived'
+};
+
 const getGridViewFromAppView = (view: AppView): 'active' | 'pending' | 'archived' => {
   switch (view) {
     case 'pending':
     case 'projects_pending':
     case 'projects_subjects_pending':
     case 'entities_pending':
+    case 'growth_pending':
+    case 'growth_subjects_pending':
       return 'pending';
     case 'archived':
     case 'projects_archived':
     case 'projects_subjects_archived':
     case 'entities_archived':
+    case 'growth_archived':
+    case 'growth_subjects_archived':
       return 'archived';
     default:
       return 'active';
@@ -294,6 +318,17 @@ const AppContent: React.FC = () => {
         { table: 'partner_entities', endpoint: (status) => `/api/projects/partner-entities?status=${status}`, view: (status) => STATUS_TO_PROJECTS_SUBJECTS_VIEW[status], normalize: normalizeEntityRow },
         { table: 'client_entities', endpoint: (status) => `/api/projects/client-entities?status=${status}`, view: (status) => STATUS_TO_PROJECTS_SUBJECTS_VIEW[status], normalize: normalizeEntityRow },
         { table: 'tiper_entities', endpoint: (status) => `/api/projects/tiper-entities?status=${status}`, view: (status) => STATUS_TO_PROJECTS_SUBJECTS_VIEW[status], normalize: normalizeEntityRow }
+      );
+    }
+
+    if (canAccessGrowthSystem(accessScope)) {
+      searchSources.push(
+        { table: 'clients', endpoint: (status) => `/api/growth/client-commissions?status=${status}`, view: (status) => STATUS_TO_GROWTH_VIEW[status], normalize: normalizeProjectCommissionRow },
+        { table: 'partners', endpoint: (status) => `/api/growth/partner-commissions?status=${status}`, view: (status) => STATUS_TO_GROWTH_VIEW[status], normalize: normalizeProjectCommissionRow },
+        { table: 'tipers', endpoint: (status) => `/api/growth/tiper-commissions?status=${status}`, view: (status) => STATUS_TO_GROWTH_VIEW[status], normalize: normalizeProjectCommissionRow },
+        { table: 'partner_entities', endpoint: (status) => `/api/growth/partner-entities?status=${status}`, view: (status) => STATUS_TO_GROWTH_SUBJECTS_VIEW[status], normalize: normalizeEntityRow },
+        { table: 'client_entities', endpoint: (status) => `/api/growth/client-entities?status=${status}`, view: (status) => STATUS_TO_GROWTH_SUBJECTS_VIEW[status], normalize: normalizeEntityRow },
+        { table: 'tiper_entities', endpoint: (status) => `/api/growth/tiper-entities?status=${status}`, view: (status) => STATUS_TO_GROWTH_SUBJECTS_VIEW[status], normalize: normalizeEntityRow }
       );
     }
 
@@ -494,7 +529,13 @@ const AppContent: React.FC = () => {
     'projects_archived',
     'projects_subjects_active',
     'projects_subjects_pending',
-    'projects_subjects_archived'
+    'projects_subjects_archived',
+    'growth_active',
+    'growth_pending',
+    'growth_archived',
+    'growth_subjects_active',
+    'growth_subjects_pending',
+    'growth_subjects_archived'
   ].includes(viewMode);
   const mainContentClassName = [
     'main-content',
@@ -544,6 +585,14 @@ const AppContent: React.FC = () => {
               case 'projects_subjects_pending':
               case 'projects_subjects_archived':
                 return <ProjectsSectionView kind="subjects" activeView={viewMode} onViewChange={handleViewChange} searchTarget={gridSearchTarget} />;
+              case 'growth_active':
+              case 'growth_pending':
+              case 'growth_archived':
+                return <GrowthSectionView kind="commissions" activeView={viewMode} onViewChange={handleViewChange} searchTarget={gridSearchTarget} />;
+              case 'growth_subjects_active':
+              case 'growth_subjects_pending':
+              case 'growth_subjects_archived':
+                return <GrowthSectionView kind="subjects" activeView={viewMode} onViewChange={handleViewChange} searchTarget={gridSearchTarget} />;
               default:
                 return null;
             }

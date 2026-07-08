@@ -2,7 +2,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
-export const VALID_FIELD_OPTION_SCOPES = new Set(['standard', 'project']);
+export const VALID_FIELD_OPTION_SCOPES = new Set(['standard', 'project', 'growth']);
 export const REMOVED_FIELD_OPTION_LABEL = 'Odstraněno';
 
 const __filename = fileURLToPath(import.meta.url);
@@ -40,6 +40,14 @@ const FIELD_OPTION_REPLACEMENT_TABLES = {
     'project_tiper_entities',
     'project_tiper_commissions',
   ],
+  growth: [
+    'growth_partner_entities',
+    'growth_partner_commissions',
+    'growth_client_entities',
+    'growth_client_commissions',
+    'growth_tiper_entities',
+    'growth_tiper_commissions',
+  ],
 };
 
 const normalizeComparisonValue = (value) => value.trim().toLocaleLowerCase('cs');
@@ -66,6 +74,7 @@ const loadStandardFieldOptionValues = () => {
 const FIXED_FIELD_OPTION_VALUES_BY_SCOPE = {
   standard: loadStandardFieldOptionValues(),
   project: PROJECT_FIXED_FIELD_OPTION_VALUES,
+  growth: loadStandardFieldOptionValues(),
 };
 
 export const normalizeFieldOptionScope = (scope) => (

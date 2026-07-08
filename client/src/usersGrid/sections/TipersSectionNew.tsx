@@ -483,7 +483,7 @@ const TipersSectionNew: React.FC<SectionProps> = ({
 
   // Get status from viewMode
   const status = useMemo(() => mapViewToStatus(viewMode), [viewMode]);
-  const resourceKey = systemNamespace ? "project-tipers" : "tipers";
+  const resourceKey = systemNamespace === "growth" ? "growth-tipers" : systemNamespace ? "project-tipers" : "tipers";
   const {
     fieldOptionsArray,
     fieldOptions: fieldOptionChoices,
@@ -1408,7 +1408,7 @@ const TipersSectionNew: React.FC<SectionProps> = ({
   const columnDefs = useMemo<ColDef<TiperGridRow>[]>(() => {
     const cols: ColDef<TiperGridRow>[] = [];
     cols.push(buildActivityColumn<TiperGridRow>());
-    const showApprovalStatusColumn = Boolean(systemNamespace);
+    const showApprovalStatusColumn = systemNamespace === "projects";
     const approvalStatusCol: ColDef<TiperGridRow> = {
       field: "status",
       headerName: "Schválení",
