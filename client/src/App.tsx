@@ -14,15 +14,12 @@ import Login from './auth/Login';
 import Sidebar from './components/Sidebar';
 import Footer from './components/Footer';
 import PaletteManager from './theme/PaletteManager';
-import ActiveCommissionsView from './views/ActiveCommissionsView';
-import PendingApprovalsView from './views/PendingApprovalsView';
-import ArchivedCommissionsView from './views/ArchivedCommissionsView';
+import GeneralSectionView from './views/GeneralSectionView';
 import FutureFunctionsView from './views/FutureFunctionsView';
 import ChatbotView from './views/ChatbotView';
 import TeamChatView from './views/TeamChatView';
 import FullCalendarView from './views/FullCalendarView';
 import AnalyticsView from './views/AnalyticsView';
-import EntitiesSystemView from './views/EntitiesSystemView';
 import AdminUsersView from './views/AdminUsersView';
 import ProjectsSectionView from './views/ProjectsSectionView';
 import { trackEvent, trackSectionStart } from './utils/analytics';
@@ -518,11 +515,9 @@ const AppContent: React.FC = () => {
           {(() => {
             switch (viewMode) {
               case 'active':
-                return <ActiveCommissionsView searchTarget={gridSearchTarget} />;
               case 'pending':
-                return <PendingApprovalsView searchTarget={gridSearchTarget} />;
               case 'archived':
-                return <ArchivedCommissionsView searchTarget={gridSearchTarget} />;
+                return <GeneralSectionView kind="commissions" activeView={viewMode} onViewChange={handleViewChange} searchTarget={gridSearchTarget} />;
               case 'future':
                 return <FutureFunctionsView />;
               case 'palettes':
@@ -538,11 +533,9 @@ const AppContent: React.FC = () => {
               case 'admin_users':
                 return <AdminUsersView />;
               case 'entities_active':
-                return <EntitiesSystemView viewMode="active" searchTarget={gridSearchTarget} />;
               case 'entities_pending':
-                return <EntitiesSystemView viewMode="pending" searchTarget={gridSearchTarget} />;
               case 'entities_archived':
-                return <EntitiesSystemView viewMode="archived" searchTarget={gridSearchTarget} />;
+                return <GeneralSectionView kind="subjects" activeView={viewMode} onViewChange={handleViewChange} searchTarget={gridSearchTarget} />;
               case 'projects_active':
               case 'projects_pending':
               case 'projects_archived':

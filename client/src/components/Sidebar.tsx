@@ -300,9 +300,13 @@ const Sidebar: React.FC<SidebarProps> = ({
           label: 'Subjekty',
           icon: <Icons.Tables />,
           items: [
-            { id: 'entities_active', label: 'Aktivní', icon: <Icons.Active /> },
-            { id: 'entities_pending', label: 'Ke schválení', icon: <Icons.Pending /> },
-            { id: 'entities_archived', label: 'Archiv', icon: <Icons.Archived /> }
+            {
+              id: 'entities_active',
+              label: 'Subjekty',
+              icon: <Icons.Tables />,
+              activeViews: ['entities_active', 'entities_pending', 'entities_archived'],
+              countViews: ['entities_active', 'entities_pending', 'entities_archived']
+            }
           ]
         },
         {
@@ -310,9 +314,13 @@ const Sidebar: React.FC<SidebarProps> = ({
           label: 'Zakázky',
           icon: <Icons.Tables />,
           items: [
-            { id: 'active', label: 'Aktivní', icon: <Icons.Active /> },
-            { id: 'pending', label: 'Ke schválení', icon: <Icons.Pending /> },
-            { id: 'archived', label: 'Archiv', icon: <Icons.Archived /> }
+            {
+              id: 'active',
+              label: 'Zakázky',
+              icon: <Icons.Tables />,
+              activeViews: ['active', 'pending', 'archived'],
+              countViews: ['active', 'pending', 'archived']
+            }
           ]
         }
       ]
