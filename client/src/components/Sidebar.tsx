@@ -292,7 +292,7 @@ const Sidebar: React.FC<SidebarProps> = ({
   const sidebarGroups: SidebarGroup[] = [
     {
       id: 'general',
-      label: 'Obecné',
+      label: 'Veřejné',
       icon: <Icons.Tables />,
       sections: [
         {
