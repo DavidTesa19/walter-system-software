@@ -30,6 +30,7 @@ interface UsersGridProps {
   systemNamespace?: string;
   storageKey?: string;
   title?: string;
+  sectionToggle?: React.ReactNode;
 }
 
 const NAV_CONFIG: Record<TableType, { label: string; icon: string; addLabel: string }> = {
@@ -43,7 +44,8 @@ const UsersGrid: React.FC<UsersGridProps> = ({
   searchTarget,
   systemNamespace,
   storageKey = USERS_GRID_TABLE_STORAGE_KEY,
-  title = "Walter System"
+  title = "Walter System",
+  sectionToggle
 }) => {
   const [activeTable, setActiveTable] = useState<TableType>(() => getStoredTableView(storageKey));
   const { getCollectionCount, markCollectionSeen } = useActivity();
@@ -166,7 +168,9 @@ const UsersGrid: React.FC<UsersGridProps> = ({
     <div className="page-container">
       <div className="header-section">
         <h1 className="page-title">{title}</h1>
-        <div className="navigation-tabs">
+        <div className="header-tabs-group">
+          {sectionToggle}
+          <div className="navigation-tabs">
           {(
             Object.entries(NAV_CONFIG) as Array<
               [TableType, { label: string; icon: string; addLabel: string }]
@@ -187,6 +191,7 @@ const UsersGrid: React.FC<UsersGridProps> = ({
               </span>
             </button>
           ))}
+          </div>
         </div>
         <div className="header-actions">
           <button

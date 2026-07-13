@@ -6,44 +6,15 @@
 
 .general-section-view__mode-bar {
   display: flex;
-  align-items: center;
-  gap: 12px;
+  justify-content: center;
 }
 
 .general-section-view__mode-tabs {
-  flex: 1;
-  display: flex;
-  justify-content: center;
-}
-
-.section-toggle-btn {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: 2.5rem;
-  height: 2.5rem;
-  flex-shrink: 0;
-  background: var(--color-surface);
-  color: var(--color-text);
-  border: 1px solid var(--color-border);
-  border-radius: 0.75rem;
-  cursor: pointer;
-  font-size: 1.2rem;
-  line-height: 1;
-  transition: background-color 0.15s ease, border-color 0.15s ease;
-}
-
-.section-toggle-btn:hover {
-  background: var(--color-border);
+  justify-self: center;
 }
 
 @media (max-width: 900px) {
   .general-section-view__mode-bar {
-    flex-wrap: wrap;
-    justify-content: flex-start;
-  }
-
-  .general-section-view__mode-tabs {
     justify-content: flex-start;
   }
 }

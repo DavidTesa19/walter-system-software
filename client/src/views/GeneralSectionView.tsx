@@ -68,6 +68,18 @@ const GeneralSectionView: React.FC<GeneralSectionViewProps> = ({
     onViewChange(getGrowthViewFor(kind, currentGridView));
   }, [kind, currentGridView, onViewChange]);
 
+  const sectionToggle = canToggleSection ? (
+    <button
+      type="button"
+      className="section-toggle-btn"
+      onClick={handleSwitchToGrowth}
+      title="Přepnout na Growth Club, se stejným výběrem tabulky a filtru"
+      aria-label="Přepnout na Growth Club"
+    >
+      👑
+    </button>
+  ) : null;
+
   return (
     <div className="general-section-view">
       <div className="general-section-view__mode-bar">
@@ -83,23 +95,12 @@ const GeneralSectionView: React.FC<GeneralSectionViewProps> = ({
             </button>
           ))}
         </div>
-        {canToggleSection ? (
-          <button
-            type="button"
-            className="section-toggle-btn"
-            onClick={handleSwitchToGrowth}
-            title="Přepnout na Growth Club, se stejným výběrem tabulky a filtru"
-            aria-label="Přepnout na Growth Club"
-          >
-            👑
-          </button>
-        ) : null}
       </div>
 
       {kind === "subjects" ? (
-        <EntitiesSystemView viewMode={currentGridView} searchTarget={searchTarget} />
+        <EntitiesSystemView viewMode={currentGridView} searchTarget={searchTarget} sectionToggle={sectionToggle} />
       ) : (
-        <UsersGrid viewMode={currentGridView} searchTarget={searchTarget} />
+        <UsersGrid viewMode={currentGridView} searchTarget={searchTarget} sectionToggle={sectionToggle} />
       )}
     </div>
   );

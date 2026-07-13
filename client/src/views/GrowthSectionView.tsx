@@ -72,6 +72,18 @@ const GrowthSectionView: React.FC<GrowthSectionViewProps> = ({
     onViewChange(getGeneralViewFor(kind, currentGridView));
   }, [kind, currentGridView, onViewChange]);
 
+  const sectionToggle = canToggleSection ? (
+    <button
+      type="button"
+      className="section-toggle-btn"
+      onClick={handleSwitchToGeneral}
+      title="Přepnout na Veřejné, se stejným výběrem tabulky a filtru"
+      aria-label="Přepnout na Veřejné"
+    >
+      🌐
+    </button>
+  ) : null;
+
   return (
     <div className="growth-section-view">
       <div className="growth-section-view__mode-bar">
@@ -87,17 +99,6 @@ const GrowthSectionView: React.FC<GrowthSectionViewProps> = ({
             </button>
           ))}
         </div>
-        {canToggleSection ? (
-          <button
-            type="button"
-            className="section-toggle-btn"
-            onClick={handleSwitchToGeneral}
-            title="Přepnout na Veřejné, se stejným výběrem tabulky a filtru"
-            aria-label="Přepnout na Veřejné"
-          >
-            🌐
-          </button>
-        ) : null}
       </div>
 
       {kind === "subjects" ? (
@@ -107,6 +108,7 @@ const GrowthSectionView: React.FC<GrowthSectionViewProps> = ({
           storageKey={GROWTH_SUBJECTS_TABLE_STORAGE_KEY}
           title="Growth Club - Subjekty"
           searchTarget={searchTarget}
+          sectionToggle={sectionToggle}
         />
       ) : (
         <UsersGrid
@@ -115,6 +117,7 @@ const GrowthSectionView: React.FC<GrowthSectionViewProps> = ({
           systemNamespace="growth"
           storageKey={GROWTH_COMMISSIONS_TABLE_STORAGE_KEY}
           title="Growth Club - Zakázky"
+          sectionToggle={sectionToggle}
         />
       )}
     </div>

@@ -42,6 +42,7 @@ interface EntitiesSystemViewProps {
   storageKey?: string;
   title?: string;
   searchTarget?: GridSearchNavigationTarget | null;
+  sectionToggle?: React.ReactNode;
 }
 
 const EntitiesSystemView: React.FC<EntitiesSystemViewProps> = ({
@@ -49,7 +50,8 @@ const EntitiesSystemView: React.FC<EntitiesSystemViewProps> = ({
   systemNamespace,
   storageKey = ENTITIES_SYSTEM_TABLE_STORAGE_KEY,
   title,
-  searchTarget
+  searchTarget,
+  sectionToggle
 }) => {
   const [activeTable, setActiveTable] = useState<TableType>(() => getStoredTableView(storageKey));
   const { getCollectionCount, markCollectionSeen } = useActivity();
@@ -176,7 +178,9 @@ const EntitiesSystemView: React.FC<EntitiesSystemViewProps> = ({
     <div className="page-container">
       <div className="header-section">
         <h1 className="page-title">{resolvedTitle}</h1>
-        <div className="navigation-tabs">
+        <div className="header-tabs-group">
+          {sectionToggle}
+          <div className="navigation-tabs">
           {(
             Object.entries(NAV_CONFIG) as Array<
               [TableType, { label: string; icon: string; addLabel: string }]
@@ -197,6 +201,7 @@ const EntitiesSystemView: React.FC<EntitiesSystemViewProps> = ({
               </span>
             </button>
           ))}
+          </div>
         </div>
         <div className="header-actions">
           <button
