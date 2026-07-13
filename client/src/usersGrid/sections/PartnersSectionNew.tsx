@@ -489,6 +489,7 @@ const PartnersSectionNew: React.FC<SectionProps> = ({ viewMode, isActive, system
   const commissionActivityScope = useMemo(() => buildCommissionsRecordScope(activitySystem, "partners"), [activitySystem]);
   const entityApiBase = systemNamespace ? `/api/${systemNamespace}/partner-entities` : "/api/partner-entities";
   const commissionApiBase = systemNamespace ? `/api/${systemNamespace}/partner-commissions` : "/api/partner-commissions";
+  const clientEntityApiBase = systemNamespace ? `/api/${systemNamespace}/client-entities` : "/api/client-entities";
   const linkableNamespace = useMemo(() => getLinkableNamespace(systemNamespace), [systemNamespace]);
   const documentManager = useProfileDocuments(resourceKey, selectedEntityId);
   const notesManager = useProfileNotes(resourceKey, selectedEntityId);
@@ -1226,6 +1227,54 @@ const PartnersSectionNew: React.FC<SectionProps> = ({ viewMode, isActive, system
     }
   }, [commissionApiBase, fetchData, selectedCommission, selectedEntity]);
 
+  const handleCopyToClient = useCallback(async () => {
+    if (!selectedEntity) return;
+
+    const entityPayload = {
+      status: selectedEntity.status,
+      first_name: emptyToNull(selectedEntity.name ?? ""),
+      company_name: emptyToNull(selectedEntity.company ?? ""),
+      field: emptyToNull(selectedEntity.field ?? ""),
+      phone: emptyToNull(selectedEntity.mobile ?? ""),
+      email: emptyToNull(selectedEntity.email ?? ""),
+      website: emptyToNull(selectedEntity.website ?? ""),
+      region: emptyToNull(selectedEntity.region ?? ""),
+      location: emptyToNull(selectedEntity.location ?? ""),
+      info: emptyToNull(selectedEntity.info ?? ""),
+      assigned_user_ids: selectedEntity.assigned_user_ids ?? []
+    };
+
+    try {
+      if (selectedCommission) {
+        const commissionPayload = {
+          status: selectedCommission.status,
+          position: emptyToNull(selectedCommission.position ?? ""),
+          service_position: emptyToNull(selectedCommission.service_position ?? ""),
+          assigned_user_ids: selectedCommission.assigned_user_ids ?? [],
+          budget: emptyToNull(selectedCommission.budget ?? ""),
+          commission_value: emptyToNull(selectedCommission.commission_value ?? ""),
+          priority: emptyToNull(selectedCommission.priority ?? ""),
+          state: emptyToNull(selectedCommission.state ?? ""),
+          deadline: emptyToNull(selectedCommission.deadline ?? ""),
+          notes: emptyToNull(selectedCommission.notes ?? "")
+        };
+
+        const response = await apiPost<{ entity: { entity_id: string } }>(`${clientEntityApiBase}/with-commission`, {
+          entity: entityPayload,
+          commission: commissionPayload
+        });
+
+        alert(`Partner byl zkopírován jako klient ${response?.entity?.entity_id ?? ""}.`);
+      } else {
+        const response = await apiPost<{ entity_id: string }>(clientEntityApiBase, entityPayload);
+        alert(`Partner byl zkopírován jako klient ${response?.entity_id ?? ""}.`);
+      }
+    } catch (error) {
+      console.error("Error copying partner to client:", error);
+      alert("Chyba při kopírování partnera ke klientům.");
+    }
+  }, [clientEntityApiBase, selectedCommission, selectedEntity]);
+
   const handleCreateFirstCommission = useCallback(async () => {
     if (!selectedEntity) return;
 
@@ -1635,6 +1684,8 @@ const PartnersSectionNew: React.FC<SectionProps> = ({ viewMode, isActive, system
         onDuplicateCommission={handleDuplicateCommission}
         onCreateCommission={selectedEntity ? handleCreateFirstCommission : undefined}
         onRemoveCommission={selectedCommission ? () => void handleDelete(selectedCommission.id, { commissionOnly: true }) : undefined}
+        otherTypeLabel="klienta"
+        onCopyToOtherType={selectedEntity ? handleCopyToClient : undefined}
         entitySectionLink={linkableNamespace && selectedEntity ? {
           label: `Zobrazit i v sekci ${linkableNamespaceLabel(otherLinkableNamespace(linkableNamespace))}`,
           checked: Boolean(selectedEntity.link_id),

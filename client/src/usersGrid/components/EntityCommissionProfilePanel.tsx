@@ -72,6 +72,8 @@ interface EntityCommissionProfilePanelProps {
   onDuplicateCommission?: () => void;
   onCreateCommission?: () => void;
   onRemoveCommission?: () => void;
+  otherTypeLabel?: string;
+  onCopyToOtherType?: () => void;
   entitySectionLink?: SectionLinkToggle;
   commissionSectionLink?: SectionLinkToggle;
   
@@ -445,6 +447,8 @@ const EntityCommissionProfilePanel: React.FC<EntityCommissionProfilePanelProps> 
   onDuplicateCommission,
   onCreateCommission,
   onRemoveCommission,
+  otherTypeLabel,
+  onCopyToOtherType,
   entitySectionLink,
   commissionSectionLink,
   onClose,
@@ -673,7 +677,17 @@ const EntityCommissionProfilePanel: React.FC<EntityCommissionProfilePanelProps> 
                 Duplikovat zakázku
               </button>
             ) : null}
-            <button 
+            {onCopyToOtherType && otherTypeLabel ? (
+              <button
+                type="button"
+                className="ec-header-action secondary"
+                onClick={onCopyToOtherType}
+                title={`Zkopírovat tento subjekt${commission ? ' i se zakázkou' : ''} jako ${otherTypeLabel}`}
+              >
+                Zkopírovat jako {otherTypeLabel}
+              </button>
+            ) : null}
+            <button
               type="button" 
               className="ec-profile-close" 
               onClick={onClose}

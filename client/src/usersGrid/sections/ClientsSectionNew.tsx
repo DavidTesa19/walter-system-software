@@ -535,6 +535,7 @@ const ClientsSectionNew: React.FC<SectionProps> = ({
   const commissionActivityScope = useMemo(() => buildCommissionsRecordScope(activitySystem, "clients"), [activitySystem]);
   const entityApiBase = systemNamespace ? `/api/${systemNamespace}/client-entities` : "/api/client-entities";
   const commissionApiBase = systemNamespace ? `/api/${systemNamespace}/client-commissions` : "/api/client-commissions";
+  const partnerEntityApiBase = systemNamespace ? `/api/${systemNamespace}/partner-entities` : "/api/partner-entities";
   const linkableNamespace = useMemo(() => getLinkableNamespace(systemNamespace), [systemNamespace]);
 
   // Document and notes managers
@@ -1331,6 +1332,54 @@ const ClientsSectionNew: React.FC<SectionProps> = ({
     }
   }, [commissionApiBase, fetchData, selectedCommission, selectedEntity]);
 
+  const handleCopyToPartner = useCallback(async () => {
+    if (!selectedEntity) return;
+
+    const entityPayload = {
+      status: selectedEntity.status,
+      first_name: emptyToNull(selectedEntity.name ?? ""),
+      company_name: emptyToNull(selectedEntity.company ?? ""),
+      field: emptyToNull(selectedEntity.field ?? ""),
+      phone: emptyToNull(selectedEntity.mobile ?? ""),
+      email: emptyToNull(selectedEntity.email ?? ""),
+      website: emptyToNull(selectedEntity.website ?? ""),
+      region: emptyToNull(selectedEntity.region ?? ""),
+      location: emptyToNull(selectedEntity.location ?? ""),
+      info: emptyToNull(selectedEntity.info ?? ""),
+      assigned_user_ids: selectedEntity.assigned_user_ids ?? []
+    };
+
+    try {
+      if (selectedCommission) {
+        const commissionPayload = {
+          status: selectedCommission.status,
+          position: emptyToNull(selectedCommission.position ?? ""),
+          service_position: emptyToNull(selectedCommission.service_position ?? ""),
+          assigned_user_ids: selectedCommission.assigned_user_ids ?? [],
+          budget: emptyToNull(selectedCommission.budget ?? ""),
+          commission_value: emptyToNull(selectedCommission.commission_value ?? ""),
+          priority: emptyToNull(selectedCommission.priority ?? ""),
+          state: emptyToNull(selectedCommission.state ?? ""),
+          deadline: emptyToNull(selectedCommission.deadline ?? ""),
+          notes: emptyToNull(selectedCommission.notes ?? "")
+        };
+
+        const response = await apiPost<{ entity: { entity_id: string } }>(`${partnerEntityApiBase}/with-commission`, {
+          entity: entityPayload,
+          commission: commissionPayload
+        });
+
+        alert(`Klient byl zkopírován jako partner ${response?.entity?.entity_id ?? ""}.`);
+      } else {
+        const response = await apiPost<{ entity_id: string }>(partnerEntityApiBase, entityPayload);
+        alert(`Klient byl zkopírován jako partner ${response?.entity_id ?? ""}.`);
+      }
+    } catch (error) {
+      console.error("Error copying client to partner:", error);
+      alert("Chyba při kopírování klienta k partnerům.");
+    }
+  }, [partnerEntityApiBase, selectedCommission, selectedEntity]);
+
   const handleCreateFirstCommission = useCallback(async () => {
     if (!selectedEntity) return;
 
@@ -1964,6 +2013,8 @@ const ClientsSectionNew: React.FC<SectionProps> = ({
         onDuplicateCommission={handleDuplicateCommission}
         onCreateCommission={selectedEntity ? handleCreateFirstCommission : undefined}
         onRemoveCommission={selectedCommission ? () => void handleDelete(selectedCommission.id, { commissionOnly: true }) : undefined}
+        otherTypeLabel="partnera"
+        onCopyToOtherType={selectedEntity ? handleCopyToPartner : undefined}
         entitySectionLink={linkableNamespace && selectedEntity ? {
           label: `Zobrazit i v sekci ${linkableNamespaceLabel(otherLinkableNamespace(linkableNamespace))}`,
           checked: Boolean(selectedEntity.link_id),
