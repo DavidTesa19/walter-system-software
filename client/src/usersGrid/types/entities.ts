@@ -14,9 +14,17 @@ export interface ActivityAuditFields {
 }
 
 /**
+ * A record's `link_id` pairs it with its counterpart row in the other
+ * (Veřejné ⇄ Growth Club) section — null/undefined means it isn't linked.
+ */
+export interface SectionLinkFields {
+  link_id?: string | null;
+}
+
+/**
  * Base entity interface - common fields for all entities
  */
-export interface BaseEntity extends ActivityAuditFields {
+export interface BaseEntity extends ActivityAuditFields, SectionLinkFields {
   id: number;
   entity_id: string;  // P001, K001, T001
   status: 'pending' | 'accepted' | 'archived';
@@ -83,7 +91,7 @@ export interface TiperEntity extends BaseEntity {
 /**
  * Base commission interface - common fields for all commissions
  */
-export interface BaseCommission extends ActivityAuditFields {
+export interface BaseCommission extends ActivityAuditFields, SectionLinkFields {
   id: number;
   commission_id: string;      // P001-001, K001-001, etc.
   status: 'pending' | 'accepted' | 'archived';

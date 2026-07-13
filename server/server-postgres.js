@@ -22,6 +22,12 @@ import {
   normalizeFieldOptionScope,
   normalizeFieldOptionValue,
 } from "./field-options.js";
+import {
+  otherNamespace,
+  resolveTable,
+  pickCoreFields,
+  isValidSectionLinkRequest,
+} from "./section-linking.js";
 
 dotenv.config();
 
@@ -4216,6 +4222,7 @@ const createEntityCommissionRoutes = (entityTypes) => {
         const payload = await applyAssignmentPayload(req.body || {});
         const updated = await updateEntity(id, payload, getRequestActorUserId(req));
         if (!updated) return res.status(404).json({ error: "Not found" });
+        await propagateLinkedFieldSync('entity', type, 'public', updated, payload);
         res.json(updated);
       } catch (error) {
         console.error(`Error updating ${type} entity:`, error);
@@ -4363,6 +4370,7 @@ const createEntityCommissionRoutes = (entityTypes) => {
         const payload = await applyAssignmentPayload(req.body || {});
         const updated = await updateCommission(id, payload, getRequestActorUserId(req));
         if (!updated) return res.status(404).json({ error: "Not found" });
+        await propagateLinkedFieldSync('commission', type, 'public', updated, payload);
         res.json(updated);
       } catch (error) {
         console.error(`Error updating ${type} commission:`, error);
@@ -4377,6 +4385,7 @@ const createEntityCommissionRoutes = (entityTypes) => {
         const payload = await applyAssignmentPayload(req.body || {});
         const updated = await updateCommission(id, payload, getRequestActorUserId(req));
         if (!updated) return res.status(404).json({ error: "Not found" });
+        await propagateLinkedFieldSync('commission', type, 'public', updated, payload);
         res.json(updated);
       } catch (error) {
         console.error(`Error patching ${type} commission:`, error);
@@ -4673,6 +4682,9 @@ const createNamespaceEntityCommissionRoutes = (routeConfig, apiPrefix, entityTyp
         if (!updated) {
           return res.status(404).json({ error: 'Not found' });
         }
+        if (apiPrefix === 'growth') {
+          await propagateLinkedFieldSync('entity', type, 'growth', updated, payload);
+        }
         res.json(updated);
       } catch (error) {
         console.error(`Error updating ${apiPrefix} ${type} entity:`, error);
@@ -4815,6 +4827,9 @@ const createNamespaceEntityCommissionRoutes = (routeConfig, apiPrefix, entityTyp
         if (!updated) {
           return res.status(404).json({ error: 'Not found' });
         }
+        if (apiPrefix === 'growth') {
+          await propagateLinkedFieldSync('commission', type, 'growth', updated, payload);
+        }
         res.json(await getNamespaceCommissionRecord(routeConfig, type, id));
       } catch (error) {
         console.error(`Error updating ${apiPrefix} ${type} commission:`, error);
@@ -4829,6 +4844,9 @@ const createNamespaceEntityCommissionRoutes = (routeConfig, apiPrefix, entityTyp
         const updated = await db.update(config.commissionTable, id, pickDefinedFields(payload || {}, config.commissionFields), getRequestActorUserId(req));
         if (!updated) {
           return res.status(404).json({ error: 'Not found' });
+        }
+        if (apiPrefix === 'growth') {
+          await propagateLinkedFieldSync('commission', type, 'growth', updated, payload);
         }
         res.json(await getNamespaceCommissionRecord(routeConfig, type, id));
       } catch (error) {
@@ -4903,6 +4921,152 @@ const createNamespaceEntityCommissionRoutes = (routeConfig, apiPrefix, entityTyp
 
 createNamespaceEntityCommissionRoutes(PROJECT_ROUTE_CONFIG, 'projects', ['partner', 'client', 'tiper']);
 createNamespaceEntityCommissionRoutes(GROWTH_ROUTE_CONFIG, 'growth', ['partner', 'client', 'tiper']);
+
+// =============================================================================
+// SECTION LINKING — Veřejné ⇄ Growth Club synced pairs
+// =============================================================================
+
+const createEntityCounterpart = async (type, targetNamespace, sourceRow, actorUserId) => {
+  const payload = pickCoreFields('entity', type, sourceRow);
+  if (targetNamespace === 'growth') {
+    return createNamespaceEntityRecord(GROWTH_ROUTE_CONFIG, type, payload, actorUserId);
+  }
+  const Type = type.charAt(0).toUpperCase() + type.slice(1);
+  return db[`create${Type}Entity`](payload, actorUserId);
+};
+
+const deleteEntityCounterpart = async (type, targetNamespace, internalId) => {
+  if (targetNamespace === 'growth') {
+    return db.delete(GROWTH_ROUTE_CONFIG[type].entityTable, internalId);
+  }
+  const Type = type.charAt(0).toUpperCase() + type.slice(1);
+  return db[`delete${Type}Entity`](internalId);
+};
+
+const createCommissionCounterpart = async (type, targetNamespace, targetEntityInternalId, sourceRow, actorUserId) => {
+  const payload = pickCoreFields('commission', type, sourceRow);
+  if (targetNamespace === 'growth') {
+    return createNamespaceCommissionRecord(GROWTH_ROUTE_CONFIG, type, targetEntityInternalId, payload, actorUserId);
+  }
+  const Type = type.charAt(0).toUpperCase() + type.slice(1);
+  return db[`create${Type}Commission`](targetEntityInternalId, payload, actorUserId);
+};
+
+const deleteCommissionCounterpart = async (type, targetNamespace, internalId) => {
+  if (targetNamespace === 'growth') {
+    return db.delete(GROWTH_ROUTE_CONFIG[type].commissionTable, internalId);
+  }
+  const Type = type.charAt(0).toUpperCase() + type.slice(1);
+  return db[`delete${Type}Commission`](internalId);
+};
+
+// Propagate core-field changes from a just-updated linked row to its
+// counterpart in the other section. Status/assignment/ids stay independent.
+const propagateLinkedFieldSync = async (kind, type, namespace, updatedRow, incomingPayload) => {
+  try {
+    if (!updatedRow?.link_id) return;
+    const coreUpdates = pickCoreFields(kind, type, incomingPayload || {});
+    if (Object.keys(coreUpdates).length === 0) return;
+    const targetTable = resolveTable(kind, type, otherNamespace(namespace));
+    const counterpart = await db.getByField(targetTable, 'link_id', updatedRow.link_id);
+    if (!counterpart) return;
+    await db.update(targetTable, counterpart.id, coreUpdates);
+  } catch (error) {
+    console.error(`Error propagating linked ${kind} sync:`, error);
+  }
+};
+
+app.post('/api/section-link/attach', authenticateToken, async (req, res) => {
+  try {
+    const { kind, type, namespace, id } = req.body || {};
+    if (!isValidSectionLinkRequest({ kind, type, namespace, id })) {
+      return res.status(400).json({ error: 'Invalid section-link request' });
+    }
+    const actorUserId = getRequestActorUserId(req);
+    const sourceTable = resolveTable(kind, type, namespace);
+    const source = await db.getById(sourceTable, Number(id));
+    if (!source) return res.status(404).json({ error: 'Not found' });
+
+    const targetNamespace = otherNamespace(namespace);
+
+    if (kind === 'commission') {
+      const entityTable = resolveTable('entity', type, namespace);
+      const parentEntity = await db.getById(entityTable, Number(source.entity_id));
+      if (!parentEntity) return res.status(400).json({ error: 'Parent entity not found' });
+
+      let targetEntity = parentEntity.link_id
+        ? await db.getByField(resolveTable('entity', type, targetNamespace), 'link_id', parentEntity.link_id)
+        : null;
+
+      if (!targetEntity) {
+        const parentLinkId = parentEntity.link_id || crypto.randomUUID();
+        const createdEntity = await createEntityCounterpart(type, targetNamespace, parentEntity, actorUserId);
+        targetEntity = await db.setLinkId(resolveTable('entity', type, targetNamespace), createdEntity.id, parentLinkId);
+        await db.setLinkId(entityTable, parentEntity.id, parentLinkId);
+      }
+
+      const commissionLinkId = source.link_id || crypto.randomUUID();
+      const createdCommission = await createCommissionCounterpart(type, targetNamespace, targetEntity.id, source, actorUserId);
+      const updatedCounterpart = await db.setLinkId(resolveTable('commission', type, targetNamespace), createdCommission.id, commissionLinkId);
+      await db.setLinkId(sourceTable, source.id, commissionLinkId);
+
+      return res.status(201).json({ linkId: commissionLinkId, counterpart: updatedCounterpart });
+    }
+
+    const linkId = source.link_id || crypto.randomUUID();
+    const created = await createEntityCounterpart(type, targetNamespace, source, actorUserId);
+    const updatedCounterpart = await db.setLinkId(resolveTable('entity', type, targetNamespace), created.id, linkId);
+    await db.setLinkId(sourceTable, source.id, linkId);
+
+    res.status(201).json({ linkId, counterpart: updatedCounterpart });
+  } catch (error) {
+    console.error('Error attaching section link:', error);
+    res.status(500).json({ error: error.message || 'Failed to attach section link' });
+  }
+});
+
+app.post('/api/section-link/detach', authenticateToken, async (req, res) => {
+  try {
+    const { kind, type, namespace, id } = req.body || {};
+    if (!isValidSectionLinkRequest({ kind, type, namespace, id })) {
+      return res.status(400).json({ error: 'Invalid section-link request' });
+    }
+    const sourceTable = resolveTable(kind, type, namespace);
+    const source = await db.getById(sourceTable, Number(id));
+    if (!source) return res.status(404).json({ error: 'Not found' });
+    if (!source.link_id) return res.status(400).json({ error: 'Record is not linked to another section' });
+
+    const targetNamespace = otherNamespace(namespace);
+    const targetTable = resolveTable(kind, type, targetNamespace);
+    const counterpart = await db.getByField(targetTable, 'link_id', source.link_id);
+
+    if (counterpart) {
+      if (kind === 'entity') {
+        await deleteEntityCounterpart(type, targetNamespace, counterpart.id);
+        // The counterpart entity's own commissions cascade-deleted with it.
+        // Clear stale link_id on this side's commissions that lost their pair.
+        const commissionTable = resolveTable('commission', type, namespace);
+        const orphanCandidates = (await db.getAll(commissionTable)).filter(
+          (c) => Number(c.entity_id) === Number(source.id) && c.link_id
+        );
+        for (const orphan of orphanCandidates) {
+          const stillLinked = await db.getByField(resolveTable('commission', type, targetNamespace), 'link_id', orphan.link_id);
+          if (!stillLinked) {
+            await db.setLinkId(commissionTable, orphan.id, null);
+          }
+        }
+      } else {
+        await deleteCommissionCounterpart(type, targetNamespace, counterpart.id);
+      }
+    }
+
+    await db.setLinkId(sourceTable, source.id, null);
+    res.json({ ok: true });
+  } catch (error) {
+    console.error('Error detaching section link:', error);
+    res.status(500).json({ error: error.message || 'Failed to detach section link' });
+  }
+});
 
 app.post('/public-submissions/:type', async (req, res) => {
   try {

@@ -5,6 +5,12 @@ import "./EntityCommissionProfilePanel.css";
 
 type FieldValues = Record<string, string | string[]>;
 
+export interface OtherSectionOption {
+  label: string;
+  checked: boolean;
+  onChange: (checked: boolean) => void;
+}
+
 interface EntityCommissionCreateModalProps {
   open: boolean;
   title: string;
@@ -18,6 +24,7 @@ interface EntityCommissionCreateModalProps {
   submitLabel?: string;
   includeCommission: boolean;
   includeCommissionLabel?: string;
+  otherSectionOption?: OtherSectionOption;
   onClose: () => void;
   onEntityChange: (key: string, value: string | string[]) => void;
   onCommissionChange: (key: string, value: string | string[]) => void;
@@ -188,6 +195,7 @@ const EntityCommissionCreateModal: React.FC<EntityCommissionCreateModalProps> = 
   submitLabel = "Vytvořit",
   includeCommission,
   includeCommissionLabel = "Vytvořit rovnou i zakázku",
+  otherSectionOption,
   onClose,
   onEntityChange,
   onCommissionChange,
@@ -353,7 +361,19 @@ const EntityCommissionCreateModal: React.FC<EntityCommissionCreateModalProps> = 
             <div className="ec-profile-columns">
               <div className="ec-profile-column entity-column">
                 <div className="ec-column-header">
-                  <h3 className="ec-column-title">{entityTitle}</h3>
+                  <div className="ec-create-commission-header">
+                    <h3 className="ec-column-title">{entityTitle}</h3>
+                    {otherSectionOption ? (
+                      <label className="ec-create-checkbox">
+                        <input
+                          type="checkbox"
+                          checked={otherSectionOption.checked}
+                          onChange={(event) => otherSectionOption.onChange(event.target.checked)}
+                        />
+                        <span>{otherSectionOption.label}</span>
+                      </label>
+                    ) : null}
+                  </div>
                 </div>
                 <div className="ec-column-content">
                   {entityGroups.map((group, index) => (

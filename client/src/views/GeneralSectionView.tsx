@@ -3,6 +3,8 @@ import EntitiesSystemView from "../entitiesSystem/EntitiesSystemView";
 import UsersGrid from "../usersGrid/UsersGrid";
 import type { AppView, GridView } from "../types/appView";
 import type { GridSearchNavigationTarget } from "../types/globalSearch";
+import { getGrowthViewFor } from "./sectionToggle";
+import { useAuth, canAccessStandardSystem, canAccessGrowthSystem } from "../auth/AuthContext";
 import "./GeneralSectionView.css";
 
 type GeneralSectionKind = "subjects" | "commissions";
@@ -51,7 +53,9 @@ const GeneralSectionView: React.FC<GeneralSectionViewProps> = ({
   onViewChange,
   searchTarget,
 }) => {
+  const { user } = useAuth();
   const currentGridView = getGridViewFromRoute(kind, activeView);
+  const canToggleSection = canAccessStandardSystem(user?.accessScope) && canAccessGrowthSystem(user?.accessScope);
 
   const handleSelect = useCallback(
     (view: GridView) => {
@@ -59,6 +63,10 @@ const GeneralSectionView: React.FC<GeneralSectionViewProps> = ({
     },
     [kind, onViewChange]
   );
+
+  const handleSwitchToGrowth = useCallback(() => {
+    onViewChange(getGrowthViewFor(kind, currentGridView));
+  }, [kind, currentGridView, onViewChange]);
 
   return (
     <div className="general-section-view">
@@ -75,6 +83,16 @@ const GeneralSectionView: React.FC<GeneralSectionViewProps> = ({
             </button>
           ))}
         </div>
+        {canToggleSection ? (
+          <button
+            type="button"
+            className="section-toggle-btn"
+            onClick={handleSwitchToGrowth}
+            title="Přepnout na Growth Club, se stejným výběrem tabulky a filtru"
+          >
+            🚀 Přepnout na Growth Club
+          </button>
+        ) : null}
       </div>
 
       {kind === "subjects" ? (

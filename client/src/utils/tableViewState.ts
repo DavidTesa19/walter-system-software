@@ -2,12 +2,18 @@ export type SubjectTableType = "clients" | "partners" | "tipers";
 
 const VALID_TABLES: SubjectTableType[] = ["clients", "partners", "tipers"];
 
-export const USERS_GRID_TABLE_STORAGE_KEY = "walterUsersGrid.activeTable";
-export const ENTITIES_SYSTEM_TABLE_STORAGE_KEY = "walterEntitiesSystem.activeTable";
+// Veřejné and Growth Club intentionally share these two keys (rather than each
+// having its own) so switching between the two sections via the toggle button
+// preserves which of Klienti/Partneři/Tipaři was active.
+const SHARED_SUBJECTS_TABLE_STORAGE_KEY = "walterSharedSubjects.activeTable";
+const SHARED_COMMISSIONS_TABLE_STORAGE_KEY = "walterSharedCommissions.activeTable";
+
+export const USERS_GRID_TABLE_STORAGE_KEY = SHARED_COMMISSIONS_TABLE_STORAGE_KEY;
+export const ENTITIES_SYSTEM_TABLE_STORAGE_KEY = SHARED_SUBJECTS_TABLE_STORAGE_KEY;
 export const PROJECTS_COMMISSIONS_TABLE_STORAGE_KEY = "walterProjectsCommissions.activeTable";
 export const PROJECTS_SUBJECTS_TABLE_STORAGE_KEY = "walterProjectsSubjects.activeTable";
-export const GROWTH_COMMISSIONS_TABLE_STORAGE_KEY = "walterGrowthCommissions.activeTable";
-export const GROWTH_SUBJECTS_TABLE_STORAGE_KEY = "walterGrowthSubjects.activeTable";
+export const GROWTH_COMMISSIONS_TABLE_STORAGE_KEY = SHARED_COMMISSIONS_TABLE_STORAGE_KEY;
+export const GROWTH_SUBJECTS_TABLE_STORAGE_KEY = SHARED_SUBJECTS_TABLE_STORAGE_KEY;
 
 export const getStoredTableView = (
   storageKey: string,

@@ -1130,6 +1130,22 @@ export async function initDatabase() {
       await client.query(`ALTER TABLE ${tableName} ADD COLUMN IF NOT EXISTS region VARCHAR(255)`);
     }
 
+    // link_id — pairs a Veřejné row with its Growth Club counterpart so the
+    // two can be kept in sync. Only public/growth entity+commission tables
+    // participate; Neveřejné (projects) is not linkable.
+    const linkIdColumnTables = [
+      'client_entities', 'growth_client_entities',
+      'partner_entities', 'growth_partner_entities',
+      'tiper_entities', 'growth_tiper_entities',
+      'client_commissions', 'growth_client_commissions',
+      'partner_commissions', 'growth_partner_commissions',
+      'tiper_commissions', 'growth_tiper_commissions',
+    ];
+
+    for (const tableName of linkIdColumnTables) {
+      await client.query(`ALTER TABLE ${tableName} ADD COLUMN IF NOT EXISTS link_id VARCHAR(64)`);
+    }
+
     const activityActorColumnTables = [
       'partners',
       'clients',
@@ -1498,10 +1514,33 @@ export const db = {
   // Get single record by ID
   async getById(table, id) {
     if (!USE_POSTGRES) return null;
-    
+
     const result = await pool.query(
       `SELECT * FROM ${table} WHERE id = $1`,
       [id]
+    );
+    return result.rows[0] || null;
+  },
+
+  // Get single record by an arbitrary column value (e.g. link_id lookups)
+  async getByField(table, field, value) {
+    if (!USE_POSTGRES) return null;
+
+    const result = await pool.query(
+      `SELECT * FROM ${table} WHERE "${field}" = $1 LIMIT 1`,
+      [value]
+    );
+    return result.rows[0] || null;
+  },
+
+  // Set the section-link pairing id directly, bypassing activity/updated_at
+  // bookkeeping since this is internal plumbing, not a user-visible edit.
+  async setLinkId(table, id, linkId) {
+    if (!USE_POSTGRES) return null;
+
+    const result = await pool.query(
+      `UPDATE ${table} SET link_id = $1 WHERE id = $2 RETURNING *`,
+      [linkId, id]
     );
     return result.rows[0] || null;
   },

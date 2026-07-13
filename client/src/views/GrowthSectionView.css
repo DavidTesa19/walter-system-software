@@ -6,15 +6,43 @@
 
 .growth-section-view__mode-bar {
   display: flex;
-  justify-content: center;
+  align-items: center;
+  gap: 12px;
 }
 
 .growth-section-view__mode-tabs {
-  justify-self: center;
+  flex: 1;
+  display: flex;
+  justify-content: center;
+}
+
+.section-toggle-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  background: var(--color-surface);
+  color: var(--color-text);
+  border: 1px solid var(--color-border);
+  padding: 0.6rem 1rem;
+  border-radius: 0.75rem;
+  cursor: pointer;
+  font-size: 0.9rem;
+  font-weight: 600;
+  white-space: nowrap;
+  transition: background-color 0.15s ease, border-color 0.15s ease;
+}
+
+.section-toggle-btn:hover {
+  background: var(--color-border);
 }
 
 @media (max-width: 900px) {
   .growth-section-view__mode-bar {
+    flex-wrap: wrap;
+    justify-content: flex-start;
+  }
+
+  .growth-section-view__mode-tabs {
     justify-content: flex-start;
   }
 }

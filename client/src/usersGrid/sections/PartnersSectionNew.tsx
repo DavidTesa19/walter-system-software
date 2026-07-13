@@ -16,6 +16,7 @@ import StatusCellRenderer from "../cells/StatusCellRenderer";
 import ApprovalStatusCellRenderer from "../cells/ApprovalStatusCellRenderer";
 import { mapViewToStatus } from "../constants";
 import { apiDelete, apiGet, apiPost, apiPut } from "../../utils/api";
+import { attachSectionLink, detachSectionLink, getLinkableNamespace, linkableNamespaceLabel, otherLinkableNamespace } from "../sectionLink";
 import { uploadDocuments } from "../../utils/uploadDocuments";
 import type { SectionProps } from "./SectionTypes";
 import useFieldOptions from "../hooks/useFieldOptions";
@@ -59,6 +60,7 @@ type PartnerEntityApi = {
   created_by_user_id?: number | null;
   updated_by_user_id?: number | null;
   field_activity?: FieldActivityMap | null;
+  link_id?: string | null;
 };
 
 type PartnerCommissionApi = {
@@ -95,6 +97,7 @@ type PartnerCommissionApi = {
   created_by_user_id?: number | null;
   updated_by_user_id?: number | null;
   field_activity?: FieldActivityMap | null;
+  link_id?: string | null;
 };
 
 // Server field-activity uses DB column names; map them to the grid's field names.
@@ -189,7 +192,8 @@ const normalizePartnerEntity = (entity: PartnerEntityApi): PartnerEntity => ({
   updated_at: entity.updated_at,
   created_by_user_id: entity.created_by_user_id ?? null,
   updated_by_user_id: entity.updated_by_user_id ?? null,
-  field_activity: entity.field_activity ?? null
+  field_activity: entity.field_activity ?? null,
+  link_id: entity.link_id ?? null
 });
 
 const normalizePartnerCommission = (commission: PartnerCommissionApi): PartnerCommission => ({
@@ -215,7 +219,8 @@ const normalizePartnerCommission = (commission: PartnerCommissionApi): PartnerCo
   updated_at: commission.updated_at,
   created_by_user_id: commission.created_by_user_id ?? null,
   updated_by_user_id: commission.updated_by_user_id ?? null,
-  field_activity: commission.field_activity ?? null
+  field_activity: commission.field_activity ?? null,
+  link_id: commission.link_id ?? null
 });
 
 const getCommissionEntityName = (commission: PartnerCommissionApi) =>
@@ -431,6 +436,7 @@ const PartnersSectionNew: React.FC<SectionProps> = ({ viewMode, isActive, system
   const [createModalOpen, setCreateModalOpen] = useState(false);
   const [isCreating, setIsCreating] = useState(false);
   const [includeCommission, setIncludeCommission] = useState(false);
+  const [linkOtherSection, setLinkOtherSection] = useState(false);
   const [createFiles, setCreateFiles] = useState<File[]>([]);
   const [createDraft, setCreateDraft] = useState<PartnerCreateDraft>(createDefaultPartnerDraft);
   const [selectedEntityId, setSelectedEntityId] = useState<number | null>(null);
@@ -483,6 +489,7 @@ const PartnersSectionNew: React.FC<SectionProps> = ({ viewMode, isActive, system
   const commissionActivityScope = useMemo(() => buildCommissionsRecordScope(activitySystem, "partners"), [activitySystem]);
   const entityApiBase = systemNamespace ? `/api/${systemNamespace}/partner-entities` : "/api/partner-entities";
   const commissionApiBase = systemNamespace ? `/api/${systemNamespace}/partner-commissions` : "/api/partner-commissions";
+  const linkableNamespace = useMemo(() => getLinkableNamespace(systemNamespace), [systemNamespace]);
   const documentManager = useProfileDocuments(resourceKey, selectedEntityId);
   const notesManager = useProfileNotes(resourceKey, selectedEntityId);
 
@@ -697,6 +704,7 @@ const PartnersSectionNew: React.FC<SectionProps> = ({ viewMode, isActive, system
   const openCreateModal = useCallback((draft?: PartnerCreateDraft) => {
     setCreateDraft(draft ?? createDefaultPartnerDraft());
     setIncludeCommission(Boolean(draft));
+    setLinkOtherSection(false);
     setCreateFiles([]);
     setCreateModalOpen(true);
   }, []);
@@ -705,6 +713,7 @@ const PartnersSectionNew: React.FC<SectionProps> = ({ viewMode, isActive, system
     if (isCreating) return;
     setCreateModalOpen(false);
     setIncludeCommission(false);
+    setLinkOtherSection(false);
     setCreateFiles([]);
     setCreateDraft(createDefaultPartnerDraft());
   }, [isCreating]);
@@ -741,6 +750,44 @@ const PartnersSectionNew: React.FC<SectionProps> = ({ viewMode, isActive, system
     await apiPut(`${commissionApiBase}/${commissionId}`, updates);
     fetchData();
   }, [commissionApiBase, fetchData]);
+
+  const [sectionLinkBusy, setSectionLinkBusy] = useState<"entity" | "commission" | null>(null);
+
+  const handleToggleEntitySectionLink = useCallback(async (checked: boolean) => {
+    if (!selectedEntity || !linkableNamespace) return;
+    setSectionLinkBusy("entity");
+    try {
+      if (checked) {
+        await attachSectionLink("entity", "partner", linkableNamespace, selectedEntity.id);
+      } else {
+        await detachSectionLink("entity", "partner", linkableNamespace, selectedEntity.id);
+      }
+      await fetchData();
+    } catch (error) {
+      console.error("Error toggling partner section link:", error);
+      alert("Změnu propojení se nepodařilo provést.");
+    } finally {
+      setSectionLinkBusy(null);
+    }
+  }, [selectedEntity, linkableNamespace, fetchData]);
+
+  const handleToggleCommissionSectionLink = useCallback(async (checked: boolean) => {
+    if (!selectedCommission || !linkableNamespace) return;
+    setSectionLinkBusy("commission");
+    try {
+      if (checked) {
+        await attachSectionLink("commission", "partner", linkableNamespace, selectedCommission.id);
+      } else {
+        await detachSectionLink("commission", "partner", linkableNamespace, selectedCommission.id);
+      }
+      await fetchData();
+    } catch (error) {
+      console.error("Error toggling partner commission section link:", error);
+      alert("Změnu propojení se nepodařilo provést.");
+    } finally {
+      setSectionLinkBusy(null);
+    }
+  }, [selectedCommission, linkableNamespace, fetchData]);
 
   const updateProjectClusterStatus = useCallback(async (row: PartnerGridRow, nextStatus: string) => {
     const entityId = row.entity?.id ?? row.partner_entity_id ?? null;
@@ -1031,8 +1078,21 @@ const PartnersSectionNew: React.FC<SectionProps> = ({ viewMode, isActive, system
         await uploadCreateDocuments(response.entity.id);
       }
 
+      if (linkOtherSection && linkableNamespace && response?.entity?.id) {
+        try {
+          await attachSectionLink("entity", "partner", linkableNamespace, response.entity.id);
+          if (response.commission?.id) {
+            await attachSectionLink("commission", "partner", linkableNamespace, response.commission.id);
+          }
+        } catch (linkError) {
+          console.error("Error linking partner to other section:", linkError);
+          alert(`Partner byl vytvořen, ale propojení do sekce ${linkableNamespaceLabel(otherLinkableNamespace(linkableNamespace))} se nezdařilo.`);
+        }
+      }
+
       setCreateModalOpen(false);
       setIncludeCommission(false);
+      setLinkOtherSection(false);
       setCreateFiles([]);
       setCreateDraft(createDefaultPartnerDraft());
       await fetchData();
@@ -1047,7 +1107,7 @@ const PartnersSectionNew: React.FC<SectionProps> = ({ viewMode, isActive, system
     } finally {
       setIsCreating(false);
     }
-  }, [createDraft, fetchData, status, uploadCreateDocuments]);
+  }, [createDraft, fetchData, linkOtherSection, linkableNamespace, status, uploadCreateDocuments]);
 
   const handleCreateEntityOnly = useCallback(async () => {
     setIsCreating(true);
@@ -1070,8 +1130,18 @@ const PartnersSectionNew: React.FC<SectionProps> = ({ viewMode, isActive, system
         await uploadCreateDocuments(entity.id);
       }
 
+      if (linkOtherSection && linkableNamespace && entity?.id) {
+        try {
+          await attachSectionLink("entity", "partner", linkableNamespace, entity.id);
+        } catch (linkError) {
+          console.error("Error linking partner to other section:", linkError);
+          alert(`Partner byl vytvořen, ale propojení do sekce ${linkableNamespaceLabel(otherLinkableNamespace(linkableNamespace))} se nezdařilo.`);
+        }
+      }
+
       setCreateModalOpen(false);
       setIncludeCommission(false);
+      setLinkOtherSection(false);
       setCreateFiles([]);
       setCreateDraft(createDefaultPartnerDraft());
       await fetchData();
@@ -1086,7 +1156,7 @@ const PartnersSectionNew: React.FC<SectionProps> = ({ viewMode, isActive, system
     } finally {
       setIsCreating(false);
     }
-  }, [createDraft, entityApiBase, fetchData, status, uploadCreateDocuments]);
+  }, [createDraft, entityApiBase, fetchData, linkOtherSection, linkableNamespace, status, uploadCreateDocuments]);
 
   const handleCreate = useCallback(async () => {
     if (includeCommission) {
@@ -1565,6 +1635,18 @@ const PartnersSectionNew: React.FC<SectionProps> = ({ viewMode, isActive, system
         onDuplicateCommission={handleDuplicateCommission}
         onCreateCommission={selectedEntity ? handleCreateFirstCommission : undefined}
         onRemoveCommission={selectedCommission ? () => void handleDelete(selectedCommission.id, { commissionOnly: true }) : undefined}
+        entitySectionLink={linkableNamespace && selectedEntity ? {
+          label: `Zobrazit i v sekci ${linkableNamespaceLabel(otherLinkableNamespace(linkableNamespace))}`,
+          checked: Boolean(selectedEntity.link_id),
+          busy: sectionLinkBusy === "entity",
+          onChange: handleToggleEntitySectionLink,
+        } : undefined}
+        commissionSectionLink={linkableNamespace && selectedCommission ? {
+          label: `Zobrazit i v sekci ${linkableNamespaceLabel(otherLinkableNamespace(linkableNamespace))}`,
+          checked: Boolean(selectedCommission.link_id),
+          busy: sectionLinkBusy === "commission",
+          onChange: handleToggleCommissionSectionLink,
+        } : undefined}
         onClose={closeProfile}
         onUpdateEntity={handleUpdateEntity}
         onUpdateCommission={handleUpdateCommission}
@@ -1615,6 +1697,11 @@ const PartnersSectionNew: React.FC<SectionProps> = ({ viewMode, isActive, system
         submitLabel={includeCommission ? "Vytvořit partnera a zakázku" : "Vytvořit partnera"}
         includeCommission={includeCommission}
         includeCommissionLabel="Přidat rovnou i zakázku"
+        otherSectionOption={linkableNamespace ? {
+          label: `Vytvořit i v sekci ${linkableNamespaceLabel(otherLinkableNamespace(linkableNamespace))}`,
+          checked: linkOtherSection,
+          onChange: setLinkOtherSection,
+        } : undefined}
         onClose={closeCreateModal}
         onEntityChange={handleDraftEntityChange}
         onCommissionChange={handleDraftCommissionChange}

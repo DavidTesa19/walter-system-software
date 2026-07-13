@@ -16,6 +16,7 @@ import StatusCellRenderer from "../cells/StatusCellRenderer";
 import ApprovalStatusCellRenderer from "../cells/ApprovalStatusCellRenderer";
 import { mapViewToStatus } from "../constants";
 import { apiGet, apiPost, apiPut, apiDelete } from "../../utils/api";
+import { attachSectionLink, detachSectionLink, getLinkableNamespace, linkableNamespaceLabel, otherLinkableNamespace } from "../sectionLink";
 import { uploadDocuments } from "../../utils/uploadDocuments";
 import type { SectionProps } from "./SectionTypes";
 import useFieldOptions from "../hooks/useFieldOptions";
@@ -64,6 +65,7 @@ type ClientEntityApi = {
   created_by_user_id?: number | null;
   updated_by_user_id?: number | null;
   field_activity?: FieldActivityMap | null;
+  link_id?: string | null;
 };
 
 type ClientCommissionApi = {
@@ -104,6 +106,7 @@ type ClientCommissionApi = {
   created_by_user_id?: number | null;
   updated_by_user_id?: number | null;
   field_activity?: FieldActivityMap | null;
+  link_id?: string | null;
 };
 
 // Server field-activity uses DB column names; map them to the grid's field names so
@@ -205,7 +208,8 @@ const normalizeClientEntity = (entity: ClientEntityApi): ClientEntity => ({
   updated_at: entity.updated_at,
   created_by_user_id: entity.created_by_user_id ?? null,
   updated_by_user_id: entity.updated_by_user_id ?? null,
-  field_activity: entity.field_activity ?? null
+  field_activity: entity.field_activity ?? null,
+  link_id: entity.link_id ?? null
 });
 
 const normalizeClientCommission = (commission: ClientCommissionApi): ClientCommission => ({
@@ -232,7 +236,8 @@ const normalizeClientCommission = (commission: ClientCommissionApi): ClientCommi
   updated_at: commission.updated_at,
   created_by_user_id: commission.created_by_user_id ?? null,
   updated_by_user_id: commission.updated_by_user_id ?? null,
-  field_activity: commission.field_activity ?? null
+  field_activity: commission.field_activity ?? null,
+  link_id: commission.link_id ?? null
 });
 
 const getCommissionEntityName = (commission: ClientCommissionApi) =>
@@ -474,6 +479,7 @@ const ClientsSectionNew: React.FC<SectionProps> = ({
   const [createModalOpen, setCreateModalOpen] = useState(false);
   const [isCreating, setIsCreating] = useState(false);
   const [includeCommission, setIncludeCommission] = useState(false);
+  const [linkOtherSection, setLinkOtherSection] = useState(false);
   const [createFiles, setCreateFiles] = useState<File[]>([]);
   const [createDraft, setCreateDraft] = useState<ClientCreateDraft>(createDefaultClientDraft);
   
@@ -529,6 +535,7 @@ const ClientsSectionNew: React.FC<SectionProps> = ({
   const commissionActivityScope = useMemo(() => buildCommissionsRecordScope(activitySystem, "clients"), [activitySystem]);
   const entityApiBase = systemNamespace ? `/api/${systemNamespace}/client-entities` : "/api/client-entities";
   const commissionApiBase = systemNamespace ? `/api/${systemNamespace}/client-commissions` : "/api/client-commissions";
+  const linkableNamespace = useMemo(() => getLinkableNamespace(systemNamespace), [systemNamespace]);
 
   // Document and notes managers
   const documentManager = useProfileDocuments(resourceKey, selectedEntityId);
@@ -771,6 +778,7 @@ const ClientsSectionNew: React.FC<SectionProps> = ({
   const openCreateModal = useCallback((draft?: ClientCreateDraft) => {
     setCreateDraft(draft ?? createDefaultClientDraft());
     setIncludeCommission(Boolean(draft));
+    setLinkOtherSection(false);
     setCreateFiles([]);
     setCreateModalOpen(true);
   }, []);
@@ -779,6 +787,7 @@ const ClientsSectionNew: React.FC<SectionProps> = ({
     if (isCreating) return;
     setCreateModalOpen(false);
     setIncludeCommission(false);
+    setLinkOtherSection(false);
     setCreateFiles([]);
     setCreateDraft(createDefaultClientDraft());
   }, [isCreating]);
@@ -829,6 +838,44 @@ const ClientsSectionNew: React.FC<SectionProps> = ({
       throw error;
     }
   }, [commissionApiBase, fetchData]);
+
+  const [sectionLinkBusy, setSectionLinkBusy] = useState<"entity" | "commission" | null>(null);
+
+  const handleToggleEntitySectionLink = useCallback(async (checked: boolean) => {
+    if (!selectedEntity || !linkableNamespace) return;
+    setSectionLinkBusy("entity");
+    try {
+      if (checked) {
+        await attachSectionLink("entity", "client", linkableNamespace, selectedEntity.id);
+      } else {
+        await detachSectionLink("entity", "client", linkableNamespace, selectedEntity.id);
+      }
+      await fetchData();
+    } catch (error) {
+      console.error("Error toggling client section link:", error);
+      alert("Změnu propojení se nepodařilo provést.");
+    } finally {
+      setSectionLinkBusy(null);
+    }
+  }, [selectedEntity, linkableNamespace, fetchData]);
+
+  const handleToggleCommissionSectionLink = useCallback(async (checked: boolean) => {
+    if (!selectedCommission || !linkableNamespace) return;
+    setSectionLinkBusy("commission");
+    try {
+      if (checked) {
+        await attachSectionLink("commission", "client", linkableNamespace, selectedCommission.id);
+      } else {
+        await detachSectionLink("commission", "client", linkableNamespace, selectedCommission.id);
+      }
+      await fetchData();
+    } catch (error) {
+      console.error("Error toggling client commission section link:", error);
+      alert("Změnu propojení se nepodařilo provést.");
+    } finally {
+      setSectionLinkBusy(null);
+    }
+  }, [selectedCommission, linkableNamespace, fetchData]);
 
   const updateProjectClusterStatus = useCallback(async (row: ClientGridRow, nextStatus: string) => {
     const entityId = row.entity?.id ?? row.client_entity_id ?? null;
@@ -1131,8 +1178,21 @@ const ClientsSectionNew: React.FC<SectionProps> = ({
         await uploadCreateDocuments(response.entity.id);
       }
 
+      if (linkOtherSection && linkableNamespace && response?.entity?.id) {
+        try {
+          await attachSectionLink("entity", "client", linkableNamespace, response.entity.id);
+          if (response.commission?.id) {
+            await attachSectionLink("commission", "client", linkableNamespace, response.commission.id);
+          }
+        } catch (linkError) {
+          console.error("Error linking client to other section:", linkError);
+          alert(`Klient byl vytvořen, ale propojení do sekce ${linkableNamespaceLabel(otherLinkableNamespace(linkableNamespace))} se nezdařilo.`);
+        }
+      }
+
       setCreateModalOpen(false);
       setIncludeCommission(false);
+      setLinkOtherSection(false);
       setCreateFiles([]);
       setCreateDraft(createDefaultClientDraft());
       await fetchData();
@@ -1147,7 +1207,7 @@ const ClientsSectionNew: React.FC<SectionProps> = ({
     } finally {
       setIsCreating(false);
     }
-  }, [createDraft, fetchData, status, uploadCreateDocuments]);
+  }, [createDraft, fetchData, linkOtherSection, linkableNamespace, status, uploadCreateDocuments]);
 
   const handleCreateEntityOnly = useCallback(async () => {
     setIsCreating(true);
@@ -1172,8 +1232,18 @@ const ClientsSectionNew: React.FC<SectionProps> = ({
         await uploadCreateDocuments(entity.id);
       }
 
+      if (linkOtherSection && linkableNamespace && entity?.id) {
+        try {
+          await attachSectionLink("entity", "client", linkableNamespace, entity.id);
+        } catch (linkError) {
+          console.error("Error linking client to other section:", linkError);
+          alert(`Klient byl vytvořen, ale propojení do sekce ${linkableNamespaceLabel(otherLinkableNamespace(linkableNamespace))} se nezdařilo.`);
+        }
+      }
+
       setCreateModalOpen(false);
       setIncludeCommission(false);
+      setLinkOtherSection(false);
       setCreateFiles([]);
       setCreateDraft(createDefaultClientDraft());
       await fetchData();
@@ -1188,7 +1258,7 @@ const ClientsSectionNew: React.FC<SectionProps> = ({
     } finally {
       setIsCreating(false);
     }
-  }, [createDraft, entityApiBase, fetchData, status, uploadCreateDocuments]);
+  }, [createDraft, entityApiBase, fetchData, linkOtherSection, linkableNamespace, status, uploadCreateDocuments]);
 
   const handleCreate = useCallback(async () => {
     if (includeCommission) {
@@ -1894,6 +1964,18 @@ const ClientsSectionNew: React.FC<SectionProps> = ({
         onDuplicateCommission={handleDuplicateCommission}
         onCreateCommission={selectedEntity ? handleCreateFirstCommission : undefined}
         onRemoveCommission={selectedCommission ? () => void handleDelete(selectedCommission.id, { commissionOnly: true }) : undefined}
+        entitySectionLink={linkableNamespace && selectedEntity ? {
+          label: `Zobrazit i v sekci ${linkableNamespaceLabel(otherLinkableNamespace(linkableNamespace))}`,
+          checked: Boolean(selectedEntity.link_id),
+          busy: sectionLinkBusy === "entity",
+          onChange: handleToggleEntitySectionLink,
+        } : undefined}
+        commissionSectionLink={linkableNamespace && selectedCommission ? {
+          label: `Zobrazit i v sekci ${linkableNamespaceLabel(otherLinkableNamespace(linkableNamespace))}`,
+          checked: Boolean(selectedCommission.link_id),
+          busy: sectionLinkBusy === "commission",
+          onChange: handleToggleCommissionSectionLink,
+        } : undefined}
         onClose={closeProfile}
         onUpdateEntity={handleUpdateEntity}
         onUpdateCommission={handleUpdateCommission}
@@ -1944,6 +2026,11 @@ const ClientsSectionNew: React.FC<SectionProps> = ({
         submitLabel={includeCommission ? "Vytvořit klienta a zakázku" : "Vytvořit klienta"}
         includeCommission={includeCommission}
         includeCommissionLabel="Přidat rovnou i zakázku"
+        otherSectionOption={linkableNamespace ? {
+          label: `Vytvořit i v sekci ${linkableNamespaceLabel(otherLinkableNamespace(linkableNamespace))}`,
+          checked: linkOtherSection,
+          onChange: setLinkOtherSection,
+        } : undefined}
         onClose={closeCreateModal}
         onEntityChange={handleDraftEntityChange}
         onCommissionChange={handleDraftCommissionChange}

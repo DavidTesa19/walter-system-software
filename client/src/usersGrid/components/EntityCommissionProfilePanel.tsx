@@ -52,6 +52,13 @@ export interface LinkedCommissionItem {
   subtitle?: string | null;
 }
 
+export interface SectionLinkToggle {
+  label: string;
+  checked: boolean;
+  busy?: boolean;
+  onChange: (checked: boolean) => void;
+}
+
 interface EntityCommissionProfilePanelProps {
   open: boolean;
   entityType: 'partner' | 'client' | 'tiper';
@@ -65,6 +72,8 @@ interface EntityCommissionProfilePanelProps {
   onDuplicateCommission?: () => void;
   onCreateCommission?: () => void;
   onRemoveCommission?: () => void;
+  entitySectionLink?: SectionLinkToggle;
+  commissionSectionLink?: SectionLinkToggle;
   
   // Callbacks
   onClose: () => void;
@@ -436,6 +445,8 @@ const EntityCommissionProfilePanel: React.FC<EntityCommissionProfilePanelProps> 
   onDuplicateCommission,
   onCreateCommission,
   onRemoveCommission,
+  entitySectionLink,
+  commissionSectionLink,
   onClose,
   onUpdateEntity,
   onUpdateCommission,
@@ -691,6 +702,17 @@ const EntityCommissionProfilePanel: React.FC<EntityCommissionProfilePanelProps> 
                     </div>
                     <span className="ec-column-id">{entity.entity_id}</span>
                   </div>
+                  {entitySectionLink ? (
+                    <label className={`ec-section-link-toggle ${entitySectionLink.busy ? 'is-busy' : ''}`}>
+                      <input
+                        type="checkbox"
+                        checked={entitySectionLink.checked}
+                        disabled={entitySectionLink.busy}
+                        onChange={(event) => entitySectionLink.onChange(event.target.checked)}
+                      />
+                      <span>{entitySectionLink.label}</span>
+                    </label>
+                  ) : null}
                   <div className="ec-column-content">
                     {entity.groups.map((group, idx) => (
                       <FieldGroupComponent
@@ -713,6 +735,17 @@ const EntityCommissionProfilePanel: React.FC<EntityCommissionProfilePanelProps> 
                       {commission ? commission.commission_id : hasLinkedCommissions ? `${linkedCommissions.length} položek` : "Zatím žádná"}
                     </span>
                   </div>
+                  {commission && commissionSectionLink ? (
+                    <label className={`ec-section-link-toggle ${commissionSectionLink.busy ? 'is-busy' : ''}`}>
+                      <input
+                        type="checkbox"
+                        checked={commissionSectionLink.checked}
+                        disabled={commissionSectionLink.busy}
+                        onChange={(event) => commissionSectionLink.onChange(event.target.checked)}
+                      />
+                      <span>{commissionSectionLink.label}</span>
+                    </label>
+                  ) : null}
                   <div className="ec-column-content">
                     {hasLinkedCommissions ? (
                       <div className="ec-linked-commissions-section">

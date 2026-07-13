@@ -7,6 +7,8 @@ import {
   GROWTH_COMMISSIONS_TABLE_STORAGE_KEY,
   GROWTH_SUBJECTS_TABLE_STORAGE_KEY,
 } from "../utils/tableViewState";
+import { getGeneralViewFor } from "./sectionToggle";
+import { useAuth, canAccessStandardSystem, canAccessGrowthSystem } from "../auth/AuthContext";
 import "./GrowthSectionView.css";
 
 type GrowthSectionKind = "subjects" | "commissions";
@@ -55,7 +57,9 @@ const GrowthSectionView: React.FC<GrowthSectionViewProps> = ({
   onViewChange,
   searchTarget,
 }) => {
+  const { user } = useAuth();
   const currentGridView = getGridViewFromRoute(kind, activeView);
+  const canToggleSection = canAccessStandardSystem(user?.accessScope) && canAccessGrowthSystem(user?.accessScope);
 
   const handleSelect = useCallback(
     (view: GridView) => {
@@ -63,6 +67,10 @@ const GrowthSectionView: React.FC<GrowthSectionViewProps> = ({
     },
     [kind, onViewChange]
   );
+
+  const handleSwitchToGeneral = useCallback(() => {
+    onViewChange(getGeneralViewFor(kind, currentGridView));
+  }, [kind, currentGridView, onViewChange]);
 
   return (
     <div className="growth-section-view">
@@ -79,6 +87,16 @@ const GrowthSectionView: React.FC<GrowthSectionViewProps> = ({
             </button>
           ))}
         </div>
+        {canToggleSection ? (
+          <button
+            type="button"
+            className="section-toggle-btn"
+            onClick={handleSwitchToGeneral}
+            title="Přepnout na Veřejné, se stejným výběrem tabulky a filtru"
+          >
+            🌐 Přepnout na Veřejné
+          </button>
+        ) : null}
       </div>
 
       {kind === "subjects" ? (
@@ -86,7 +104,7 @@ const GrowthSectionView: React.FC<GrowthSectionViewProps> = ({
           viewMode={currentGridView}
           systemNamespace="growth"
           storageKey={GROWTH_SUBJECTS_TABLE_STORAGE_KEY}
-          title="Growth Club - Subjekty & Zakázky"
+          title="Growth Club - Subjekty"
           searchTarget={searchTarget}
         />
       ) : (
@@ -95,7 +113,7 @@ const GrowthSectionView: React.FC<GrowthSectionViewProps> = ({
           searchTarget={searchTarget}
           systemNamespace="growth"
           storageKey={GROWTH_COMMISSIONS_TABLE_STORAGE_KEY}
-          title="Growth Club"
+          title="Growth Club - Zakázky"
         />
       )}
     </div>

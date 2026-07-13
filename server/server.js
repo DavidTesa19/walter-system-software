@@ -24,6 +24,12 @@ import {
   normalizeFieldOptionValue,
   REMOVED_FIELD_OPTION_LABEL,
 } from "./field-options.js";
+import {
+  otherNamespace,
+  resolveTable,
+  pickCoreFields,
+  isValidSectionLinkRequest,
+} from "./section-linking.js";
 
 // Load environment variables
 dotenv.config();
@@ -3291,6 +3297,7 @@ app.put("/api/partner-entities/:id", authenticateToken, (req, res) => {
     const payload = applyAssignmentPayload(db, req.body || {});
     const updated = entityCommissionJson.updatePartnerEntity(db, id, payload);
     if (!updated) return res.status(404).json({ error: "Not found" });
+    propagateLinkedFieldSync(db, 'entity', 'partner', 'public', updated, payload);
     if (!writeDb(db)) return res.status(500).json({ error: "Failed to persist" });
     res.json(updated);
   } catch (error) {
@@ -3463,6 +3470,7 @@ app.put("/api/partner-commissions/:id", authenticateToken, (req, res) => {
     const payload = applyAssignmentPayload(db, req.body || {});
     const updated = entityCommissionJson.updatePartnerCommission(db, id, payload);
     if (!updated) return res.status(404).json({ error: "Not found" });
+    propagateLinkedFieldSync(db, 'commission', 'partner', 'public', updated, payload);
     if (!writeDb(db)) return res.status(500).json({ error: "Failed to persist" });
     res.json(updated);
   } catch (error) {
@@ -3479,6 +3487,7 @@ app.patch("/api/partner-commissions/:id", authenticateToken, (req, res) => {
     const payload = applyAssignmentPayload(db, req.body || {});
     const updated = entityCommissionJson.updatePartnerCommission(db, id, payload);
     if (!updated) return res.status(404).json({ error: "Not found" });
+    propagateLinkedFieldSync(db, 'commission', 'partner', 'public', updated, payload);
     if (!writeDb(db)) return res.status(500).json({ error: "Failed to persist" });
     res.json(updated);
   } catch (error) {
@@ -3589,6 +3598,7 @@ app.put("/api/client-entities/:id", authenticateToken, (req, res) => {
     const payload = applyAssignmentPayload(db, req.body || {});
     const updated = entityCommissionJson.updateClientEntity(db, id, payload);
     if (!updated) return res.status(404).json({ error: "Not found" });
+    propagateLinkedFieldSync(db, 'entity', 'client', 'public', updated, payload);
     if (!writeDb(db)) return res.status(500).json({ error: "Failed to persist" });
     res.json(updated);
   } catch (error) {
@@ -3759,6 +3769,7 @@ app.put("/api/client-commissions/:id", authenticateToken, (req, res) => {
     const payload = applyAssignmentPayload(db, req.body || {});
     const updated = entityCommissionJson.updateClientCommission(db, id, payload);
     if (!updated) return res.status(404).json({ error: "Not found" });
+    propagateLinkedFieldSync(db, 'commission', 'client', 'public', updated, payload);
     if (!writeDb(db)) return res.status(500).json({ error: "Failed to persist" });
     res.json(updated);
   } catch (error) {
@@ -3775,6 +3786,7 @@ app.patch("/api/client-commissions/:id", authenticateToken, (req, res) => {
     const payload = applyAssignmentPayload(db, req.body || {});
     const updated = entityCommissionJson.updateClientCommission(db, id, payload);
     if (!updated) return res.status(404).json({ error: "Not found" });
+    propagateLinkedFieldSync(db, 'commission', 'client', 'public', updated, payload);
     if (!writeDb(db)) return res.status(500).json({ error: "Failed to persist" });
     res.json(updated);
   } catch (error) {
@@ -3885,6 +3897,7 @@ app.put("/api/tiper-entities/:id", authenticateToken, (req, res) => {
     const payload = applyAssignmentPayload(db, req.body || {});
     const updated = entityCommissionJson.updateTiperEntity(db, id, payload);
     if (!updated) return res.status(404).json({ error: "Not found" });
+    propagateLinkedFieldSync(db, 'entity', 'tiper', 'public', updated, payload);
     if (!writeDb(db)) return res.status(500).json({ error: "Failed to persist" });
     res.json(updated);
   } catch (error) {
@@ -4055,6 +4068,7 @@ app.put("/api/tiper-commissions/:id", authenticateToken, (req, res) => {
     const payload = applyAssignmentPayload(db, req.body || {});
     const updated = entityCommissionJson.updateTiperCommission(db, id, payload);
     if (!updated) return res.status(404).json({ error: "Not found" });
+    propagateLinkedFieldSync(db, 'commission', 'tiper', 'public', updated, payload);
     if (!writeDb(db)) return res.status(500).json({ error: "Failed to persist" });
     res.json(updated);
   } catch (error) {
@@ -4071,6 +4085,7 @@ app.patch("/api/tiper-commissions/:id", authenticateToken, (req, res) => {
     const payload = applyAssignmentPayload(db, req.body || {});
     const updated = entityCommissionJson.updateTiperCommission(db, id, payload);
     if (!updated) return res.status(404).json({ error: "Not found" });
+    propagateLinkedFieldSync(db, 'commission', 'tiper', 'public', updated, payload);
     if (!writeDb(db)) return res.status(500).json({ error: "Failed to persist" });
     res.json(updated);
   } catch (error) {
@@ -4477,6 +4492,9 @@ const createNamespaceRoutes = (routeConfig, countersStoreKey, ensureFn, apiPrefi
         if (!updated) {
           return res.status(404).json({ error: 'Not found' });
         }
+        if (apiPrefix === 'growth') {
+          propagateLinkedFieldSync(store, 'entity', type, 'growth', updated, payload);
+        }
         if (!writeDb(store)) return res.status(500).json({ error: 'Failed to persist' });
         res.json(updated);
       } catch (error) {
@@ -4630,6 +4648,9 @@ const createNamespaceRoutes = (routeConfig, countersStoreKey, ensureFn, apiPrefi
         if (!updated) {
           return res.status(404).json({ error: 'Not found' });
         }
+        if (apiPrefix === 'growth') {
+          propagateLinkedFieldSync(store, 'commission', type, 'growth', updated, payload);
+        }
         if (!writeDb(store)) return res.status(500).json({ error: 'Failed to persist' });
         res.json(updated);
       } catch (error) {
@@ -4645,6 +4666,9 @@ const createNamespaceRoutes = (routeConfig, countersStoreKey, ensureFn, apiPrefi
         const updated = updateNamespaceCommission(routeConfig, countersStoreKey, ensureFn, type, store, req.params.id, payload, getRequestActorUserId(req));
         if (!updated) {
           return res.status(404).json({ error: 'Not found' });
+        }
+        if (apiPrefix === 'growth') {
+          propagateLinkedFieldSync(store, 'commission', type, 'growth', updated, payload);
         }
         if (!writeDb(store)) return res.status(500).json({ error: 'Failed to persist' });
         res.json(updated);
@@ -4724,6 +4748,170 @@ const createNamespaceRoutes = (routeConfig, countersStoreKey, ensureFn, apiPrefi
 
 createNamespaceRoutes(PROJECT_JSON_CONFIG, 'project_entity_counters', ensureProjectCollections, 'projects', ['partner', 'client', 'tiper']);
 createNamespaceRoutes(GROWTH_JSON_CONFIG, 'growth_entity_counters', ensureGrowthCollections, 'growth', ['partner', 'client', 'tiper']);
+
+// =============================================================================
+// SECTION LINKING — Veřejné ⇄ Growth Club synced pairs
+// =============================================================================
+
+const capitalize = (type) => type.charAt(0).toUpperCase() + type.slice(1);
+
+const getSectionLinkRows = (db, kind, type, namespace) => {
+  if (namespace === 'growth') {
+    ensureGrowthCollections(db);
+    const config = GROWTH_JSON_CONFIG[type];
+    return db[kind === 'entity' ? config.entityCollection : config.commissionCollection];
+  }
+  entityCommissionJson.ensureEntityCommissionCollections(db);
+  return db[kind === 'entity' ? `${type}_entities` : `${type}_commissions`];
+};
+
+const findSectionLinkRowById = (rows, id) => rows.find((row) => Number(row.id) === Number(id)) || null;
+const findSectionLinkRowByLinkId = (rows, linkId) => rows.find((row) => row.link_id === linkId) || null;
+
+const createEntityCounterpart = (db, type, targetNamespace, sourceRow, actorUserId) => {
+  const payload = pickCoreFields('entity', type, sourceRow);
+  if (targetNamespace === 'growth') {
+    return createNamespaceEntity(GROWTH_JSON_CONFIG, 'growth_entity_counters', ensureGrowthCollections, type, db, payload, actorUserId);
+  }
+  return entityCommissionJson[`create${capitalize(type)}Entity`](db, payload);
+};
+
+const deleteEntityCounterpart = (db, type, targetNamespace, internalId) => {
+  if (targetNamespace === 'growth') {
+    return deleteNamespaceEntity(GROWTH_JSON_CONFIG, 'growth_entity_counters', ensureGrowthCollections, type, db, internalId);
+  }
+  return entityCommissionJson[`delete${capitalize(type)}Entity`](db, internalId);
+};
+
+const createCommissionCounterpart = (db, type, targetNamespace, targetEntityInternalId, sourceRow, actorUserId) => {
+  const payload = pickCoreFields('commission', type, sourceRow);
+  if (targetNamespace === 'growth') {
+    return createNamespaceCommission(GROWTH_JSON_CONFIG, 'growth_entity_counters', ensureGrowthCollections, type, db, targetEntityInternalId, payload, actorUserId);
+  }
+  return entityCommissionJson[`create${capitalize(type)}Commission`](db, targetEntityInternalId, payload);
+};
+
+const deleteCommissionCounterpart = (db, type, targetNamespace, internalId) => {
+  if (targetNamespace === 'growth') {
+    return deleteNamespaceCommission(GROWTH_JSON_CONFIG, 'growth_entity_counters', ensureGrowthCollections, type, db, internalId);
+  }
+  return entityCommissionJson[`delete${capitalize(type)}Commission`](db, internalId);
+};
+
+// Propagate core-field changes from a just-updated linked row to its
+// counterpart in the other section. Status/assignment/ids stay independent.
+const propagateLinkedFieldSync = (db, kind, type, namespace, updatedRow, incomingPayload) => {
+  if (!updatedRow?.link_id) return;
+  const coreUpdates = pickCoreFields(kind, type, incomingPayload || {});
+  if (Object.keys(coreUpdates).length === 0) return;
+  const targetRows = getSectionLinkRows(db, kind, type, otherNamespace(namespace));
+  const counterpart = findSectionLinkRowByLinkId(targetRows, updatedRow.link_id);
+  if (!counterpart) return;
+  Object.assign(counterpart, coreUpdates, { updated_at: new Date().toISOString() });
+};
+
+app.post('/api/section-link/attach', authenticateToken, (req, res) => {
+  try {
+    const { kind, type, namespace, id } = req.body || {};
+    if (!isValidSectionLinkRequest({ kind, type, namespace, id })) {
+      return res.status(400).json({ error: 'Invalid section-link request' });
+    }
+    const db = readDb();
+    ensureMigrated(db);
+    const actorUserId = getRequestActorUserId(req);
+
+    const sourceRows = getSectionLinkRows(db, kind, type, namespace);
+    const source = findSectionLinkRowById(sourceRows, id);
+    if (!source) return res.status(404).json({ error: 'Not found' });
+
+    const targetNamespace = otherNamespace(namespace);
+
+    if (kind === 'commission') {
+      const entityRowsSource = getSectionLinkRows(db, 'entity', type, namespace);
+      const parentEntity = findSectionLinkRowById(entityRowsSource, source.entity_id);
+      if (!parentEntity) return res.status(400).json({ error: 'Parent entity not found' });
+
+      let targetEntity = parentEntity.link_id
+        ? findSectionLinkRowByLinkId(getSectionLinkRows(db, 'entity', type, targetNamespace), parentEntity.link_id)
+        : null;
+
+      if (!targetEntity) {
+        const parentLinkId = parentEntity.link_id || crypto.randomUUID();
+        targetEntity = createEntityCounterpart(db, type, targetNamespace, parentEntity, actorUserId);
+        targetEntity.link_id = parentLinkId;
+        parentEntity.link_id = parentLinkId;
+      }
+
+      const commissionLinkId = source.link_id || crypto.randomUUID();
+      // createCommissionCounterpart returns a computed/merged response object,
+      // not the raw array element — find the live row to mutate link_id on it.
+      const createdCommissionResponse = createCommissionCounterpart(db, type, targetNamespace, targetEntity.id, source, actorUserId);
+      const createdCommissionRow = findSectionLinkRowById(
+        getSectionLinkRows(db, 'commission', type, targetNamespace),
+        createdCommissionResponse.id
+      );
+      if (createdCommissionRow) createdCommissionRow.link_id = commissionLinkId;
+      source.link_id = commissionLinkId;
+
+      if (!writeDb(db)) return res.status(500).json({ error: 'Failed to persist' });
+      return res.status(201).json({ linkId: commissionLinkId, counterpart: { ...createdCommissionResponse, link_id: commissionLinkId } });
+    }
+
+    const linkId = source.link_id || crypto.randomUUID();
+    const created = createEntityCounterpart(db, type, targetNamespace, source, actorUserId);
+    created.link_id = linkId;
+    source.link_id = linkId;
+
+    if (!writeDb(db)) return res.status(500).json({ error: 'Failed to persist' });
+    res.status(201).json({ linkId, counterpart: created });
+  } catch (error) {
+    console.error('Error attaching section link:', error);
+    res.status(500).json({ error: error.message || 'Failed to attach section link' });
+  }
+});
+
+app.post('/api/section-link/detach', authenticateToken, (req, res) => {
+  try {
+    const { kind, type, namespace, id } = req.body || {};
+    if (!isValidSectionLinkRequest({ kind, type, namespace, id })) {
+      return res.status(400).json({ error: 'Invalid section-link request' });
+    }
+    const db = readDb();
+    ensureMigrated(db);
+
+    const sourceRows = getSectionLinkRows(db, kind, type, namespace);
+    const source = findSectionLinkRowById(sourceRows, id);
+    if (!source) return res.status(404).json({ error: 'Not found' });
+    if (!source.link_id) return res.status(400).json({ error: 'Record is not linked to another section' });
+
+    const targetNamespace = otherNamespace(namespace);
+    const targetRows = getSectionLinkRows(db, kind, type, targetNamespace);
+    const counterpart = findSectionLinkRowByLinkId(targetRows, source.link_id);
+
+    if (counterpart) {
+      if (kind === 'entity') {
+        deleteEntityCounterpart(db, type, targetNamespace, counterpart.id);
+        const survivingCommissions = getSectionLinkRows(db, 'commission', type, namespace)
+          .filter((commission) => Number(commission.entity_id) === Number(source.id) && commission.link_id);
+        for (const commission of survivingCommissions) {
+          const stillLinked = getSectionLinkRows(db, 'commission', type, targetNamespace)
+            .some((item) => item.link_id === commission.link_id);
+          if (!stillLinked) commission.link_id = null;
+        }
+      } else {
+        deleteCommissionCounterpart(db, type, targetNamespace, counterpart.id);
+      }
+    }
+
+    source.link_id = null;
+
+    if (!writeDb(db)) return res.status(500).json({ error: 'Failed to persist' });
+    res.json({ ok: true });
+  } catch (error) {
+    console.error('Error detaching section link:', error);
+    res.status(500).json({ error: error.message || 'Failed to detach section link' });
+  }
+});
 
 app.post('/public-submissions/:type', (req, res) => {
   try {
