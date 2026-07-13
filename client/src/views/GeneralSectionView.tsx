@@ -89,8 +89,9 @@ const GeneralSectionView: React.FC<GeneralSectionViewProps> = ({
             className="section-toggle-btn"
             onClick={handleSwitchToGrowth}
             title="Přepnout na Growth Club, se stejným výběrem tabulky a filtru"
+            aria-label="Přepnout na Growth Club"
           >
-            🚀 Přepnout na Growth Club
+            👑
           </button>
         ) : null}
       </div>

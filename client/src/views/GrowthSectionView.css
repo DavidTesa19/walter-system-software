@@ -19,16 +19,17 @@
 .section-toggle-btn {
   display: inline-flex;
   align-items: center;
-  gap: 0.4rem;
+  justify-content: center;
+  width: 2.5rem;
+  height: 2.5rem;
+  flex-shrink: 0;
   background: var(--color-surface);
   color: var(--color-text);
   border: 1px solid var(--color-border);
-  padding: 0.6rem 1rem;
   border-radius: 0.75rem;
   cursor: pointer;
-  font-size: 0.9rem;
-  font-weight: 600;
-  white-space: nowrap;
+  font-size: 1.2rem;
+  line-height: 1;
   transition: background-color 0.15s ease, border-color 0.15s ease;
 }
 

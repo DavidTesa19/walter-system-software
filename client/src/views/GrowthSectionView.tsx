@@ -93,8 +93,9 @@ const GrowthSectionView: React.FC<GrowthSectionViewProps> = ({
             className="section-toggle-btn"
             onClick={handleSwitchToGeneral}
             title="Přepnout na Veřejné, se stejným výběrem tabulky a filtru"
+            aria-label="Přepnout na Veřejné"
           >
-            🌐 Přepnout na Veřejné
+            🌐
           </button>
         ) : null}
       </div>
