@@ -556,6 +556,8 @@ export async function initDatabase() {
       "ALTER TABLE project_partner_commissions ADD COLUMN IF NOT EXISTS assigned_user_ids INTEGER[] DEFAULT '{}'",
       "ALTER TABLE project_client_commissions ADD COLUMN IF NOT EXISTS assigned_user_ids INTEGER[] DEFAULT '{}'",
       "ALTER TABLE project_tiper_commissions ADD COLUMN IF NOT EXISTS assigned_user_ids INTEGER[] DEFAULT '{}'",
+      "ALTER TABLE project_client_commissions ADD COLUMN IF NOT EXISTS project_name VARCHAR(255)",
+      "ALTER TABLE growth_client_commissions ADD COLUMN IF NOT EXISTS project_name VARCHAR(255)",
       "ALTER TABLE partner_commissions ALTER COLUMN assigned_to TYPE TEXT",
       "ALTER TABLE client_commissions ALTER COLUMN assigned_to TYPE TEXT",
       "ALTER TABLE tiper_commissions ALTER COLUMN assigned_to TYPE TEXT",

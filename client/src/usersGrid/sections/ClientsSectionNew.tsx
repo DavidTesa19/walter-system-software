@@ -840,6 +840,29 @@ const ClientsSectionNew: React.FC<SectionProps> = ({
     }
   }, [commissionApiBase, fetchData]);
 
+  // Subjects without a commission yet have no id to PUT against — create the
+  // first commission with the edited field instead of silently dropping it.
+  const createCommissionForRow = useCallback(async (row: ClientGridRow, updates: Record<string, unknown>) => {
+    const entityId = row.client_entity_id ?? row.entity?.id ?? null;
+    if (entityId == null) return;
+    try {
+      const response = await apiPost<{ id: number }>(commissionApiBase, {
+        entity_id: entityId,
+        status,
+        position: null,
+        budget: null,
+        commission_value: null,
+        assigned_user_ids: [],
+        ...updates
+      });
+      await fetchData();
+      return response;
+    } catch (error) {
+      console.error("Error creating client commission:", error);
+      throw error;
+    }
+  }, [commissionApiBase, fetchData, status]);
+
   const [sectionLinkBusy, setSectionLinkBusy] = useState<"entity" | "commission" | null>(null);
 
   const handleToggleEntitySectionLink = useCallback(async (checked: boolean) => {
@@ -1490,6 +1513,8 @@ const ClientsSectionNew: React.FC<SectionProps> = ({
 
           if (targetCommissionId !== null) {
             await handleUpdateCommission(targetCommissionId, { state: normalizedState });
+          } else {
+            await createCommissionForRow(row, { state: normalizedState });
           }
           return;
         }
@@ -1514,6 +1539,8 @@ const ClientsSectionNew: React.FC<SectionProps> = ({
 
         if (targetCommissionId !== null) {
           await handleUpdateCommission(targetCommissionId, { [field]: newValue });
+        } else {
+          await createCommissionForRow(row, { [field]: newValue });
         }
       }
     } catch (error) {
@@ -1521,7 +1548,7 @@ const ClientsSectionNew: React.FC<SectionProps> = ({
       alert("Chyba při aktualizaci");
       fetchData();
     }
-  }, [fetchData, handleUpdateCommission, handleUpdateEntity, projectStatusOptions, systemNamespace, updateProjectClusterStatus, updateProjectClusterWorkflowState, viewMode]);
+  }, [createCommissionForRow, fetchData, handleUpdateCommission, handleUpdateEntity, projectStatusOptions, systemNamespace, updateProjectClusterStatus, updateProjectClusterWorkflowState, viewMode]);
 
   // ==========================================================================
   // ADD NEW CLIENT + COMMISSION
@@ -1984,6 +2011,7 @@ const ClientsSectionNew: React.FC<SectionProps> = ({
               }
             }}
             domLayout={useContentHeightLayout ? 'autoHeight' : 'normal'}
+            singleClickEdit={true}
             onCellValueChanged={onCellValueChanged}
             onCellEditingStarted={readOnly ? (params) => params.api.stopEditing(true) : undefined}
             defaultColDef={{

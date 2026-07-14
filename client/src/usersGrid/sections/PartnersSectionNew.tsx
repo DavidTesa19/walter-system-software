@@ -752,6 +752,29 @@ const PartnersSectionNew: React.FC<SectionProps> = ({ viewMode, isActive, system
     fetchData();
   }, [commissionApiBase, fetchData]);
 
+  // Subjects without a commission yet have no id to PUT against — create the
+  // first commission with the edited field instead of silently dropping it.
+  const createCommissionForRow = useCallback(async (row: PartnerGridRow, updates: Record<string, unknown>) => {
+    const entityId = row.partner_entity_id ?? row.entity?.id ?? null;
+    if (entityId == null) return;
+    try {
+      const response = await apiPost<{ id: number }>(commissionApiBase, {
+        entity_id: entityId,
+        status,
+        position: null,
+        budget: null,
+        commission_value: null,
+        assigned_user_ids: [],
+        ...updates
+      });
+      await fetchData();
+      return response;
+    } catch (error) {
+      console.error("Error creating partner commission:", error);
+      throw error;
+    }
+  }, [commissionApiBase, fetchData, status]);
+
   const [sectionLinkBusy, setSectionLinkBusy] = useState<"entity" | "commission" | null>(null);
 
   const handleToggleEntitySectionLink = useCallback(async (checked: boolean) => {
@@ -1369,12 +1392,14 @@ const PartnersSectionNew: React.FC<SectionProps> = ({ viewMode, isActive, system
         }
 
         if (!row.entityOnly) {
-          const targetCommissionId = viewMode === "active"
+          const targetCommissionId = sectionKind === "subjects" && viewMode === "active"
             ? (row.primaryCommissionId ?? null)
             : row.id;
 
           if (targetCommissionId !== null) {
             await handleUpdateCommission(targetCommissionId, { state: normalizedState });
+          } else {
+            await createCommissionForRow(row, { state: normalizedState });
           }
           return;
         }
@@ -1391,14 +1416,22 @@ const PartnersSectionNew: React.FC<SectionProps> = ({ viewMode, isActive, system
       if (["name", "company", "field", "location", "mobile", "email"].includes(field) && row.entity) {
         await handleUpdateEntity(row.entity.id, { [field]: params.newValue });
       } else if (!row.entityOnly) {
-        await handleUpdateCommission(row.id, { [field]: params.newValue });
+        const targetCommissionId = sectionKind === "subjects" && viewMode === "active"
+          ? (row.primaryCommissionId ?? null)
+          : row.id;
+
+        if (targetCommissionId !== null) {
+          await handleUpdateCommission(targetCommissionId, { [field]: params.newValue });
+        } else {
+          await createCommissionForRow(row, { [field]: params.newValue });
+        }
       }
     } catch (error) {
       console.error("Error updating partner row:", error);
       alert("Chyba při aktualizaci");
       fetchData();
     }
-  }, [fetchData, handleUpdateCommission, handleUpdateEntity, projectStatusOptions, systemNamespace, updateProjectClusterStatus, updateProjectClusterWorkflowState, viewMode]);
+  }, [createCommissionForRow, fetchData, handleUpdateCommission, handleUpdateEntity, projectStatusOptions, sectionKind, systemNamespace, updateProjectClusterStatus, updateProjectClusterWorkflowState, viewMode]);
 
   const handleAdd = useCallback(async () => {
     openCreateModal();
@@ -1659,6 +1692,7 @@ const PartnersSectionNew: React.FC<SectionProps> = ({ viewMode, isActive, system
               }
             }}
             domLayout={useContentHeightLayout ? 'autoHeight' : 'normal'}
+            singleClickEdit={true}
             onCellValueChanged={onCellValueChanged}
             onCellEditingStarted={readOnly ? (params) => params.api.stopEditing(true) : undefined}
             defaultColDef={{ resizable: true, sortable: true, cellClassRules: activityCellClassRules }}

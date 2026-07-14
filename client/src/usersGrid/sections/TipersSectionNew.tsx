@@ -808,6 +808,29 @@ const TipersSectionNew: React.FC<SectionProps> = ({
     }
   }, [commissionApiBase, fetchData]);
 
+  // Subjects without a commission yet have no id to PUT against — create the
+  // first commission with the edited field instead of silently dropping it.
+  const createCommissionForRow = useCallback(async (row: TiperGridRow, updates: Record<string, unknown>) => {
+    const entityId = row.tiper_entity_id ?? row.entity?.id ?? null;
+    if (entityId == null) return;
+    try {
+      const response = await apiPost<{ id: number }>(commissionApiBase, {
+        entity_id: entityId,
+        status,
+        position: null,
+        budget: null,
+        commission_value: null,
+        assigned_user_ids: [],
+        ...updates
+      });
+      await fetchData();
+      return response;
+    } catch (error) {
+      console.error("Error creating tiper commission:", error);
+      throw error;
+    }
+  }, [commissionApiBase, fetchData, status]);
+
   const [sectionLinkBusy, setSectionLinkBusy] = useState<"entity" | "commission" | null>(null);
 
   const handleToggleEntitySectionLink = useCallback(async (checked: boolean) => {
@@ -1395,12 +1418,14 @@ const TipersSectionNew: React.FC<SectionProps> = ({
         }
 
         if (!row.entityOnly) {
-          const targetCommissionId = viewMode === "active"
+          const targetCommissionId = sectionKind === "subjects" && viewMode === "active"
             ? (row.primaryCommissionId ?? null)
             : row.id;
 
           if (targetCommissionId !== null) {
             await handleUpdateCommission(targetCommissionId, { state: normalizedState });
+          } else {
+            await createCommissionForRow(row, { state: normalizedState });
           }
           return;
         }
@@ -1419,14 +1444,22 @@ const TipersSectionNew: React.FC<SectionProps> = ({
       if (entityFields.includes(field) && row.entity) {
         await handleUpdateEntity(row.entity.id, { [field]: params.newValue });
       } else if (!row.entityOnly) {
-        await handleUpdateCommission(row.id, { [field]: params.newValue });
+        const targetCommissionId = sectionKind === "subjects" && viewMode === "active"
+          ? (row.primaryCommissionId ?? null)
+          : row.id;
+
+        if (targetCommissionId !== null) {
+          await handleUpdateCommission(targetCommissionId, { [field]: params.newValue });
+        } else {
+          await createCommissionForRow(row, { [field]: params.newValue });
+        }
       }
     } catch (error) {
       console.error("Error updating:", error);
       alert("Chyba při aktualizaci");
       fetchData();
     }
-  }, [fetchData, handleUpdateCommission, handleUpdateEntity, projectStatusOptions, systemNamespace, updateProjectClusterStatus, updateProjectClusterWorkflowState, viewMode]);
+  }, [createCommissionForRow, fetchData, handleUpdateCommission, handleUpdateEntity, projectStatusOptions, sectionKind, systemNamespace, updateProjectClusterStatus, updateProjectClusterWorkflowState, viewMode]);
 
   // ==========================================================================
   // ADD NEW TIPER + COMMISSION
@@ -1873,6 +1906,7 @@ const TipersSectionNew: React.FC<SectionProps> = ({
               }
             }}
             domLayout={useContentHeightLayout ? 'autoHeight' : 'normal'}
+            singleClickEdit={true}
             onCellValueChanged={onCellValueChanged}
             onCellEditingStarted={readOnly ? (params) => params.api.stopEditing(true) : undefined}
             defaultColDef={{
