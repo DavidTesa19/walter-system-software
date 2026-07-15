@@ -1548,7 +1548,7 @@ const ClientsSectionNew: React.FC<SectionProps> = ({
       alert("Chyba při aktualizaci");
       fetchData();
     }
-  }, [createCommissionForRow, fetchData, handleUpdateCommission, handleUpdateEntity, projectStatusOptions, systemNamespace, updateProjectClusterStatus, updateProjectClusterWorkflowState, viewMode]);
+  }, [createCommissionForRow, fetchData, handleUpdateCommission, handleUpdateEntity, projectStatusOptions, sectionKind, systemNamespace, updateProjectClusterStatus, updateProjectClusterWorkflowState, viewMode]);
 
   // ==========================================================================
   // ADD NEW CLIENT + COMMISSION

@@ -4571,6 +4571,7 @@ const buildProjectCommissionResponse = (type, commission, entity) => {
   };
 
   if (type === 'client') {
+    payload.project_name = commission.project_name ?? null;
     payload.entity_service = entity?.service ?? null;
     payload.entity_budget = entity?.budget ?? null;
   }
