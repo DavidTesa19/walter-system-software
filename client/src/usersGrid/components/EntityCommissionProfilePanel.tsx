@@ -194,10 +194,24 @@ const EditableFieldCell: React.FC<EditableFieldCellProps> = ({ field, onSave }) 
   const normalizedOptions = useMemo(() => normalizeFieldOptions(field.options), [field.options]);
 
   useEffect(() => {
-    if (isEditing && inputRef.current) {
-      inputRef.current.focus();
+    if (!isEditing || !inputRef.current) return;
+    inputRef.current.focus();
+
+    // Mounting a <select> only focuses it; the browser's native dropdown still
+    // needs its own click to open. showPicker() opens it immediately so the
+    // first click both enters edit mode and shows the options.
+    if (field.type === 'select' || field.type === 'boolean') {
+      const el = inputRef.current as HTMLSelectElement;
+      if (typeof el.showPicker === 'function') {
+        try {
+          el.showPicker();
+        } catch {
+          // Unsupported in this context (e.g. no user activation) -- the
+          // select is still focused, just falls back to a second click.
+        }
+      }
     }
-  }, [isEditing]);
+  }, [isEditing, field.type]);
 
   const handleStartEdit = () => {
     setIsEditing(true);
