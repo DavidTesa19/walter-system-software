@@ -204,23 +204,28 @@ const EditableFieldCell: React.FC<EditableFieldCellProps> = ({ field, onSave }) 
     setEditValue(getInitialEditValue(field));
   };
 
-  const handleSave = () => {
+  // Takes the value to commit explicitly: selects save the option straight from
+  // the change event, because reading editValue here would see the pre-change
+  // render's value and drop the edit.
+  const commitValue = (rawValue: string | boolean | string[]) => {
     setIsEditing(false);
     let finalValue: string | boolean | string[] | null;
-    
+
     if (field.type === 'multi-select') {
-      finalValue = Array.isArray(editValue) ? editValue : [];
+      finalValue = Array.isArray(rawValue) ? rawValue : [];
     } else if (field.type === 'boolean') {
-      finalValue = editValue === 'true';
+      finalValue = rawValue === 'true';
     } else {
-      const stringValue = String(editValue).trim();
+      const stringValue = String(rawValue).trim();
       finalValue = stringValue || null;
     }
-    
+
     if (!areEditableValuesEqual(finalValue, field.value)) {
       onSave(field.key, finalValue);
     }
   };
+
+  const handleSave = () => commitValue(editValue);
 
   const handleCancel = () => {
     setIsEditing(false);
@@ -284,9 +289,10 @@ const EditableFieldCell: React.FC<EditableFieldCellProps> = ({ field, onSave }) 
             className="editable-input select"
             value={String(editValue)}
             onChange={(e) => {
-              setEditValue(e.target.value);
+              const nextValue = e.target.value;
+              setEditValue(nextValue);
               // Auto-save on select change
-              setTimeout(() => handleSave(), 0);
+              commitValue(nextValue);
             }}
             onBlur={handleSave}
             onKeyDown={handleKeyDown}
@@ -346,8 +352,9 @@ const EditableFieldCell: React.FC<EditableFieldCellProps> = ({ field, onSave }) 
             className="editable-input select"
             value={String(editValue)}
             onChange={(e) => {
-              setEditValue(e.target.value);
-              setTimeout(() => handleSave(), 0);
+              const nextValue = e.target.value;
+              setEditValue(nextValue);
+              commitValue(nextValue);
             }}
             onBlur={handleSave}
             onKeyDown={handleKeyDown}
