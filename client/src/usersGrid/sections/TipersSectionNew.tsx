@@ -4,19 +4,28 @@ import type { ColDef, IRowNode } from "ag-grid-community";
 import type { TiperEntity, TiperCommission, TiperGridRow } from "../types/entities";
 import ProfileCellRenderer from "../cells/ProfileCellRenderer";
 import AssignedUsersCellRenderer from "../cells/AssignedUsersCellRenderer";
-import EntityCommissionCreateModal from "../components/EntityCommissionCreateModal";
+import EntityCommissionCreateModal, { type OtherSectionOption } from "../components/EntityCommissionCreateModal";
 import EntityCommissionProfilePanel, {
   type EntityData,
   type CommissionData,
   type FieldGroup,
-  type LinkedCommissionItem
+  type LinkedCommissionItem,
+  type SectionLinkToggle
 } from "../components/EntityCommissionProfilePanel";
 import FieldCellRenderer from "../cells/FieldCellRenderer";
 import StatusCellRenderer from "../cells/StatusCellRenderer";
 import ApprovalStatusCellRenderer from "../cells/ApprovalStatusCellRenderer";
 import { mapViewToStatus } from "../constants";
 import { apiGet, apiPost, apiPut, apiDelete } from "../../utils/api";
-import { attachSectionLink, detachSectionLink, getLinkableNamespace, linkableNamespaceLabel, otherLinkableNamespace } from "../sectionLink";
+import {
+  attachSectionLink,
+  detachSectionLink,
+  getLinkableNamespace,
+  getSectionLinkStatus,
+  linkableNamespaceLabel,
+  otherLinkableNamespaces,
+  type LinkableNamespace
+} from "../sectionLink";
 import { uploadDocuments } from "../../utils/uploadDocuments";
 import type { SectionProps } from "./SectionTypes";
 import useFieldOptions from "../hooks/useFieldOptions";
@@ -453,7 +462,7 @@ const TipersSectionNew: React.FC<SectionProps> = ({
   const [createModalOpen, setCreateModalOpen] = useState(false);
   const [isCreating, setIsCreating] = useState(false);
   const [includeCommission, setIncludeCommission] = useState(false);
-  const [linkOtherSection, setLinkOtherSection] = useState(false);
+  const [linkTargetNamespaces, setLinkTargetNamespaces] = useState<LinkableNamespace[]>([]);
   const [createFiles, setCreateFiles] = useState<File[]>([]);
   const [createDraft, setCreateDraft] = useState<TiperCreateDraft>(createDefaultTiperDraft);
   
@@ -747,7 +756,7 @@ const TipersSectionNew: React.FC<SectionProps> = ({
   const openCreateModal = useCallback((draft?: TiperCreateDraft) => {
     setCreateDraft(draft ?? createDefaultTiperDraft());
     setIncludeCommission(Boolean(draft));
-    setLinkOtherSection(false);
+    setLinkTargetNamespaces([]);
     setCreateFiles([]);
     setCreateModalOpen(true);
   }, []);
@@ -756,10 +765,16 @@ const TipersSectionNew: React.FC<SectionProps> = ({
     if (isCreating) return;
     setCreateModalOpen(false);
     setIncludeCommission(false);
-    setLinkOtherSection(false);
+    setLinkTargetNamespaces([]);
     setCreateFiles([]);
     setCreateDraft(createDefaultTiperDraft());
   }, [isCreating]);
+
+  const toggleLinkTargetNamespace = useCallback((namespace: LinkableNamespace, checked: boolean) => {
+    setLinkTargetNamespaces((prev) => (
+      checked ? [...prev, namespace] : prev.filter((ns) => ns !== namespace)
+    ));
+  }, []);
 
   const uploadCreateDocuments = useCallback(async (entityId: number) => {
     if (!createFiles.length) {
@@ -831,43 +846,121 @@ const TipersSectionNew: React.FC<SectionProps> = ({
     }
   }, [commissionApiBase, fetchData, status]);
 
-  const [sectionLinkBusy, setSectionLinkBusy] = useState<"entity" | "commission" | null>(null);
+  const [sectionLinkBusyKey, setSectionLinkBusyKey] = useState<string | null>(null);
+  const [entityLinkedNamespaces, setEntityLinkedNamespaces] = useState<LinkableNamespace[]>([]);
+  const [commissionLinkedNamespaces, setCommissionLinkedNamespaces] = useState<LinkableNamespace[]>([]);
 
-  const handleToggleEntitySectionLink = useCallback(async (checked: boolean) => {
+  useEffect(() => {
+    if (!linkableNamespace || !selectedEntity) {
+      setEntityLinkedNamespaces([]);
+      return;
+    }
+    let cancelled = false;
+    getSectionLinkStatus("entity", "tiper", linkableNamespace, selectedEntity.id)
+      .then((result) => {
+        if (!cancelled) setEntityLinkedNamespaces(result.linkedNamespaces);
+      })
+      .catch((error) => {
+        console.error("Error fetching tiper section-link status:", error);
+        if (!cancelled) setEntityLinkedNamespaces([]);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [linkableNamespace, selectedEntity?.id, selectedEntity?.link_id]);
+
+  useEffect(() => {
+    if (!linkableNamespace || !selectedCommission) {
+      setCommissionLinkedNamespaces([]);
+      return;
+    }
+    let cancelled = false;
+    getSectionLinkStatus("commission", "tiper", linkableNamespace, selectedCommission.id)
+      .then((result) => {
+        if (!cancelled) setCommissionLinkedNamespaces(result.linkedNamespaces);
+      })
+      .catch((error) => {
+        console.error("Error fetching tiper commission section-link status:", error);
+        if (!cancelled) setCommissionLinkedNamespaces([]);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [linkableNamespace, selectedCommission?.id, selectedCommission?.link_id]);
+
+  const handleToggleEntitySectionLink = useCallback(async (targetNamespace: LinkableNamespace, checked: boolean) => {
     if (!selectedEntity || !linkableNamespace) return;
-    setSectionLinkBusy("entity");
+    const busyKey = `entity:${targetNamespace}`;
+    setSectionLinkBusyKey(busyKey);
     try {
       if (checked) {
-        await attachSectionLink("entity", "tiper", linkableNamespace, selectedEntity.id);
+        await attachSectionLink("entity", "tiper", linkableNamespace, selectedEntity.id, targetNamespace);
       } else {
-        await detachSectionLink("entity", "tiper", linkableNamespace, selectedEntity.id);
+        await detachSectionLink("entity", "tiper", linkableNamespace, selectedEntity.id, targetNamespace);
       }
+      const result = await getSectionLinkStatus("entity", "tiper", linkableNamespace, selectedEntity.id);
+      setEntityLinkedNamespaces(result.linkedNamespaces);
       await fetchData();
     } catch (error) {
       console.error("Error toggling tiper section link:", error);
       alert("Změnu propojení se nepodařilo provést.");
     } finally {
-      setSectionLinkBusy(null);
+      setSectionLinkBusyKey(null);
     }
   }, [selectedEntity, linkableNamespace, fetchData]);
 
-  const handleToggleCommissionSectionLink = useCallback(async (checked: boolean) => {
+  const handleToggleCommissionSectionLink = useCallback(async (targetNamespace: LinkableNamespace, checked: boolean) => {
     if (!selectedCommission || !linkableNamespace) return;
-    setSectionLinkBusy("commission");
+    const busyKey = `commission:${targetNamespace}`;
+    setSectionLinkBusyKey(busyKey);
     try {
       if (checked) {
-        await attachSectionLink("commission", "tiper", linkableNamespace, selectedCommission.id);
+        await attachSectionLink("commission", "tiper", linkableNamespace, selectedCommission.id, targetNamespace);
       } else {
-        await detachSectionLink("commission", "tiper", linkableNamespace, selectedCommission.id);
+        await detachSectionLink("commission", "tiper", linkableNamespace, selectedCommission.id, targetNamespace);
       }
+      const result = await getSectionLinkStatus("commission", "tiper", linkableNamespace, selectedCommission.id);
+      setCommissionLinkedNamespaces(result.linkedNamespaces);
       await fetchData();
     } catch (error) {
       console.error("Error toggling tiper commission section link:", error);
       alert("Změnu propojení se nepodařilo provést.");
     } finally {
-      setSectionLinkBusy(null);
+      setSectionLinkBusyKey(null);
     }
   }, [selectedCommission, linkableNamespace, fetchData]);
+
+  const entitySectionLinkToggles = useMemo<SectionLinkToggle[]>(() => {
+    if (!linkableNamespace || !selectedEntity) return [];
+    return otherLinkableNamespaces(linkableNamespace).map((ns) => ({
+      key: ns,
+      label: `Zobrazit i v sekci ${linkableNamespaceLabel(ns)}`,
+      checked: entityLinkedNamespaces.includes(ns),
+      busy: sectionLinkBusyKey === `entity:${ns}`,
+      onChange: (checked: boolean) => handleToggleEntitySectionLink(ns, checked),
+    }));
+  }, [linkableNamespace, selectedEntity, entityLinkedNamespaces, sectionLinkBusyKey, handleToggleEntitySectionLink]);
+
+  const commissionSectionLinkToggles = useMemo<SectionLinkToggle[]>(() => {
+    if (!linkableNamespace || !selectedCommission) return [];
+    return otherLinkableNamespaces(linkableNamespace).map((ns) => ({
+      key: ns,
+      label: `Zobrazit i v sekci ${linkableNamespaceLabel(ns)}`,
+      checked: commissionLinkedNamespaces.includes(ns),
+      busy: sectionLinkBusyKey === `commission:${ns}`,
+      onChange: (checked: boolean) => handleToggleCommissionSectionLink(ns, checked),
+    }));
+  }, [linkableNamespace, selectedCommission, commissionLinkedNamespaces, sectionLinkBusyKey, handleToggleCommissionSectionLink]);
+
+  const createSectionLinkOptions = useMemo<OtherSectionOption[]>(() => {
+    if (!linkableNamespace) return [];
+    return otherLinkableNamespaces(linkableNamespace).map((ns) => ({
+      key: ns,
+      label: `Vytvořit i v sekci ${linkableNamespaceLabel(ns)}`,
+      checked: linkTargetNamespaces.includes(ns),
+      onChange: (checked: boolean) => toggleLinkTargetNamespace(ns, checked),
+    }));
+  }, [linkableNamespace, linkTargetNamespaces, toggleLinkTargetNamespace]);
 
   const updateProjectClusterStatus = useCallback(async (row: TiperGridRow, nextStatus: string) => {
     const entityId = row.entity?.id ?? row.tiper_entity_id ?? null;
@@ -1166,21 +1259,23 @@ const TipersSectionNew: React.FC<SectionProps> = ({
         await uploadCreateDocuments(response.entity.id);
       }
 
-      if (linkOtherSection && linkableNamespace && response?.entity?.id) {
-        try {
-          await attachSectionLink("entity", "tiper", linkableNamespace, response.entity.id);
-          if (response.commission?.id) {
-            await attachSectionLink("commission", "tiper", linkableNamespace, response.commission.id);
+      if (linkTargetNamespaces.length > 0 && linkableNamespace && response?.entity?.id) {
+        for (const targetNamespace of linkTargetNamespaces) {
+          try {
+            await attachSectionLink("entity", "tiper", linkableNamespace, response.entity.id, targetNamespace);
+            if (response.commission?.id) {
+              await attachSectionLink("commission", "tiper", linkableNamespace, response.commission.id, targetNamespace);
+            }
+          } catch (linkError) {
+            console.error("Error linking tiper to other section:", linkError);
+            alert(`Tipař byl vytvořen, ale propojení do sekce ${linkableNamespaceLabel(targetNamespace)} se nezdařilo.`);
           }
-        } catch (linkError) {
-          console.error("Error linking tiper to other section:", linkError);
-          alert(`Tipař byl vytvořen, ale propojení do sekce ${linkableNamespaceLabel(otherLinkableNamespace(linkableNamespace))} se nezdařilo.`);
         }
       }
 
       setCreateModalOpen(false);
       setIncludeCommission(false);
-      setLinkOtherSection(false);
+      setLinkTargetNamespaces([]);
       setCreateFiles([]);
       setCreateDraft(createDefaultTiperDraft());
       await fetchData();
@@ -1195,7 +1290,7 @@ const TipersSectionNew: React.FC<SectionProps> = ({
     } finally {
       setIsCreating(false);
     }
-  }, [createDraft, fetchData, linkOtherSection, linkableNamespace, status, uploadCreateDocuments]);
+  }, [createDraft, fetchData, linkTargetNamespaces, linkableNamespace, status, uploadCreateDocuments]);
 
   const handleCreateEntityOnly = useCallback(async () => {
     setIsCreating(true);
@@ -1218,18 +1313,20 @@ const TipersSectionNew: React.FC<SectionProps> = ({
         await uploadCreateDocuments(entity.id);
       }
 
-      if (linkOtherSection && linkableNamespace && entity?.id) {
-        try {
-          await attachSectionLink("entity", "tiper", linkableNamespace, entity.id);
-        } catch (linkError) {
-          console.error("Error linking tiper to other section:", linkError);
-          alert(`Tipař byl vytvořen, ale propojení do sekce ${linkableNamespaceLabel(otherLinkableNamespace(linkableNamespace))} se nezdařilo.`);
+      if (linkTargetNamespaces.length > 0 && linkableNamespace && entity?.id) {
+        for (const targetNamespace of linkTargetNamespaces) {
+          try {
+            await attachSectionLink("entity", "tiper", linkableNamespace, entity.id, targetNamespace);
+          } catch (linkError) {
+            console.error("Error linking tiper to other section:", linkError);
+            alert(`Tipař byl vytvořen, ale propojení do sekce ${linkableNamespaceLabel(targetNamespace)} se nezdařilo.`);
+          }
         }
       }
 
       setCreateModalOpen(false);
       setIncludeCommission(false);
-      setLinkOtherSection(false);
+      setLinkTargetNamespaces([]);
       setCreateFiles([]);
       setCreateDraft(createDefaultTiperDraft());
       await fetchData();
@@ -1244,7 +1341,7 @@ const TipersSectionNew: React.FC<SectionProps> = ({
     } finally {
       setIsCreating(false);
     }
-  }, [createDraft, entityApiBase, fetchData, linkOtherSection, linkableNamespace, status, uploadCreateDocuments]);
+  }, [createDraft, entityApiBase, fetchData, linkTargetNamespaces, linkableNamespace, status, uploadCreateDocuments]);
 
   const handleCreate = useCallback(async () => {
     if (includeCommission) {
@@ -1936,18 +2033,8 @@ const TipersSectionNew: React.FC<SectionProps> = ({
         onDuplicateCommission={handleDuplicateCommission}
         onCreateCommission={selectedEntity ? handleCreateFirstCommission : undefined}
         onRemoveCommission={selectedCommission ? () => void handleDelete(selectedCommission.id, { commissionOnly: true }) : undefined}
-        entitySectionLink={linkableNamespace && selectedEntity ? {
-          label: `Zobrazit i v sekci ${linkableNamespaceLabel(otherLinkableNamespace(linkableNamespace))}`,
-          checked: Boolean(selectedEntity.link_id),
-          busy: sectionLinkBusy === "entity",
-          onChange: handleToggleEntitySectionLink,
-        } : undefined}
-        commissionSectionLink={linkableNamespace && selectedCommission ? {
-          label: `Zobrazit i v sekci ${linkableNamespaceLabel(otherLinkableNamespace(linkableNamespace))}`,
-          checked: Boolean(selectedCommission.link_id),
-          busy: sectionLinkBusy === "commission",
-          onChange: handleToggleCommissionSectionLink,
-        } : undefined}
+        entitySectionLinks={entitySectionLinkToggles}
+        commissionSectionLinks={commissionSectionLinkToggles}
         onClose={closeProfile}
         onUpdateEntity={handleUpdateEntity}
         onUpdateCommission={handleUpdateCommission}
@@ -1998,11 +2085,7 @@ const TipersSectionNew: React.FC<SectionProps> = ({
         submitLabel={includeCommission ? "Vytvořit tipaře a tip" : "Vytvořit tipaře"}
         includeCommission={includeCommission}
         includeCommissionLabel="Přidat rovnou i tip / zakázku"
-        otherSectionOption={linkableNamespace ? {
-          label: `Vytvořit i v sekci ${linkableNamespaceLabel(otherLinkableNamespace(linkableNamespace))}`,
-          checked: linkOtherSection,
-          onChange: setLinkOtherSection,
-        } : undefined}
+        otherSectionOptions={createSectionLinkOptions}
         onClose={closeCreateModal}
         onEntityChange={handleDraftEntityChange}
         onCommissionChange={handleDraftCommissionChange}

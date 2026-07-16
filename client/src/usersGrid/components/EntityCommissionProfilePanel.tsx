@@ -53,6 +53,7 @@ export interface LinkedCommissionItem {
 }
 
 export interface SectionLinkToggle {
+  key: string;
   label: string;
   checked: boolean;
   busy?: boolean;
@@ -74,8 +75,8 @@ interface EntityCommissionProfilePanelProps {
   onRemoveCommission?: () => void;
   otherTypeLabel?: string;
   onCopyToOtherType?: () => void;
-  entitySectionLink?: SectionLinkToggle;
-  commissionSectionLink?: SectionLinkToggle;
+  entitySectionLinks?: SectionLinkToggle[];
+  commissionSectionLinks?: SectionLinkToggle[];
   
   // Callbacks
   onClose: () => void;
@@ -470,8 +471,8 @@ const EntityCommissionProfilePanel: React.FC<EntityCommissionProfilePanelProps> 
   onRemoveCommission,
   otherTypeLabel,
   onCopyToOtherType,
-  entitySectionLink,
-  commissionSectionLink,
+  entitySectionLinks,
+  commissionSectionLinks,
   onClose,
   onUpdateEntity,
   onUpdateCommission,
@@ -737,16 +738,20 @@ const EntityCommissionProfilePanel: React.FC<EntityCommissionProfilePanelProps> 
                     </div>
                     <span className="ec-column-id">{entity.entity_id}</span>
                   </div>
-                  {entitySectionLink ? (
-                    <label className={`ec-section-link-toggle ${entitySectionLink.busy ? 'is-busy' : ''}`}>
-                      <input
-                        type="checkbox"
-                        checked={entitySectionLink.checked}
-                        disabled={entitySectionLink.busy}
-                        onChange={(event) => entitySectionLink.onChange(event.target.checked)}
-                      />
-                      <span>{entitySectionLink.label}</span>
-                    </label>
+                  {entitySectionLinks && entitySectionLinks.length > 0 ? (
+                    <div className="ec-section-link-toggle-group">
+                      {entitySectionLinks.map((toggle) => (
+                        <label key={toggle.key} className={`ec-section-link-toggle ${toggle.busy ? 'is-busy' : ''}`}>
+                          <input
+                            type="checkbox"
+                            checked={toggle.checked}
+                            disabled={toggle.busy}
+                            onChange={(event) => toggle.onChange(event.target.checked)}
+                          />
+                          <span>{toggle.label}</span>
+                        </label>
+                      ))}
+                    </div>
                   ) : null}
                   <div className="ec-column-content">
                     {entity.groups.map((group, idx) => (
@@ -770,16 +775,20 @@ const EntityCommissionProfilePanel: React.FC<EntityCommissionProfilePanelProps> 
                       {commission ? commission.commission_id : hasLinkedCommissions ? `${linkedCommissions.length} položek` : "Zatím žádná"}
                     </span>
                   </div>
-                  {commission && commissionSectionLink ? (
-                    <label className={`ec-section-link-toggle ${commissionSectionLink.busy ? 'is-busy' : ''}`}>
-                      <input
-                        type="checkbox"
-                        checked={commissionSectionLink.checked}
-                        disabled={commissionSectionLink.busy}
-                        onChange={(event) => commissionSectionLink.onChange(event.target.checked)}
-                      />
-                      <span>{commissionSectionLink.label}</span>
-                    </label>
+                  {commission && commissionSectionLinks && commissionSectionLinks.length > 0 ? (
+                    <div className="ec-section-link-toggle-group">
+                      {commissionSectionLinks.map((toggle) => (
+                        <label key={toggle.key} className={`ec-section-link-toggle ${toggle.busy ? 'is-busy' : ''}`}>
+                          <input
+                            type="checkbox"
+                            checked={toggle.checked}
+                            disabled={toggle.busy}
+                            onChange={(event) => toggle.onChange(event.target.checked)}
+                          />
+                          <span>{toggle.label}</span>
+                        </label>
+                      ))}
+                    </div>
                   ) : null}
                   <div className="ec-column-content">
                     {hasLinkedCommissions ? (

@@ -6,6 +6,7 @@ import "./EntityCommissionProfilePanel.css";
 type FieldValues = Record<string, string | string[]>;
 
 export interface OtherSectionOption {
+  key: string;
   label: string;
   checked: boolean;
   onChange: (checked: boolean) => void;
@@ -24,7 +25,7 @@ interface EntityCommissionCreateModalProps {
   submitLabel?: string;
   includeCommission: boolean;
   includeCommissionLabel?: string;
-  otherSectionOption?: OtherSectionOption;
+  otherSectionOptions?: OtherSectionOption[];
   onClose: () => void;
   onEntityChange: (key: string, value: string | string[]) => void;
   onCommissionChange: (key: string, value: string | string[]) => void;
@@ -195,7 +196,7 @@ const EntityCommissionCreateModal: React.FC<EntityCommissionCreateModalProps> = 
   submitLabel = "Vytvořit",
   includeCommission,
   includeCommissionLabel = "Vytvořit rovnou i zakázku",
-  otherSectionOption,
+  otherSectionOptions,
   onClose,
   onEntityChange,
   onCommissionChange,
@@ -363,15 +364,19 @@ const EntityCommissionCreateModal: React.FC<EntityCommissionCreateModalProps> = 
                 <div className="ec-column-header">
                   <div className="ec-create-commission-header">
                     <h3 className="ec-column-title">{entityTitle}</h3>
-                    {otherSectionOption ? (
-                      <label className="ec-create-checkbox">
-                        <input
-                          type="checkbox"
-                          checked={otherSectionOption.checked}
-                          onChange={(event) => otherSectionOption.onChange(event.target.checked)}
-                        />
-                        <span>{otherSectionOption.label}</span>
-                      </label>
+                    {otherSectionOptions && otherSectionOptions.length > 0 ? (
+                      <div className="ec-create-checkbox-group">
+                        {otherSectionOptions.map((option) => (
+                          <label key={option.key} className="ec-create-checkbox">
+                            <input
+                              type="checkbox"
+                              checked={option.checked}
+                              onChange={(event) => option.onChange(event.target.checked)}
+                            />
+                            <span>{option.label}</span>
+                          </label>
+                        ))}
+                      </div>
                     ) : null}
                   </div>
                 </div>

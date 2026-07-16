@@ -725,6 +725,13 @@
   width: 100%;
 }
 
+.ec-create-checkbox-group {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 0.4rem;
+}
+
 .ec-create-checkbox {
   display: inline-flex;
   align-items: center;
@@ -743,6 +750,13 @@
   cursor: pointer;
 }
 
+.ec-section-link-toggle-group {
+  display: flex;
+  flex-direction: column;
+  gap: 0.3rem;
+  margin: 0.25rem 0 0.5rem;
+}
+
 .ec-section-link-toggle {
   display: inline-flex;
   align-items: center;
@@ -752,7 +766,10 @@
   color: var(--color-text-muted, #64748b);
   cursor: pointer;
   user-select: none;
-  margin: 0.25rem 0 0.5rem;
+}
+
+.ec-section-link-toggle-group .ec-section-link-toggle {
+  margin: 0;
 }
 
 .ec-section-link-toggle input {

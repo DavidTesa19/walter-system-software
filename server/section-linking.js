@@ -1,31 +1,34 @@
 /**
- * Shared configuration for linking Veřejné ("public") and Growth Club ("growth")
- * subject/commission records together as a synced pair.
+ * Shared configuration for linking Veřejné ("public"), Growth Club ("growth")
+ * and Neveřejné ("projects") subject/commission records together as a synced
+ * group.
  *
- * A linked pair shares a `link_id` (a random UUID) across the two rows that
- * represent "the same" real-world client/partner/tiper (or their commission)
- * in both sections. Core descriptive fields are kept in sync between the
- * pair; workflow status, assignment, ids and timestamps stay independent
- * per section. Neveřejné (projects) is intentionally not part of this —
- * linking only ever happens between 'public' and 'growth'.
+ * Linked rows share a `link_id` (a random UUID) across the (up to three) rows
+ * that represent "the same" real-world client/partner/tiper (or their
+ * commission) across sections. Core descriptive fields are kept in sync
+ * across every member of the group; workflow status, assignment, ids and
+ * timestamps stay independent per section. A row can be linked to just one
+ * other section, or to both, forming a fully-connected trio.
  */
 
 export const LINKABLE_ENTITY_TYPES = ["client", "partner", "tiper"];
 
-export const otherNamespace = (namespace) => (namespace === "public" ? "growth" : "public");
+export const LINKABLE_NAMESPACES = ["public", "growth", "projects"];
 
-export const isLinkableNamespace = (namespace) => namespace === "public" || namespace === "growth";
+export const otherNamespaces = (namespace) => LINKABLE_NAMESPACES.filter((ns) => ns !== namespace);
+
+export const isLinkableNamespace = (namespace) => LINKABLE_NAMESPACES.includes(namespace);
 
 export const ENTITY_TABLES = {
-  client: { public: "client_entities", growth: "growth_client_entities" },
-  partner: { public: "partner_entities", growth: "growth_partner_entities" },
-  tiper: { public: "tiper_entities", growth: "growth_tiper_entities" },
+  client: { public: "client_entities", growth: "growth_client_entities", projects: "project_client_entities" },
+  partner: { public: "partner_entities", growth: "growth_partner_entities", projects: "project_partner_entities" },
+  tiper: { public: "tiper_entities", growth: "growth_tiper_entities", projects: "project_tiper_entities" },
 };
 
 export const COMMISSION_TABLES = {
-  client: { public: "client_commissions", growth: "growth_client_commissions" },
-  partner: { public: "partner_commissions", growth: "growth_partner_commissions" },
-  tiper: { public: "tiper_commissions", growth: "growth_tiper_commissions" },
+  client: { public: "client_commissions", growth: "growth_client_commissions", projects: "project_client_commissions" },
+  partner: { public: "partner_commissions", growth: "growth_partner_commissions", projects: "project_partner_commissions" },
+  tiper: { public: "tiper_commissions", growth: "growth_tiper_commissions", projects: "project_tiper_commissions" },
 };
 
 export const ENTITY_CORE_FIELDS = {
@@ -68,14 +71,20 @@ export const isValidSectionLinkRequest = ({ kind, type, namespace, id }) =>
 export const LINK_COLUMN_TABLES = [
   "client_entities",
   "growth_client_entities",
+  "project_client_entities",
   "partner_entities",
   "growth_partner_entities",
+  "project_partner_entities",
   "tiper_entities",
   "growth_tiper_entities",
+  "project_tiper_entities",
   "client_commissions",
   "growth_client_commissions",
+  "project_client_commissions",
   "partner_commissions",
   "growth_partner_commissions",
+  "project_partner_commissions",
   "tiper_commissions",
   "growth_tiper_commissions",
+  "project_tiper_commissions",
 ];

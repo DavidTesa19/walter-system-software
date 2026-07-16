@@ -25,7 +25,8 @@ import {
   REMOVED_FIELD_OPTION_LABEL,
 } from "./field-options.js";
 import {
-  otherNamespace,
+  otherNamespaces,
+  isLinkableNamespace,
   resolveTable,
   pickCoreFields,
   isValidSectionLinkRequest,
@@ -4750,15 +4751,21 @@ createNamespaceRoutes(PROJECT_JSON_CONFIG, 'project_entity_counters', ensureProj
 createNamespaceRoutes(GROWTH_JSON_CONFIG, 'growth_entity_counters', ensureGrowthCollections, 'growth', ['partner', 'client', 'tiper']);
 
 // =============================================================================
-// SECTION LINKING — Veřejné ⇄ Growth Club synced pairs
+// SECTION LINKING — Veřejné ⇄ Growth Club ⇄ Neveřejné synced groups
 // =============================================================================
 
 const capitalize = (type) => type.charAt(0).toUpperCase() + type.slice(1);
 
+const NAMESPACE_JSON_CONFIGS = {
+  growth: { config: GROWTH_JSON_CONFIG, counterKey: 'growth_entity_counters', ensure: ensureGrowthCollections },
+  projects: { config: PROJECT_JSON_CONFIG, counterKey: 'project_entity_counters', ensure: ensureProjectCollections },
+};
+
 const getSectionLinkRows = (db, kind, type, namespace) => {
-  if (namespace === 'growth') {
-    ensureGrowthCollections(db);
-    const config = GROWTH_JSON_CONFIG[type];
+  const nsConfig = NAMESPACE_JSON_CONFIGS[namespace];
+  if (nsConfig) {
+    nsConfig.ensure(db);
+    const config = nsConfig.config[type];
     return db[kind === 'entity' ? config.entityCollection : config.commissionCollection];
   }
   entityCommissionJson.ensureEntityCommissionCollections(db);
@@ -4770,50 +4777,94 @@ const findSectionLinkRowByLinkId = (rows, linkId) => rows.find((row) => row.link
 
 const createEntityCounterpart = (db, type, targetNamespace, sourceRow, actorUserId) => {
   const payload = pickCoreFields('entity', type, sourceRow);
-  if (targetNamespace === 'growth') {
-    return createNamespaceEntity(GROWTH_JSON_CONFIG, 'growth_entity_counters', ensureGrowthCollections, type, db, payload, actorUserId);
+  const nsConfig = NAMESPACE_JSON_CONFIGS[targetNamespace];
+  if (nsConfig) {
+    return createNamespaceEntity(nsConfig.config, nsConfig.counterKey, nsConfig.ensure, type, db, payload, actorUserId);
   }
   return entityCommissionJson[`create${capitalize(type)}Entity`](db, payload);
 };
 
 const deleteEntityCounterpart = (db, type, targetNamespace, internalId) => {
-  if (targetNamespace === 'growth') {
-    return deleteNamespaceEntity(GROWTH_JSON_CONFIG, 'growth_entity_counters', ensureGrowthCollections, type, db, internalId);
+  const nsConfig = NAMESPACE_JSON_CONFIGS[targetNamespace];
+  if (nsConfig) {
+    return deleteNamespaceEntity(nsConfig.config, nsConfig.counterKey, nsConfig.ensure, type, db, internalId);
   }
   return entityCommissionJson[`delete${capitalize(type)}Entity`](db, internalId);
 };
 
 const createCommissionCounterpart = (db, type, targetNamespace, targetEntityInternalId, sourceRow, actorUserId) => {
   const payload = pickCoreFields('commission', type, sourceRow);
-  if (targetNamespace === 'growth') {
-    return createNamespaceCommission(GROWTH_JSON_CONFIG, 'growth_entity_counters', ensureGrowthCollections, type, db, targetEntityInternalId, payload, actorUserId);
+  const nsConfig = NAMESPACE_JSON_CONFIGS[targetNamespace];
+  if (nsConfig) {
+    return createNamespaceCommission(nsConfig.config, nsConfig.counterKey, nsConfig.ensure, type, db, targetEntityInternalId, payload, actorUserId);
   }
   return entityCommissionJson[`create${capitalize(type)}Commission`](db, targetEntityInternalId, payload);
 };
 
 const deleteCommissionCounterpart = (db, type, targetNamespace, internalId) => {
-  if (targetNamespace === 'growth') {
-    return deleteNamespaceCommission(GROWTH_JSON_CONFIG, 'growth_entity_counters', ensureGrowthCollections, type, db, internalId);
+  const nsConfig = NAMESPACE_JSON_CONFIGS[targetNamespace];
+  if (nsConfig) {
+    return deleteNamespaceCommission(nsConfig.config, nsConfig.counterKey, nsConfig.ensure, type, db, internalId);
   }
   return entityCommissionJson[`delete${capitalize(type)}Commission`](db, internalId);
 };
 
-// Propagate core-field changes from a just-updated linked row to its
-// counterpart in the other section. Status/assignment/ids stay independent.
+// True if some other linkable namespace (besides ownNamespace) still holds a
+// row sharing linkId — i.e. the group hasn't shrunk down to this row alone.
+const anyCounterpartExists = (db, kind, type, ownNamespace, linkId) => {
+  if (!linkId) return false;
+  for (const ns of otherNamespaces(ownNamespace)) {
+    const rows = getSectionLinkRows(db, kind, type, ns);
+    if (findSectionLinkRowByLinkId(rows, linkId)) return true;
+  }
+  return false;
+};
+
+// Propagate core-field changes from a just-updated linked row to every other
+// linked counterpart. Status/assignment/ids stay independent per section.
 const propagateLinkedFieldSync = (db, kind, type, namespace, updatedRow, incomingPayload) => {
   if (!updatedRow?.link_id) return;
   const coreUpdates = pickCoreFields(kind, type, incomingPayload || {});
   if (Object.keys(coreUpdates).length === 0) return;
-  const targetRows = getSectionLinkRows(db, kind, type, otherNamespace(namespace));
-  const counterpart = findSectionLinkRowByLinkId(targetRows, updatedRow.link_id);
-  if (!counterpart) return;
-  Object.assign(counterpart, coreUpdates, { updated_at: new Date().toISOString() });
+  for (const targetNamespace of otherNamespaces(namespace)) {
+    const targetRows = getSectionLinkRows(db, kind, type, targetNamespace);
+    const counterpart = findSectionLinkRowByLinkId(targetRows, updatedRow.link_id);
+    if (!counterpart) continue;
+    Object.assign(counterpart, coreUpdates, { updated_at: new Date().toISOString() });
+  }
 };
+
+app.get('/api/section-link/status', authenticateToken, (req, res) => {
+  try {
+    const { kind, type, namespace, id } = req.query || {};
+    if (!isValidSectionLinkRequest({ kind, type, namespace, id })) {
+      return res.status(400).json({ error: 'Invalid section-link request' });
+    }
+    const db = readDb();
+    ensureMigrated(db);
+    const sourceRows = getSectionLinkRows(db, kind, type, namespace);
+    const source = findSectionLinkRowById(sourceRows, id);
+    if (!source) return res.status(404).json({ error: 'Not found' });
+
+    const linkedNamespaces = [];
+    if (source.link_id) {
+      for (const ns of otherNamespaces(namespace)) {
+        const rows = getSectionLinkRows(db, kind, type, ns);
+        if (findSectionLinkRowByLinkId(rows, source.link_id)) linkedNamespaces.push(ns);
+      }
+    }
+
+    res.json({ linkId: source.link_id || null, linkedNamespaces });
+  } catch (error) {
+    console.error('Error fetching section-link status:', error);
+    res.status(500).json({ error: error.message || 'Failed to fetch section-link status' });
+  }
+});
 
 app.post('/api/section-link/attach', authenticateToken, (req, res) => {
   try {
-    const { kind, type, namespace, id } = req.body || {};
-    if (!isValidSectionLinkRequest({ kind, type, namespace, id })) {
+    const { kind, type, namespace, id, targetNamespace } = req.body || {};
+    if (!isValidSectionLinkRequest({ kind, type, namespace, id }) || !isLinkableNamespace(targetNamespace) || targetNamespace === namespace) {
       return res.status(400).json({ error: 'Invalid section-link request' });
     }
     const db = readDb();
@@ -4823,8 +4874,6 @@ app.post('/api/section-link/attach', authenticateToken, (req, res) => {
     const sourceRows = getSectionLinkRows(db, kind, type, namespace);
     const source = findSectionLinkRowById(sourceRows, id);
     if (!source) return res.status(404).json({ error: 'Not found' });
-
-    const targetNamespace = otherNamespace(namespace);
 
     if (kind === 'commission') {
       const entityRowsSource = getSectionLinkRows(db, 'entity', type, namespace);
@@ -4872,8 +4921,8 @@ app.post('/api/section-link/attach', authenticateToken, (req, res) => {
 
 app.post('/api/section-link/detach', authenticateToken, (req, res) => {
   try {
-    const { kind, type, namespace, id } = req.body || {};
-    if (!isValidSectionLinkRequest({ kind, type, namespace, id })) {
+    const { kind, type, namespace, id, targetNamespace } = req.body || {};
+    if (!isValidSectionLinkRequest({ kind, type, namespace, id }) || !isLinkableNamespace(targetNamespace) || targetNamespace === namespace) {
       return res.status(400).json({ error: 'Invalid section-link request' });
     }
     const db = readDb();
@@ -4884,7 +4933,6 @@ app.post('/api/section-link/detach', authenticateToken, (req, res) => {
     if (!source) return res.status(404).json({ error: 'Not found' });
     if (!source.link_id) return res.status(400).json({ error: 'Record is not linked to another section' });
 
-    const targetNamespace = otherNamespace(namespace);
     const targetRows = getSectionLinkRows(db, kind, type, targetNamespace);
     const counterpart = findSectionLinkRowByLinkId(targetRows, source.link_id);
 
@@ -4894,8 +4942,7 @@ app.post('/api/section-link/detach', authenticateToken, (req, res) => {
         const survivingCommissions = getSectionLinkRows(db, 'commission', type, namespace)
           .filter((commission) => Number(commission.entity_id) === Number(source.id) && commission.link_id);
         for (const commission of survivingCommissions) {
-          const stillLinked = getSectionLinkRows(db, 'commission', type, targetNamespace)
-            .some((item) => item.link_id === commission.link_id);
+          const stillLinked = anyCounterpartExists(db, 'commission', type, namespace, commission.link_id);
           if (!stillLinked) commission.link_id = null;
         }
       } else {
@@ -4903,7 +4950,12 @@ app.post('/api/section-link/detach', authenticateToken, (req, res) => {
       }
     }
 
-    source.link_id = null;
+    // Only clear this row's own link_id if the group has shrunk to just this
+    // row — if it's still linked to the third section, that pairing stands.
+    const stillLinkedElsewhere = anyCounterpartExists(db, kind, type, namespace, source.link_id);
+    if (!stillLinkedElsewhere) {
+      source.link_id = null;
+    }
 
     if (!writeDb(db)) return res.status(500).json({ error: 'Failed to persist' });
     res.json({ ok: true });

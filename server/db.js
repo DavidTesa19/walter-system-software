@@ -1132,16 +1132,16 @@ export async function initDatabase() {
       await client.query(`ALTER TABLE ${tableName} ADD COLUMN IF NOT EXISTS region VARCHAR(255)`);
     }
 
-    // link_id — pairs a Veřejné row with its Growth Club counterpart so the
-    // two can be kept in sync. Only public/growth entity+commission tables
-    // participate; Neveřejné (projects) is not linkable.
+    // link_id — pairs a row with its counterpart(s) in the other sections
+    // (Veřejné, Growth Club, Neveřejné) so they can be kept in sync. A row
+    // can be linked to one or both other sections, sharing the same link_id.
     const linkIdColumnTables = [
-      'client_entities', 'growth_client_entities',
-      'partner_entities', 'growth_partner_entities',
-      'tiper_entities', 'growth_tiper_entities',
-      'client_commissions', 'growth_client_commissions',
-      'partner_commissions', 'growth_partner_commissions',
-      'tiper_commissions', 'growth_tiper_commissions',
+      'client_entities', 'growth_client_entities', 'project_client_entities',
+      'partner_entities', 'growth_partner_entities', 'project_partner_entities',
+      'tiper_entities', 'growth_tiper_entities', 'project_tiper_entities',
+      'client_commissions', 'growth_client_commissions', 'project_client_commissions',
+      'partner_commissions', 'growth_partner_commissions', 'project_partner_commissions',
+      'tiper_commissions', 'growth_tiper_commissions', 'project_tiper_commissions',
     ];
 
     for (const tableName of linkIdColumnTables) {
