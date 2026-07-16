@@ -54,6 +54,15 @@ import {
   multiValueFormatter,
   passesMultiValueFilter,
 } from "../multiValue";
+import {
+  createSubjectInOtherTypes,
+  SUBJECT_TYPE_AS_LABEL,
+  SUBJECT_TYPE_LABEL,
+  type SubjectType,
+} from "../crossTypeCreate";
+
+// The other subject types a new partner can also be created as.
+const PARTNER_OTHER_TYPES: SubjectType[] = ["client", "tiper"];
 
 type PartnerEntityApi = {
   id: number;
@@ -453,6 +462,8 @@ const PartnersSectionNew: React.FC<SectionProps> = ({ viewMode, isActive, system
   const [isCreating, setIsCreating] = useState(false);
   const [includeCommission, setIncludeCommission] = useState(false);
   const [linkTargetNamespaces, setLinkTargetNamespaces] = useState<LinkableNamespace[]>([]);
+  // Other subject types to also create the record as ("Vytvořit i jako ...").
+  const [createAlsoTypes, setCreateAlsoTypes] = useState<SubjectType[]>([]);
   const [createFiles, setCreateFiles] = useState<File[]>([]);
   const [createDraft, setCreateDraft] = useState<PartnerCreateDraft>(createDefaultPartnerDraft);
   const [selectedEntityId, setSelectedEntityId] = useState<number | null>(null);
@@ -722,6 +733,7 @@ const PartnersSectionNew: React.FC<SectionProps> = ({ viewMode, isActive, system
     setCreateDraft(draft ?? createDefaultPartnerDraft());
     setIncludeCommission(Boolean(draft));
     setLinkTargetNamespaces([]);
+    setCreateAlsoTypes([]);
     setCreateFiles([]);
     setCreateModalOpen(true);
   }, []);
@@ -731,6 +743,7 @@ const PartnersSectionNew: React.FC<SectionProps> = ({ viewMode, isActive, system
     setCreateModalOpen(false);
     setIncludeCommission(false);
     setLinkTargetNamespaces([]);
+    setCreateAlsoTypes([]);
     setCreateFiles([]);
     setCreateDraft(createDefaultPartnerDraft());
   }, [isCreating]);
@@ -738,6 +751,12 @@ const PartnersSectionNew: React.FC<SectionProps> = ({ viewMode, isActive, system
   const toggleLinkTargetNamespace = useCallback((namespace: LinkableNamespace, checked: boolean) => {
     setLinkTargetNamespaces((prev) => (
       checked ? [...prev, namespace] : prev.filter((ns) => ns !== namespace)
+    ));
+  }, []);
+
+  const toggleCreateAlsoType = useCallback((type: SubjectType, checked: boolean) => {
+    setCreateAlsoTypes((prev) => (
+      checked ? [...prev, type] : prev.filter((existing) => existing !== type)
     ));
   }, []);
 
@@ -912,6 +931,22 @@ const PartnersSectionNew: React.FC<SectionProps> = ({ viewMode, isActive, system
       onChange: (checked: boolean) => toggleLinkTargetNamespace(ns, checked),
     }));
   }, [linkableNamespace, linkTargetNamespaces, toggleLinkTargetNamespace]);
+
+  // "Vytvořit i jako Klienta / Tipaře" — also create this subject as the other
+  // two types at the same time.
+  const createOtherTypeOptions = useMemo<OtherSectionOption[]>(() => (
+    PARTNER_OTHER_TYPES.map((type) => ({
+      key: `type:${type}`,
+      label: `Vytvořit i jako ${SUBJECT_TYPE_AS_LABEL[type]}`,
+      checked: createAlsoTypes.includes(type),
+      onChange: (checked: boolean) => toggleCreateAlsoType(type, checked),
+    }))
+  ), [createAlsoTypes, toggleCreateAlsoType]);
+
+  const createOtherOptions = useMemo<OtherSectionOption[]>(
+    () => [...createSectionLinkOptions, ...createOtherTypeOptions],
+    [createSectionLinkOptions, createOtherTypeOptions]
+  );
 
   const updateProjectClusterStatus = useCallback(async (row: PartnerGridRow, nextStatus: string) => {
     const entityId = row.entity?.id ?? row.partner_entity_id ?? null;
@@ -1170,32 +1205,35 @@ const PartnersSectionNew: React.FC<SectionProps> = ({ viewMode, isActive, system
   const handleCreateWithCommission = useCallback(async () => {
     setIsCreating(true);
     try {
+      const entityPayload = {
+        status,
+        first_name: emptyToNull(createDraft.entity.name),
+        company_name: emptyToNull(createDraft.entity.company),
+        field: emptyToNull(createDraft.entity.field),
+        phone: emptyToNull(createDraft.entity.mobile),
+        email: emptyToNull(createDraft.entity.email),
+        website: emptyToNull(createDraft.entity.website),
+        region: emptyToNull(createDraft.entity.region),
+        location: emptyToNull(createDraft.entity.location),
+        info: emptyToNull(createDraft.entity.info),
+        assigned_user_ids: fromAssignmentDraftValue(createDraft.entity.assigned_user_ids)
+      };
+      const commissionPayload = {
+        position: emptyToNull(createDraft.commission.position),
+        service_position: emptyToNull(createDraft.commission.service_position),
+        assigned_user_ids: fromAssignmentDraftValue(createDraft.commission.assigned_user_ids),
+        budget: emptyToNull(createDraft.commission.budget),
+        commission_value: emptyToNull(createDraft.commission.commission_value),
+        priority: emptyToNull(createDraft.commission.priority),
+        state: emptyToNull(createDraft.commission.state),
+        deadline: emptyToNull(createDraft.commission.deadline),
+        notes: emptyToNull(createDraft.commission.notes),
+        status
+      };
+
       const response = await apiPost<{ entity: { id: number }; commission: { id: number } }>(`${entityApiBase}/with-commission`, {
-        entity: {
-          status,
-          first_name: emptyToNull(createDraft.entity.name),
-          company_name: emptyToNull(createDraft.entity.company),
-          field: emptyToNull(createDraft.entity.field),
-          phone: emptyToNull(createDraft.entity.mobile),
-          email: emptyToNull(createDraft.entity.email),
-          website: emptyToNull(createDraft.entity.website),
-          region: emptyToNull(createDraft.entity.region),
-          location: emptyToNull(createDraft.entity.location),
-          info: emptyToNull(createDraft.entity.info),
-          assigned_user_ids: fromAssignmentDraftValue(createDraft.entity.assigned_user_ids)
-        },
-        commission: {
-          position: emptyToNull(createDraft.commission.position),
-          service_position: emptyToNull(createDraft.commission.service_position),
-          assigned_user_ids: fromAssignmentDraftValue(createDraft.commission.assigned_user_ids),
-          budget: emptyToNull(createDraft.commission.budget),
-          commission_value: emptyToNull(createDraft.commission.commission_value),
-          priority: emptyToNull(createDraft.commission.priority),
-          state: emptyToNull(createDraft.commission.state),
-          deadline: emptyToNull(createDraft.commission.deadline),
-          notes: emptyToNull(createDraft.commission.notes),
-          status
-        }
+        entity: entityPayload,
+        commission: commissionPayload
       });
 
       if (response?.entity?.id) {
@@ -1216,9 +1254,17 @@ const PartnersSectionNew: React.FC<SectionProps> = ({ viewMode, isActive, system
         }
       }
 
+      if (createAlsoTypes.length > 0) {
+        const failed = await createSubjectInOtherTypes({ targets: createAlsoTypes, systemNamespace, entityPayload, commissionPayload });
+        if (failed.length > 0) {
+          alert(`Partner byl vytvořen, ale nepodařilo se vytvořit jako: ${failed.map((type) => SUBJECT_TYPE_LABEL[type]).join(", ")}.`);
+        }
+      }
+
       setCreateModalOpen(false);
       setIncludeCommission(false);
       setLinkTargetNamespaces([]);
+      setCreateAlsoTypes([]);
       setCreateFiles([]);
       setCreateDraft(createDefaultPartnerDraft());
       await fetchData();
@@ -1233,12 +1279,12 @@ const PartnersSectionNew: React.FC<SectionProps> = ({ viewMode, isActive, system
     } finally {
       setIsCreating(false);
     }
-  }, [createDraft, fetchData, linkTargetNamespaces, linkableNamespace, status, uploadCreateDocuments]);
+  }, [createAlsoTypes, createDraft, fetchData, linkTargetNamespaces, linkableNamespace, status, systemNamespace, uploadCreateDocuments]);
 
   const handleCreateEntityOnly = useCallback(async () => {
     setIsCreating(true);
     try {
-      const entity = await apiPost<PartnerEntityApi>(entityApiBase, {
+      const entityPayload = {
         status,
         first_name: emptyToNull(createDraft.entity.name),
         company_name: emptyToNull(createDraft.entity.company),
@@ -1250,7 +1296,9 @@ const PartnersSectionNew: React.FC<SectionProps> = ({ viewMode, isActive, system
         location: emptyToNull(createDraft.entity.location),
         info: emptyToNull(createDraft.entity.info),
         assigned_user_ids: fromAssignmentDraftValue(createDraft.entity.assigned_user_ids)
-      });
+      };
+
+      const entity = await apiPost<PartnerEntityApi>(entityApiBase, entityPayload);
 
       if (entity?.id) {
         await uploadCreateDocuments(entity.id);
@@ -1267,9 +1315,17 @@ const PartnersSectionNew: React.FC<SectionProps> = ({ viewMode, isActive, system
         }
       }
 
+      if (createAlsoTypes.length > 0) {
+        const failed = await createSubjectInOtherTypes({ targets: createAlsoTypes, systemNamespace, entityPayload });
+        if (failed.length > 0) {
+          alert(`Partner byl vytvořen, ale nepodařilo se vytvořit jako: ${failed.map((type) => SUBJECT_TYPE_LABEL[type]).join(", ")}.`);
+        }
+      }
+
       setCreateModalOpen(false);
       setIncludeCommission(false);
       setLinkTargetNamespaces([]);
+      setCreateAlsoTypes([]);
       setCreateFiles([]);
       setCreateDraft(createDefaultPartnerDraft());
       await fetchData();
@@ -1284,7 +1340,7 @@ const PartnersSectionNew: React.FC<SectionProps> = ({ viewMode, isActive, system
     } finally {
       setIsCreating(false);
     }
-  }, [createDraft, entityApiBase, fetchData, linkTargetNamespaces, linkableNamespace, status, uploadCreateDocuments]);
+  }, [createAlsoTypes, createDraft, entityApiBase, fetchData, linkTargetNamespaces, linkableNamespace, status, systemNamespace, uploadCreateDocuments]);
 
   const handleCreate = useCallback(async () => {
     if (includeCommission) {
@@ -1885,7 +1941,7 @@ const PartnersSectionNew: React.FC<SectionProps> = ({ viewMode, isActive, system
         submitLabel={includeCommission ? "Vytvořit partnera a zakázku" : "Vytvořit partnera"}
         includeCommission={includeCommission}
         includeCommissionLabel="Přidat rovnou i zakázku"
-        otherSectionOptions={createSectionLinkOptions}
+        otherSectionOptions={createOtherOptions}
         fieldPicker={{
           fieldOptions: fieldOptionChoices,
           groupedFieldOptions: groupedFieldOptionChoices,

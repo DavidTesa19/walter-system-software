@@ -54,6 +54,15 @@ import {
   multiValueFormatter,
   passesMultiValueFilter,
 } from "../multiValue";
+import {
+  createSubjectInOtherTypes,
+  SUBJECT_TYPE_AS_LABEL,
+  SUBJECT_TYPE_LABEL,
+  type SubjectType,
+} from "../crossTypeCreate";
+
+// The other subject types a new tiper can also be created as.
+const TIPER_OTHER_TYPES: SubjectType[] = ["partner", "client"];
 
 type TiperEntityApi = {
   id: number;
@@ -470,6 +479,8 @@ const TipersSectionNew: React.FC<SectionProps> = ({
   const [isCreating, setIsCreating] = useState(false);
   const [includeCommission, setIncludeCommission] = useState(false);
   const [linkTargetNamespaces, setLinkTargetNamespaces] = useState<LinkableNamespace[]>([]);
+  // Other subject types to also create the record as ("Vytvořit i jako ...").
+  const [createAlsoTypes, setCreateAlsoTypes] = useState<SubjectType[]>([]);
   const [createFiles, setCreateFiles] = useState<File[]>([]);
   const [createDraft, setCreateDraft] = useState<TiperCreateDraft>(createDefaultTiperDraft);
   
@@ -764,6 +775,7 @@ const TipersSectionNew: React.FC<SectionProps> = ({
     setCreateDraft(draft ?? createDefaultTiperDraft());
     setIncludeCommission(Boolean(draft));
     setLinkTargetNamespaces([]);
+    setCreateAlsoTypes([]);
     setCreateFiles([]);
     setCreateModalOpen(true);
   }, []);
@@ -773,9 +785,16 @@ const TipersSectionNew: React.FC<SectionProps> = ({
     setCreateModalOpen(false);
     setIncludeCommission(false);
     setLinkTargetNamespaces([]);
+    setCreateAlsoTypes([]);
     setCreateFiles([]);
     setCreateDraft(createDefaultTiperDraft());
   }, [isCreating]);
+
+  const toggleCreateAlsoType = useCallback((type: SubjectType, checked: boolean) => {
+    setCreateAlsoTypes((prev) => (
+      checked ? [...prev, type] : prev.filter((existing) => existing !== type)
+    ));
+  }, []);
 
   const toggleLinkTargetNamespace = useCallback((namespace: LinkableNamespace, checked: boolean) => {
     setLinkTargetNamespaces((prev) => (
@@ -968,6 +987,22 @@ const TipersSectionNew: React.FC<SectionProps> = ({
       onChange: (checked: boolean) => toggleLinkTargetNamespace(ns, checked),
     }));
   }, [linkableNamespace, linkTargetNamespaces, toggleLinkTargetNamespace]);
+
+  // "Vytvořit i jako Partnera / Klienta" — also create this subject as the other
+  // two types at the same time.
+  const createOtherTypeOptions = useMemo<OtherSectionOption[]>(() => (
+    TIPER_OTHER_TYPES.map((type) => ({
+      key: `type:${type}`,
+      label: `Vytvořit i jako ${SUBJECT_TYPE_AS_LABEL[type]}`,
+      checked: createAlsoTypes.includes(type),
+      onChange: (checked: boolean) => toggleCreateAlsoType(type, checked),
+    }))
+  ), [createAlsoTypes, toggleCreateAlsoType]);
+
+  const createOtherOptions = useMemo<OtherSectionOption[]>(
+    () => [...createSectionLinkOptions, ...createOtherTypeOptions],
+    [createSectionLinkOptions, createOtherTypeOptions]
+  );
 
   const updateProjectClusterStatus = useCallback(async (row: TiperGridRow, nextStatus: string) => {
     const entityId = row.entity?.id ?? row.tiper_entity_id ?? null;
@@ -1234,32 +1269,35 @@ const TipersSectionNew: React.FC<SectionProps> = ({
   const handleCreateWithCommission = useCallback(async () => {
     setIsCreating(true);
     try {
+      const entityPayload = {
+        status,
+        first_name: emptyToNull(createDraft.entity.name),
+        company_name: emptyToNull(createDraft.entity.company),
+        field: emptyToNull(createDraft.entity.field),
+        phone: emptyToNull(createDraft.entity.mobile),
+        email: emptyToNull(createDraft.entity.email),
+        website: emptyToNull(createDraft.entity.website),
+        region: emptyToNull(createDraft.entity.region),
+        location: emptyToNull(createDraft.entity.location),
+        info: emptyToNull(createDraft.entity.info),
+        assigned_user_ids: fromAssignmentDraftValue(createDraft.entity.assigned_user_ids)
+      };
+      const commissionPayload = {
+        position: emptyToNull(createDraft.commission.position),
+        service_position: emptyToNull(createDraft.commission.service_position),
+        assigned_user_ids: fromAssignmentDraftValue(createDraft.commission.assigned_user_ids),
+        budget: emptyToNull(createDraft.commission.budget),
+        commission_value: emptyToNull(createDraft.commission.commission_value),
+        priority: emptyToNull(createDraft.commission.priority),
+        state: emptyToNull(createDraft.commission.state),
+        deadline: emptyToNull(createDraft.commission.deadline),
+        notes: emptyToNull(createDraft.commission.notes),
+        status
+      };
+
       const response = await apiPost<{ entity: TiperEntity; commission: TiperCommission }>(`${entityApiBase}/with-commission`, {
-        entity: {
-          status,
-          first_name: emptyToNull(createDraft.entity.name),
-          company_name: emptyToNull(createDraft.entity.company),
-          field: emptyToNull(createDraft.entity.field),
-          phone: emptyToNull(createDraft.entity.mobile),
-          email: emptyToNull(createDraft.entity.email),
-          website: emptyToNull(createDraft.entity.website),
-          region: emptyToNull(createDraft.entity.region),
-          location: emptyToNull(createDraft.entity.location),
-          info: emptyToNull(createDraft.entity.info),
-          assigned_user_ids: fromAssignmentDraftValue(createDraft.entity.assigned_user_ids)
-        },
-        commission: {
-          position: emptyToNull(createDraft.commission.position),
-          service_position: emptyToNull(createDraft.commission.service_position),
-          assigned_user_ids: fromAssignmentDraftValue(createDraft.commission.assigned_user_ids),
-          budget: emptyToNull(createDraft.commission.budget),
-          commission_value: emptyToNull(createDraft.commission.commission_value),
-          priority: emptyToNull(createDraft.commission.priority),
-          state: emptyToNull(createDraft.commission.state),
-          deadline: emptyToNull(createDraft.commission.deadline),
-          notes: emptyToNull(createDraft.commission.notes),
-          status
-        }
+        entity: entityPayload,
+        commission: commissionPayload
       });
 
       if (response?.entity?.id) {
@@ -1280,9 +1318,17 @@ const TipersSectionNew: React.FC<SectionProps> = ({
         }
       }
 
+      if (createAlsoTypes.length > 0) {
+        const failed = await createSubjectInOtherTypes({ targets: createAlsoTypes, systemNamespace, entityPayload, commissionPayload });
+        if (failed.length > 0) {
+          alert(`Tipař byl vytvořen, ale nepodařilo se vytvořit jako: ${failed.map((type) => SUBJECT_TYPE_LABEL[type]).join(", ")}.`);
+        }
+      }
+
       setCreateModalOpen(false);
       setIncludeCommission(false);
       setLinkTargetNamespaces([]);
+      setCreateAlsoTypes([]);
       setCreateFiles([]);
       setCreateDraft(createDefaultTiperDraft());
       await fetchData();
@@ -1297,12 +1343,12 @@ const TipersSectionNew: React.FC<SectionProps> = ({
     } finally {
       setIsCreating(false);
     }
-  }, [createDraft, fetchData, linkTargetNamespaces, linkableNamespace, status, uploadCreateDocuments]);
+  }, [createAlsoTypes, createDraft, fetchData, linkTargetNamespaces, linkableNamespace, status, systemNamespace, uploadCreateDocuments]);
 
   const handleCreateEntityOnly = useCallback(async () => {
     setIsCreating(true);
     try {
-      const entity = await apiPost<TiperEntityApi>(entityApiBase, {
+      const entityPayload = {
         status,
         first_name: emptyToNull(createDraft.entity.name),
         company_name: emptyToNull(createDraft.entity.company),
@@ -1314,7 +1360,9 @@ const TipersSectionNew: React.FC<SectionProps> = ({
         location: emptyToNull(createDraft.entity.location),
         info: emptyToNull(createDraft.entity.info),
         assigned_user_ids: fromAssignmentDraftValue(createDraft.entity.assigned_user_ids)
-      });
+      };
+
+      const entity = await apiPost<TiperEntityApi>(entityApiBase, entityPayload);
 
       if (entity?.id) {
         await uploadCreateDocuments(entity.id);
@@ -1331,9 +1379,17 @@ const TipersSectionNew: React.FC<SectionProps> = ({
         }
       }
 
+      if (createAlsoTypes.length > 0) {
+        const failed = await createSubjectInOtherTypes({ targets: createAlsoTypes, systemNamespace, entityPayload });
+        if (failed.length > 0) {
+          alert(`Tipař byl vytvořen, ale nepodařilo se vytvořit jako: ${failed.map((type) => SUBJECT_TYPE_LABEL[type]).join(", ")}.`);
+        }
+      }
+
       setCreateModalOpen(false);
       setIncludeCommission(false);
       setLinkTargetNamespaces([]);
+      setCreateAlsoTypes([]);
       setCreateFiles([]);
       setCreateDraft(createDefaultTiperDraft());
       await fetchData();
@@ -1348,7 +1404,7 @@ const TipersSectionNew: React.FC<SectionProps> = ({
     } finally {
       setIsCreating(false);
     }
-  }, [createDraft, entityApiBase, fetchData, linkTargetNamespaces, linkableNamespace, status, uploadCreateDocuments]);
+  }, [createAlsoTypes, createDraft, entityApiBase, fetchData, linkTargetNamespaces, linkableNamespace, status, systemNamespace, uploadCreateDocuments]);
 
   const handleCreate = useCallback(async () => {
     if (includeCommission) {
@@ -2107,7 +2163,7 @@ const TipersSectionNew: React.FC<SectionProps> = ({
         submitLabel={includeCommission ? "Vytvořit tipaře a tip" : "Vytvořit tipaře"}
         includeCommission={includeCommission}
         includeCommissionLabel="Přidat rovnou i tip / zakázku"
-        otherSectionOptions={createSectionLinkOptions}
+        otherSectionOptions={createOtherOptions}
         fieldPicker={{
           fieldOptions: fieldOptionChoices,
           groupedFieldOptions: groupedFieldOptionChoices,
