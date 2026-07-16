@@ -1,6 +1,7 @@
 import React, { useCallback, useEffect, useMemo, useRef } from "react";
 import ThemeToggleButton from "../../components/ThemeToggleButton";
 import type { EditableField, FieldGroup } from "./EntityCommissionProfilePanel";
+import { MultiValueEditor } from "./EntityCommissionProfilePanel";
 import FieldSelectInput, { type FieldPickerConfig } from "./FieldSelectInput";
 import "./EntityCommissionProfilePanel.css";
 
@@ -56,6 +57,20 @@ const normalizeFieldOptions = (options: EditableField['options']) =>
   ));
 
 const DraftField: React.FC<DraftFieldProps> = ({ field, value, onChange, disabled = false, fieldPicker, onKeyDown }) => {
+  // Multi-value fields (Obor, Společnost, Kraj, Lokalita) use the same add/remove
+  // editor as the profile panel. The draft stores the serialized scalar / JSON
+  // array string, so submission passes it straight through.
+  if (field.type === "multi-value") {
+    return (
+      <MultiValueEditor
+        field={{ ...field, value: value ?? "" }}
+        onSave={(key, next) => onChange(key, typeof next === "boolean" ? String(next) : (next ?? ""))}
+        fieldPicker={fieldPicker}
+        commitOnChange
+      />
+    );
+  }
+
   if (field.type === "field-select" && fieldPicker) {
     return (
       <FieldSelectInput

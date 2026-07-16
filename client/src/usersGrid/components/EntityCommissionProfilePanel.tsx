@@ -205,13 +205,17 @@ interface MultiValueEditorProps {
   field: EditableField;
   onSave: (key: string, value: string | boolean | string[] | null) => void;
   fieldPicker?: FieldPickerConfig;
+  // Profile panel (default): commit text on blur, so each edit is one save.
+  // Create modal: commit on every keystroke, because the form is submitted as a
+  // whole and a not-yet-blurred value would otherwise be lost.
+  commitOnChange?: boolean;
 }
 
 // Editor for a subject field that can hold several values (Obor, Společnost,
 // Kraj, Lokalita). Each value gets its own inline editor plus a remove button,
 // and a "+" adds another. Persisted as a single scalar / JSON array via
-// serializeMultiValue.
-const MultiValueEditor: React.FC<MultiValueEditorProps> = ({ field, onSave, fieldPicker }) => {
+// serializeMultiValue. Reused by the create modal's DraftField.
+export const MultiValueEditor: React.FC<MultiValueEditorProps> = ({ field, onSave, fieldPicker, commitOnChange = false }) => {
   const editor = field.multiValueEditor ?? 'text';
   const normalizedOptions = useMemo(() => normalizeFieldOptions(field.options), [field.options]);
 
@@ -251,12 +255,14 @@ const MultiValueEditor: React.FC<MultiValueEditorProps> = ({ field, onSave, fiel
   }, [commit, setRowsSafe]);
 
   const handleTextChange = useCallback((id: number, value: string) => {
-    setRowsSafe(rowsRef.current.map((row) => (row.id === id ? { ...row, value } : row)));
-  }, [setRowsSafe]);
+    const next = rowsRef.current.map((row) => (row.id === id ? { ...row, value } : row));
+    setRowsSafe(next);
+    if (commitOnChange) commit(next);
+  }, [commit, commitOnChange, setRowsSafe]);
 
   const handleTextBlur = useCallback(() => {
-    commit(rowsRef.current);
-  }, [commit]);
+    if (!commitOnChange) commit(rowsRef.current);
+  }, [commit, commitOnChange]);
 
   const handleRemove = useCallback((id: number) => {
     const next = rowsRef.current.filter((row) => row.id !== id);

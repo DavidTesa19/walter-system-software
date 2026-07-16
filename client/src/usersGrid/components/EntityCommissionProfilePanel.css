@@ -626,6 +626,15 @@
   align-items: stretch;
 }
 
+/* Inside the create modal every field is already wrapped in a padded
+   `.ec-create-field` box, so the editor's own box would double up. */
+.ec-create-field > .editable-field.mv-editor {
+  padding: 0;
+  border: none;
+  background: none;
+  box-shadow: none;
+}
+
 .mv-editor-rows {
   display: flex;
   flex-direction: column;
