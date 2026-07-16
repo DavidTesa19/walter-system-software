@@ -6,6 +6,7 @@ import type { DocumentBreadcrumb } from "../hooks/useProfileDocuments";
 import DocumentExplorer from "./DocumentExplorer";
 import ThemeToggleButton from "../../components/ThemeToggleButton";
 import FieldSelectInput, { type FieldPickerConfig } from "./FieldSelectInput";
+import { parseMultiValue, serializeMultiValue } from "../multiValue";
 import "./EntityCommissionProfilePanel.css";
 
 // =============================================================================
@@ -16,10 +17,13 @@ export interface EditableField {
   key: string;
   label: string;
   value: string | boolean | string[] | null;
-  type: 'text' | 'textarea' | 'select' | 'field-select' | 'multi-select' | 'boolean' | 'date';
+  type: 'text' | 'textarea' | 'select' | 'field-select' | 'multi-select' | 'multi-value' | 'boolean' | 'date';
   options?: Array<string | { value: string; label: string; description?: string }>;
   isMultiline?: boolean;
   placeholder?: string;
+  // For type === 'multi-value': how each individual value is edited. The stored
+  // value is a single scalar (one value) or a JSON array string (several).
+  multiValueEditor?: 'text' | 'select' | 'field-select';
 }
 
 export interface FieldGroup {
@@ -191,7 +195,166 @@ const getInitialEditValue = (field: EditableField): string | boolean | string[] 
   return field.value === null || field.value === undefined ? '' : String(field.value);
 };
 
+// A stable id lets text inputs keep focus as the surrounding list re-renders.
+interface MultiValueRow {
+  id: number;
+  value: string;
+}
+
+interface MultiValueEditorProps {
+  field: EditableField;
+  onSave: (key: string, value: string | boolean | string[] | null) => void;
+  fieldPicker?: FieldPickerConfig;
+}
+
+// Editor for a subject field that can hold several values (Obor, Společnost,
+// Kraj, Lokalita). Each value gets its own inline editor plus a remove button,
+// and a "+" adds another. Persisted as a single scalar / JSON array via
+// serializeMultiValue.
+const MultiValueEditor: React.FC<MultiValueEditorProps> = ({ field, onSave, fieldPicker }) => {
+  const editor = field.multiValueEditor ?? 'text';
+  const normalizedOptions = useMemo(() => normalizeFieldOptions(field.options), [field.options]);
+
+  const idRef = useRef(0);
+  const makeRow = useCallback((value: string): MultiValueRow => ({ id: idRef.current++, value }), []);
+
+  const [rows, setRows] = useState<MultiValueRow[]>(() => parseMultiValue(field.value).map(makeRow));
+  const rowsRef = useRef(rows);
+  const [autoFocusId, setAutoFocusId] = useState<number | null>(null);
+
+  const setRowsSafe = useCallback((next: MultiValueRow[]) => {
+    rowsRef.current = next;
+    setRows(next);
+  }, []);
+
+  // Re-sync from the persisted value after a server round-trip. Compares the
+  // canonical serialized forms so a user's uncommitted typing is never clobbered
+  // (this only fires when the stored value actually changes).
+  const persisted = serializeMultiValue(parseMultiValue(field.value)) ?? "";
+  useEffect(() => {
+    const local = serializeMultiValue(rowsRef.current.map((row) => row.value)) ?? "";
+    if (persisted !== local) {
+      setRowsSafe(parseMultiValue(field.value).map(makeRow));
+    }
+    // Only react to changes of the persisted value.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [persisted]);
+
+  const commit = useCallback((next: MultiValueRow[]) => {
+    onSave(field.key, serializeMultiValue(next.map((row) => row.value)));
+  }, [field.key, onSave]);
+
+  const handleChoice = useCallback((id: number, value: string) => {
+    const next = rowsRef.current.map((row) => (row.id === id ? { ...row, value } : row));
+    setRowsSafe(next);
+    commit(next);
+  }, [commit, setRowsSafe]);
+
+  const handleTextChange = useCallback((id: number, value: string) => {
+    setRowsSafe(rowsRef.current.map((row) => (row.id === id ? { ...row, value } : row)));
+  }, [setRowsSafe]);
+
+  const handleTextBlur = useCallback(() => {
+    commit(rowsRef.current);
+  }, [commit]);
+
+  const handleRemove = useCallback((id: number) => {
+    const next = rowsRef.current.filter((row) => row.id !== id);
+    setRowsSafe(next);
+    commit(next);
+  }, [commit, setRowsSafe]);
+
+  const handleAdd = useCallback(() => {
+    const row = makeRow("");
+    setRowsSafe([...rowsRef.current, row]);
+    setAutoFocusId(row.id);
+  }, [makeRow, setRowsSafe]);
+
+  const addLabel = editor === 'select'
+    ? 'Přidat další'
+    : editor === 'field-select'
+      ? 'Přidat další obor'
+      : 'Přidat další';
+
+  const renderRowEditor = (row: MultiValueRow) => {
+    if (editor === 'field-select' && fieldPicker) {
+      return (
+        <FieldSelectInput
+          value={row.value}
+          placeholder={field.placeholder || field.label}
+          fieldOptions={fieldPicker.fieldOptions}
+          groupedFieldOptions={fieldPicker.groupedFieldOptions}
+          onChange={(nextValue) => handleChoice(row.id, nextValue)}
+          onCreateFieldOption={fieldPicker.onCreateFieldOption}
+          onDeleteFieldOption={fieldPicker.onDeleteFieldOption}
+        />
+      );
+    }
+
+    if (editor === 'select') {
+      return (
+        <select
+          className="editable-input select"
+          value={row.value}
+          onChange={(e) => handleChoice(row.id, e.target.value)}
+        >
+          <option value="">— Vyberte —</option>
+          {normalizedOptions.map((opt) => (
+            <option key={opt.value} value={opt.value}>{opt.label}</option>
+          ))}
+        </select>
+      );
+    }
+
+    return (
+      <input
+        type="text"
+        className="editable-input"
+        value={row.value}
+        autoFocus={row.id === autoFocusId}
+        onChange={(e) => handleTextChange(row.id, e.target.value)}
+        onBlur={handleTextBlur}
+        onKeyDown={(e) => {
+          if (e.key === 'Enter') {
+            e.preventDefault();
+            (e.target as HTMLInputElement).blur();
+          }
+        }}
+        placeholder={field.placeholder || field.label}
+      />
+    );
+  };
+
+  return (
+    <div className="editable-field editing mv-editor">
+      {rows.length > 0 ? (
+        <div className="mv-editor-rows">
+          {rows.map((row) => (
+            <div key={row.id} className="mv-editor-row">
+              <div className="mv-editor-input">{renderRowEditor(row)}</div>
+              <button
+                type="button"
+                className="mv-editor-remove"
+                onClick={() => handleRemove(row.id)}
+                title="Odebrat hodnotu"
+                aria-label="Odebrat hodnotu"
+              >
+                ×
+              </button>
+            </div>
+          ))}
+        </div>
+      ) : null}
+      <button type="button" className="mv-editor-add" onClick={handleAdd}>
+        <span className="mv-editor-add-icon" aria-hidden="true">+</span>
+        {addLabel}
+      </button>
+    </div>
+  );
+};
+
 const EditableFieldCell: React.FC<EditableFieldCellProps> = ({ field, onSave, fieldPicker }) => {
+
   const [isEditing, setIsEditing] = useState(false);
   const [editValue, setEditValue] = useState<string | boolean | string[]>(() => getInitialEditValue(field));
   const inputRef = useRef<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>(null);
@@ -280,6 +443,12 @@ const EditableFieldCell: React.FC<EditableFieldCellProps> = ({ field, onSave, fi
     }
     return String(field.value);
   }, [field.type, field.value, normalizedOptions]);
+
+  // Multi-value fields (Obor, Společnost, Kraj, Lokalita) render their own
+  // add/remove editor and manage persistence internally.
+  if (field.type === 'multi-value') {
+    return <MultiValueEditor field={field} onSave={onSave} fieldPicker={fieldPicker} />;
+  }
 
   // The "Obor" picker is always shown as a clickable dropdown trigger (like the
   // ag-grid table cell), rather than the readonly-until-click pattern.

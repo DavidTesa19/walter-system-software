@@ -5,6 +5,7 @@ import {
 } from "../fieldOptions";
 import type { FieldCategory, FieldOption } from "../fieldOptions";
 import { openFieldDropdown } from "./fieldDropdown";
+import { parseMultiValue } from "../multiValue";
 
 interface FieldCellParams {
   value: string;
@@ -29,13 +30,16 @@ const FieldCellRenderer: React.FC<FieldCellParams> = (params) => {
     ? availableFieldOptions
     : availableGroupedFieldOptions.flatMap((group) => group.options);
 
-  const getCurrentField = () => {
-    return (
-      flatFieldOptions.find((option) => option.value === params.value) || {
-        value: params.value || "",
-        label: params.value || "Vyberte obor"
-      }
-    );
+  // A subject can carry several Obor values (stored as a JSON array string).
+  const values = parseMultiValue(params.value);
+  const isMulti = values.length > 1;
+
+  const labelForValue = (value: string) =>
+    flatFieldOptions.find((option) => option.value === value)?.label ?? value;
+
+  const getCurrentLabel = () => {
+    if (values.length === 0) return "Vyberte obor";
+    return values.map(labelForValue).join(", ");
   };
 
   const writeValue = (val: string) => {
@@ -48,6 +52,12 @@ const FieldCellRenderer: React.FC<FieldCellParams> = (params) => {
 
   const handleFieldClick = (e: React.MouseEvent) => {
     if (params.disabled) {
+      return;
+    }
+
+    // With several values the single-select dropdown would overwrite the list,
+    // so multi-value Obor is edited from the profile panel instead.
+    if (isMulti) {
       return;
     }
 
@@ -70,19 +80,20 @@ const FieldCellRenderer: React.FC<FieldCellParams> = (params) => {
     });
   };
 
-  const currentField = getCurrentField();
+  const currentLabel = getCurrentLabel();
   const isDark = document.documentElement.getAttribute("data-theme") === "dark";
 
   return (
     <div
       onClick={handleFieldClick}
       className={`field-cell-renderer ${params.value ? '' : 'placeholder'}`}
+      title={isMulti ? "Několik oborů — upravte v profilu subjektu" : undefined}
       style={{
         display: "flex",
         alignItems: "center",
         width: "100%",
         height: "100%",
-        cursor: "pointer",
+        cursor: isMulti ? "default" : "pointer",
         padding: "0 8px",
         borderRadius: "4px",
         transition: "all 0.2s ease",
@@ -93,16 +104,18 @@ const FieldCellRenderer: React.FC<FieldCellParams> = (params) => {
         overflow: "hidden",
         textOverflow: "ellipsis",
         whiteSpace: "nowrap",
-        color: !params.value ? (isDark ? "#888" : "#999") : "inherit"
+        color: values.length === 0 ? (isDark ? "#888" : "#999") : "inherit"
       }}>
-        {currentField.label}
+        {currentLabel}
       </span>
-      {/* Down chevron icon to indicate it's a dropdown */}
-      <span style={{ marginLeft: "auto", opacity: 0.5, display: "flex", alignItems: "center" }}>
-        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-            <polyline points="6 9 12 15 18 9"></polyline>
-        </svg>
-      </span>
+      {/* Down chevron only when the cell opens the single-select dropdown. */}
+      {!isMulti ? (
+        <span style={{ marginLeft: "auto", opacity: 0.5, display: "flex", alignItems: "center" }}>
+          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <polyline points="6 9 12 15 18 9"></polyline>
+          </svg>
+        </span>
+      ) : null}
     </div>
   );
 };

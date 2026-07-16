@@ -1132,6 +1132,18 @@ export async function initDatabase() {
       await client.query(`ALTER TABLE ${tableName} ADD COLUMN IF NOT EXISTS region VARCHAR(255)`);
     }
 
+    // Multi-value fields (Obor/field, Společnost/company_name, Kraj/region,
+    // Lokalita/location) can hold several values on a single subject; two or
+    // more values are stored as a JSON array string in the same column. Widen
+    // those columns to TEXT so multiple values never exceed the old VARCHAR(255)
+    // limit. (Safe/idempotent — re-running keeps the type as TEXT.)
+    const multiValueColumnTables = regionColumnTables;
+    for (const tableName of multiValueColumnTables) {
+      for (const columnName of ['field', 'location', 'company_name', 'region']) {
+        await client.query(`ALTER TABLE ${tableName} ALTER COLUMN ${columnName} TYPE TEXT`);
+      }
+    }
+
     // link_id — pairs a row with its counterpart(s) in the other sections
     // (Veřejné, Growth Club, Neveřejné) so they can be kept in sync. A row
     // can be linked to one or both other sections, sharing the same link_id.

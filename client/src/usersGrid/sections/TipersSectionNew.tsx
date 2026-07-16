@@ -47,6 +47,13 @@ import OptionSelectEditor from "../../futureFunctions/cells/OptionSelectEditor";
 import StatusFilterHeader from "../cells/StatusFilterHeader";
 import FieldFilterHeader from "../cells/FieldFilterHeader";
 import { REGION_OPTIONS } from "../regions";
+import {
+  makeMultiValueFilterGetter,
+  makeSingleValueEditable,
+  multiValueComparator,
+  multiValueFormatter,
+  passesMultiValueFilter,
+} from "../multiValue";
 
 type TiperEntityApi = {
   id: number;
@@ -287,8 +294,8 @@ const buildEntityData = (entity: TiperEntity | null, assignmentOptions: Array<st
       color: "purple",
       fields: [
         { key: "name", label: "Jméno", value: entity.name, type: "text" },
-        { key: "company", label: "Organizace", value: entity.company, type: "text" },
-        { key: "field", label: "Oblast působení", value: entity.field, type: oborFieldType, options: fieldOptionsArray },
+        { key: "company", label: "Organizace", value: entity.company, type: "multi-value", multiValueEditor: "text" },
+        { key: "field", label: "Oblast působení", value: entity.field, type: "multi-value", multiValueEditor: oborFieldType === "field-select" ? "field-select" : "select", options: fieldOptionsArray },
         { key: "assigned_user_ids", label: "Přiřazení uživatelé", value: toAssignmentDraftValue(entity.assigned_user_ids), type: "multi-select", options: assignmentOptions }
       ]
     },
@@ -305,8 +312,8 @@ const buildEntityData = (entity: TiperEntity | null, assignmentOptions: Array<st
       title: "Informace o tipařovi",
       color: "gray",
       fields: [
-        { key: "region", label: "Kraj", value: entity.region, type: "select", options: REGION_OPTIONS },
-        { key: "location", label: "Lokalita", value: entity.location, type: "text" },
+        { key: "region", label: "Kraj", value: entity.region, type: "multi-value", multiValueEditor: "select", options: REGION_OPTIONS },
+        { key: "location", label: "Lokalita", value: entity.location, type: "multi-value", multiValueEditor: "text" },
         { key: "info", label: "Popis / Poznámky", value: entity.info, type: "textarea", isMultiline: true },
       ]
     }
@@ -1782,6 +1789,8 @@ const TipersSectionNew: React.FC<SectionProps> = ({
         headerName: "Obor",
         filter: true,
         editable: false,
+        filterValueGetter: makeMultiValueFilterGetter("field"),
+        comparator: multiValueComparator,
         flex: 1,
         minWidth: 100,
         cellRenderer: FieldCellRenderer,
@@ -1803,7 +1812,10 @@ const TipersSectionNew: React.FC<SectionProps> = ({
         field: "region",
         headerName: "Kraj",
         filter: true,
-        editable: true,
+        editable: makeSingleValueEditable("region"),
+        valueFormatter: multiValueFormatter,
+        filterValueGetter: makeMultiValueFilterGetter("region"),
+        comparator: multiValueComparator,
         flex: 1,
         minWidth: 130,
         cellEditor: "agSelectCellEditor",
@@ -1821,7 +1833,10 @@ const TipersSectionNew: React.FC<SectionProps> = ({
         field: "location",
         headerName: "Lokalita",
         filter: true,
-        editable: true,
+        editable: makeSingleValueEditable("location"),
+        valueFormatter: multiValueFormatter,
+        filterValueGetter: makeMultiValueFilterGetter("location"),
+        comparator: multiValueComparator,
         flex: 1,
         minWidth: 100
       },
@@ -1845,7 +1860,10 @@ const TipersSectionNew: React.FC<SectionProps> = ({
           field: "company",
           headerName: "Společnost",
           filter: true,
-          editable: true,
+          editable: makeSingleValueEditable("company"),
+          valueFormatter: multiValueFormatter,
+          filterValueGetter: makeMultiValueFilterGetter("company"),
+          comparator: multiValueComparator,
           flex: 1.2,
           minWidth: 130
         },
@@ -1930,14 +1948,12 @@ const TipersSectionNew: React.FC<SectionProps> = ({
     const fieldSet = activeFieldFiltersRef.current;
     if (fieldSet !== null) {
       if (fieldSet.size === 0) return false;
-      const fieldValue = node.data?.field ?? "";
-      if (!fieldSet.has(fieldValue)) return false;
+      if (!passesMultiValueFilter(node.data?.field, fieldSet)) return false;
     }
     const regionSet = activeRegionFiltersRef.current;
     if (regionSet !== null) {
       if (regionSet.size === 0) return false;
-      const regionValue = node.data?.region ?? "";
-      if (!regionSet.has(regionValue)) return false;
+      if (!passesMultiValueFilter(node.data?.region, regionSet)) return false;
     }
     return true;
   }, []);
