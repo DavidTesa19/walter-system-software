@@ -15,7 +15,7 @@ export interface EditableField {
   key: string;
   label: string;
   value: string | boolean | string[] | null;
-  type: 'text' | 'textarea' | 'select' | 'multi-select' | 'boolean' | 'date';
+  type: 'text' | 'textarea' | 'select' | 'field-select' | 'multi-select' | 'boolean' | 'date';
   options?: Array<string | { value: string; label: string; description?: string }>;
   isMultiline?: boolean;
   placeholder?: string;

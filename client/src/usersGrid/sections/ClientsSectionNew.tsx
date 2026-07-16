@@ -299,7 +299,7 @@ const deriveClientEntityFromCommission = (commission: ClientCommissionApi): Clie
 // BUILD ENTITY DATA FOR PROFILE PANEL
 // =============================================================================
 
-const buildEntityData = (entity: ClientEntity | null, assignmentOptions: Array<string | { value: string; label: string; description?: string }>, fieldOptionsArray: string[] = FIELD_OPTIONS_ARRAY): EntityData | null => {
+const buildEntityData = (entity: ClientEntity | null, assignmentOptions: Array<string | { value: string; label: string; description?: string }>, fieldOptionsArray: string[] = FIELD_OPTIONS_ARRAY, oborFieldType: "select" | "field-select" = "select"): EntityData | null => {
   if (!entity) return null;
 
   const groups: FieldGroup[] = [
@@ -309,7 +309,7 @@ const buildEntityData = (entity: ClientEntity | null, assignmentOptions: Array<s
       fields: [
         { key: "name", label: "Jméno / Název", value: entity.name, type: "text" },
         { key: "company", label: "Společnost", value: entity.company, type: "text" },
-        { key: "field", label: "Obor činnosti", value: entity.field, type: "select", options: fieldOptionsArray },
+        { key: "field", label: "Obor činnosti", value: entity.field, type: oborFieldType, options: fieldOptionsArray },
         { key: "service", label: "Požadovaná služba", value: entity.service, type: "text" },
         { key: "budget", label: "Rozpočet subjektu", value: entity.budget, type: "text" },
         { key: "assigned_user_ids", label: "Přiřazení uživatelé", value: toAssignmentDraftValue(entity.assigned_user_ids), type: "multi-select", options: assignmentOptions },
@@ -424,7 +424,7 @@ const buildClientDraftEntityData = (draft: ClientCreateDraft, assignmentOptions:
     assigned_user_ids: fromAssignmentDraftValue(draft.entity.assigned_user_ids),
     created_at: undefined,
     updated_at: undefined
-  }, assignmentOptions, fieldOptionsArray)!.groups
+  }, assignmentOptions, fieldOptionsArray, "field-select")!.groups
 });
 
 const buildClientDraftCommissionData = (draft: ClientCreateDraft, status: ClientCommissionApi["status"], assignmentOptions: Array<string | { value: string; label: string; description?: string }>): CommissionData => ({
@@ -2193,6 +2193,12 @@ const ClientsSectionNew: React.FC<SectionProps> = ({
         includeCommission={includeCommission}
         includeCommissionLabel="Přidat rovnou i zakázku"
         otherSectionOptions={createSectionLinkOptions}
+        fieldPicker={{
+          fieldOptions: fieldOptionChoices,
+          groupedFieldOptions: groupedFieldOptionChoices,
+          onCreateFieldOption: handleCreateFieldOption,
+          onDeleteFieldOption: handleDeleteFieldOption,
+        }}
         onClose={closeCreateModal}
         onEntityChange={handleDraftEntityChange}
         onCommissionChange={handleDraftCommissionChange}

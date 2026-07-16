@@ -278,7 +278,7 @@ const deriveTiperEntityFromCommission = (commission: TiperCommissionApi): TiperE
 // BUILD ENTITY DATA FOR PROFILE PANEL
 // =============================================================================
 
-const buildEntityData = (entity: TiperEntity | null, assignmentOptions: Array<string | { value: string; label: string; description?: string }>, fieldOptionsArray: string[] = FIELD_OPTIONS_ARRAY): EntityData | null => {
+const buildEntityData = (entity: TiperEntity | null, assignmentOptions: Array<string | { value: string; label: string; description?: string }>, fieldOptionsArray: string[] = FIELD_OPTIONS_ARRAY, oborFieldType: "select" | "field-select" = "select"): EntityData | null => {
   if (!entity) return null;
 
   const groups: FieldGroup[] = [
@@ -288,7 +288,7 @@ const buildEntityData = (entity: TiperEntity | null, assignmentOptions: Array<st
       fields: [
         { key: "name", label: "Jméno", value: entity.name, type: "text" },
         { key: "company", label: "Organizace", value: entity.company, type: "text" },
-        { key: "field", label: "Oblast působení", value: entity.field, type: "select", options: fieldOptionsArray },
+        { key: "field", label: "Oblast působení", value: entity.field, type: oborFieldType, options: fieldOptionsArray },
         { key: "assigned_user_ids", label: "Přiřazení uživatelé", value: toAssignmentDraftValue(entity.assigned_user_ids), type: "multi-select", options: assignmentOptions }
       ]
     },
@@ -401,7 +401,7 @@ const buildTiperDraftEntityData = (draft: TiperCreateDraft, assignmentOptions: A
     assigned_user_ids: fromAssignmentDraftValue(draft.entity.assigned_user_ids),
     created_at: undefined,
     updated_at: undefined
-  }, assignmentOptions, fieldOptionsArray)!.groups
+  }, assignmentOptions, fieldOptionsArray, "field-select")!.groups
 });
 
 const buildTiperDraftCommissionData = (draft: TiperCreateDraft, status: TiperCommissionApi["status"], assignmentOptions: Array<string | { value: string; label: string; description?: string }>): CommissionData => ({
@@ -2086,6 +2086,12 @@ const TipersSectionNew: React.FC<SectionProps> = ({
         includeCommission={includeCommission}
         includeCommissionLabel="Přidat rovnou i tip / zakázku"
         otherSectionOptions={createSectionLinkOptions}
+        fieldPicker={{
+          fieldOptions: fieldOptionChoices,
+          groupedFieldOptions: groupedFieldOptionChoices,
+          onCreateFieldOption: handleCreateFieldOption,
+          onDeleteFieldOption: handleDeleteFieldOption,
+        }}
         onClose={closeCreateModal}
         onEntityChange={handleDraftEntityChange}
         onCommissionChange={handleDraftCommissionChange}

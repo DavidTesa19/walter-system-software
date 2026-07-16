@@ -278,7 +278,7 @@ const derivePartnerEntityFromCommission = (commission: PartnerCommissionApi): Pa
   };
 };
 
-const buildEntityData = (entity: PartnerEntity | null, assignmentOptions: Array<string | { value: string; label: string; description?: string }>, fieldOptionsArray: string[] = FIELD_OPTIONS_ARRAY): EntityData | null => {
+const buildEntityData = (entity: PartnerEntity | null, assignmentOptions: Array<string | { value: string; label: string; description?: string }>, fieldOptionsArray: string[] = FIELD_OPTIONS_ARRAY, oborFieldType: "select" | "field-select" = "select"): EntityData | null => {
   if (!entity) return null;
 
   const groups: FieldGroup[] = [
@@ -288,7 +288,7 @@ const buildEntityData = (entity: PartnerEntity | null, assignmentOptions: Array<
       fields: [
         { key: "name", label: "Jméno / Název", value: entity.name, type: "text" },
         { key: "company", label: "Společnost", value: entity.company, type: "text" },
-        { key: "field", label: "Obor", value: entity.field, type: "select", options: fieldOptionsArray },
+        { key: "field", label: "Obor", value: entity.field, type: oborFieldType, options: fieldOptionsArray },
         { key: "assigned_user_ids", label: "Přiřazení uživatelé", value: toAssignmentDraftValue(entity.assigned_user_ids), type: "multi-select", options: assignmentOptions }
       ]
     },
@@ -397,7 +397,7 @@ const buildPartnerDraftEntityData = (draft: PartnerCreateDraft, assignmentOption
     assigned_user_ids: fromAssignmentDraftValue(draft.entity.assigned_user_ids),
     created_at: undefined,
     updated_at: undefined
-  }, assignmentOptions, fieldOptionsArray)!.groups
+  }, assignmentOptions, fieldOptionsArray, "field-select")!.groups
 });
 
 const buildPartnerDraftCommissionData = (draft: PartnerCreateDraft, status: PartnerCommissionApi["status"], assignmentOptions: Array<string | { value: string; label: string; description?: string }>): CommissionData => ({
@@ -1870,6 +1870,12 @@ const PartnersSectionNew: React.FC<SectionProps> = ({ viewMode, isActive, system
         includeCommission={includeCommission}
         includeCommissionLabel="Přidat rovnou i zakázku"
         otherSectionOptions={createSectionLinkOptions}
+        fieldPicker={{
+          fieldOptions: fieldOptionChoices,
+          groupedFieldOptions: groupedFieldOptionChoices,
+          onCreateFieldOption: handleCreateFieldOption,
+          onDeleteFieldOption: handleDeleteFieldOption,
+        }}
         onClose={closeCreateModal}
         onEntityChange={handleDraftEntityChange}
         onCommissionChange={handleDraftCommissionChange}

@@ -1,6 +1,8 @@
 import React, { useCallback, useEffect, useMemo, useRef } from "react";
 import ThemeToggleButton from "../../components/ThemeToggleButton";
 import type { EditableField, FieldGroup } from "./EntityCommissionProfilePanel";
+import type { FieldCategory, FieldOption } from "../fieldOptions";
+import FieldSelectInput from "./FieldSelectInput";
 import "./EntityCommissionProfilePanel.css";
 
 type FieldValues = Record<string, string | string[]>;
@@ -10,6 +12,13 @@ export interface OtherSectionOption {
   label: string;
   checked: boolean;
   onChange: (checked: boolean) => void;
+}
+
+export interface FieldPickerConfig {
+  fieldOptions: FieldOption[];
+  groupedFieldOptions: FieldCategory[];
+  onCreateFieldOption?: (value: string) => Promise<FieldOption | void> | FieldOption | void;
+  onDeleteFieldOption?: (optionId: number) => Promise<void> | void;
 }
 
 interface EntityCommissionCreateModalProps {
@@ -26,6 +35,7 @@ interface EntityCommissionCreateModalProps {
   includeCommission: boolean;
   includeCommissionLabel?: string;
   otherSectionOptions?: OtherSectionOption[];
+  fieldPicker?: FieldPickerConfig;
   onClose: () => void;
   onEntityChange: (key: string, value: string | string[]) => void;
   onCommissionChange: (key: string, value: string | string[]) => void;
@@ -40,6 +50,7 @@ interface DraftFieldProps {
   value: string | string[];
   onChange: (key: string, value: string | string[]) => void;
   disabled?: boolean;
+  fieldPicker?: FieldPickerConfig;
   onKeyDown?: (event: React.KeyboardEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>, fieldType: FieldGroup["fields"][number]["type"]) => void;
 }
 
@@ -50,7 +61,22 @@ const normalizeFieldOptions = (options: EditableField['options']) =>
       : option
   ));
 
-const DraftField: React.FC<DraftFieldProps> = ({ field, value, onChange, disabled = false, onKeyDown }) => {
+const DraftField: React.FC<DraftFieldProps> = ({ field, value, onChange, disabled = false, fieldPicker, onKeyDown }) => {
+  if (field.type === "field-select" && fieldPicker) {
+    return (
+      <FieldSelectInput
+        value={Array.isArray(value) ? "" : value}
+        placeholder={field.placeholder || field.label}
+        disabled={disabled}
+        fieldOptions={fieldPicker.fieldOptions}
+        groupedFieldOptions={fieldPicker.groupedFieldOptions}
+        onChange={(nextValue) => onChange(field.key, nextValue)}
+        onCreateFieldOption={fieldPicker.onCreateFieldOption}
+        onDeleteFieldOption={fieldPicker.onDeleteFieldOption}
+      />
+    );
+  }
+
   if (field.type === "textarea") {
     return (
       <textarea
@@ -154,10 +180,11 @@ interface DraftFieldGroupProps {
   values: FieldValues;
   onChange: (key: string, value: string | string[]) => void;
   disabled?: boolean;
+  fieldPicker?: FieldPickerConfig;
   onFieldKeyDown?: (event: React.KeyboardEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>, fieldType: FieldGroup["fields"][number]["type"]) => void;
 }
 
-const DraftFieldGroup: React.FC<DraftFieldGroupProps> = ({ group, values, onChange, disabled = false, onFieldKeyDown }) => {
+const DraftFieldGroup: React.FC<DraftFieldGroupProps> = ({ group, values, onChange, disabled = false, fieldPicker, onFieldKeyDown }) => {
   const colorClass = group.color ? `group-${group.color}` : "";
 
   return (
@@ -173,6 +200,7 @@ const DraftFieldGroup: React.FC<DraftFieldGroupProps> = ({ group, values, onChan
                 value={values[field.key] || ""}
                 onChange={onChange}
                 disabled={disabled}
+                fieldPicker={fieldPicker}
                 onKeyDown={onFieldKeyDown}
               />
             </div>
@@ -197,6 +225,7 @@ const EntityCommissionCreateModal: React.FC<EntityCommissionCreateModalProps> = 
   includeCommission,
   includeCommissionLabel = "Vytvořit rovnou i zakázku",
   otherSectionOptions,
+  fieldPicker,
   onClose,
   onEntityChange,
   onCommissionChange,
@@ -387,6 +416,7 @@ const EntityCommissionCreateModal: React.FC<EntityCommissionCreateModalProps> = 
                       group={group}
                       values={entityValues}
                       onChange={onEntityChange}
+                      fieldPicker={fieldPicker}
                       onFieldKeyDown={handleFieldKeyDown}
                     />
                   ))}
