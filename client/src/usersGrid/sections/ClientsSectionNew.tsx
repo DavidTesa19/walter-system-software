@@ -299,7 +299,7 @@ const deriveClientEntityFromCommission = (commission: ClientCommissionApi): Clie
 // BUILD ENTITY DATA FOR PROFILE PANEL
 // =============================================================================
 
-const buildEntityData = (entity: ClientEntity | null, assignmentOptions: Array<string | { value: string; label: string; description?: string }>, fieldOptionsArray: string[] = FIELD_OPTIONS_ARRAY, oborFieldType: "select" | "field-select" = "select"): EntityData | null => {
+const buildEntityData = (entity: ClientEntity | null, assignmentOptions: Array<string | { value: string; label: string; description?: string }>, fieldOptionsArray: string[] = FIELD_OPTIONS_ARRAY, oborFieldType: "select" | "field-select" = "field-select"): EntityData | null => {
   if (!entity) return null;
 
   const groups: FieldGroup[] = [
@@ -2142,6 +2142,12 @@ const ClientsSectionNew: React.FC<SectionProps> = ({
         onCopyToOtherType={selectedEntity ? handleCopyToPartner : undefined}
         entitySectionLinks={entitySectionLinkToggles}
         commissionSectionLinks={commissionSectionLinkToggles}
+        fieldPicker={{
+          fieldOptions: fieldOptionChoices,
+          groupedFieldOptions: groupedFieldOptionChoices,
+          onCreateFieldOption: handleCreateFieldOption,
+          onDeleteFieldOption: handleDeleteFieldOption,
+        }}
         onClose={closeProfile}
         onUpdateEntity={handleUpdateEntity}
         onUpdateCommission={handleUpdateCommission}

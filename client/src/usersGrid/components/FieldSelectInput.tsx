@@ -3,6 +3,15 @@ import type { FieldCategory, FieldOption } from "../fieldOptions";
 import { openFieldDropdown } from "../cells/fieldDropdown";
 import "./FieldSelectInput.css";
 
+// Shared config bundle for the searchable "Obor" field picker, reused by the
+// create modal and the profile panel.
+export interface FieldPickerConfig {
+  fieldOptions: FieldOption[];
+  groupedFieldOptions: FieldCategory[];
+  onCreateFieldOption?: (value: string) => Promise<FieldOption | void> | FieldOption | void;
+  onDeleteFieldOption?: (optionId: number) => Promise<void> | void;
+}
+
 export interface FieldSelectInputProps {
   value: string;
   placeholder?: string;

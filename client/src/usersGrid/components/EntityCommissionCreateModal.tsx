@@ -1,8 +1,7 @@
 import React, { useCallback, useEffect, useMemo, useRef } from "react";
 import ThemeToggleButton from "../../components/ThemeToggleButton";
 import type { EditableField, FieldGroup } from "./EntityCommissionProfilePanel";
-import type { FieldCategory, FieldOption } from "../fieldOptions";
-import FieldSelectInput from "./FieldSelectInput";
+import FieldSelectInput, { type FieldPickerConfig } from "./FieldSelectInput";
 import "./EntityCommissionProfilePanel.css";
 
 type FieldValues = Record<string, string | string[]>;
@@ -14,12 +13,7 @@ export interface OtherSectionOption {
   onChange: (checked: boolean) => void;
 }
 
-export interface FieldPickerConfig {
-  fieldOptions: FieldOption[];
-  groupedFieldOptions: FieldCategory[];
-  onCreateFieldOption?: (value: string) => Promise<FieldOption | void> | FieldOption | void;
-  onDeleteFieldOption?: (optionId: number) => Promise<void> | void;
-}
+export type { FieldPickerConfig };
 
 interface EntityCommissionCreateModalProps {
   open: boolean;

@@ -5,6 +5,7 @@ import { getApprovalStatusMeta } from "../utils/approvalStatus";
 import type { DocumentBreadcrumb } from "../hooks/useProfileDocuments";
 import DocumentExplorer from "./DocumentExplorer";
 import ThemeToggleButton from "../../components/ThemeToggleButton";
+import FieldSelectInput, { type FieldPickerConfig } from "./FieldSelectInput";
 import "./EntityCommissionProfilePanel.css";
 
 // =============================================================================
@@ -77,6 +78,7 @@ interface EntityCommissionProfilePanelProps {
   onCopyToOtherType?: () => void;
   entitySectionLinks?: SectionLinkToggle[];
   commissionSectionLinks?: SectionLinkToggle[];
+  fieldPicker?: FieldPickerConfig;
   
   // Callbacks
   onClose: () => void;
@@ -129,6 +131,7 @@ type ProfilePanelView = 'details' | 'documents';
 interface EditableFieldCellProps {
   field: EditableField;
   onSave: (key: string, value: string | boolean | string[] | null) => void;
+  fieldPicker?: FieldPickerConfig;
 }
 
 const normalizeFieldOptions = (options: EditableField['options']) =>
@@ -188,7 +191,7 @@ const getInitialEditValue = (field: EditableField): string | boolean | string[] 
   return field.value === null || field.value === undefined ? '' : String(field.value);
 };
 
-const EditableFieldCell: React.FC<EditableFieldCellProps> = ({ field, onSave }) => {
+const EditableFieldCell: React.FC<EditableFieldCellProps> = ({ field, onSave, fieldPicker }) => {
   const [isEditing, setIsEditing] = useState(false);
   const [editValue, setEditValue] = useState<string | boolean | string[]>(() => getInitialEditValue(field));
   const inputRef = useRef<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>(null);
@@ -278,6 +281,24 @@ const EditableFieldCell: React.FC<EditableFieldCellProps> = ({ field, onSave }) 
     return String(field.value);
   }, [field.type, field.value, normalizedOptions]);
 
+  // The "Obor" picker is always shown as a clickable dropdown trigger (like the
+  // ag-grid table cell), rather than the readonly-until-click pattern.
+  if (field.type === 'field-select' && fieldPicker) {
+    return (
+      <div className="editable-field editing">
+        <FieldSelectInput
+          value={typeof field.value === 'string' ? field.value : ''}
+          placeholder={field.placeholder || field.label}
+          fieldOptions={fieldPicker.fieldOptions}
+          groupedFieldOptions={fieldPicker.groupedFieldOptions}
+          onChange={(nextValue) => onSave(field.key, nextValue || null)}
+          onCreateFieldOption={fieldPicker.onCreateFieldOption}
+          onDeleteFieldOption={fieldPicker.onDeleteFieldOption}
+        />
+      </div>
+    );
+  }
+
   if (isEditing) {
     if (field.type === 'textarea') {
       return (
@@ -296,7 +317,7 @@ const EditableFieldCell: React.FC<EditableFieldCellProps> = ({ field, onSave }) 
       );
     }
 
-    if (field.type === 'select' && normalizedOptions.length > 0) {
+    if ((field.type === 'select' || field.type === 'field-select') && normalizedOptions.length > 0) {
       return (
         <div className="editable-field editing">
           <select
@@ -432,11 +453,12 @@ const EditableFieldCell: React.FC<EditableFieldCellProps> = ({ field, onSave }) 
 interface FieldGroupComponentProps {
   group: FieldGroup;
   onSave: (key: string, value: string | boolean | string[] | null) => void;
+  fieldPicker?: FieldPickerConfig;
 }
 
-const FieldGroupComponent: React.FC<FieldGroupComponentProps> = ({ group, onSave }) => {
+const FieldGroupComponent: React.FC<FieldGroupComponentProps> = ({ group, onSave, fieldPicker }) => {
   const colorClass = group.color ? `group-${group.color}` : '';
-  
+
   return (
     <div className={`field-group ${colorClass}`}>
       <h4 className="field-group-title">{group.title}</h4>
@@ -444,7 +466,7 @@ const FieldGroupComponent: React.FC<FieldGroupComponentProps> = ({ group, onSave
         {group.fields.map(field => (
           <div key={field.key} className={`field-row ${field.isMultiline ? 'multiline' : ''}`}>
             <label className="field-label">{field.label}</label>
-            <EditableFieldCell field={field} onSave={onSave} />
+            <EditableFieldCell field={field} onSave={onSave} fieldPicker={fieldPicker} />
           </div>
         ))}
       </div>
@@ -473,6 +495,7 @@ const EntityCommissionProfilePanel: React.FC<EntityCommissionProfilePanelProps> 
   onCopyToOtherType,
   entitySectionLinks,
   commissionSectionLinks,
+  fieldPicker,
   onClose,
   onUpdateEntity,
   onUpdateCommission,
@@ -759,6 +782,7 @@ const EntityCommissionProfilePanel: React.FC<EntityCommissionProfilePanelProps> 
                         key={`entity-${idx}`}
                         group={group}
                         onSave={handleEntityFieldSave}
+                        fieldPicker={fieldPicker}
                       />
                     ))}
                   </div>

@@ -278,7 +278,7 @@ const deriveTiperEntityFromCommission = (commission: TiperCommissionApi): TiperE
 // BUILD ENTITY DATA FOR PROFILE PANEL
 // =============================================================================
 
-const buildEntityData = (entity: TiperEntity | null, assignmentOptions: Array<string | { value: string; label: string; description?: string }>, fieldOptionsArray: string[] = FIELD_OPTIONS_ARRAY, oborFieldType: "select" | "field-select" = "select"): EntityData | null => {
+const buildEntityData = (entity: TiperEntity | null, assignmentOptions: Array<string | { value: string; label: string; description?: string }>, fieldOptionsArray: string[] = FIELD_OPTIONS_ARRAY, oborFieldType: "select" | "field-select" = "field-select"): EntityData | null => {
   if (!entity) return null;
 
   const groups: FieldGroup[] = [
@@ -2035,6 +2035,12 @@ const TipersSectionNew: React.FC<SectionProps> = ({
         onRemoveCommission={selectedCommission ? () => void handleDelete(selectedCommission.id, { commissionOnly: true }) : undefined}
         entitySectionLinks={entitySectionLinkToggles}
         commissionSectionLinks={commissionSectionLinkToggles}
+        fieldPicker={{
+          fieldOptions: fieldOptionChoices,
+          groupedFieldOptions: groupedFieldOptionChoices,
+          onCreateFieldOption: handleCreateFieldOption,
+          onDeleteFieldOption: handleDeleteFieldOption,
+        }}
         onClose={closeProfile}
         onUpdateEntity={handleUpdateEntity}
         onUpdateCommission={handleUpdateCommission}
