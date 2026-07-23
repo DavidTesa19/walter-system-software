@@ -88,6 +88,28 @@ export interface SectionLinkToggle {
   onChange: (checked: boolean) => void;
 }
 
+// One of the three sides (Klient / Partner / Tipař) of a commission's deal. The
+// current commission's own type is `self`; the other two can be linked to an
+// existing subject (which spawns a mirror commission) or cleared.
+export interface DealSlotView {
+  type: 'client' | 'partner' | 'tiper';
+  label: string;
+  self: boolean;
+  linkedCode: string | null;
+  linkedName: string | null;
+  linkedCommissionId: string | null;
+  options: Array<{ id: number; label: string }>;
+  busy: boolean;
+  onAttach: (entityId: number) => void;
+  onDetach: () => void;
+}
+
+export interface DealLinkConfig {
+  slots: DealSlotView[];
+  title?: string;
+  optional?: 'tiper';
+}
+
 interface EntityCommissionProfilePanelProps {
   open: boolean;
   entityType: 'partner' | 'client' | 'tiper';
@@ -105,6 +127,7 @@ interface EntityCommissionProfilePanelProps {
   onCopyToOtherType?: () => void;
   entitySectionLinks?: SectionLinkToggle[];
   commissionSectionLinks?: SectionLinkToggle[];
+  dealLink?: DealLinkConfig | null;
   fieldPicker?: FieldPickerConfig;
   specializationPicker?: SpecializationPickerConfig;
 
@@ -768,6 +791,89 @@ const FieldGroupComponent: React.FC<FieldGroupComponentProps> = ({ group, onSave
 };
 
 // =============================================================================
+// DEAL LINK SECTION — the three sides (Klient / Partner / Tipař) of a commission
+// =============================================================================
+
+const DealLinkSlotRow: React.FC<{ slot: DealSlotView }> = ({ slot }) => {
+  const [picking, setPicking] = useState(false);
+  const linked = slot.linkedCode != null;
+  const linkedText = `${slot.linkedCode ?? ''}${slot.linkedName ? ` — ${slot.linkedName}` : ''}`;
+
+  return (
+    <div className={`ec-deal-slot ${slot.self ? 'is-self' : ''} ${linked ? 'is-linked' : ''}`}>
+      <span className="ec-deal-slot-label">{slot.label}</span>
+      {slot.self ? (
+        <span className="ec-deal-slot-value self">
+          <span className="ec-deal-slot-name">{linked ? linkedText : '—'}</span>
+          <span className="ec-deal-slot-tag">tato zakázka</span>
+        </span>
+      ) : linked ? (
+        <span className="ec-deal-slot-value">
+          <span className="ec-deal-slot-name">{linkedText}</span>
+          <button
+            type="button"
+            className="ec-deal-slot-remove"
+            disabled={slot.busy}
+            onClick={slot.onDetach}
+            title="Zrušit propojení"
+            aria-label="Zrušit propojení"
+          >
+            ×
+          </button>
+        </span>
+      ) : picking ? (
+        <select
+          className="ec-deal-slot-select"
+          disabled={slot.busy}
+          defaultValue=""
+          autoFocus
+          onChange={(event) => {
+            const value = Number(event.target.value);
+            setPicking(false);
+            if (value) slot.onAttach(value);
+          }}
+          onBlur={() => setPicking(false)}
+        >
+          <option value="" disabled>
+            Vyberte {slot.label.toLowerCase()}…
+          </option>
+          {slot.options.map((option) => (
+            <option key={option.id} value={option.id}>
+              {option.label}
+            </option>
+          ))}
+        </select>
+      ) : (
+        <button
+          type="button"
+          className="ec-deal-slot-add"
+          disabled={slot.busy}
+          onClick={() => setPicking(true)}
+        >
+          + Připojit {slot.label.toLowerCase()}
+        </button>
+      )}
+    </div>
+  );
+};
+
+const DealLinkSection: React.FC<{ config: DealLinkConfig }> = ({ config }) => (
+  <div className="ec-deal-link">
+    <div className="ec-deal-link-header">
+      <h4 className="ec-linked-commissions-title">{config.title ?? 'Propojení zakázky'}</h4>
+      <p className="ec-linked-commissions-subtitle">
+        Klient a Partner tvoří spojenou zakázku, Tipař je nepovinný.
+      </p>
+    </div>
+    <div className="ec-deal-link-slots">
+      {config.slots.map((slot) => (
+        <DealLinkSlotRow key={slot.type} slot={slot} />
+      ))}
+    </div>
+  </div>
+);
+
+// =============================================================================
 // MAIN COMPONENT
 // =============================================================================
 
@@ -788,6 +894,7 @@ const EntityCommissionProfilePanel: React.FC<EntityCommissionProfilePanelProps> 
   onCopyToOtherType,
   entitySectionLinks,
   commissionSectionLinks,
+  dealLink,
   fieldPicker,
   specializationPicker,
   onClose,
@@ -1165,6 +1272,7 @@ const EntityCommissionProfilePanel: React.FC<EntityCommissionProfilePanelProps> 
                               <h4 className="ec-linked-commissions-title">Detail zakázky</h4>
                               <span className="ec-column-id">{commission.commission_id}</span>
                             </div>
+                            {dealLink ? <DealLinkSection config={dealLink} /> : null}
                             <div className="ec-linked-commission-detail-groups">
                               {commission.groups.map((group, idx) => (
                                 <FieldGroupComponent

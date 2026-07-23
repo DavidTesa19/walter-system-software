@@ -2772,3 +2772,130 @@
     align-items: flex-start;
   }
 }
+
+/* =========================================================================
+   DEAL LINK — the three sides (Klient / Partner / Tipař) of a commission
+   ========================================================================= */
+
+.ec-deal-link {
+  margin: 0 0 0.85rem;
+  padding: 0.75rem 0.85rem;
+  border: 1px solid var(--color-border, #e5e7eb);
+  border-radius: 0.75rem;
+  background: var(--color-surface-muted, rgba(148, 163, 184, 0.08));
+}
+
+.ec-deal-link-header {
+  margin-bottom: 0.6rem;
+}
+
+.ec-deal-link-slots {
+  display: flex;
+  flex-direction: column;
+  gap: 0.45rem;
+}
+
+.ec-deal-slot {
+  display: grid;
+  grid-template-columns: 5.5rem 1fr;
+  align-items: center;
+  gap: 0.6rem;
+  min-height: 2.1rem;
+}
+
+.ec-deal-slot-label {
+  font-size: 0.72rem;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--color-text-muted, #64748b);
+}
+
+.ec-deal-slot-value {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  min-width: 0;
+}
+
+.ec-deal-slot-name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 0.85rem;
+  font-weight: 600;
+  color: var(--color-text, #1f2937);
+}
+
+.ec-deal-slot.is-self .ec-deal-slot-name {
+  color: var(--color-accent-hover, #0f766e);
+}
+
+.ec-deal-slot-tag {
+  flex: 0 0 auto;
+  font-size: 0.65rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+  padding: 0.1rem 0.4rem;
+  border-radius: 999px;
+  background: var(--color-accent-soft, #d1fae5);
+  color: var(--color-accent-hover, #0f766e);
+}
+
+.ec-deal-slot-remove {
+  flex: 0 0 auto;
+  width: 1.35rem;
+  height: 1.35rem;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid var(--color-border, #e5e7eb);
+  border-radius: 999px;
+  background: transparent;
+  color: var(--color-text-muted, #64748b);
+  font-size: 1rem;
+  line-height: 1;
+  cursor: pointer;
+  transition: background 0.15s ease, color 0.15s ease;
+}
+
+.ec-deal-slot-remove:hover:not(:disabled) {
+  background: var(--color-danger-soft, rgba(239, 68, 68, 0.12));
+  color: var(--color-danger, #ef4444);
+  border-color: var(--color-danger, #ef4444);
+}
+
+.ec-deal-slot-add {
+  justify-self: start;
+  padding: 0.28rem 0.6rem;
+  border: 1px dashed var(--color-border-strong, #cbd5e1);
+  border-radius: 0.5rem;
+  background: transparent;
+  color: var(--color-accent-hover, #0f766e);
+  font-size: 0.78rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background 0.15s ease, border-color 0.15s ease;
+}
+
+.ec-deal-slot-add:hover:not(:disabled) {
+  background: var(--color-accent-soft, #d1fae5);
+  border-color: var(--color-accent, #0f766e);
+}
+
+.ec-deal-slot-add:disabled,
+.ec-deal-slot-remove:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+
+.ec-deal-slot-select {
+  width: 100%;
+  padding: 0.3rem 0.5rem;
+  border: 1px solid var(--color-border-strong, #cbd5e1);
+  border-radius: 0.5rem;
+  background: var(--color-surface, #ffffff);
+  color: var(--color-text, #1f2937);
+  font-size: 0.82rem;
+}

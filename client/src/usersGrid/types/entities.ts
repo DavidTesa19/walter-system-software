@@ -98,6 +98,8 @@ export interface BaseCommission extends ActivityAuditFields, SectionLinkFields {
   id: number;
   commission_id: string;      // P001-001, K001-001, etc.
   status: 'pending' | 'accepted' | 'archived';
+  // Groups the client/partner/tiper sides of one commission within a section.
+  deal_id?: string | null;
   created_at?: string;
   updated_at?: string;
 

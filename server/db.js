@@ -1184,6 +1184,20 @@ export async function initDatabase() {
       await client.query(`ALTER TABLE ${tableName} ADD COLUMN IF NOT EXISTS link_id VARCHAR(64)`);
     }
 
+    // deal_id — groups a client/partner/tiper commission trio WITHIN one section
+    // (Veřejné, Growth Club or Neveřejné) into a single "deal". Unlike link_id
+    // (which pairs the same subject across sections), deal_id connects the two
+    // (or three) sides of one commission: who provides, who needs, who tipped.
+    const dealIdColumnTables = [
+      'client_commissions', 'growth_client_commissions', 'project_client_commissions',
+      'partner_commissions', 'growth_partner_commissions', 'project_partner_commissions',
+      'tiper_commissions', 'growth_tiper_commissions', 'project_tiper_commissions',
+    ];
+
+    for (const tableName of dealIdColumnTables) {
+      await client.query(`ALTER TABLE ${tableName} ADD COLUMN IF NOT EXISTS deal_id VARCHAR(64)`);
+    }
+
     const activityActorColumnTables = [
       'partners',
       'clients',
@@ -1614,6 +1628,18 @@ export const db = {
     const result = await pool.query(
       `UPDATE ${table} SET link_id = $1 WHERE id = $2 RETURNING *`,
       [linkId, id]
+    );
+    return result.rows[0] || null;
+  },
+
+  // Set the deal-link grouping id directly (client/partner/tiper trio inside one
+  // section). Same internal-plumbing rationale as setLinkId.
+  async setDealId(table, id, dealId) {
+    if (!USE_POSTGRES) return null;
+
+    const result = await pool.query(
+      `UPDATE ${table} SET deal_id = $1 WHERE id = $2 RETURNING *`,
+      [dealId, id]
     );
     return result.rows[0] || null;
   },

@@ -31,6 +31,13 @@ import {
   pickCoreFields,
   isValidSectionLinkRequest,
 } from "./section-linking.js";
+import {
+  DEAL_TYPES,
+  isDealType,
+  otherDealTypes,
+  entityDisplayName,
+  isValidDealRequest,
+} from "./deal-linking.js";
 
 // Load environment variables
 dotenv.config();
@@ -3650,6 +3657,7 @@ app.put("/api/partner-commissions/:id", authenticateToken, (req, res) => {
     const updated = entityCommissionJson.updatePartnerCommission(db, id, payload);
     if (!updated) return res.status(404).json({ error: "Not found" });
     propagateLinkedFieldSync(db, 'commission', 'partner', 'public', updated, payload);
+    propagateDealFieldSync(db, 'public', 'partner', updated, payload);
     if (!writeDb(db)) return res.status(500).json({ error: "Failed to persist" });
     res.json(updated);
   } catch (error) {
@@ -3667,6 +3675,7 @@ app.patch("/api/partner-commissions/:id", authenticateToken, (req, res) => {
     const updated = entityCommissionJson.updatePartnerCommission(db, id, payload);
     if (!updated) return res.status(404).json({ error: "Not found" });
     propagateLinkedFieldSync(db, 'commission', 'partner', 'public', updated, payload);
+    propagateDealFieldSync(db, 'public', 'partner', updated, payload);
     if (!writeDb(db)) return res.status(500).json({ error: "Failed to persist" });
     res.json(updated);
   } catch (error) {
@@ -3949,6 +3958,7 @@ app.put("/api/client-commissions/:id", authenticateToken, (req, res) => {
     const updated = entityCommissionJson.updateClientCommission(db, id, payload);
     if (!updated) return res.status(404).json({ error: "Not found" });
     propagateLinkedFieldSync(db, 'commission', 'client', 'public', updated, payload);
+    propagateDealFieldSync(db, 'public', 'client', updated, payload);
     if (!writeDb(db)) return res.status(500).json({ error: "Failed to persist" });
     res.json(updated);
   } catch (error) {
@@ -3966,6 +3976,7 @@ app.patch("/api/client-commissions/:id", authenticateToken, (req, res) => {
     const updated = entityCommissionJson.updateClientCommission(db, id, payload);
     if (!updated) return res.status(404).json({ error: "Not found" });
     propagateLinkedFieldSync(db, 'commission', 'client', 'public', updated, payload);
+    propagateDealFieldSync(db, 'public', 'client', updated, payload);
     if (!writeDb(db)) return res.status(500).json({ error: "Failed to persist" });
     res.json(updated);
   } catch (error) {
@@ -4248,6 +4259,7 @@ app.put("/api/tiper-commissions/:id", authenticateToken, (req, res) => {
     const updated = entityCommissionJson.updateTiperCommission(db, id, payload);
     if (!updated) return res.status(404).json({ error: "Not found" });
     propagateLinkedFieldSync(db, 'commission', 'tiper', 'public', updated, payload);
+    propagateDealFieldSync(db, 'public', 'tiper', updated, payload);
     if (!writeDb(db)) return res.status(500).json({ error: "Failed to persist" });
     res.json(updated);
   } catch (error) {
@@ -4265,6 +4277,7 @@ app.patch("/api/tiper-commissions/:id", authenticateToken, (req, res) => {
     const updated = entityCommissionJson.updateTiperCommission(db, id, payload);
     if (!updated) return res.status(404).json({ error: "Not found" });
     propagateLinkedFieldSync(db, 'commission', 'tiper', 'public', updated, payload);
+    propagateDealFieldSync(db, 'public', 'tiper', updated, payload);
     if (!writeDb(db)) return res.status(500).json({ error: "Failed to persist" });
     res.json(updated);
   } catch (error) {
@@ -4830,6 +4843,7 @@ const createNamespaceRoutes = (routeConfig, countersStoreKey, ensureFn, apiPrefi
         if (apiPrefix === 'growth') {
           propagateLinkedFieldSync(store, 'commission', type, 'growth', updated, payload);
         }
+        propagateDealFieldSync(store, apiPrefix, type, updated, payload);
         if (!writeDb(store)) return res.status(500).json({ error: 'Failed to persist' });
         res.json(updated);
       } catch (error) {
@@ -4849,6 +4863,7 @@ const createNamespaceRoutes = (routeConfig, countersStoreKey, ensureFn, apiPrefi
         if (apiPrefix === 'growth') {
           propagateLinkedFieldSync(store, 'commission', type, 'growth', updated, payload);
         }
+        propagateDealFieldSync(store, apiPrefix, type, updated, payload);
         if (!writeDb(store)) return res.status(500).json({ error: 'Failed to persist' });
         res.json(updated);
       } catch (error) {
@@ -5140,6 +5155,151 @@ app.post('/api/section-link/detach', authenticateToken, (req, res) => {
   } catch (error) {
     console.error('Error detaching section link:', error);
     res.status(500).json({ error: error.message || 'Failed to detach section link' });
+  }
+});
+
+// =============================================================================
+// DEAL LINKING — connect the client / partner / tiper sides of one commission
+// within a single section (Veřejné / Growth Club / Neveřejné).
+// =============================================================================
+
+const findDealMemberRow = (db, type, namespace, dealId) => {
+  if (!dealId) return null;
+  return getSectionLinkRows(db, 'commission', type, namespace).find((row) => row.deal_id === dealId) || null;
+};
+
+const buildDealSlot = (db, type, namespace, commissionRow) => {
+  if (!commissionRow) return null;
+  const entity = getSectionLinkRows(db, 'entity', type, namespace)
+    .find((e) => Number(e.id) === Number(commissionRow.entity_id)) || null;
+  return {
+    type,
+    commissionInternalId: commissionRow.id,
+    commissionId: commissionRow.commission_id,
+    status: commissionRow.status,
+    entityInternalId: entity ? entity.id : null,
+    entityCode: entity ? entity.entity_id : null,
+    name: entityDisplayName(entity),
+  };
+};
+
+const buildDealStatus = (db, namespace, sourceType, sourceRow) => {
+  const dealId = sourceRow.deal_id || null;
+  const slots = {};
+  for (const type of DEAL_TYPES) {
+    const row = type === sourceType ? sourceRow : findDealMemberRow(db, type, namespace, dealId);
+    slots[type] = buildDealSlot(db, type, namespace, row);
+  }
+  return { dealId, slots };
+};
+
+// How many sides (of the three types) currently share this dealId in a section.
+const countDealMembers = (db, namespace, dealId) => {
+  if (!dealId) return 0;
+  return DEAL_TYPES.reduce((count, type) => count + (findDealMemberRow(db, type, namespace, dealId) ? 1 : 0), 0);
+};
+
+// Propagate core-field edits from a just-updated commission to the other sides
+// of its deal (same section, other subject types). Ids/status/assignment stay
+// independent per side, exactly like the cross-section link sync.
+const propagateDealFieldSync = (db, namespace, sourceType, updatedRow, incomingPayload) => {
+  if (!updatedRow?.deal_id) return;
+  for (const targetType of otherDealTypes(sourceType)) {
+    const member = findDealMemberRow(db, targetType, namespace, updatedRow.deal_id);
+    if (!member) continue;
+    const coreUpdates = pickCoreFields('commission', targetType, incomingPayload || {});
+    if (Object.keys(coreUpdates).length === 0) continue;
+    Object.assign(member, coreUpdates, { updated_at: new Date().toISOString() });
+  }
+};
+
+app.get('/api/deal-link/status', authenticateToken, (req, res) => {
+  try {
+    const { namespace, type, id } = req.query || {};
+    if (!isValidDealRequest({ namespace, type, id })) {
+      return res.status(400).json({ error: 'Invalid deal-link request' });
+    }
+    const db = readDb();
+    ensureMigrated(db);
+    const source = findSectionLinkRowById(getSectionLinkRows(db, 'commission', type, namespace), id);
+    if (!source) return res.status(404).json({ error: 'Not found' });
+    res.json(buildDealStatus(db, namespace, type, source));
+  } catch (error) {
+    console.error('Error fetching deal-link status:', error);
+    res.status(500).json({ error: error.message || 'Failed to fetch deal-link status' });
+  }
+});
+
+app.post('/api/deal-link/attach', authenticateToken, (req, res) => {
+  try {
+    const { namespace, type, id, targetType, targetEntityId } = req.body || {};
+    if (!isValidDealRequest({ namespace, type, id }) || !isDealType(targetType) || targetType === type) {
+      return res.status(400).json({ error: 'Invalid deal-link request' });
+    }
+    if (targetEntityId === undefined || targetEntityId === null || targetEntityId === '') {
+      return res.status(400).json({ error: 'targetEntityId is required' });
+    }
+    const db = readDb();
+    ensureMigrated(db);
+    const actorUserId = getRequestActorUserId(req);
+
+    const source = findSectionLinkRowById(getSectionLinkRows(db, 'commission', type, namespace), id);
+    if (!source) return res.status(404).json({ error: 'Not found' });
+
+    const targetEntity = findSectionLinkRowById(getSectionLinkRows(db, 'entity', targetType, namespace), targetEntityId);
+    if (!targetEntity) return res.status(400).json({ error: 'Target subject not found' });
+
+    const dealId = source.deal_id || crypto.randomUUID();
+    source.deal_id = dealId;
+
+    // "Always create a new mirror commission" — if this deal already has a
+    // commission of the target type, delete it first (replacing the side).
+    const existing = findDealMemberRow(db, targetType, namespace, dealId);
+    if (existing) deleteCommissionCounterpart(db, targetType, namespace, existing.id);
+
+    const createdResponse = createCommissionCounterpart(db, targetType, namespace, targetEntity.id, source, actorUserId);
+    const createdRow = findSectionLinkRowById(getSectionLinkRows(db, 'commission', targetType, namespace), createdResponse.id);
+    if (createdRow) createdRow.deal_id = dealId;
+
+    if (!writeDb(db)) return res.status(500).json({ error: 'Failed to persist' });
+    res.status(201).json(buildDealStatus(db, namespace, type, source));
+  } catch (error) {
+    console.error('Error attaching deal link:', error);
+    res.status(500).json({ error: error.message || 'Failed to attach deal link' });
+  }
+});
+
+app.post('/api/deal-link/detach', authenticateToken, (req, res) => {
+  try {
+    const { namespace, type, id, targetType } = req.body || {};
+    if (!isValidDealRequest({ namespace, type, id }) || !isDealType(targetType) || targetType === type) {
+      return res.status(400).json({ error: 'Invalid deal-link request' });
+    }
+    const db = readDb();
+    ensureMigrated(db);
+
+    const source = findSectionLinkRowById(getSectionLinkRows(db, 'commission', type, namespace), id);
+    if (!source) return res.status(404).json({ error: 'Not found' });
+
+    const dealId = source.deal_id;
+    if (dealId) {
+      const member = findDealMemberRow(db, targetType, namespace, dealId);
+      if (member) deleteCommissionCounterpart(db, targetType, namespace, member.id);
+
+      // If the deal has shrunk to a single side, drop the grouping entirely.
+      if (countDealMembers(db, namespace, dealId) < 2) {
+        for (const t of DEAL_TYPES) {
+          const remaining = findDealMemberRow(db, t, namespace, dealId);
+          if (remaining) remaining.deal_id = null;
+        }
+      }
+    }
+
+    if (!writeDb(db)) return res.status(500).json({ error: 'Failed to persist' });
+    res.json(buildDealStatus(db, namespace, type, source));
+  } catch (error) {
+    console.error('Error detaching deal link:', error);
+    res.status(500).json({ error: error.message || 'Failed to detach deal link' });
   }
 });
 

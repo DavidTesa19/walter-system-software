@@ -27,6 +27,7 @@ import {
   otherLinkableNamespaces,
   type LinkableNamespace
 } from "../sectionLink";
+import { useDealLink } from "../useDealLink";
 import { uploadDocuments } from "../../utils/uploadDocuments";
 import type { SectionProps } from "./SectionTypes";
 import useFieldOptions from "../hooks/useFieldOptions";
@@ -969,6 +970,14 @@ const PartnersSectionNew: React.FC<SectionProps> = ({ viewMode, isActive, system
       onChange: (checked: boolean) => handleToggleEntitySectionLink(ns, checked),
     }));
   }, [linkableNamespace, selectedEntity, entityLinkedNamespaces, sectionLinkBusyKey, handleToggleEntitySectionLink]);
+
+  const dealLink = useDealLink({
+    ownType: "partner",
+    linkableNamespace,
+    selectedCommissionId: selectedCommission?.id ?? null,
+    selectedCommissionDealId: selectedCommission?.deal_id ?? null,
+    onChanged: fetchData,
+  });
 
   const commissionSectionLinkToggles = useMemo<SectionLinkToggle[]>(() => {
     if (!linkableNamespace || !selectedCommission) return [];
@@ -1936,6 +1945,7 @@ const PartnersSectionNew: React.FC<SectionProps> = ({ viewMode, isActive, system
         onRemoveCommission={selectedCommission ? () => void handleDelete(selectedCommission.id, { commissionOnly: true }) : undefined}
         entitySectionLinks={entityProfileToggles}
         commissionSectionLinks={commissionSectionLinkToggles}
+        dealLink={dealLink}
         fieldPicker={{
           fieldOptions: fieldOptionChoices,
           groupedFieldOptions: groupedFieldOptionChoices,
