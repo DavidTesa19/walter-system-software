@@ -7,7 +7,7 @@ import DocumentExplorer from "./DocumentExplorer";
 import ThemeToggleButton from "../../components/ThemeToggleButton";
 import FieldSelectInput, { type FieldPickerConfig } from "./FieldSelectInput";
 import type { FieldOption } from "../fieldOptions";
-import type { FieldDropdownLabels } from "../cells/fieldDropdown";
+import { SPECIALIZATION_DROPDOWN_LABELS } from "../cells/fieldDropdown";
 import {
   parseMultiValue,
   serializeMultiValue,
@@ -15,17 +15,6 @@ import {
   type SpecializationMap,
 } from "../multiValue";
 import "./EntityCommissionProfilePanel.css";
-
-// Wording for the nested "Zaměření" (specialization) dropdown reused from the
-// Obor picker.
-const SPECIALIZATION_DROPDOWN_LABELS: Partial<FieldDropdownLabels> = {
-  searchPlaceholder: "Hledat zaměření...",
-  newOptionPlaceholder: "Název nového zaměření",
-  emptyNameError: "Zadejte název zaměření.",
-  createFailed: "Nepodařilo se přidat zaměření.",
-  deleteConfirm: (label: string) => `Opravdu chcete odstranit zaměření "${label}"?`,
-  deleteFailed: "Nepodařilo se odstranit zaměření.",
-};
 
 // Config for the specialization dropdown nested under each Obor value. Options
 // are keyed per obor value and persist per namespace, exactly like custom obor

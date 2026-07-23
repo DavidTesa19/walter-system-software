@@ -13,6 +13,7 @@ import EntityCommissionProfilePanel, {
   type SectionLinkToggle
 } from "../components/EntityCommissionProfilePanel";
 import FieldCellRenderer from "../cells/FieldCellRenderer";
+import SpecializationCellRenderer from "../cells/SpecializationCellRenderer";
 import StatusCellRenderer from "../cells/StatusCellRenderer";
 import ApprovalStatusCellRenderer from "../cells/ApprovalStatusCellRenderer";
 import { mapViewToStatus } from "../constants";
@@ -1608,7 +1609,7 @@ const PartnersSectionNew: React.FC<SectionProps> = ({ viewMode, isActive, system
         return;
       }
 
-      if (["name", "company", "field", "location", "mobile", "email"].includes(field) && row.entity) {
+      if (["name", "company", "field", "field_specialization", "location", "mobile", "email"].includes(field) && row.entity) {
         await handleUpdateEntity(row.entity.id, { [field]: params.newValue });
       } else if (!row.entityOnly) {
         const targetCommissionId = sectionKind === "subjects" && viewMode === "active"
@@ -1786,6 +1787,14 @@ const PartnersSectionNew: React.FC<SectionProps> = ({ viewMode, isActive, system
         valueGetter: makeSpecializationValueGetter((data) => data?.entity?.field_specialization, "field"),
         flex: 1,
         minWidth: 120,
+        cellRenderer: SpecializationCellRenderer,
+        cellRendererParams: {
+          oborKey: "field",
+          getOptions: getSpecializationOptions,
+          onCreateFieldOption: readOnly ? undefined : createSpecializationOption,
+          onDeleteFieldOption: readOnly ? undefined : handleDeleteSpecializationOption,
+          disabled: readOnly,
+        },
       },
       {
         field: "region",
@@ -1814,7 +1823,7 @@ const PartnersSectionNew: React.FC<SectionProps> = ({ viewMode, isActive, system
     );
 
     return cols;
-  }, [assignableUsers, fieldOptionChoices, fieldOptionsArray, groupedFieldOptionChoices, handleCreateFieldOption, handleDeleteFieldOption, handleFieldFilterChange, handleRegionFilterChange, handleStateFilterChange, onStatusCellClicked, projectStatusOptions, readOnly, systemNamespace, viewMode]);
+  }, [assignableUsers, createSpecializationOption, fieldOptionChoices, fieldOptionsArray, getSpecializationOptions, groupedFieldOptionChoices, handleCreateFieldOption, handleDeleteFieldOption, handleDeleteSpecializationOption, handleFieldFilterChange, handleRegionFilterChange, handleStateFilterChange, onStatusCellClicked, projectStatusOptions, readOnly, systemNamespace, viewMode]);
 
   const isExternalFilterPresent = useCallback(() => {
     return activeStateFiltersRef.current.size < WORKFLOW_STATUS_VALUES.length ||

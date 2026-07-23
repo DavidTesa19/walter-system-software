@@ -25,6 +25,17 @@ const DEFAULT_FIELD_DROPDOWN_LABELS: FieldDropdownLabels = {
   deleteFailed: "Nepodařilo se odstranit obor.",
 };
 
+// Shared wording for every "Zaměření" (specialization) dropdown instance —
+// the profile panel, the create modal, and the grid cell all pass this in.
+export const SPECIALIZATION_DROPDOWN_LABELS: Partial<FieldDropdownLabels> = {
+  searchPlaceholder: "Hledat zaměření...",
+  newOptionPlaceholder: "Název nového zaměření",
+  emptyNameError: "Zadejte název zaměření.",
+  createFailed: "Nepodařilo se přidat zaměření.",
+  deleteConfirm: (label) => `Opravdu chcete odstranit zaměření "${label}"?`,
+  deleteFailed: "Nepodařilo se odstranit zaměření.",
+};
+
 export interface OpenFieldDropdownParams {
   anchorRect: { top: number; bottom: number; left: number; width: number };
   fieldOptions?: FieldOption[];
@@ -207,25 +218,28 @@ export const openFieldDropdown = (params: OpenFieldDropdownParams) => {
     // 3. Categories Mode (Top level)
     else {
       currentView = 'categories';
-      const rootOptions = showCategories
-        ? menuGroups
-        : (menuGroups[0]?.options ?? flatFieldOptions);
 
-      rootOptions.forEach((entry) => {
-        const isGroup = showCategories;
-        const item = createItem(isGroup ? entry.label : entry.label, isGroup, false, () => {
-          if (showCategories) {
-            activeCategory = entry as FieldCategory;
+      if (showCategories) {
+        menuGroups.forEach((group) => {
+          const item = createItem(group.label, true, false, () => {
+            activeCategory = group;
             currentView = 'suboptions';
             render();
             listContainer.scrollTop = 0;
-            return;
-          }
-
-          selectValue((entry as FieldOption).value);
+          });
+          listContainer.appendChild(item);
         });
-        listContainer.appendChild(item);
-      });
+      } else {
+        // A single (or no) category means there's no drill-down — this is the
+        // root list of selectable options, so it needs the same delete action
+        // as search/sub-options mode. Using the plain createItem here (as
+        // before) silently dropped the "Odstranit" button for custom options.
+        const flatRootOptions = menuGroups[0]?.options ?? flatFieldOptions;
+        flatRootOptions.forEach((opt) => {
+          const item = createOptionItem(opt, false);
+          listContainer.appendChild(item);
+        });
+      }
     }
 
     renderFooter();

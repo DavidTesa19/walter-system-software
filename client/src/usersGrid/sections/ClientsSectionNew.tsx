@@ -13,6 +13,7 @@ import EntityCommissionProfilePanel, {
   type SectionLinkToggle
 } from "../components/EntityCommissionProfilePanel";
 import FieldCellRenderer from "../cells/FieldCellRenderer";
+import SpecializationCellRenderer from "../cells/SpecializationCellRenderer";
 import StatusCellRenderer from "../cells/StatusCellRenderer";
 import ApprovalStatusCellRenderer from "../cells/ApprovalStatusCellRenderer";
 import { mapViewToStatus } from "../constants";
@@ -1723,7 +1724,7 @@ const ClientsSectionNew: React.FC<SectionProps> = ({
         return;
       }
 
-      const entityFields = ['name', 'company', 'field', 'location', 'mobile', 'email'];
+      const entityFields = ['name', 'company', 'field', 'field_specialization', 'location', 'mobile', 'email'];
 
       if (entityFields.includes(field) && row.entity) {
         await handleUpdateEntity(row.entity.id, { [field]: newValue });
@@ -2006,6 +2007,14 @@ const ClientsSectionNew: React.FC<SectionProps> = ({
         valueGetter: makeSpecializationValueGetter((data) => data?.entity?.field_specialization, "field"),
         flex: 1,
         minWidth: 120,
+        cellRenderer: SpecializationCellRenderer,
+        cellRendererParams: {
+          oborKey: "field",
+          getOptions: getSpecializationOptions,
+          onCreateFieldOption: readOnly ? undefined : createSpecializationOption,
+          onDeleteFieldOption: readOnly ? undefined : handleDeleteSpecializationOption,
+          disabled: readOnly,
+        },
       },
       {
         field: "region",
@@ -2132,7 +2141,7 @@ const ClientsSectionNew: React.FC<SectionProps> = ({
     }
 
     return cols;
-  }, [assignableUsers, fieldOptionChoices, fieldOptionsArray, groupedFieldOptionChoices, handleCreateFieldOption, handleDeleteFieldOption, handleFieldFilterChange, handleRegionFilterChange, handleStateFilterChange, onStatusCellClicked, projectStatusOptions, readOnly, systemNamespace, viewMode]);
+  }, [assignableUsers, createSpecializationOption, fieldOptionChoices, fieldOptionsArray, getSpecializationOptions, groupedFieldOptionChoices, handleCreateFieldOption, handleDeleteFieldOption, handleDeleteSpecializationOption, handleFieldFilterChange, handleRegionFilterChange, handleStateFilterChange, onStatusCellClicked, projectStatusOptions, readOnly, systemNamespace, viewMode]);
 
   const isExternalFilterPresent = useCallback(() => {
     return activeStateFiltersRef.current.size < WORKFLOW_STATUS_VALUES.length ||
