@@ -59,9 +59,11 @@ import {
   passesMultiValueFilter,
 } from "../multiValue";
 import {
+  copySubjectToOtherType,
   createSubjectInOtherTypes,
   SUBJECT_TYPE_AS_LABEL,
   SUBJECT_TYPE_LABEL,
+  SUBJECT_TYPE_TO_DATIVE_PLURAL,
   type SubjectType,
 } from "../crossTypeCreate";
 
@@ -988,6 +990,32 @@ const TipersSectionNew: React.FC<SectionProps> = ({
     }
   }, [selectedCommission, linkableNamespace, fetchData]);
 
+  // "Vytvořit i jako Partnera / Klienta" checkboxes shown alongside an existing
+  // tipař's profile — same action as the create-modal option, run after the
+  // fact. Once a copy has been created for a type it stays checked (and the
+  // checkbox no longer re-triggers creation) until a different subject is opened.
+  const [copyingOtherType, setCopyingOtherType] = useState<SubjectType | null>(null);
+  const [copiedOtherTypes, setCopiedOtherTypes] = useState<SubjectType[]>([]);
+
+  useEffect(() => {
+    setCopiedOtherTypes([]);
+  }, [selectedEntityId]);
+
+  const handleCopyToOtherType = useCallback(async (type: SubjectType) => {
+    if (!selectedEntity) return;
+    setCopyingOtherType(type);
+    try {
+      const entityId = await copySubjectToOtherType(type, systemNamespace, selectedEntity, selectedCommission);
+      setCopiedOtherTypes((prev) => (prev.includes(type) ? prev : [...prev, type]));
+      alert(`Tipař byl zkopírován jako ${SUBJECT_TYPE_LABEL[type].toLowerCase()} ${entityId}.`);
+    } catch (error) {
+      console.error(`Error copying tiper to ${type}:`, error);
+      alert(`Chyba při kopírování tipaře ${SUBJECT_TYPE_TO_DATIVE_PLURAL[type]}.`);
+    } finally {
+      setCopyingOtherType(null);
+    }
+  }, [selectedCommission, selectedEntity, systemNamespace]);
+
   const entitySectionLinkToggles = useMemo<SectionLinkToggle[]>(() => {
     if (!linkableNamespace || !selectedEntity) return [];
     return otherLinkableNamespaces(linkableNamespace).map((ns) => ({
@@ -1034,6 +1062,28 @@ const TipersSectionNew: React.FC<SectionProps> = ({
   const createOtherOptions = useMemo<OtherSectionOption[]>(
     () => [...createSectionLinkOptions, ...createOtherTypeOptions],
     [createSectionLinkOptions, createOtherTypeOptions]
+  );
+
+  // Profile-panel equivalent of "Vytvořit i jako Partnera / Klienta" — same two
+  // options as the create modal, available after the subject already exists.
+  const entityTypeCopyToggles = useMemo<SectionLinkToggle[]>(() => {
+    if (!selectedEntity) return [];
+    return TIPER_OTHER_TYPES.map((type) => ({
+      key: `type:${type}`,
+      label: `Vytvořit i jako ${SUBJECT_TYPE_AS_LABEL[type]}`,
+      checked: copiedOtherTypes.includes(type),
+      busy: copyingOtherType === type,
+      onChange: (checked: boolean) => {
+        if (checked && !copiedOtherTypes.includes(type)) {
+          void handleCopyToOtherType(type);
+        }
+      },
+    }));
+  }, [copiedOtherTypes, copyingOtherType, handleCopyToOtherType, selectedEntity]);
+
+  const entityProfileToggles = useMemo<SectionLinkToggle[]>(
+    () => [...entitySectionLinkToggles, ...entityTypeCopyToggles],
+    [entitySectionLinkToggles, entityTypeCopyToggles]
   );
 
   const updateProjectClusterStatus = useCallback(async (row: TiperGridRow, nextStatus: string) => {
@@ -2156,7 +2206,7 @@ const TipersSectionNew: React.FC<SectionProps> = ({
         onDuplicateCommission={handleDuplicateCommission}
         onCreateCommission={selectedEntity ? handleCreateFirstCommission : undefined}
         onRemoveCommission={selectedCommission ? () => void handleDelete(selectedCommission.id, { commissionOnly: true }) : undefined}
-        entitySectionLinks={entitySectionLinkToggles}
+        entitySectionLinks={entityProfileToggles}
         commissionSectionLinks={commissionSectionLinkToggles}
         fieldPicker={{
           fieldOptions: fieldOptionChoices,

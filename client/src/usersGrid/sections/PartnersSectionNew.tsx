@@ -59,9 +59,11 @@ import {
   passesMultiValueFilter,
 } from "../multiValue";
 import {
+  copySubjectToOtherType,
   createSubjectInOtherTypes,
   SUBJECT_TYPE_AS_LABEL,
   SUBJECT_TYPE_LABEL,
+  SUBJECT_TYPE_TO_DATIVE_PLURAL,
   type SubjectType,
 } from "../crossTypeCreate";
 
@@ -531,7 +533,6 @@ const PartnersSectionNew: React.FC<SectionProps> = ({ viewMode, isActive, system
   const commissionActivityScope = useMemo(() => buildCommissionsRecordScope(activitySystem, "partners"), [activitySystem]);
   const entityApiBase = systemNamespace ? `/api/${systemNamespace}/partner-entities` : "/api/partner-entities";
   const commissionApiBase = systemNamespace ? `/api/${systemNamespace}/partner-commissions` : "/api/partner-commissions";
-  const clientEntityApiBase = systemNamespace ? `/api/${systemNamespace}/client-entities` : "/api/client-entities";
   const linkableNamespace = useMemo(() => getLinkableNamespace(systemNamespace), [systemNamespace]);
   const documentManager = useProfileDocuments(resourceKey, selectedEntityId);
   const notesManager = useProfileNotes(resourceKey, selectedEntityId);
@@ -932,6 +933,32 @@ const PartnersSectionNew: React.FC<SectionProps> = ({ viewMode, isActive, system
     }
   }, [selectedCommission, linkableNamespace, fetchData]);
 
+  // "Vytvořit i jako Klienta / Tipaře" checkboxes shown alongside an existing
+  // partner's profile — same action as the create-modal option, run after the
+  // fact. Once a copy has been created for a type it stays checked (and the
+  // checkbox no longer re-triggers creation) until a different subject is opened.
+  const [copyingOtherType, setCopyingOtherType] = useState<SubjectType | null>(null);
+  const [copiedOtherTypes, setCopiedOtherTypes] = useState<SubjectType[]>([]);
+
+  useEffect(() => {
+    setCopiedOtherTypes([]);
+  }, [selectedEntityId]);
+
+  const handleCopyToOtherType = useCallback(async (type: SubjectType) => {
+    if (!selectedEntity) return;
+    setCopyingOtherType(type);
+    try {
+      const entityId = await copySubjectToOtherType(type, systemNamespace, selectedEntity, selectedCommission);
+      setCopiedOtherTypes((prev) => (prev.includes(type) ? prev : [...prev, type]));
+      alert(`Partner byl zkopírován jako ${SUBJECT_TYPE_LABEL[type].toLowerCase()} ${entityId}.`);
+    } catch (error) {
+      console.error(`Error copying partner to ${type}:`, error);
+      alert(`Chyba při kopírování partnera ${SUBJECT_TYPE_TO_DATIVE_PLURAL[type]}.`);
+    } finally {
+      setCopyingOtherType(null);
+    }
+  }, [selectedCommission, selectedEntity, systemNamespace]);
+
   const entitySectionLinkToggles = useMemo<SectionLinkToggle[]>(() => {
     if (!linkableNamespace || !selectedEntity) return [];
     return otherLinkableNamespaces(linkableNamespace).map((ns) => ({
@@ -978,6 +1005,28 @@ const PartnersSectionNew: React.FC<SectionProps> = ({ viewMode, isActive, system
   const createOtherOptions = useMemo<OtherSectionOption[]>(
     () => [...createSectionLinkOptions, ...createOtherTypeOptions],
     [createSectionLinkOptions, createOtherTypeOptions]
+  );
+
+  // Profile-panel equivalent of "Vytvořit i jako Klienta / Tipaře" — same two
+  // options as the create modal, available after the subject already exists.
+  const entityTypeCopyToggles = useMemo<SectionLinkToggle[]>(() => {
+    if (!selectedEntity) return [];
+    return PARTNER_OTHER_TYPES.map((type) => ({
+      key: `type:${type}`,
+      label: `Vytvořit i jako ${SUBJECT_TYPE_AS_LABEL[type]}`,
+      checked: copiedOtherTypes.includes(type),
+      busy: copyingOtherType === type,
+      onChange: (checked: boolean) => {
+        if (checked && !copiedOtherTypes.includes(type)) {
+          void handleCopyToOtherType(type);
+        }
+      },
+    }));
+  }, [copiedOtherTypes, copyingOtherType, handleCopyToOtherType, selectedEntity]);
+
+  const entityProfileToggles = useMemo<SectionLinkToggle[]>(
+    () => [...entitySectionLinkToggles, ...entityTypeCopyToggles],
+    [entitySectionLinkToggles, entityTypeCopyToggles]
   );
 
   const updateProjectClusterStatus = useCallback(async (row: PartnerGridRow, nextStatus: string) => {
@@ -1445,55 +1494,6 @@ const PartnersSectionNew: React.FC<SectionProps> = ({ viewMode, isActive, system
     }
   }, [commissionApiBase, fetchData, selectedCommission, selectedEntity]);
 
-  const handleCopyToClient = useCallback(async () => {
-    if (!selectedEntity) return;
-
-    const entityPayload = {
-      status: selectedEntity.status,
-      first_name: emptyToNull(selectedEntity.name ?? ""),
-      company_name: emptyToNull(selectedEntity.company ?? ""),
-      field: emptyToNull(selectedEntity.field ?? ""),
-      field_specialization: emptyToNull(selectedEntity.field_specialization ?? ""),
-      phone: emptyToNull(selectedEntity.mobile ?? ""),
-      email: emptyToNull(selectedEntity.email ?? ""),
-      website: emptyToNull(selectedEntity.website ?? ""),
-      region: emptyToNull(selectedEntity.region ?? ""),
-      location: emptyToNull(selectedEntity.location ?? ""),
-      info: emptyToNull(selectedEntity.info ?? ""),
-      assigned_user_ids: selectedEntity.assigned_user_ids ?? []
-    };
-
-    try {
-      if (selectedCommission) {
-        const commissionPayload = {
-          status: selectedCommission.status,
-          position: emptyToNull(selectedCommission.position ?? ""),
-          service_position: emptyToNull(selectedCommission.service_position ?? ""),
-          assigned_user_ids: selectedCommission.assigned_user_ids ?? [],
-          budget: emptyToNull(selectedCommission.budget ?? ""),
-          commission_value: emptyToNull(selectedCommission.commission_value ?? ""),
-          priority: emptyToNull(selectedCommission.priority ?? ""),
-          state: emptyToNull(selectedCommission.state ?? ""),
-          deadline: emptyToNull(selectedCommission.deadline ?? ""),
-          notes: emptyToNull(selectedCommission.notes ?? "")
-        };
-
-        const response = await apiPost<{ entity: { entity_id: string } }>(`${clientEntityApiBase}/with-commission`, {
-          entity: entityPayload,
-          commission: commissionPayload
-        });
-
-        alert(`Partner byl zkopírován jako klient ${response?.entity?.entity_id ?? ""}.`);
-      } else {
-        const response = await apiPost<{ entity_id: string }>(clientEntityApiBase, entityPayload);
-        alert(`Partner byl zkopírován jako klient ${response?.entity_id ?? ""}.`);
-      }
-    } catch (error) {
-      console.error("Error copying partner to client:", error);
-      alert("Chyba při kopírování partnera ke klientům.");
-    }
-  }, [clientEntityApiBase, selectedCommission, selectedEntity]);
-
   const handleCreateFirstCommission = useCallback(async () => {
     if (!selectedEntity) return;
 
@@ -1934,9 +1934,7 @@ const PartnersSectionNew: React.FC<SectionProps> = ({ viewMode, isActive, system
         onDuplicateCommission={handleDuplicateCommission}
         onCreateCommission={selectedEntity ? handleCreateFirstCommission : undefined}
         onRemoveCommission={selectedCommission ? () => void handleDelete(selectedCommission.id, { commissionOnly: true }) : undefined}
-        otherTypeLabel="klienta"
-        onCopyToOtherType={selectedEntity ? handleCopyToClient : undefined}
-        entitySectionLinks={entitySectionLinkToggles}
+        entitySectionLinks={entityProfileToggles}
         commissionSectionLinks={commissionSectionLinkToggles}
         fieldPicker={{
           fieldOptions: fieldOptionChoices,
