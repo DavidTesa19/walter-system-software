@@ -1522,6 +1522,41 @@ async function replaceDeletedFieldOptionReferences(client, scope, value) {
   }
 }
 
+// Only the entity tables carry field_specialization (commissions and the
+// legacy partners/clients/tipers tables don't), unlike FIELD_OPTION_REPLACEMENT_TABLES above.
+const FIELD_SPECIALIZATION_ENTITY_TABLES = {
+  standard: ['partner_entities', 'client_entities', 'tiper_entities'],
+  project: ['project_partner_entities', 'project_client_entities', 'project_tiper_entities'],
+  growth: ['growth_partner_entities', 'growth_client_entities', 'growth_tiper_entities'],
+};
+
+// When a specialization option is deleted, drop it from every subject's
+// obor -> specialization map that had it selected (rather than leaving a
+// dangling reference to a value that no longer exists in the catalog).
+async function replaceDeletedFieldSpecializationOptionReferences(client, scope, fieldValue, value) {
+  const normalizedScope = normalizeFieldOptionScope(scope);
+  const normalizedField = normalizeFieldOptionValue(fieldValue);
+  const normalizedValue = normalizeFieldOptionValue(value);
+  if (!normalizedScope || !normalizedField || !normalizedValue) {
+    return;
+  }
+
+  const tableNames = FIELD_SPECIALIZATION_ENTITY_TABLES[normalizedScope] ?? [];
+  for (const tableName of tableNames) {
+    await client.query(
+      `UPDATE ${tableName}
+          SET field_specialization = CASE
+                WHEN (field_specialization::jsonb - $1::text) = '{}'::jsonb THEN NULL
+                ELSE (field_specialization::jsonb - $1::text)::text
+              END,
+              updated_at = CURRENT_TIMESTAMP
+        WHERE field_specialization LIKE '{%'
+          AND field_specialization::jsonb ->> $1 = $2`,
+      [normalizedField, normalizedValue]
+    );
+  }
+}
+
 // Generic database operations
 export const db = {
   // Execute raw query
@@ -1785,12 +1820,40 @@ export const db = {
   async deleteFieldSpecializationOption(id) {
     if (!USE_POSTGRES) return null;
 
-    const { rows } = await pool.query(
-      `DELETE FROM field_specialization_options WHERE id = $1
-       RETURNING id, scope, field_value, value, created_at, updated_at`,
-      [id]
-    );
-    return rows[0] ?? null;
+    const client = await pool.connect();
+    try {
+      await client.query('BEGIN');
+
+      const { rows } = await client.query(
+        `SELECT id, scope, field_value, value, created_at, updated_at
+           FROM field_specialization_options
+          WHERE id = $1`,
+        [id]
+      );
+
+      if (rows.length === 0) {
+        await client.query('ROLLBACK');
+        return null;
+      }
+
+      const deletedOption = rows[0];
+
+      await client.query('DELETE FROM field_specialization_options WHERE id = $1', [id]);
+      await replaceDeletedFieldSpecializationOptionReferences(
+        client,
+        deletedOption.scope,
+        deletedOption.field_value,
+        deletedOption.value
+      );
+
+      await client.query('COMMIT');
+      return deletedOption;
+    } catch (error) {
+      await client.query('ROLLBACK');
+      throw error;
+    } finally {
+      client.release();
+    }
   },
 
   async createColorPalette({ name, mode, colors, typography, is_active }) {

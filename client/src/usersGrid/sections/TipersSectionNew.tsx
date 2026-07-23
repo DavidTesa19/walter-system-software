@@ -734,6 +734,13 @@ const TipersSectionNew: React.FC<SectionProps> = ({
     await fetchData();
   }, [deleteFieldOption, fetchData]);
 
+  // Deleting a specialization option clears it server-side from every subject
+  // that had it selected, so the grid must refetch to pick up those changes.
+  const handleDeleteSpecializationOption = useCallback(async (optionId: number) => {
+    await deleteSpecializationOption(optionId);
+    await fetchData();
+  }, [deleteSpecializationOption, fetchData]);
+
   // "Zaměření" (specialization) picker shared by the profile panel and the
   // create modal. Options are scoped per obor value; the chosen values persist
   // in the entity's field_specialization column.
@@ -741,8 +748,8 @@ const TipersSectionNew: React.FC<SectionProps> = ({
     fieldKey: "field_specialization",
     getOptions: getSpecializationOptions,
     onCreateOption: readOnly ? undefined : createSpecializationOption,
-    onDeleteOption: readOnly ? undefined : deleteSpecializationOption,
-  }), [getSpecializationOptions, createSpecializationOption, deleteSpecializationOption, readOnly]);
+    onDeleteOption: readOnly ? undefined : handleDeleteSpecializationOption,
+  }), [getSpecializationOptions, createSpecializationOption, handleDeleteSpecializationOption, readOnly]);
 
   // ==========================================================================
   // PROFILE PANEL LOGIC

@@ -1668,6 +1668,63 @@ const replaceDeletedFieldOptionReferencesInStore = (store, scope, value, actorUs
   }
 };
 
+// Only the entity tables carry field_specialization (commissions and the
+// legacy partners/clients/tipers tables don't), unlike getFieldOptionReplacementTables above.
+const FIELD_SPECIALIZATION_ENTITY_TABLES = {
+  standard: ['partner_entities', 'client_entities', 'tiper_entities'],
+  project: ['project_partner_entities', 'project_client_entities', 'project_tiper_entities'],
+  growth: ['growth_partner_entities', 'growth_client_entities', 'growth_tiper_entities'],
+};
+
+const parseSpecializationMapForCleanup = (raw) => {
+  if (typeof raw !== 'string') return {};
+  const trimmed = raw.trim();
+  if (!trimmed || !trimmed.startsWith('{')) return {};
+  try {
+    const parsed = JSON.parse(trimmed);
+    return parsed && typeof parsed === 'object' && !Array.isArray(parsed) ? parsed : {};
+  } catch {
+    return {};
+  }
+};
+
+const serializeSpecializationMapForCleanup = (map) => (
+  Object.keys(map || {}).length === 0 ? null : JSON.stringify(map)
+);
+
+// When a specialization option is deleted, drop it from every subject's
+// obor -> specialization map that had it selected (rather than leaving a
+// dangling reference to a value that no longer exists in the catalog).
+const replaceDeletedFieldSpecializationOptionReferencesInStore = (store, scope, fieldValue, value, actorUserId) => {
+  const normalizedScope = normalizeFieldOptionScope(scope);
+  const normalizedField = normalizeFieldOptionValue(fieldValue);
+  const normalizedValue = normalizeFieldOptionValue(value);
+  if (!normalizedScope || !normalizedField || !normalizedValue) {
+    return;
+  }
+
+  for (const tableName of FIELD_SPECIALIZATION_ENTITY_TABLES[normalizedScope] ?? []) {
+    if (!Array.isArray(store[tableName])) {
+      continue;
+    }
+
+    store[tableName] = store[tableName].map((record) => {
+      const map = parseSpecializationMapForCleanup(record?.field_specialization);
+      if (map[normalizedField] !== normalizedValue) {
+        return record;
+      }
+
+      const nextMap = { ...map };
+      delete nextMap[normalizedField];
+      return updateAuditedJsonRecord(
+        record,
+        { field_specialization: serializeSpecializationMapForCleanup(nextMap) },
+        actorUserId
+      );
+    });
+  }
+};
+
 [
   /^\/partners(\/|$)/,
   /^\/clients(\/|$)/,
@@ -2106,6 +2163,13 @@ app.delete("/field-specialization-options/:id", authenticateToken, (req, res) =>
   }
 
   store.field_specialization_options = store.field_specialization_options.filter((entry) => Number(entry.id) !== id);
+  replaceDeletedFieldSpecializationOptionReferencesInStore(
+    store,
+    scope,
+    fieldSpecializationOption.field_value,
+    fieldSpecializationOption.value,
+    getRequestActorUserId(req)
+  );
 
   if (!writeDb(store)) {
     return res.status(500).json({ error: 'Failed to delete field specialization option' });
