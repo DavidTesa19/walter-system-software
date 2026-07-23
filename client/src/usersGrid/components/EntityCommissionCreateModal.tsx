@@ -1,6 +1,6 @@
 import React, { useCallback, useEffect, useMemo, useRef } from "react";
 import ThemeToggleButton from "../../components/ThemeToggleButton";
-import type { EditableField, FieldGroup } from "./EntityCommissionProfilePanel";
+import type { EditableField, FieldGroup, SpecializationPickerConfig } from "./EntityCommissionProfilePanel";
 import { MultiValueEditor } from "./EntityCommissionProfilePanel";
 import FieldSelectInput, { type FieldPickerConfig } from "./FieldSelectInput";
 import "./EntityCommissionProfilePanel.css";
@@ -31,6 +31,7 @@ interface EntityCommissionCreateModalProps {
   includeCommissionLabel?: string;
   otherSectionOptions?: OtherSectionOption[];
   fieldPicker?: FieldPickerConfig;
+  specializationPicker?: SpecializationPickerConfig;
   onClose: () => void;
   onEntityChange: (key: string, value: string | string[]) => void;
   onCommissionChange: (key: string, value: string | string[]) => void;
@@ -46,6 +47,7 @@ interface DraftFieldProps {
   onChange: (key: string, value: string | string[]) => void;
   disabled?: boolean;
   fieldPicker?: FieldPickerConfig;
+  specializationPicker?: SpecializationPickerConfig;
   onKeyDown?: (event: React.KeyboardEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>, fieldType: FieldGroup["fields"][number]["type"]) => void;
 }
 
@@ -56,7 +58,7 @@ const normalizeFieldOptions = (options: EditableField['options']) =>
       : option
   ));
 
-const DraftField: React.FC<DraftFieldProps> = ({ field, value, onChange, disabled = false, fieldPicker, onKeyDown }) => {
+const DraftField: React.FC<DraftFieldProps> = ({ field, value, onChange, disabled = false, fieldPicker, specializationPicker, onKeyDown }) => {
   // Multi-value fields (Obor, Společnost, Kraj, Lokalita) use the same add/remove
   // editor as the profile panel. The draft stores the serialized scalar / JSON
   // array string, so submission passes it straight through.
@@ -66,6 +68,7 @@ const DraftField: React.FC<DraftFieldProps> = ({ field, value, onChange, disable
         field={{ ...field, value: value ?? "" }}
         onSave={(key, next) => onChange(key, typeof next === "boolean" ? String(next) : (next ?? ""))}
         fieldPicker={fieldPicker}
+        specializationPicker={specializationPicker}
         commitOnChange
       />
     );
@@ -190,10 +193,11 @@ interface DraftFieldGroupProps {
   onChange: (key: string, value: string | string[]) => void;
   disabled?: boolean;
   fieldPicker?: FieldPickerConfig;
+  specializationPicker?: SpecializationPickerConfig;
   onFieldKeyDown?: (event: React.KeyboardEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>, fieldType: FieldGroup["fields"][number]["type"]) => void;
 }
 
-const DraftFieldGroup: React.FC<DraftFieldGroupProps> = ({ group, values, onChange, disabled = false, fieldPicker, onFieldKeyDown }) => {
+const DraftFieldGroup: React.FC<DraftFieldGroupProps> = ({ group, values, onChange, disabled = false, fieldPicker, specializationPicker, onFieldKeyDown }) => {
   const colorClass = group.color ? `group-${group.color}` : "";
 
   return (
@@ -210,6 +214,7 @@ const DraftFieldGroup: React.FC<DraftFieldGroupProps> = ({ group, values, onChan
                 onChange={onChange}
                 disabled={disabled}
                 fieldPicker={fieldPicker}
+                specializationPicker={specializationPicker}
                 onKeyDown={onFieldKeyDown}
               />
             </div>
@@ -235,6 +240,7 @@ const EntityCommissionCreateModal: React.FC<EntityCommissionCreateModalProps> = 
   includeCommissionLabel = "Vytvořit rovnou i zakázku",
   otherSectionOptions,
   fieldPicker,
+  specializationPicker,
   onClose,
   onEntityChange,
   onCommissionChange,
@@ -426,6 +432,7 @@ const EntityCommissionCreateModal: React.FC<EntityCommissionCreateModalProps> = 
                       values={entityValues}
                       onChange={onEntityChange}
                       fieldPicker={fieldPicker}
+                      specializationPicker={specializationPicker}
                       onFieldKeyDown={handleFieldKeyDown}
                     />
                   ))}

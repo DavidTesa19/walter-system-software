@@ -29,6 +29,7 @@ import {
 import { uploadDocuments } from "../../utils/uploadDocuments";
 import type { SectionProps } from "./SectionTypes";
 import useFieldOptions from "../hooks/useFieldOptions";
+import useFieldSpecializationOptions from "../hooks/useFieldSpecializationOptions";
 import useProfileDocuments from "../hooks/useProfileDocuments";
 import useProfileNotes from "../hooks/useProfileNotes";
 import { ApproveRestoreCellRenderer, DeleteArchiveCellRenderer, ArchiveCellRenderer } from "../cells/RowActionCellRenderers";
@@ -50,8 +51,10 @@ import { REGION_OPTIONS } from "../regions";
 import {
   makeMultiValueFilterGetter,
   makeSingleValueEditable,
+  makeSpecializationValueGetter,
   multiValueComparator,
   multiValueFormatter,
+  parseSpecializationMap,
   passesMultiValueFilter,
 } from "../multiValue";
 import {
@@ -72,6 +75,7 @@ type PartnerEntityApi = {
   assigned_user_ids?: number[] | null;
   company_name?: string | null;
   field?: string | null;
+  field_specialization?: string | null;
   region?: string | null;
   location?: string | null;
   info?: string | null;
@@ -142,6 +146,7 @@ type PartnerCreateDraft = {
     name: string;
     company: string;
     field: string;
+    field_specialization: string;
     region: string;
     mobile: string;
     email: string;
@@ -176,6 +181,7 @@ const createDefaultPartnerDraft = (): PartnerCreateDraft => ({
     name: "",
     company: "",
     field: "",
+    field_specialization: "",
     region: "",
     mobile: "",
     email: "",
@@ -206,6 +212,7 @@ const normalizePartnerEntity = (entity: PartnerEntityApi): PartnerEntity => ({
   name: joinName(entity.first_name, entity.last_name) || entity.company_name || entity.entity_id,
   company: entity.company_name ?? null,
   field: entity.field ?? null,
+  field_specialization: entity.field_specialization ?? null,
   region: entity.region ?? null,
   location: entity.location ?? null,
   address: null,
@@ -260,7 +267,7 @@ const mapPartnerEntityUpdates = (updates: Record<string, unknown>) => {
     else if (key === "mobile") mapped.phone = value;
     else if (key === "assigned_user_ids") mapped.assigned_user_ids = value;
     else if (key === "status") mapped.status = value;
-    else if (["field", "region", "location", "email", "website", "info"].includes(key)) mapped[key] = value;
+    else if (["field", "field_specialization", "region", "location", "email", "website", "info"].includes(key)) mapped[key] = value;
   }
 
   return mapped;
@@ -277,6 +284,7 @@ const derivePartnerEntityFromCommission = (commission: PartnerCommissionApi): Pa
     name: joinName(commission.entity_first_name, commission.entity_last_name) || commission.entity_company_name || commission.commission_id.split("-")[0] || String(entityId),
     company: commission.entity_company_name ?? null,
     field: commission.entity_field ?? null,
+    field_specialization: null,
     region: commission.entity_region ?? null,
     location: commission.entity_location ?? null,
     address: null,
@@ -304,7 +312,7 @@ const buildEntityData = (entity: PartnerEntity | null, assignmentOptions: Array<
       fields: [
         { key: "name", label: "Jméno / Název", value: entity.name, type: "text" },
         { key: "company", label: "Společnost", value: entity.company, type: "multi-value", multiValueEditor: "text" },
-        { key: "field", label: "Obor", value: entity.field, type: "multi-value", multiValueEditor: oborFieldType === "field-select" ? "field-select" : "select", options: fieldOptionsArray },
+        { key: "field", label: "Obor", value: entity.field, type: "multi-value", multiValueEditor: oborFieldType === "field-select" ? "field-select" : "select", options: fieldOptionsArray, specializationValues: parseSpecializationMap(entity.field_specialization) },
         { key: "assigned_user_ids", label: "Přiřazení uživatelé", value: toAssignmentDraftValue(entity.assigned_user_ids), type: "multi-select", options: assignmentOptions }
       ]
     },
@@ -402,6 +410,7 @@ const buildPartnerDraftEntityData = (draft: PartnerCreateDraft, assignmentOption
     name: draft.entity.name,
     company: draft.entity.company,
     field: draft.entity.field,
+    field_specialization: draft.entity.field_specialization,
     region: draft.entity.region,
     location: draft.entity.location,
     address: null,
@@ -504,6 +513,11 @@ const PartnersSectionNew: React.FC<SectionProps> = ({ viewMode, isActive, system
     createFieldOption,
     deleteFieldOption,
   } = useFieldOptions(systemNamespace);
+  const {
+    getOptionsForField: getSpecializationOptions,
+    createSpecializationOption,
+    deleteSpecializationOption,
+  } = useFieldSpecializationOptions(systemNamespace);
   const projectStatusOptions = useMemo(
     () =>
       systemNamespace === "projects"
@@ -693,6 +707,16 @@ const PartnersSectionNew: React.FC<SectionProps> = ({ viewMode, isActive, system
     await deleteFieldOption(optionId);
     await fetchData();
   }, [deleteFieldOption, fetchData]);
+
+  // "Zaměření" (specialization) picker shared by the profile panel and the
+  // create modal. Options are scoped per obor value; the chosen values persist
+  // in the entity's field_specialization column.
+  const specializationPicker = useMemo(() => ({
+    fieldKey: "field_specialization",
+    getOptions: getSpecializationOptions,
+    onCreateOption: readOnly ? undefined : createSpecializationOption,
+    onDeleteOption: readOnly ? undefined : deleteSpecializationOption,
+  }), [getSpecializationOptions, createSpecializationOption, deleteSpecializationOption, readOnly]);
 
   const selectedEntity = useMemo(() => selectedEntityId === null ? null : entities.find((entity) => entity.id === selectedEntityId) || null, [entities, selectedEntityId]);
   const selectedCommission = useMemo(() => selectedCommissionId === null ? null : commissions.find((commission) => commission.id === selectedCommissionId) || null, [commissions, selectedCommissionId]);
@@ -1210,6 +1234,7 @@ const PartnersSectionNew: React.FC<SectionProps> = ({ viewMode, isActive, system
         first_name: emptyToNull(createDraft.entity.name),
         company_name: emptyToNull(createDraft.entity.company),
         field: emptyToNull(createDraft.entity.field),
+        field_specialization: emptyToNull(createDraft.entity.field_specialization),
         phone: emptyToNull(createDraft.entity.mobile),
         email: emptyToNull(createDraft.entity.email),
         website: emptyToNull(createDraft.entity.website),
@@ -1289,6 +1314,7 @@ const PartnersSectionNew: React.FC<SectionProps> = ({ viewMode, isActive, system
         first_name: emptyToNull(createDraft.entity.name),
         company_name: emptyToNull(createDraft.entity.company),
         field: emptyToNull(createDraft.entity.field),
+        field_specialization: emptyToNull(createDraft.entity.field_specialization),
         phone: emptyToNull(createDraft.entity.mobile),
         email: emptyToNull(createDraft.entity.email),
         website: emptyToNull(createDraft.entity.website),
@@ -1358,6 +1384,7 @@ const PartnersSectionNew: React.FC<SectionProps> = ({ viewMode, isActive, system
         name: selectedEntity.name ?? "",
         company: selectedEntity.company ?? "",
         field: selectedEntity.field ?? "",
+        field_specialization: selectedEntity.field_specialization ?? "",
         region: selectedEntity.region ?? "",
         mobile: selectedEntity.mobile ?? "",
         email: selectedEntity.email ?? "",
@@ -1418,6 +1445,7 @@ const PartnersSectionNew: React.FC<SectionProps> = ({ viewMode, isActive, system
       first_name: emptyToNull(selectedEntity.name ?? ""),
       company_name: emptyToNull(selectedEntity.company ?? ""),
       field: emptyToNull(selectedEntity.field ?? ""),
+      field_specialization: emptyToNull(selectedEntity.field_specialization ?? ""),
       phone: emptyToNull(selectedEntity.mobile ?? ""),
       email: emptyToNull(selectedEntity.email ?? ""),
       website: emptyToNull(selectedEntity.website ?? ""),
@@ -1744,6 +1772,15 @@ const PartnersSectionNew: React.FC<SectionProps> = ({ viewMode, isActive, system
         },
       },
       {
+        field: "field_specialization",
+        headerName: "Zaměření",
+        filter: true,
+        editable: false,
+        valueGetter: makeSpecializationValueGetter((data) => data?.entity?.field_specialization, "field"),
+        flex: 1,
+        minWidth: 120,
+      },
+      {
         field: "region",
         headerName: "Kraj",
         filter: true,
@@ -1891,6 +1928,7 @@ const PartnersSectionNew: React.FC<SectionProps> = ({ viewMode, isActive, system
           onCreateFieldOption: handleCreateFieldOption,
           onDeleteFieldOption: handleDeleteFieldOption,
         }}
+        specializationPicker={specializationPicker}
         onClose={closeProfile}
         onUpdateEntity={handleUpdateEntity}
         onUpdateCommission={handleUpdateCommission}
@@ -1948,6 +1986,7 @@ const PartnersSectionNew: React.FC<SectionProps> = ({ viewMode, isActive, system
           onCreateFieldOption: handleCreateFieldOption,
           onDeleteFieldOption: handleDeleteFieldOption,
         }}
+        specializationPicker={specializationPicker}
         onClose={closeCreateModal}
         onEntityChange={handleDraftEntityChange}
         onCommissionChange={handleDraftCommissionChange}

@@ -95,6 +95,89 @@ export const passesMultiValueFilter = (raw: unknown, filterSet: Set<string>): bo
 };
 
 // ---------------------------------------------------------------------------
+// Specialization ("Zaměření") — a single specialization chosen per Obor value.
+//
+// Stored in its own text column (`field_specialization`) as a JSON object that
+// maps each obor value to its chosen specialization, e.g.
+//   '{"Lobbying":"Energetika","IT":"Kyberbezpečnost"}'
+// Empty maps are stored as null. Keys line up with the entity's obor values;
+// orphaned keys (obor no longer selected) are ignored on display.
+// ---------------------------------------------------------------------------
+
+export type SpecializationMap = Record<string, string>;
+
+/** Read the stored representation into a clean obor -> specialization map. */
+export const parseSpecializationMap = (raw: unknown): SpecializationMap => {
+  if (raw && typeof raw === "object" && !Array.isArray(raw)) {
+    const out: SpecializationMap = {};
+    for (const [key, value] of Object.entries(raw as Record<string, unknown>)) {
+      const k = String(key).trim();
+      const v = String(value ?? "").trim();
+      if (k && v) out[k] = v;
+    }
+    return out;
+  }
+
+  if (typeof raw !== "string") {
+    return {};
+  }
+
+  const trimmed = raw.trim();
+  if (!trimmed || !trimmed.startsWith("{")) {
+    return {};
+  }
+
+  try {
+    const parsed = JSON.parse(trimmed);
+    if (parsed && typeof parsed === "object" && !Array.isArray(parsed)) {
+      return parseSpecializationMap(parsed);
+    }
+  } catch {
+    // Not valid JSON — treat as empty.
+  }
+  return {};
+};
+
+/** Turn an obor -> specialization map back into the storage representation. */
+export const serializeSpecializationMap = (map: SpecializationMap): string | null => {
+  const clean: SpecializationMap = {};
+  for (const [key, value] of Object.entries(map || {})) {
+    const k = String(key).trim();
+    const v = String(value ?? "").trim();
+    if (k && v) clean[k] = v;
+  }
+  return Object.keys(clean).length === 0 ? null : JSON.stringify(clean);
+};
+
+/**
+ * Human-readable specialization rendering for grid cells: the specialization
+ * values whose obor is still selected, ordered by the obor list. When the obor
+ * list is unknown, every stored specialization is shown.
+ */
+export const formatSpecialization = (specRaw: unknown, oborRaw: unknown, separator = ", "): string => {
+  const map = parseSpecializationMap(specRaw);
+  const obors = parseMultiValue(oborRaw);
+  const values = obors.length > 0
+    ? obors.map((obor) => map[obor]).filter(Boolean)
+    : Object.values(map);
+  const seen: string[] = [];
+  for (const value of values) {
+    if (!seen.includes(value)) seen.push(value);
+  }
+  return seen.join(separator);
+};
+
+/**
+ * ag-grid valueGetter for the specialization column. Reads the chosen
+ * specialization map off the joined entity and the obor list off the row.
+ */
+export const makeSpecializationValueGetter =
+  (specSource: (data: any) => unknown, oborKey: string) =>
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  (params: any): string =>
+    formatSpecialization(specSource(params?.data), params?.data?.[oborKey]);
+
+// ---------------------------------------------------------------------------
 // ag-grid column helpers — shared so every section renders/sorts/filters the
 // multi-value columns identically.
 // ---------------------------------------------------------------------------

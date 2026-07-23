@@ -1241,6 +1241,7 @@ if (!fs.existsSync(DATA_FILE)) {
           growth_tiper_entities: [],
           growth_tiper_commissions: [],
           field_options: [],
+          field_specialization_options: [],
           color_palettes: cloneDefaultPalettes()
         };
       fs.writeFileSync(DATA_FILE, JSON.stringify(defaultData, null, 2));
@@ -1334,6 +1335,9 @@ function readDb() {
     if (!Array.isArray(obj.field_options)) {
       obj.field_options = [];
     }
+    if (!Array.isArray(obj.field_specialization_options)) {
+      obj.field_specialization_options = [];
+    }
     if (!Array.isArray(obj.documents)) {
       obj.documents = [];
     }
@@ -1385,6 +1389,7 @@ function readDb() {
       growth_tiper_entities: [],
       growth_tiper_commissions: [],
       field_options: [],
+      field_specialization_options: [],
       // color_palettes: cloneDefaultPalettes() // No longer needed for global palettes
     };
   }
@@ -1589,6 +1594,17 @@ const ensureFieldOptionsCollection = (store) => {
 const getNextFieldOptionId = (store) => {
   ensureFieldOptionsCollection(store);
   return store.field_options.reduce((maxId, item) => Math.max(maxId, Number(item.id) || 0), 0) + 1;
+};
+
+const ensureFieldSpecializationOptionsCollection = (store) => {
+  if (!Array.isArray(store.field_specialization_options)) {
+    store.field_specialization_options = [];
+  }
+};
+
+const getNextFieldSpecializationOptionId = (store) => {
+  ensureFieldSpecializationOptionsCollection(store);
+  return store.field_specialization_options.reduce((maxId, item) => Math.max(maxId, Number(item.id) || 0), 0) + 1;
 };
 
 const canAccessFieldOptionScope = (user, scope) => {
@@ -1998,6 +2014,104 @@ app.delete("/field-options/:id", authenticateToken, (req, res) => {
   }
 
   res.json(fieldOption);
+});
+
+app.get("/field-specialization-options", authenticateToken, (req, res) => {
+  const scope = requireFieldOptionScopeAccess(req, res, req.query.scope, { write: false });
+  if (!scope) {
+    return;
+  }
+
+  const store = readDb();
+  ensureFieldSpecializationOptionsCollection(store);
+
+  const options = store.field_specialization_options
+    .filter((entry) => entry.scope === scope)
+    .sort((left, right) => {
+      const leftCreatedAt = left.created_at ?? '';
+      const rightCreatedAt = right.created_at ?? '';
+      if (leftCreatedAt !== rightCreatedAt) {
+        return leftCreatedAt.localeCompare(rightCreatedAt);
+      }
+      return Number(left.id) - Number(right.id);
+    });
+
+  res.json(options);
+});
+
+app.post("/field-specialization-options", authenticateToken, (req, res) => {
+  const scope = requireFieldOptionScopeAccess(req, res, req.body?.scope, { write: true });
+  if (!scope) {
+    return;
+  }
+
+  const fieldValue = normalizeFieldOptionValue(req.body?.field);
+  if (!fieldValue) {
+    return res.status(400).json({ error: 'Field specialization field is required' });
+  }
+
+  const value = normalizeFieldOptionValue(req.body?.value);
+  if (!value) {
+    return res.status(400).json({ error: 'Field specialization value is required' });
+  }
+
+  const store = readDb();
+  ensureFieldSpecializationOptionsCollection(store);
+
+  const comparisonFieldValue = fieldValue.toLocaleLowerCase('cs');
+  const existingOptions = store.field_specialization_options.filter(
+    (entry) => entry.scope === scope
+      && String(entry.field_value ?? '').trim().toLocaleLowerCase('cs') === comparisonFieldValue
+  );
+  if (hasDuplicateFieldOptionValue(existingOptions, value)) {
+    return res.status(409).json({ error: 'Field specialization option already exists' });
+  }
+
+  const newFieldSpecializationOption = createAuditedJsonRecord(
+    {
+      id: getNextFieldSpecializationOptionId(store),
+      scope,
+      field_value: fieldValue,
+      value,
+    },
+    getRequestActorUserId(req)
+  );
+
+  store.field_specialization_options.push(newFieldSpecializationOption);
+
+  if (!writeDb(store)) {
+    return res.status(500).json({ error: 'Failed to persist field specialization option' });
+  }
+
+  res.status(201).json(newFieldSpecializationOption);
+});
+
+app.delete("/field-specialization-options/:id", authenticateToken, (req, res) => {
+  const id = Number(req.params.id);
+  if (!Number.isInteger(id) || id <= 0) {
+    return res.status(400).json({ error: 'Invalid field specialization option id' });
+  }
+
+  const store = readDb();
+  ensureFieldSpecializationOptionsCollection(store);
+
+  const fieldSpecializationOption = store.field_specialization_options.find((entry) => Number(entry.id) === id);
+  if (!fieldSpecializationOption) {
+    return res.status(404).json({ error: 'Field specialization option not found' });
+  }
+
+  const scope = requireFieldOptionScopeAccess(req, res, fieldSpecializationOption.scope, { write: true });
+  if (!scope) {
+    return;
+  }
+
+  store.field_specialization_options = store.field_specialization_options.filter((entry) => Number(entry.id) !== id);
+
+  if (!writeDb(store)) {
+    return res.status(500).json({ error: 'Failed to delete field specialization option' });
+  }
+
+  res.json(fieldSpecializationOption);
 });
 
 // Color palette routes for local JSON storage
@@ -4168,7 +4282,7 @@ const PROJECT_JSON_CONFIG = {
     counterKey: 'project_partner',
     entityPrefix: 'PP',
     entityDefaults: { company_name: 'Nová společnost' },
-    entityFields: ['status', 'company_name', 'field', 'location', 'region', 'info', 'category', 'first_name', 'last_name', 'email', 'phone', 'website', 'assigned_to', 'assigned_user_ids'],
+    entityFields: ['status', 'company_name', 'field', 'location', 'region', 'info', 'category', 'first_name', 'last_name', 'email', 'phone', 'website', 'assigned_to', 'assigned_user_ids', 'field_specialization'],
     commissionFields: ['status', 'position', 'budget', 'state', 'assigned_to', 'assigned_user_ids', 'field', 'service_position', 'location', 'info', 'category', 'deadline', 'priority', 'phone', 'commission_value', 'is_tipped', 'notes']
   },
   client: {
@@ -4177,7 +4291,7 @@ const PROJECT_JSON_CONFIG = {
     counterKey: 'project_client',
     entityPrefix: 'PK',
     entityDefaults: { company_name: 'Nová společnost' },
-    entityFields: ['status', 'company_name', 'field', 'service', 'location', 'region', 'info', 'category', 'budget', 'first_name', 'last_name', 'email', 'phone', 'website', 'assigned_to', 'assigned_user_ids'],
+    entityFields: ['status', 'company_name', 'field', 'service', 'location', 'region', 'info', 'category', 'budget', 'first_name', 'last_name', 'email', 'phone', 'website', 'assigned_to', 'assigned_user_ids', 'field_specialization'],
     commissionFields: ['status', 'project_name', 'position', 'budget', 'state', 'assigned_to', 'assigned_user_ids', 'field', 'service_position', 'location', 'info', 'category', 'deadline', 'priority', 'phone', 'commission_value', 'is_tipped', 'notes']
   },
   tiper: {
@@ -4186,7 +4300,7 @@ const PROJECT_JSON_CONFIG = {
     counterKey: 'project_tiper',
     entityPrefix: 'PT',
     entityDefaults: {},
-    entityFields: ['status', 'company_name', 'field', 'location', 'region', 'info', 'category', 'first_name', 'last_name', 'email', 'phone', 'website', 'assigned_to', 'assigned_user_ids'],
+    entityFields: ['status', 'company_name', 'field', 'location', 'region', 'info', 'category', 'first_name', 'last_name', 'email', 'phone', 'website', 'assigned_to', 'assigned_user_ids', 'field_specialization'],
     commissionFields: ['status', 'position', 'budget', 'state', 'assigned_to', 'assigned_user_ids', 'field', 'service_position', 'location', 'info', 'category', 'deadline', 'priority', 'phone', 'linked_entity_type', 'linked_commission_id', 'commission_value', 'is_tipped', 'notes']
   }
 };
@@ -4198,7 +4312,7 @@ const GROWTH_JSON_CONFIG = {
     counterKey: 'growth_partner',
     entityPrefix: 'GP',
     entityDefaults: { company_name: 'Nová společnost' },
-    entityFields: ['status', 'company_name', 'field', 'location', 'region', 'info', 'category', 'first_name', 'last_name', 'email', 'phone', 'website', 'assigned_to', 'assigned_user_ids'],
+    entityFields: ['status', 'company_name', 'field', 'location', 'region', 'info', 'category', 'first_name', 'last_name', 'email', 'phone', 'website', 'assigned_to', 'assigned_user_ids', 'field_specialization'],
     commissionFields: ['status', 'position', 'budget', 'state', 'assigned_to', 'assigned_user_ids', 'field', 'service_position', 'location', 'info', 'category', 'deadline', 'priority', 'phone', 'commission_value', 'is_tipped', 'notes']
   },
   client: {
@@ -4207,7 +4321,7 @@ const GROWTH_JSON_CONFIG = {
     counterKey: 'growth_client',
     entityPrefix: 'GK',
     entityDefaults: { company_name: 'Nová společnost' },
-    entityFields: ['status', 'company_name', 'field', 'service', 'location', 'region', 'info', 'category', 'budget', 'first_name', 'last_name', 'email', 'phone', 'website', 'assigned_to', 'assigned_user_ids'],
+    entityFields: ['status', 'company_name', 'field', 'service', 'location', 'region', 'info', 'category', 'budget', 'first_name', 'last_name', 'email', 'phone', 'website', 'assigned_to', 'assigned_user_ids', 'field_specialization'],
     commissionFields: ['status', 'project_name', 'position', 'budget', 'state', 'assigned_to', 'assigned_user_ids', 'field', 'service_position', 'location', 'info', 'category', 'deadline', 'priority', 'phone', 'commission_value', 'is_tipped', 'notes']
   },
   tiper: {
@@ -4216,7 +4330,7 @@ const GROWTH_JSON_CONFIG = {
     counterKey: 'growth_tiper',
     entityPrefix: 'GT',
     entityDefaults: {},
-    entityFields: ['status', 'company_name', 'field', 'location', 'region', 'info', 'category', 'first_name', 'last_name', 'email', 'phone', 'website', 'assigned_to', 'assigned_user_ids'],
+    entityFields: ['status', 'company_name', 'field', 'location', 'region', 'info', 'category', 'first_name', 'last_name', 'email', 'phone', 'website', 'assigned_to', 'assigned_user_ids', 'field_specialization'],
     commissionFields: ['status', 'position', 'budget', 'state', 'assigned_to', 'assigned_user_ids', 'field', 'service_position', 'location', 'info', 'category', 'deadline', 'priority', 'phone', 'linked_entity_type', 'linked_commission_id', 'commission_value', 'is_tipped', 'notes']
   }
 };

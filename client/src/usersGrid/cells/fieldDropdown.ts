@@ -5,6 +5,26 @@ import type { FieldCategory, FieldOption } from "../fieldOptions";
 // so both surfaces behave identically: category drill-down, live search, and
 // inline add/remove of custom options.
 
+// Wording overrides so the same dropdown can serve both "Obor" and its nested
+// "Zaměření" (specialization) variant. Defaults keep the original obor copy.
+export interface FieldDropdownLabels {
+  searchPlaceholder: string;
+  newOptionPlaceholder: string;
+  emptyNameError: string;
+  createFailed: string;
+  deleteConfirm: (label: string) => string;
+  deleteFailed: string;
+}
+
+const DEFAULT_FIELD_DROPDOWN_LABELS: FieldDropdownLabels = {
+  searchPlaceholder: "Hledat obor...",
+  newOptionPlaceholder: "Název nového oboru",
+  emptyNameError: "Zadejte název oboru.",
+  createFailed: "Nepodařilo se přidat obor.",
+  deleteConfirm: (label) => `Opravdu chcete odstranit obor "${label}"?`,
+  deleteFailed: "Nepodařilo se odstranit obor.",
+};
+
 export interface OpenFieldDropdownParams {
   anchorRect: { top: number; bottom: number; left: number; width: number };
   fieldOptions?: FieldOption[];
@@ -12,6 +32,7 @@ export interface OpenFieldDropdownParams {
   currentValue?: string | null;
   disabled?: boolean;
   minWidth?: number;
+  labels?: Partial<FieldDropdownLabels>;
   onSelect: (value: string) => void;
   onCreateFieldOption?: (value: string) => Promise<FieldOption | void> | FieldOption | void;
   onDeleteFieldOption?: (optionId: number) => Promise<void> | void;
@@ -34,6 +55,7 @@ export const openFieldDropdown = (params: OpenFieldDropdownParams) => {
     activeFieldCleanup = null;
   }
 
+  const labels: FieldDropdownLabels = { ...DEFAULT_FIELD_DROPDOWN_LABELS, ...(params.labels ?? {}) };
   const availableFieldOptions = params.fieldOptions ?? [];
   const availableGroupedFieldOptions = params.groupedFieldOptions ?? [];
   const flatFieldOptions = availableFieldOptions.length > 0
@@ -83,7 +105,7 @@ export const openFieldDropdown = (params: OpenFieldDropdownParams) => {
 
   const searchInput = document.createElement("input");
   searchInput.type = "text";
-  searchInput.placeholder = "Hledat obor...";
+  searchInput.placeholder = labels.searchPlaceholder;
   searchInput.style.width = "100%";
   searchInput.style.padding = "8px 12px";
   searchInput.style.border = isDark ? "1px solid #3d3d3d" : "1px solid #ccc";
@@ -249,7 +271,7 @@ export const openFieldDropdown = (params: OpenFieldDropdownParams) => {
     const input = document.createElement("input");
     input.type = "text";
     input.value = pendingFieldOptionName;
-    input.placeholder = "Název nového oboru";
+    input.placeholder = labels.newOptionPlaceholder;
     input.style.width = "100%";
     input.style.padding = "8px 12px";
     input.style.border = isDark ? "1px solid #3d3d3d" : "1px solid #ccc";
@@ -426,7 +448,7 @@ export const openFieldDropdown = (params: OpenFieldDropdownParams) => {
 
     const normalizedName = pendingFieldOptionName.trim();
     if (!normalizedName) {
-      footerErrorMessage = "Zadejte název oboru.";
+      footerErrorMessage = labels.emptyNameError;
       renderFooter();
       return;
     }
@@ -439,7 +461,7 @@ export const openFieldDropdown = (params: OpenFieldDropdownParams) => {
       const createdOption = await params.onCreateFieldOption(normalizedName);
       selectValue(createdOption?.value ?? normalizedName);
     } catch (error) {
-      footerErrorMessage = error instanceof Error ? error.message : "Nepodařilo se přidat obor.";
+      footerErrorMessage = error instanceof Error ? error.message : labels.createFailed;
       isSubmittingOption = false;
       renderFooter();
     }
@@ -450,7 +472,7 @@ export const openFieldDropdown = (params: OpenFieldDropdownParams) => {
       return;
     }
 
-    const confirmed = window.confirm(`Opravdu chcete odstranit obor "${option.label}"?`);
+    const confirmed = window.confirm(labels.deleteConfirm(option.label));
     if (!confirmed) {
       return;
     }
@@ -462,7 +484,7 @@ export const openFieldDropdown = (params: OpenFieldDropdownParams) => {
       }
       cleanup();
     } catch (error) {
-      window.alert(error instanceof Error ? error.message : "Nepodařilo se odstranit obor.");
+      window.alert(error instanceof Error ? error.message : labels.deleteFailed);
     }
   };
 

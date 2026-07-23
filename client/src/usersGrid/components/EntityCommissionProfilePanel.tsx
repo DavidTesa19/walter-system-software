@@ -6,8 +6,38 @@ import type { DocumentBreadcrumb } from "../hooks/useProfileDocuments";
 import DocumentExplorer from "./DocumentExplorer";
 import ThemeToggleButton from "../../components/ThemeToggleButton";
 import FieldSelectInput, { type FieldPickerConfig } from "./FieldSelectInput";
-import { parseMultiValue, serializeMultiValue } from "../multiValue";
+import type { FieldOption } from "../fieldOptions";
+import type { FieldDropdownLabels } from "../cells/fieldDropdown";
+import {
+  parseMultiValue,
+  serializeMultiValue,
+  serializeSpecializationMap,
+  type SpecializationMap,
+} from "../multiValue";
 import "./EntityCommissionProfilePanel.css";
+
+// Wording for the nested "Zaměření" (specialization) dropdown reused from the
+// Obor picker.
+const SPECIALIZATION_DROPDOWN_LABELS: Partial<FieldDropdownLabels> = {
+  searchPlaceholder: "Hledat zaměření...",
+  newOptionPlaceholder: "Název nového zaměření",
+  emptyNameError: "Zadejte název zaměření.",
+  createFailed: "Nepodařilo se přidat zaměření.",
+  deleteConfirm: (label: string) => `Opravdu chcete odstranit zaměření "${label}"?`,
+  deleteFailed: "Nepodařilo se odstranit zaměření.",
+};
+
+// Config for the specialization dropdown nested under each Obor value. Options
+// are keyed per obor value and persist per namespace, exactly like custom obor
+// options. The chosen values live on the obor field as `specializationValues`.
+export interface SpecializationPickerConfig {
+  // Entity key the serialized obor -> specialization map is saved under.
+  fieldKey: string;
+  getOptions: (oborValue: string) => FieldOption[];
+  onCreateOption?: (oborValue: string, value: string) => Promise<FieldOption | void> | FieldOption | void;
+  // Return value is ignored — the hook resolves with the deleted row.
+  onDeleteOption?: (optionId: number) => Promise<unknown> | void;
+}
 
 // =============================================================================
 // TYPES
@@ -24,6 +54,10 @@ export interface EditableField {
   // For type === 'multi-value': how each individual value is edited. The stored
   // value is a single scalar (one value) or a JSON array string (several).
   multiValueEditor?: 'text' | 'select' | 'field-select';
+  // For the Obor multi-value field: the current obor -> specialization choices.
+  // Rendered as a nested dropdown under each obor row when a specializationPicker
+  // is supplied.
+  specializationValues?: SpecializationMap;
 }
 
 export interface FieldGroup {
@@ -83,7 +117,8 @@ interface EntityCommissionProfilePanelProps {
   entitySectionLinks?: SectionLinkToggle[];
   commissionSectionLinks?: SectionLinkToggle[];
   fieldPicker?: FieldPickerConfig;
-  
+  specializationPicker?: SpecializationPickerConfig;
+
   // Callbacks
   onClose: () => void;
   onUpdateEntity?: (entityId: number, updates: Record<string, unknown>) => Promise<void> | void;
@@ -136,6 +171,7 @@ interface EditableFieldCellProps {
   field: EditableField;
   onSave: (key: string, value: string | boolean | string[] | null) => void;
   fieldPicker?: FieldPickerConfig;
+  specializationPicker?: SpecializationPickerConfig;
 }
 
 const normalizeFieldOptions = (options: EditableField['options']) =>
@@ -205,6 +241,7 @@ interface MultiValueEditorProps {
   field: EditableField;
   onSave: (key: string, value: string | boolean | string[] | null) => void;
   fieldPicker?: FieldPickerConfig;
+  specializationPicker?: SpecializationPickerConfig;
   // Profile panel (default): commit text on blur, so each edit is one save.
   // Create modal: commit on every keystroke, because the form is submitted as a
   // whole and a not-yet-blurred value would otherwise be lost.
@@ -215,9 +252,11 @@ interface MultiValueEditorProps {
 // Kraj, Lokalita). Each value gets its own inline editor plus a remove button,
 // and a "+" adds another. Persisted as a single scalar / JSON array via
 // serializeMultiValue. Reused by the create modal's DraftField.
-export const MultiValueEditor: React.FC<MultiValueEditorProps> = ({ field, onSave, fieldPicker, commitOnChange = false }) => {
+export const MultiValueEditor: React.FC<MultiValueEditorProps> = ({ field, onSave, fieldPicker, specializationPicker, commitOnChange = false }) => {
   const editor = field.multiValueEditor ?? 'text';
   const normalizedOptions = useMemo(() => normalizeFieldOptions(field.options), [field.options]);
+  const showSpecialization = editor === 'field-select' && Boolean(specializationPicker);
+  const specValues = field.specializationValues ?? {};
 
   const idRef = useRef(0);
   const makeRow = useCallback((value: string): MultiValueRow => ({ id: idRef.current++, value }), []);
@@ -244,15 +283,50 @@ export const MultiValueEditor: React.FC<MultiValueEditorProps> = ({ field, onSav
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [persisted]);
 
+  // A ref keeps the spec-map handlers stable while always seeing the latest map.
+  const specValuesRef = useRef(specValues);
+  specValuesRef.current = specValues;
+
   const commit = useCallback((next: MultiValueRow[]) => {
     onSave(field.key, serializeMultiValue(next.map((row) => row.value)));
   }, [field.key, onSave]);
+
+  const commitSpecMap = useCallback((nextMap: SpecializationMap) => {
+    if (!specializationPicker) return;
+    onSave(specializationPicker.fieldKey, serializeSpecializationMap(nextMap));
+  }, [onSave, specializationPicker]);
+
+  // Drop specialization entries for obor values that are no longer selected, so
+  // removing/renaming an obor never leaves an orphaned specialization behind.
+  const pruneSpecMap = useCallback((oborValues: string[]) => {
+    if (!specializationPicker) return;
+    const current = specValuesRef.current;
+    const allowed = new Set(oborValues.map((value) => value.trim()).filter(Boolean));
+    const nextMap: SpecializationMap = {};
+    for (const [key, value] of Object.entries(current)) {
+      if (allowed.has(key)) nextMap[key] = value;
+    }
+    if ((serializeSpecializationMap(nextMap) ?? "") !== (serializeSpecializationMap(current) ?? "")) {
+      commitSpecMap(nextMap);
+    }
+  }, [commitSpecMap, specializationPicker]);
+
+  const handleSpecChange = useCallback((oborValue: string, value: string) => {
+    const nextMap: SpecializationMap = { ...specValuesRef.current };
+    if (value) {
+      nextMap[oborValue] = value;
+    } else {
+      delete nextMap[oborValue];
+    }
+    commitSpecMap(nextMap);
+  }, [commitSpecMap]);
 
   const handleChoice = useCallback((id: number, value: string) => {
     const next = rowsRef.current.map((row) => (row.id === id ? { ...row, value } : row));
     setRowsSafe(next);
     commit(next);
-  }, [commit, setRowsSafe]);
+    pruneSpecMap(next.map((row) => row.value));
+  }, [commit, pruneSpecMap, setRowsSafe]);
 
   const handleTextChange = useCallback((id: number, value: string) => {
     const next = rowsRef.current.map((row) => (row.id === id ? { ...row, value } : row));
@@ -268,7 +342,8 @@ export const MultiValueEditor: React.FC<MultiValueEditorProps> = ({ field, onSav
     const next = rowsRef.current.filter((row) => row.id !== id);
     setRowsSafe(next);
     commit(next);
-  }, [commit, setRowsSafe]);
+    pruneSpecMap(next.map((row) => row.value));
+  }, [commit, pruneSpecMap, setRowsSafe]);
 
   const handleAdd = useCallback(() => {
     const row = makeRow("");
@@ -331,22 +406,60 @@ export const MultiValueEditor: React.FC<MultiValueEditorProps> = ({ field, onSav
     );
   };
 
+  // Nested "Zaměření" dropdown for a chosen obor value. Options are scoped to
+  // that obor and can be created/removed inline, mirroring the obor picker.
+  const renderSpecialization = (row: MultiValueRow) => {
+    const oborValue = row.value.trim();
+    if (!showSpecialization || !specializationPicker || !oborValue) {
+      return null;
+    }
+
+    const options = specializationPicker.getOptions(oborValue);
+
+    return (
+      <div className="mv-editor-specialization">
+        <span className="mv-editor-specialization-label">Zaměření</span>
+        <FieldSelectInput
+          value={specValues[oborValue] ?? ""}
+          placeholder="Vyberte zaměření"
+          fieldOptions={options}
+          groupedFieldOptions={[{ label: "Zaměření", options }]}
+          labels={SPECIALIZATION_DROPDOWN_LABELS}
+          onChange={(nextValue) => handleSpecChange(oborValue, nextValue)}
+          onCreateFieldOption={
+            specializationPicker.onCreateOption
+              ? (value) => specializationPicker.onCreateOption!(oborValue, value)
+              : undefined
+          }
+          onDeleteFieldOption={
+            specializationPicker.onDeleteOption
+              ? (optionId) => Promise.resolve(specializationPicker.onDeleteOption!(optionId)).then(() => undefined)
+              : undefined
+          }
+        />
+      </div>
+    );
+  };
+
   return (
     <div className="editable-field editing mv-editor">
       {rows.length > 0 ? (
         <div className="mv-editor-rows">
           {rows.map((row) => (
-            <div key={row.id} className="mv-editor-row">
-              <div className="mv-editor-input">{renderRowEditor(row)}</div>
-              <button
-                type="button"
-                className="mv-editor-remove"
-                onClick={() => handleRemove(row.id)}
-                title="Odebrat hodnotu"
-                aria-label="Odebrat hodnotu"
-              >
-                ×
-              </button>
+            <div key={row.id} className="mv-editor-row-group">
+              <div className="mv-editor-row">
+                <div className="mv-editor-input">{renderRowEditor(row)}</div>
+                <button
+                  type="button"
+                  className="mv-editor-remove"
+                  onClick={() => handleRemove(row.id)}
+                  title="Odebrat hodnotu"
+                  aria-label="Odebrat hodnotu"
+                >
+                  ×
+                </button>
+              </div>
+              {renderSpecialization(row)}
             </div>
           ))}
         </div>
@@ -359,7 +472,7 @@ export const MultiValueEditor: React.FC<MultiValueEditorProps> = ({ field, onSav
   );
 };
 
-const EditableFieldCell: React.FC<EditableFieldCellProps> = ({ field, onSave, fieldPicker }) => {
+const EditableFieldCell: React.FC<EditableFieldCellProps> = ({ field, onSave, fieldPicker, specializationPicker }) => {
 
   const [isEditing, setIsEditing] = useState(false);
   const [editValue, setEditValue] = useState<string | boolean | string[]>(() => getInitialEditValue(field));
@@ -453,7 +566,7 @@ const EditableFieldCell: React.FC<EditableFieldCellProps> = ({ field, onSave, fi
   // Multi-value fields (Obor, Společnost, Kraj, Lokalita) render their own
   // add/remove editor and manage persistence internally.
   if (field.type === 'multi-value') {
-    return <MultiValueEditor field={field} onSave={onSave} fieldPicker={fieldPicker} />;
+    return <MultiValueEditor field={field} onSave={onSave} fieldPicker={fieldPicker} specializationPicker={specializationPicker} />;
   }
 
   // The "Obor" picker is always shown as a clickable dropdown trigger (like the
@@ -629,9 +742,10 @@ interface FieldGroupComponentProps {
   group: FieldGroup;
   onSave: (key: string, value: string | boolean | string[] | null) => void;
   fieldPicker?: FieldPickerConfig;
+  specializationPicker?: SpecializationPickerConfig;
 }
 
-const FieldGroupComponent: React.FC<FieldGroupComponentProps> = ({ group, onSave, fieldPicker }) => {
+const FieldGroupComponent: React.FC<FieldGroupComponentProps> = ({ group, onSave, fieldPicker, specializationPicker }) => {
   const colorClass = group.color ? `group-${group.color}` : '';
 
   return (
@@ -641,7 +755,7 @@ const FieldGroupComponent: React.FC<FieldGroupComponentProps> = ({ group, onSave
         {group.fields.map(field => (
           <div key={field.key} className={`field-row ${field.isMultiline ? 'multiline' : ''}`}>
             <label className="field-label">{field.label}</label>
-            <EditableFieldCell field={field} onSave={onSave} fieldPicker={fieldPicker} />
+            <EditableFieldCell field={field} onSave={onSave} fieldPicker={fieldPicker} specializationPicker={specializationPicker} />
           </div>
         ))}
       </div>
@@ -671,6 +785,7 @@ const EntityCommissionProfilePanel: React.FC<EntityCommissionProfilePanelProps> 
   entitySectionLinks,
   commissionSectionLinks,
   fieldPicker,
+  specializationPicker,
   onClose,
   onUpdateEntity,
   onUpdateCommission,
@@ -958,6 +1073,7 @@ const EntityCommissionProfilePanel: React.FC<EntityCommissionProfilePanelProps> 
                         group={group}
                         onSave={handleEntityFieldSave}
                         fieldPicker={fieldPicker}
+                        specializationPicker={specializationPicker}
                       />
                     ))}
                   </div>

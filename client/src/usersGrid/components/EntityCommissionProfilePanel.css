@@ -641,10 +641,41 @@
   gap: 0.4rem;
 }
 
+/* An obor value plus its nested "Zaměření" (specialization) dropdown. */
+.mv-editor-row-group {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+}
+
 .mv-editor-row {
   display: flex;
   align-items: center;
   gap: 0.4rem;
+}
+
+/* Indented specialization picker, visually tied to the obor above it. */
+.mv-editor-specialization {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  margin-left: 0.9rem;
+  padding-left: 0.75rem;
+  border-left: 2px solid color-mix(in srgb, var(--color-primary, #3b82f6) 35%, transparent);
+}
+
+.mv-editor-specialization-label {
+  flex-shrink: 0;
+  font-size: 0.72rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+  color: var(--color-text-muted, #64748b);
+}
+
+.mv-editor-specialization .ec-field-select-trigger {
+  flex: 1;
+  min-width: 0;
 }
 
 .mv-editor-input {

@@ -477,6 +477,24 @@ export async function initDatabase() {
         ON field_options (scope, LOWER(value))
     `);
 
+    // Specialization ("Zaměření") options: like field_options but each option
+    // additionally belongs to a single obor value (field_value). Starts empty.
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS field_specialization_options (
+        id SERIAL PRIMARY KEY,
+        scope VARCHAR(20) NOT NULL CHECK (scope IN ('standard', 'project', 'growth')),
+        field_value VARCHAR(255) NOT NULL,
+        value VARCHAR(255) NOT NULL,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+      )
+    `);
+
+    await client.query(`
+      CREATE UNIQUE INDEX IF NOT EXISTS idx_field_spec_options_scope_field_value_lower
+        ON field_specialization_options (scope, LOWER(field_value), LOWER(value))
+    `);
+
     // Create calendar events table
     await client.query(`
       CREATE TABLE IF NOT EXISTS calendar_events (
@@ -1144,6 +1162,12 @@ export async function initDatabase() {
       }
     }
 
+    // Zaměření (specialization) — one chosen specialization per obor value,
+    // stored as a JSON object string in this entity-level column.
+    for (const tableName of regionColumnTables) {
+      await client.query(`ALTER TABLE ${tableName} ADD COLUMN IF NOT EXISTS field_specialization TEXT`);
+    }
+
     // link_id — pairs a row with its counterpart(s) in the other sections
     // (Veřejné, Growth Club, Neveřejné) so they can be kept in sync. A row
     // can be linked to one or both other sections, sharing the same link_id.
@@ -1716,6 +1740,57 @@ export const db = {
     } finally {
       client.release();
     }
+  },
+
+  // --- Specialization ("Zaměření") options, scoped per obor value ---
+
+  async getFieldSpecializationOptions(scope) {
+    if (!USE_POSTGRES) return null;
+
+    const normalizedScope = normalizeFieldOptionScope(scope);
+    if (!normalizedScope) {
+      throw new Error('Invalid field option scope');
+    }
+
+    const result = await pool.query(
+      `SELECT id, scope, field_value, value, created_at, updated_at
+         FROM field_specialization_options
+        WHERE scope = $1
+        ORDER BY created_at ASC, id ASC`,
+      [normalizedScope]
+    );
+    return result.rows;
+  },
+
+  async createFieldSpecializationOption(scope, fieldValue, value) {
+    if (!USE_POSTGRES) return null;
+
+    const normalizedScope = normalizeFieldOptionScope(scope);
+    const normalizedField = normalizeFieldOptionValue(fieldValue);
+    const normalizedValue = normalizeFieldOptionValue(value);
+    if (!normalizedScope || !normalizedField || !normalizedValue) {
+      throw new Error('Invalid specialization option payload');
+    }
+
+    const result = await pool.query(
+      `INSERT INTO field_specialization_options (scope, field_value, value)
+       VALUES ($1, $2, $3)
+       RETURNING id, scope, field_value, value, created_at, updated_at`,
+      [normalizedScope, normalizedField, normalizedValue]
+    );
+
+    return result.rows[0] ?? null;
+  },
+
+  async deleteFieldSpecializationOption(id) {
+    if (!USE_POSTGRES) return null;
+
+    const { rows } = await pool.query(
+      `DELETE FROM field_specialization_options WHERE id = $1
+       RETURNING id, scope, field_value, value, created_at, updated_at`,
+      [id]
+    );
+    return rows[0] ?? null;
   },
 
   async createColorPalette({ name, mode, colors, typography, is_active }) {
@@ -2436,10 +2511,10 @@ export const db = {
 
     const entityId = await this.getNextEntityId('partner');
     const { rows } = await pool.query(
-      `INSERT INTO partner_entities (entity_id, status, company_name, field, location, region, info, category, first_name, last_name, email, phone, website, assigned_to, assigned_user_ids)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15)
+      `INSERT INTO partner_entities (entity_id, status, company_name, field, location, region, info, category, first_name, last_name, email, phone, website, assigned_to, assigned_user_ids, field_specialization)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16)
        RETURNING *`,
-      [entityId, data.status || 'accepted', data.company_name, data.field, data.location, data.region ?? null, data.info, data.category, data.first_name, data.last_name, data.email, data.phone, data.website, data.assigned_to ?? null, data.assigned_user_ids ?? []]
+      [entityId, data.status || 'accepted', data.company_name, data.field, data.location, data.region ?? null, data.info, data.category, data.first_name, data.last_name, data.email, data.phone, data.website, data.assigned_to ?? null, data.assigned_user_ids ?? [], data.field_specialization ?? null]
     );
     return applyCreateActor('partner_entities', rows[0], actorUserId);
   },
@@ -2692,10 +2767,10 @@ export const db = {
 
     const entityId = await this.getNextEntityId('client');
     const { rows } = await pool.query(
-      `INSERT INTO client_entities (entity_id, status, company_name, field, service, location, region, info, category, budget, first_name, last_name, email, phone, website, assigned_to, assigned_user_ids)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17)
+      `INSERT INTO client_entities (entity_id, status, company_name, field, service, location, region, info, category, budget, first_name, last_name, email, phone, website, assigned_to, assigned_user_ids, field_specialization)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18)
        RETURNING *`,
-      [entityId, data.status || 'accepted', data.company_name, data.field, data.service, data.location, data.region ?? null, data.info, data.category, data.budget, data.first_name, data.last_name, data.email, data.phone, data.website, data.assigned_to ?? null, data.assigned_user_ids ?? []]
+      [entityId, data.status || 'accepted', data.company_name, data.field, data.service, data.location, data.region ?? null, data.info, data.category, data.budget, data.first_name, data.last_name, data.email, data.phone, data.website, data.assigned_to ?? null, data.assigned_user_ids ?? [], data.field_specialization ?? null]
     );
     return applyCreateActor('client_entities', rows[0], actorUserId);
   },
@@ -2953,10 +3028,10 @@ export const db = {
 
     const entityId = await this.getNextEntityId('tiper');
     const { rows } = await pool.query(
-      `INSERT INTO tiper_entities (entity_id, status, company_name, first_name, last_name, field, location, region, info, category, email, phone, website, assigned_to, assigned_user_ids)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15)
+      `INSERT INTO tiper_entities (entity_id, status, company_name, first_name, last_name, field, location, region, info, category, email, phone, website, assigned_to, assigned_user_ids, field_specialization)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16)
        RETURNING *`,
-      [entityId, data.status || 'accepted', data.company_name, data.first_name, data.last_name, data.field, data.location, data.region ?? null, data.info, data.category, data.email, data.phone, data.website, data.assigned_to ?? null, data.assigned_user_ids ?? []]
+      [entityId, data.status || 'accepted', data.company_name, data.first_name, data.last_name, data.field, data.location, data.region ?? null, data.info, data.category, data.email, data.phone, data.website, data.assigned_to ?? null, data.assigned_user_ids ?? [], data.field_specialization ?? null]
     );
     return applyCreateActor('tiper_entities', rows[0], actorUserId);
   },

@@ -29,6 +29,7 @@ import {
 import { uploadDocuments } from "../../utils/uploadDocuments";
 import type { SectionProps } from "./SectionTypes";
 import useFieldOptions from "../hooks/useFieldOptions";
+import useFieldSpecializationOptions from "../hooks/useFieldSpecializationOptions";
 import useProfileDocuments from "../hooks/useProfileDocuments";
 import useProfileNotes from "../hooks/useProfileNotes";
 import { ApproveRestoreCellRenderer, DeleteArchiveCellRenderer, ArchiveCellRenderer } from "../cells/RowActionCellRenderers";
@@ -53,8 +54,10 @@ import { REGION_OPTIONS } from "../regions";
 import {
   makeMultiValueFilterGetter,
   makeSingleValueEditable,
+  makeSpecializationValueGetter,
   multiValueComparator,
   multiValueFormatter,
+  parseSpecializationMap,
   passesMultiValueFilter,
 } from "../multiValue";
 import {
@@ -75,6 +78,7 @@ type ClientEntityApi = {
   assigned_user_ids?: number[] | null;
   company_name?: string | null;
   field?: string | null;
+  field_specialization?: string | null;
   service?: string | null;
   budget?: string | null;
   region?: string | null;
@@ -153,6 +157,7 @@ type ClientCreateDraft = {
     name: string;
     company: string;
     field: string;
+    field_specialization: string;
     service: string;
     budget: string;
     mobile: string;
@@ -187,6 +192,7 @@ const createDefaultClientDraft = (): ClientCreateDraft => ({
     name: "",
     company: "",
     field: "",
+    field_specialization: "",
     service: "",
     budget: "",
     mobile: "",
@@ -220,6 +226,7 @@ const normalizeClientEntity = (entity: ClientEntityApi): ClientEntity => ({
   name: joinName(entity.first_name, entity.last_name) || entity.company_name || entity.entity_id,
   company: entity.company_name ?? null,
   field: entity.field ?? null,
+  field_specialization: entity.field_specialization ?? null,
   service: entity.service ?? null,
   budget: entity.budget ?? null,
   region: entity.region ?? null,
@@ -276,7 +283,7 @@ const mapClientEntityUpdates = (updates: Record<string, unknown>) => {
     else if (key === "mobile") mapped.phone = value;
     else if (key === "assigned_user_ids") mapped.assigned_user_ids = value;
     else if (key === "status") mapped.status = value;
-    else if (["field", "service", "budget", "region", "location", "email", "website", "info"].includes(key)) mapped[key] = value;
+    else if (["field", "field_specialization", "service", "budget", "region", "location", "email", "website", "info"].includes(key)) mapped[key] = value;
   }
   return mapped;
 };
@@ -292,6 +299,7 @@ const deriveClientEntityFromCommission = (commission: ClientCommissionApi): Clie
     name: joinName(commission.entity_first_name, commission.entity_last_name) || commission.entity_company_name || commission.commission_id.split('-')[0] || String(entityId),
     company: commission.entity_company_name ?? null,
     field: commission.entity_field ?? null,
+    field_specialization: null,
     service: commission.entity_service ?? null,
     budget: commission.entity_budget ?? null,
     region: commission.entity_region ?? null,
@@ -325,7 +333,7 @@ const buildEntityData = (entity: ClientEntity | null, assignmentOptions: Array<s
       fields: [
         { key: "name", label: "Jméno / Název", value: entity.name, type: "text" },
         { key: "company", label: "Společnost", value: entity.company, type: "multi-value", multiValueEditor: "text" },
-        { key: "field", label: "Obor činnosti", value: entity.field, type: "multi-value", multiValueEditor: oborFieldType === "field-select" ? "field-select" : "select", options: fieldOptionsArray },
+        { key: "field", label: "Obor činnosti", value: entity.field, type: "multi-value", multiValueEditor: oborFieldType === "field-select" ? "field-select" : "select", options: fieldOptionsArray, specializationValues: parseSpecializationMap(entity.field_specialization) },
         { key: "service", label: "Požadovaná služba", value: entity.service, type: "text" },
         { key: "budget", label: "Rozpočet subjektu", value: entity.budget, type: "text" },
         { key: "assigned_user_ids", label: "Přiřazení uživatelé", value: toAssignmentDraftValue(entity.assigned_user_ids), type: "multi-select", options: assignmentOptions },
@@ -427,6 +435,7 @@ const buildClientDraftEntityData = (draft: ClientCreateDraft, assignmentOptions:
     name: draft.entity.name,
     company: draft.entity.company,
     field: draft.entity.field,
+    field_specialization: draft.entity.field_specialization,
     service: draft.entity.service,
     budget: draft.entity.budget,
     region: draft.entity.region,
@@ -550,6 +559,11 @@ const ClientsSectionNew: React.FC<SectionProps> = ({
     createFieldOption,
     deleteFieldOption,
   } = useFieldOptions(systemNamespace);
+  const {
+    getOptionsForField: getSpecializationOptions,
+    createSpecializationOption,
+    deleteSpecializationOption,
+  } = useFieldSpecializationOptions(systemNamespace);
   const projectStatusOptions = useMemo(
     () =>
       systemNamespace === "projects"
@@ -748,6 +762,16 @@ const ClientsSectionNew: React.FC<SectionProps> = ({
     await deleteFieldOption(optionId);
     await fetchData();
   }, [deleteFieldOption, fetchData]);
+
+  // "Zaměření" (specialization) picker shared by the profile panel and the
+  // create modal. Options are scoped per obor value; the chosen values persist
+  // in the entity's field_specialization column.
+  const specializationPicker = useMemo(() => ({
+    fieldKey: "field_specialization",
+    getOptions: getSpecializationOptions,
+    onCreateOption: readOnly ? undefined : createSpecializationOption,
+    onDeleteOption: readOnly ? undefined : deleteSpecializationOption,
+  }), [getSpecializationOptions, createSpecializationOption, deleteSpecializationOption, readOnly]);
 
   // ==========================================================================
   // PROFILE PANEL LOGIC
@@ -1308,6 +1332,7 @@ const ClientsSectionNew: React.FC<SectionProps> = ({
         first_name: emptyToNull(createDraft.entity.name),
         company_name: emptyToNull(createDraft.entity.company),
         field: emptyToNull(createDraft.entity.field),
+        field_specialization: emptyToNull(createDraft.entity.field_specialization),
         service: emptyToNull(createDraft.entity.service),
         budget: emptyToNull(createDraft.entity.budget),
         phone: emptyToNull(createDraft.entity.mobile),
@@ -1389,6 +1414,7 @@ const ClientsSectionNew: React.FC<SectionProps> = ({
         first_name: emptyToNull(createDraft.entity.name),
         company_name: emptyToNull(createDraft.entity.company),
         field: emptyToNull(createDraft.entity.field),
+        field_specialization: emptyToNull(createDraft.entity.field_specialization),
         service: emptyToNull(createDraft.entity.service),
         budget: emptyToNull(createDraft.entity.budget),
         phone: emptyToNull(createDraft.entity.mobile),
@@ -1460,6 +1486,7 @@ const ClientsSectionNew: React.FC<SectionProps> = ({
         name: selectedEntity.name ?? "",
         company: selectedEntity.company ?? "",
         field: selectedEntity.field ?? "",
+        field_specialization: selectedEntity.field_specialization ?? "",
         service: selectedEntity.service ?? "",
         budget: selectedEntity.budget ?? "",
         mobile: selectedEntity.mobile ?? "",
@@ -1523,6 +1550,7 @@ const ClientsSectionNew: React.FC<SectionProps> = ({
       first_name: emptyToNull(selectedEntity.name ?? ""),
       company_name: emptyToNull(selectedEntity.company ?? ""),
       field: emptyToNull(selectedEntity.field ?? ""),
+      field_specialization: emptyToNull(selectedEntity.field_specialization ?? ""),
       phone: emptyToNull(selectedEntity.mobile ?? ""),
       email: emptyToNull(selectedEntity.email ?? ""),
       website: emptyToNull(selectedEntity.website ?? ""),
@@ -1964,6 +1992,15 @@ const ClientsSectionNew: React.FC<SectionProps> = ({
         },
       },
       {
+        field: "field_specialization",
+        headerName: "Zaměření",
+        filter: true,
+        editable: false,
+        valueGetter: makeSpecializationValueGetter((data) => data?.entity?.field_specialization, "field"),
+        flex: 1,
+        minWidth: 120,
+      },
+      {
         field: "region",
         headerName: "Kraj",
         filter: true,
@@ -2219,6 +2256,7 @@ const ClientsSectionNew: React.FC<SectionProps> = ({
           onCreateFieldOption: handleCreateFieldOption,
           onDeleteFieldOption: handleDeleteFieldOption,
         }}
+        specializationPicker={specializationPicker}
         onClose={closeProfile}
         onUpdateEntity={handleUpdateEntity}
         onUpdateCommission={handleUpdateCommission}
@@ -2276,6 +2314,7 @@ const ClientsSectionNew: React.FC<SectionProps> = ({
           onCreateFieldOption: handleCreateFieldOption,
           onDeleteFieldOption: handleDeleteFieldOption,
         }}
+        specializationPicker={specializationPicker}
         onClose={closeCreateModal}
         onEntityChange={handleDraftEntityChange}
         onCommissionChange={handleDraftCommissionChange}

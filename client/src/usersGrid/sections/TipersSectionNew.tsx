@@ -29,6 +29,7 @@ import {
 import { uploadDocuments } from "../../utils/uploadDocuments";
 import type { SectionProps } from "./SectionTypes";
 import useFieldOptions from "../hooks/useFieldOptions";
+import useFieldSpecializationOptions from "../hooks/useFieldSpecializationOptions";
 import useProfileDocuments from "../hooks/useProfileDocuments";
 import useProfileNotes from "../hooks/useProfileNotes";
 import { ApproveRestoreCellRenderer, DeleteArchiveCellRenderer, ArchiveCellRenderer } from "../cells/RowActionCellRenderers";
@@ -50,8 +51,10 @@ import { REGION_OPTIONS } from "../regions";
 import {
   makeMultiValueFilterGetter,
   makeSingleValueEditable,
+  makeSpecializationValueGetter,
   multiValueComparator,
   multiValueFormatter,
+  parseSpecializationMap,
   passesMultiValueFilter,
 } from "../multiValue";
 import {
@@ -72,6 +75,7 @@ type TiperEntityApi = {
   assigned_user_ids?: number[] | null;
   company_name?: string | null;
   field?: string | null;
+  field_specialization?: string | null;
   region?: string | null;
   location?: string | null;
   info?: string | null;
@@ -143,6 +147,7 @@ type TiperCreateDraft = {
     name: string;
     company: string;
     field: string;
+    field_specialization: string;
     mobile: string;
     email: string;
     website: string;
@@ -174,6 +179,7 @@ const createDefaultTiperDraft = (): TiperCreateDraft => ({
     name: "",
     company: "",
     field: "",
+    field_specialization: "",
     mobile: "",
     email: "",
     website: "",
@@ -204,6 +210,7 @@ const normalizeTiperEntity = (entity: TiperEntityApi): TiperEntity => ({
   name: joinName(entity.first_name, entity.last_name) || entity.company_name || entity.entity_id,
   company: entity.company_name ?? null,
   field: entity.field ?? null,
+  field_specialization: entity.field_specialization ?? null,
   region: entity.region ?? null,
   location: entity.location ?? null,
   address: null,
@@ -257,7 +264,7 @@ const mapTiperEntityUpdates = (updates: Record<string, unknown>) => {
     else if (key === "mobile") mapped.phone = value;
     else if (key === "assigned_user_ids") mapped.assigned_user_ids = value;
     else if (key === "status") mapped.status = value;
-    else if (["field", "region", "location", "email", "website", "info"].includes(key)) mapped[key] = value;
+    else if (["field", "field_specialization", "region", "location", "email", "website", "info"].includes(key)) mapped[key] = value;
   }
   return mapped;
 };
@@ -273,6 +280,7 @@ const deriveTiperEntityFromCommission = (commission: TiperCommissionApi): TiperE
     name: joinName(commission.entity_first_name, commission.entity_last_name) || commission.entity_company_name || commission.commission_id.split('-')[0] || String(entityId),
     company: commission.entity_company_name ?? null,
     field: commission.entity_field ?? null,
+    field_specialization: null,
     region: commission.entity_region ?? null,
     location: commission.entity_location ?? null,
     address: null,
@@ -304,7 +312,7 @@ const buildEntityData = (entity: TiperEntity | null, assignmentOptions: Array<st
       fields: [
         { key: "name", label: "Jméno", value: entity.name, type: "text" },
         { key: "company", label: "Organizace", value: entity.company, type: "multi-value", multiValueEditor: "text" },
-        { key: "field", label: "Oblast působení", value: entity.field, type: "multi-value", multiValueEditor: oborFieldType === "field-select" ? "field-select" : "select", options: fieldOptionsArray },
+        { key: "field", label: "Oblast působení", value: entity.field, type: "multi-value", multiValueEditor: oborFieldType === "field-select" ? "field-select" : "select", options: fieldOptionsArray, specializationValues: parseSpecializationMap(entity.field_specialization) },
         { key: "assigned_user_ids", label: "Přiřazení uživatelé", value: toAssignmentDraftValue(entity.assigned_user_ids), type: "multi-select", options: assignmentOptions }
       ]
     },
@@ -406,6 +414,7 @@ const buildTiperDraftEntityData = (draft: TiperCreateDraft, assignmentOptions: A
     name: draft.entity.name,
     company: draft.entity.company,
     field: draft.entity.field,
+    field_specialization: draft.entity.field_specialization,
     region: draft.entity.region,
     location: draft.entity.location,
     address: null,
@@ -524,6 +533,11 @@ const TipersSectionNew: React.FC<SectionProps> = ({
     createFieldOption,
     deleteFieldOption,
   } = useFieldOptions(systemNamespace);
+  const {
+    getOptionsForField: getSpecializationOptions,
+    createSpecializationOption,
+    deleteSpecializationOption,
+  } = useFieldSpecializationOptions(systemNamespace);
   const projectStatusOptions = useMemo(
     () =>
       systemNamespace === "projects"
@@ -719,6 +733,16 @@ const TipersSectionNew: React.FC<SectionProps> = ({
     await deleteFieldOption(optionId);
     await fetchData();
   }, [deleteFieldOption, fetchData]);
+
+  // "Zaměření" (specialization) picker shared by the profile panel and the
+  // create modal. Options are scoped per obor value; the chosen values persist
+  // in the entity's field_specialization column.
+  const specializationPicker = useMemo(() => ({
+    fieldKey: "field_specialization",
+    getOptions: getSpecializationOptions,
+    onCreateOption: readOnly ? undefined : createSpecializationOption,
+    onDeleteOption: readOnly ? undefined : deleteSpecializationOption,
+  }), [getSpecializationOptions, createSpecializationOption, deleteSpecializationOption, readOnly]);
 
   // ==========================================================================
   // PROFILE PANEL LOGIC
@@ -1274,6 +1298,7 @@ const TipersSectionNew: React.FC<SectionProps> = ({
         first_name: emptyToNull(createDraft.entity.name),
         company_name: emptyToNull(createDraft.entity.company),
         field: emptyToNull(createDraft.entity.field),
+        field_specialization: emptyToNull(createDraft.entity.field_specialization),
         phone: emptyToNull(createDraft.entity.mobile),
         email: emptyToNull(createDraft.entity.email),
         website: emptyToNull(createDraft.entity.website),
@@ -1353,6 +1378,7 @@ const TipersSectionNew: React.FC<SectionProps> = ({
         first_name: emptyToNull(createDraft.entity.name),
         company_name: emptyToNull(createDraft.entity.company),
         field: emptyToNull(createDraft.entity.field),
+        field_specialization: emptyToNull(createDraft.entity.field_specialization),
         phone: emptyToNull(createDraft.entity.mobile),
         email: emptyToNull(createDraft.entity.email),
         website: emptyToNull(createDraft.entity.website),
@@ -1422,6 +1448,7 @@ const TipersSectionNew: React.FC<SectionProps> = ({
         name: selectedEntity.name ?? "",
         company: selectedEntity.company ?? "",
         field: selectedEntity.field ?? "",
+        field_specialization: selectedEntity.field_specialization ?? "",
         mobile: selectedEntity.mobile ?? "",
         email: selectedEntity.email ?? "",
         website: selectedEntity.website ?? "",
@@ -1865,6 +1892,15 @@ const TipersSectionNew: React.FC<SectionProps> = ({
         },
       },
       {
+        field: "field_specialization",
+        headerName: "Zaměření",
+        filter: true,
+        editable: false,
+        valueGetter: makeSpecializationValueGetter((data) => data?.entity?.field_specialization, "field"),
+        flex: 1,
+        minWidth: 120,
+      },
+      {
         field: "region",
         headerName: "Kraj",
         filter: true,
@@ -2112,6 +2148,7 @@ const TipersSectionNew: React.FC<SectionProps> = ({
           onCreateFieldOption: handleCreateFieldOption,
           onDeleteFieldOption: handleDeleteFieldOption,
         }}
+        specializationPicker={specializationPicker}
         onClose={closeProfile}
         onUpdateEntity={handleUpdateEntity}
         onUpdateCommission={handleUpdateCommission}
@@ -2169,6 +2206,7 @@ const TipersSectionNew: React.FC<SectionProps> = ({
           onCreateFieldOption: handleCreateFieldOption,
           onDeleteFieldOption: handleDeleteFieldOption,
         }}
+        specializationPicker={specializationPicker}
         onClose={closeCreateModal}
         onEntityChange={handleDraftEntityChange}
         onCommissionChange={handleDraftCommissionChange}

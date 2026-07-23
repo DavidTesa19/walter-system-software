@@ -1993,6 +1993,95 @@ app.delete("/field-options/:id", authenticateToken, async (req, res) => {
   }
 });
 
+// Specialization ("Zaměření") option routes — options scoped per obor value.
+app.get("/field-specialization-options", authenticateToken, async (req, res) => {
+  try {
+    const scope = requireFieldOptionScopeAccess(req, res, req.query.scope, { write: false });
+    if (!scope) {
+      return;
+    }
+
+    const options = await db.getFieldSpecializationOptions(scope);
+    res.json(options ?? []);
+  } catch (error) {
+    console.error('Error fetching specialization options:', error);
+    res.status(500).json({ error: 'Failed to fetch specialization options' });
+  }
+});
+
+app.post("/field-specialization-options", authenticateToken, async (req, res) => {
+  try {
+    const scope = requireFieldOptionScopeAccess(req, res, req.body?.scope, { write: true });
+    if (!scope) {
+      return;
+    }
+
+    const fieldValue = normalizeFieldOptionValue(req.body?.field ?? req.body?.field_value);
+    const value = normalizeFieldOptionValue(req.body?.value ?? req.body?.name);
+    if (!fieldValue) {
+      return res.status(400).json({ error: 'Obor value is required' });
+    }
+    if (!value) {
+      return res.status(400).json({ error: 'Specialization value is required' });
+    }
+
+    const existing = await db.getFieldSpecializationOptions(scope);
+    const normalizedField = fieldValue.toLocaleLowerCase('cs');
+    const normalizedValue = value.toLocaleLowerCase('cs');
+    const duplicate = (existing ?? []).some((entry) =>
+      String(entry.field_value ?? '').toLocaleLowerCase('cs') === normalizedField &&
+      String(entry.value ?? '').toLocaleLowerCase('cs') === normalizedValue
+    );
+    if (duplicate) {
+      return res.status(409).json({ error: 'Specialization option already exists' });
+    }
+
+    const created = await db.createFieldSpecializationOption(scope, fieldValue, value);
+    res.status(201).json(created);
+  } catch (error) {
+    if (error?.code === '23505') {
+      return res.status(409).json({ error: 'Specialization option already exists' });
+    }
+
+    console.error('Error creating specialization option:', error);
+    res.status(500).json({ error: 'Failed to create specialization option' });
+  }
+});
+
+app.delete("/field-specialization-options/:id", authenticateToken, async (req, res) => {
+  try {
+    const id = Number(req.params.id);
+    if (!Number.isInteger(id) || id <= 0) {
+      return res.status(400).json({ error: 'Invalid specialization option id' });
+    }
+
+    const check = await db.query(
+      `SELECT id, scope, field_value, value FROM field_specialization_options WHERE id = $1`,
+      [id]
+    );
+
+    const option = check.rows[0];
+    if (!option) {
+      return res.status(404).json({ error: 'Specialization option not found' });
+    }
+
+    const scope = requireFieldOptionScopeAccess(req, res, option.scope, { write: true });
+    if (!scope) {
+      return;
+    }
+
+    const deleted = await db.deleteFieldSpecializationOption(id);
+    if (!deleted) {
+      return res.status(404).json({ error: 'Specialization option not found' });
+    }
+
+    res.json(deleted);
+  } catch (error) {
+    console.error('Error deleting specialization option:', error);
+    res.status(500).json({ error: 'Failed to delete specialization option' });
+  }
+});
+
 // Color palette routes
 app.get("/color-palettes", authenticateToken, async (req, res) => {
   try {
@@ -4465,7 +4554,7 @@ const PROJECT_ROUTE_CONFIG = {
     counterKey: 'project_partner',
     commissionKey: 'project_partner',
     entityDefaults: { company_name: 'Nová společnost' },
-    entityFields: ['status', 'company_name', 'field', 'location', 'region', 'info', 'category', 'first_name', 'last_name', 'email', 'phone', 'website', 'assigned_to', 'assigned_user_ids'],
+    entityFields: ['status', 'company_name', 'field', 'location', 'region', 'info', 'category', 'first_name', 'last_name', 'email', 'phone', 'website', 'assigned_to', 'assigned_user_ids', 'field_specialization'],
     commissionFields: ['status', 'position', 'budget', 'state', 'assigned_to', 'assigned_user_ids', 'field', 'service_position', 'location', 'info', 'category', 'deadline', 'priority', 'phone', 'commission_value', 'is_tipped', 'notes']
   },
   client: {
@@ -4474,7 +4563,7 @@ const PROJECT_ROUTE_CONFIG = {
     counterKey: 'project_client',
     commissionKey: 'project_client',
     entityDefaults: { company_name: 'Nová společnost' },
-    entityFields: ['status', 'company_name', 'field', 'service', 'location', 'region', 'info', 'category', 'budget', 'first_name', 'last_name', 'email', 'phone', 'website', 'assigned_to', 'assigned_user_ids'],
+    entityFields: ['status', 'company_name', 'field', 'service', 'location', 'region', 'info', 'category', 'budget', 'first_name', 'last_name', 'email', 'phone', 'website', 'assigned_to', 'assigned_user_ids', 'field_specialization'],
     commissionFields: ['status', 'project_name', 'position', 'budget', 'state', 'assigned_to', 'assigned_user_ids', 'field', 'service_position', 'location', 'info', 'category', 'deadline', 'priority', 'phone', 'commission_value', 'is_tipped', 'notes']
   },
   tiper: {
@@ -4483,7 +4572,7 @@ const PROJECT_ROUTE_CONFIG = {
     counterKey: 'project_tiper',
     commissionKey: 'project_tiper',
     entityDefaults: {},
-    entityFields: ['status', 'company_name', 'field', 'location', 'region', 'info', 'category', 'first_name', 'last_name', 'email', 'phone', 'website', 'assigned_to', 'assigned_user_ids'],
+    entityFields: ['status', 'company_name', 'field', 'location', 'region', 'info', 'category', 'first_name', 'last_name', 'email', 'phone', 'website', 'assigned_to', 'assigned_user_ids', 'field_specialization'],
     commissionFields: ['status', 'position', 'budget', 'state', 'assigned_to', 'assigned_user_ids', 'field', 'service_position', 'location', 'info', 'category', 'deadline', 'priority', 'phone', 'linked_entity_type', 'linked_commission_id', 'commission_value', 'is_tipped', 'notes']
   }
 };
@@ -4495,7 +4584,7 @@ const GROWTH_ROUTE_CONFIG = {
     counterKey: 'growth_partner',
     commissionKey: 'growth_partner',
     entityDefaults: { company_name: 'Nová společnost' },
-    entityFields: ['status', 'company_name', 'field', 'location', 'region', 'info', 'category', 'first_name', 'last_name', 'email', 'phone', 'website', 'assigned_to', 'assigned_user_ids'],
+    entityFields: ['status', 'company_name', 'field', 'location', 'region', 'info', 'category', 'first_name', 'last_name', 'email', 'phone', 'website', 'assigned_to', 'assigned_user_ids', 'field_specialization'],
     commissionFields: ['status', 'position', 'budget', 'state', 'assigned_to', 'assigned_user_ids', 'field', 'service_position', 'location', 'info', 'category', 'deadline', 'priority', 'phone', 'commission_value', 'is_tipped', 'notes']
   },
   client: {
@@ -4504,7 +4593,7 @@ const GROWTH_ROUTE_CONFIG = {
     counterKey: 'growth_client',
     commissionKey: 'growth_client',
     entityDefaults: { company_name: 'Nová společnost' },
-    entityFields: ['status', 'company_name', 'field', 'service', 'location', 'region', 'info', 'category', 'budget', 'first_name', 'last_name', 'email', 'phone', 'website', 'assigned_to', 'assigned_user_ids'],
+    entityFields: ['status', 'company_name', 'field', 'service', 'location', 'region', 'info', 'category', 'budget', 'first_name', 'last_name', 'email', 'phone', 'website', 'assigned_to', 'assigned_user_ids', 'field_specialization'],
     commissionFields: ['status', 'project_name', 'position', 'budget', 'state', 'assigned_to', 'assigned_user_ids', 'field', 'service_position', 'location', 'info', 'category', 'deadline', 'priority', 'phone', 'commission_value', 'is_tipped', 'notes']
   },
   tiper: {
@@ -4513,7 +4602,7 @@ const GROWTH_ROUTE_CONFIG = {
     counterKey: 'growth_tiper',
     commissionKey: 'growth_tiper',
     entityDefaults: {},
-    entityFields: ['status', 'company_name', 'field', 'location', 'region', 'info', 'category', 'first_name', 'last_name', 'email', 'phone', 'website', 'assigned_to', 'assigned_user_ids'],
+    entityFields: ['status', 'company_name', 'field', 'location', 'region', 'info', 'category', 'first_name', 'last_name', 'email', 'phone', 'website', 'assigned_to', 'assigned_user_ids', 'field_specialization'],
     commissionFields: ['status', 'position', 'budget', 'state', 'assigned_to', 'assigned_user_ids', 'field', 'service_position', 'location', 'info', 'category', 'deadline', 'priority', 'phone', 'linked_entity_type', 'linked_commission_id', 'commission_value', 'is_tipped', 'notes']
   }
 };

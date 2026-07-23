@@ -1,6 +1,6 @@
 import React, { useMemo, useRef } from "react";
 import type { FieldCategory, FieldOption } from "../fieldOptions";
-import { openFieldDropdown } from "../cells/fieldDropdown";
+import { openFieldDropdown, type FieldDropdownLabels } from "../cells/fieldDropdown";
 import "./FieldSelectInput.css";
 
 // Shared config bundle for the searchable "Obor" field picker, reused by the
@@ -18,6 +18,7 @@ export interface FieldSelectInputProps {
   disabled?: boolean;
   fieldOptions: FieldOption[];
   groupedFieldOptions: FieldCategory[];
+  labels?: Partial<FieldDropdownLabels>;
   onChange: (value: string) => void;
   onCreateFieldOption?: (value: string) => Promise<FieldOption | void> | FieldOption | void;
   onDeleteFieldOption?: (optionId: number) => Promise<void> | void;
@@ -31,6 +32,7 @@ const FieldSelectInput: React.FC<FieldSelectInputProps> = ({
   disabled = false,
   fieldOptions,
   groupedFieldOptions,
+  labels,
   onChange,
   onCreateFieldOption,
   onDeleteFieldOption,
@@ -55,6 +57,7 @@ const FieldSelectInput: React.FC<FieldSelectInputProps> = ({
       groupedFieldOptions,
       currentValue: value,
       disabled,
+      labels,
       onSelect: onChange,
       onCreateFieldOption,
       onDeleteFieldOption,

@@ -32,9 +32,9 @@ export const COMMISSION_TABLES = {
 };
 
 export const ENTITY_CORE_FIELDS = {
-  client: ["company_name", "field", "service", "location", "region", "info", "category", "budget", "first_name", "last_name", "email", "phone", "website"],
-  partner: ["company_name", "field", "location", "region", "info", "category", "first_name", "last_name", "email", "phone", "website"],
-  tiper: ["company_name", "field", "location", "region", "info", "category", "first_name", "last_name", "email", "phone", "website"],
+  client: ["company_name", "field", "service", "location", "region", "info", "category", "budget", "first_name", "last_name", "email", "phone", "website", "field_specialization"],
+  partner: ["company_name", "field", "location", "region", "info", "category", "first_name", "last_name", "email", "phone", "website", "field_specialization"],
+  tiper: ["company_name", "field", "location", "region", "info", "category", "first_name", "last_name", "email", "phone", "website", "field_specialization"],
 };
 
 export const COMMISSION_CORE_FIELDS = {
