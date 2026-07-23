@@ -408,6 +408,9 @@ export const MultiValueEditor: React.FC<MultiValueEditorProps> = ({ field, onSav
 
   // Nested "Zaměření" dropdown for a chosen obor value. Options are scoped to
   // that obor and can be created/removed inline, mirroring the obor picker.
+  // The "×" clears only this row's chosen specialization (it stays in the
+  // shared catalog for other subjects) — deleting the option itself from the
+  // dropdown is a separate, catalog-wide action.
   const renderSpecialization = (row: MultiValueRow) => {
     const oborValue = row.value.trim();
     if (!showSpecialization || !specializationPicker || !oborValue) {
@@ -415,12 +418,13 @@ export const MultiValueEditor: React.FC<MultiValueEditorProps> = ({ field, onSav
     }
 
     const options = specializationPicker.getOptions(oborValue);
+    const selectedValue = specValues[oborValue] ?? "";
 
     return (
       <div className="mv-editor-specialization">
         <span className="mv-editor-specialization-label">Zaměření</span>
         <FieldSelectInput
-          value={specValues[oborValue] ?? ""}
+          value={selectedValue}
           placeholder="Vyberte zaměření"
           fieldOptions={options}
           groupedFieldOptions={[{ label: "Zaměření", options }]}
@@ -437,6 +441,17 @@ export const MultiValueEditor: React.FC<MultiValueEditorProps> = ({ field, onSav
               : undefined
           }
         />
+        {selectedValue ? (
+          <button
+            type="button"
+            className="mv-editor-specialization-clear"
+            onClick={() => handleSpecChange(oborValue, "")}
+            title="Odebrat zaměření"
+            aria-label="Odebrat zaměření"
+          >
+            ×
+          </button>
+        ) : null}
       </div>
     );
   };
