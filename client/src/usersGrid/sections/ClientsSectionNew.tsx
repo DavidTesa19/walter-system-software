@@ -2055,7 +2055,6 @@ const ClientsSectionNew: React.FC<SectionProps> = ({
           minWidth: 100,
           cellEditor: 'agTextCellEditor'
         },
-        assignedUsersColumn,
         ...(showApprovalStatusColumn
           ? [approvalStatusCol]
           : []),

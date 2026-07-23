@@ -1966,7 +1966,6 @@ const TipersSectionNew: React.FC<SectionProps> = ({
           flex: 0.8,
           minWidth: 80
         },
-        assignedUsersColumn,
         ...(showApprovalStatusColumn
           ? [approvalStatusCol]
           : []),
