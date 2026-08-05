@@ -177,6 +177,24 @@ export const makeSpecializationValueGetter =
   (params: any): string =>
     formatSpecialization(specSource(params?.data), params?.data?.[oborKey]);
 
+/**
+ * ag-grid valueSetter, paired with makeSpecializationValueGetter. `applyValue`
+ * must write to the exact same place the paired valueGetter reads from (e.g.
+ * the nested `entity` object) — without a matching setter, ag-grid falls back
+ * to writing a flat property on the row that the getter never looks at, so an
+ * edit made in the grid appears to do nothing (it silently reverts on the next
+ * cell repaint) until an unrelated refetch happens to overwrite the row with
+ * the value that actually made it to the server.
+ */
+export const makeSpecializationValueSetter =
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  (applyValue: (data: any, value: string | null) => void) =>
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  (params: any): boolean => {
+    applyValue(params?.data, (params?.newValue as string | null) ?? null);
+    return true;
+  };
+
 // ---------------------------------------------------------------------------
 // ag-grid column helpers — shared so every section renders/sorts/filters the
 // multi-value columns identically.

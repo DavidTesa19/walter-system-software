@@ -57,6 +57,7 @@ import {
   makeMultiValueFilterGetter,
   makeSingleValueEditable,
   makeSpecializationValueGetter,
+  makeSpecializationValueSetter,
   multiValueComparator,
   multiValueFormatter,
   parseSpecializationMap,
@@ -904,6 +905,13 @@ const ClientsSectionNew: React.FC<SectionProps> = ({
       throw error;
     }
   }, [entityApiBase, fetchData]);
+
+  // Lets the Obor/Zaměření grid-cell popovers (multi-value edits) persist the
+  // same way the profile panel does, independent of ag-grid's own cell value
+  // plumbing for that column.
+  const handleSaveEntityFieldFromGrid = useCallback((entityId: number, key: string, value: string | null) => {
+    void handleUpdateEntity(entityId, { [key]: value });
+  }, [handleUpdateEntity]);
 
   const handleUpdateCommission = useCallback(async (commissionId: number, updates: Record<string, unknown>) => {
     try {
@@ -2000,6 +2008,9 @@ const ClientsSectionNew: React.FC<SectionProps> = ({
           onCreateFieldOption: readOnly ? undefined : handleCreateFieldOption,
           onDeleteFieldOption: readOnly ? undefined : handleDeleteFieldOption,
           disabled: readOnly,
+          label: "Obor",
+          specializationPicker,
+          onSaveEntityField: readOnly ? undefined : handleSaveEntityFieldFromGrid,
         },
         headerComponent: FieldFilterHeader,
         headerComponentParams: {
@@ -2014,14 +2025,23 @@ const ClientsSectionNew: React.FC<SectionProps> = ({
         filter: true,
         editable: false,
         valueGetter: makeSpecializationValueGetter((data) => data?.entity?.field_specialization, "field"),
+        valueSetter: makeSpecializationValueSetter((data, value) => {
+          if (data?.entity) data.entity.field_specialization = value;
+        }),
         flex: 1,
         minWidth: 120,
         cellRenderer: SpecializationCellRenderer,
         cellRendererParams: {
           oborKey: "field",
+          oborLabel: "Obor",
           getOptions: getSpecializationOptions,
           onCreateFieldOption: readOnly ? undefined : createSpecializationOption,
           onDeleteFieldOption: readOnly ? undefined : handleDeleteSpecializationOption,
+          fieldOptions: fieldOptionChoices,
+          groupedFieldOptions: groupedFieldOptionChoices,
+          onCreateFieldOptionForObor: readOnly ? undefined : handleCreateFieldOption,
+          onDeleteFieldOptionForObor: readOnly ? undefined : handleDeleteFieldOption,
+          onSaveEntityField: readOnly ? undefined : handleSaveEntityFieldFromGrid,
           disabled: readOnly,
         },
       },
@@ -2150,7 +2170,7 @@ const ClientsSectionNew: React.FC<SectionProps> = ({
     }
 
     return cols;
-  }, [assignableUsers, createSpecializationOption, fieldOptionChoices, fieldOptionsArray, getSpecializationOptions, groupedFieldOptionChoices, handleCreateFieldOption, handleDeleteFieldOption, handleDeleteSpecializationOption, handleFieldFilterChange, handleRegionFilterChange, handleStateFilterChange, onStatusCellClicked, projectStatusOptions, readOnly, systemNamespace, viewMode]);
+  }, [assignableUsers, createSpecializationOption, fieldOptionChoices, fieldOptionsArray, getSpecializationOptions, groupedFieldOptionChoices, handleCreateFieldOption, handleDeleteFieldOption, handleDeleteSpecializationOption, handleFieldFilterChange, handleRegionFilterChange, handleSaveEntityFieldFromGrid, handleStateFilterChange, onStatusCellClicked, projectStatusOptions, readOnly, specializationPicker, systemNamespace, viewMode]);
 
   const isExternalFilterPresent = useCallback(() => {
     return activeStateFiltersRef.current.size < WORKFLOW_STATUS_VALUES.length ||

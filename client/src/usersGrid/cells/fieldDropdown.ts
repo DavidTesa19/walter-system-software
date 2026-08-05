@@ -91,11 +91,17 @@ export const openFieldDropdown = (params: OpenFieldDropdownParams) => {
 
   // --- DOM Elements ---
   const dropdown = document.createElement("div");
+  // Lets other floating panels (e.g. the ag-grid multi-value popover) tell this
+  // dropdown apart from a genuine "click outside" so nesting one inside the
+  // other doesn't make the outer panel close itself out from under a click.
+  dropdown.dataset.fieldDropdown = "true";
   dropdown.style.position = "fixed";
   dropdown.style.top = `${anchorRect.bottom + 2}px`;
   dropdown.style.left = `${anchorRect.left}px`;
   dropdown.style.width = `${Math.max(anchorRect.width, params.minWidth ?? 260)}px`;
-  dropdown.style.zIndex = "10000";
+  // One above FieldPopoverPanel's z-index so it reliably renders on top when
+  // opened from a FieldSelectInput nested inside that panel.
+  dropdown.style.zIndex = "10001";
   dropdown.style.backgroundColor = isDark ? "#1a1a1a" : "white";
   dropdown.style.border = isDark ? "1px solid #2d2d2d" : "1px solid #ccc";
   dropdown.style.borderRadius = "4px";
