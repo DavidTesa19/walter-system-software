@@ -1,15 +1,15 @@
 import React from "react";
-import type { FieldOption } from "../fieldOptions";
-import { openFieldDropdown, SPECIALIZATION_DROPDOWN_LABELS } from "./fieldDropdown";
-import { parseMultiValue, parseSpecializationMap, serializeSpecializationMap } from "../multiValue";
+import { formatSpecialization, parseMultiValue } from "../multiValue";
+import type { FieldEditorAnchor } from "../components/SubjectFieldPopover";
 
 interface SpecializationCellParams {
   value?: string;
-  setValue?: (value: string | null) => void;
   oborKey: string;
-  getOptions: (oborValue: string) => FieldOption[];
-  onCreateFieldOption?: (oborValue: string, value: string) => Promise<FieldOption | void> | FieldOption | void;
-  onDeleteFieldOption?: (optionId: number) => Promise<void> | void;
+  // Opens the section-owned Obor/Zaměření editor popover for this row — the
+  // same one the Obor cell opens, since a Zaměření is always chosen underneath
+  // a specific Obor value.
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  onOpenEditor?: (data: any, anchorRect: FieldEditorAnchor) => void;
   disabled?: boolean;
   // Ag-grid params
   colDef: any;
@@ -17,91 +17,48 @@ interface SpecializationCellParams {
   node: any;
 }
 
-// Grid-cell counterpart to the profile panel's nested Zaměření picker. Only
-// interactive when the row has exactly one Obor value — with several, which
-// obor a click would target is ambiguous, so editing stays in the profile
-// panel (same guard FieldCellRenderer applies to multi-value Obor cells).
+// Grid-cell counterpart to the profile panel's nested Zaměření picker. Editing
+// happens in the shared popover (SubjectFieldPopover), which lists every Obor
+// value with its own Zaměření dropdown — so rows with several Obor values are
+// as editable here as single-value ones, and the value is persisted through the
+// same entity-update path the profile panel uses.
 const SpecializationCellRenderer: React.FC<SpecializationCellParams> = (params) => {
   const oborValues = parseMultiValue(params.data?.[params.oborKey]);
-  const oborValue = oborValues.length === 1 ? oborValues[0] : null;
+  const canOpenEditor = typeof params.onOpenEditor === "function" && !params.disabled;
 
-  const specMap = parseSpecializationMap(params.data?.entity?.field_specialization);
-  const currentValue = oborValue ? (specMap[oborValue] ?? "") : "";
-
-  const writeMap = (nextMap: Record<string, string>) => {
-    const serialized = serializeSpecializationMap(nextMap);
-    if (typeof params.setValue === "function") {
-      params.setValue(serialized);
-    } else if (params.colDef?.field && typeof params.node?.setDataValue === "function") {
-      params.node.setDataValue(params.colDef.field, serialized);
-    }
-  };
+  // The column's valueGetter already formats the stored map; fall back to
+  // formatting here so the cell also works without one.
+  const currentValue = params.value
+    ?? formatSpecialization(params.data?.entity?.field_specialization, params.data?.[params.oborKey]);
 
   const handleClick = (e: React.MouseEvent) => {
-    if (params.disabled || !oborValue) {
+    if (!canOpenEditor) {
       return;
     }
-
-    e.stopPropagation();
-    e.preventDefault();
 
     const cellRect = (e.target as HTMLElement).closest(".ag-cell")?.getBoundingClientRect();
     if (!cellRect) return;
 
-    const options = params.getOptions(oborValue);
+    e.stopPropagation();
+    e.preventDefault();
 
-    openFieldDropdown({
-      anchorRect: cellRect,
-      fieldOptions: options,
-      groupedFieldOptions: [{ label: "Zaměření", options }],
-      currentValue,
-      disabled: params.disabled,
-      labels: SPECIALIZATION_DROPDOWN_LABELS,
-      onSelect: (nextValue) => {
-        const nextMap = { ...specMap };
-        if (nextValue) {
-          nextMap[oborValue] = nextValue;
-        } else {
-          delete nextMap[oborValue];
-        }
-        writeMap(nextMap);
-      },
-      onCreateFieldOption: params.onCreateFieldOption
-        ? (value) => params.onCreateFieldOption!(oborValue, value)
-        : undefined,
-      onDeleteFieldOption: params.onDeleteFieldOption,
-      onDeletedCurrentValue: () => {
-        const nextMap = { ...specMap };
-        delete nextMap[oborValue];
-        writeMap(nextMap);
-      },
-    });
+    params.onOpenEditor!(params.data, cellRect);
   };
 
   const isDark = document.documentElement.getAttribute("data-theme") === "dark";
-  const displayText = oborValues.length === 0
-    ? "Nejprve vyberte obor"
-    : oborValue
-      ? (currentValue || "Vyberte zaměření")
-      : (params.value || "—");
+  const displayText = currentValue || (oborValues.length === 0 ? "Nejprve vyberte obor" : "Vyberte zaměření");
 
   return (
     <div
       onClick={handleClick}
       className={`field-cell-renderer ${currentValue ? '' : 'placeholder'}`}
-      title={
-        oborValues.length === 0
-          ? "Nejprve vyberte obor"
-          : !oborValue
-            ? "Několik oborů — upravte zaměření v profilu subjektu"
-            : undefined
-      }
+      title={currentValue || undefined}
       style={{
         display: "flex",
         alignItems: "center",
         width: "100%",
         height: "100%",
-        cursor: oborValue && !params.disabled ? "pointer" : "default",
+        cursor: canOpenEditor ? "pointer" : "default",
         padding: "0 8px",
         borderRadius: "4px",
         transition: "all 0.2s ease",
@@ -116,7 +73,7 @@ const SpecializationCellRenderer: React.FC<SpecializationCellParams> = (params) 
       }}>
         {displayText}
       </span>
-      {oborValue ? (
+      {canOpenEditor ? (
         <span style={{ marginLeft: "auto", opacity: 0.5, display: "flex", alignItems: "center" }}>
           <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
               <polyline points="6 9 12 15 18 9"></polyline>

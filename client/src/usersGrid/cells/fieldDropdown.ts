@@ -91,6 +91,10 @@ export const openFieldDropdown = (params: OpenFieldDropdownParams) => {
 
   // --- DOM Elements ---
   const dropdown = document.createElement("div");
+  // Marks this body-appended element as part of the field-picker UI so panels
+  // hosting a picker (SubjectFieldPopover) can tell a click inside the dropdown
+  // apart from a genuine click outside themselves.
+  dropdown.setAttribute("data-field-dropdown", "true");
   dropdown.style.position = "fixed";
   dropdown.style.top = `${anchorRect.bottom + 2}px`;
   dropdown.style.left = `${anchorRect.left}px`;

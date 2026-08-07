@@ -12,6 +12,7 @@ import EntityCommissionProfilePanel, {
   type LinkedCommissionItem,
   type SectionLinkToggle
 } from "../components/EntityCommissionProfilePanel";
+import SubjectFieldPopover, { type FieldEditorAnchor } from "../components/SubjectFieldPopover";
 import FieldCellRenderer from "../cells/FieldCellRenderer";
 import SpecializationCellRenderer from "../cells/SpecializationCellRenderer";
 import StatusCellRenderer from "../cells/StatusCellRenderer";
@@ -482,6 +483,10 @@ const PartnersSectionNew: React.FC<SectionProps> = ({ viewMode, isActive, system
   const [selectedEntityId, setSelectedEntityId] = useState<number | null>(null);
   const [selectedCommissionId, setSelectedCommissionId] = useState<number | null>(null);
 
+  // Obor / Zaměření editor opened from a grid cell. Owned here rather than by
+  // the cell renderer so it survives the rowData replacement each save triggers.
+  const [fieldEditor, setFieldEditor] = useState<{ entityId: number; anchor: FieldEditorAnchor } | null>(null);
+
   const gridRef = useRef<AgGridReact<PartnerGridRow>>(null);
 
   // Workflow state checkbox filter — use a ref so column defs stay stable when filter changes
@@ -732,6 +737,13 @@ const PartnersSectionNew: React.FC<SectionProps> = ({ viewMode, isActive, system
   const selectedCommission = useMemo(() => selectedCommissionId === null ? null : commissions.find((commission) => commission.id === selectedCommissionId) || null, [commissions, selectedCommissionId]);
   const linkedCommissions = useMemo(() => selectedEntityId === null ? [] : buildLinkedCommissionItems(commissions.filter((commission) => commission.partner_entity_id === selectedEntityId), assignableUsers), [assignableUsers, commissions, selectedEntityId]);
   const entityData = useMemo(() => buildEntityData(selectedEntity, assignmentOptions, fieldOptionsArray), [assignmentOptions, fieldOptionsArray, selectedEntity]);
+
+  // Subject behind the grid-cell Obor / Zaměření editor, read from live state so
+  // the popover shows saved values immediately (and closes if the row is gone).
+  const fieldEditorEntity = useMemo(() => {
+    if (!fieldEditor) return null;
+    return entities.find((entity) => entity.id === fieldEditor.entityId) ?? null;
+  }, [entities, fieldEditor]);
   const commissionData = useMemo(() => buildCommissionData(selectedCommission, assignmentOptions), [assignmentOptions, selectedCommission]);
   const draftEntityData = useMemo(() => buildPartnerDraftEntityData(createDraft, assignmentOptions, fieldOptionsArray), [assignmentOptions, createDraft, fieldOptionsArray]);
   const draftCommissionData = useMemo(() => buildPartnerDraftCommissionData(createDraft, status, assignmentOptions), [assignmentOptions, createDraft, status]);
@@ -815,12 +827,49 @@ const PartnersSectionNew: React.FC<SectionProps> = ({ viewMode, isActive, system
     setCreateDraft((current) => ({ ...current, commission: { ...current.commission, [key]: value } }));
   }, []);
 
+  // Apply an Obor / Zaměření edit to the local state right away, so the grid
+  // cell and the profile panel both repaint the moment the value changes
+  // instead of only after the save round-trip and refetch land. The refetch
+  // still reconciles with whatever the server actually stored.
+  const applySubjectFieldPatch = useCallback((entityId: number, updates: Record<string, unknown>) => {
+    const patch: Partial<PartnerEntity> = {};
+    if ("field" in updates) patch.field = (updates.field as string | null) ?? null;
+    if ("field_specialization" in updates) patch.field_specialization = (updates.field_specialization as string | null) ?? null;
+    if (Object.keys(patch).length === 0) return;
+
+    setEntities((prev) => prev.map((entity) => (entity.id === entityId ? { ...entity, ...patch } : entity)));
+    setGridData((prev) => prev.map((row) => {
+      if (!row.entity || row.entity.id !== entityId) return row;
+      const nextEntity = { ...row.entity, ...patch };
+      return {
+        ...row,
+        entity: nextEntity,
+        // `field` is mirrored flat on the row for the grid column to read.
+        ...("field" in patch ? { field: nextEntity.field || "" } : {}),
+      };
+    }));
+  }, []);
+
   const handleUpdateEntity = useCallback(async (entityId: number, updates: Record<string, unknown>) => {
     const mappedUpdates = mapPartnerEntityUpdates(updates);
     if (Object.keys(mappedUpdates).length === 0) return;
-    await apiPut(`${entityApiBase}/${entityId}`, mappedUpdates);
+    applySubjectFieldPatch(entityId, updates);
+    try {
+      await apiPut(`${entityApiBase}/${entityId}`, mappedUpdates);
+    } catch (error) {
+      // Drop the optimistic patch — the stored value is the authoritative one.
+      fetchData();
+      throw error;
+    }
     fetchData();
-  }, [entityApiBase, fetchData]);
+  }, [applySubjectFieldPatch, entityApiBase, fetchData]);
+
+  // Opens the Obor / Zaměření editor for the clicked grid cell's subject.
+  const handleOpenFieldEditor = useCallback((data: PartnerGridRow | undefined, anchor: FieldEditorAnchor) => {
+    const entityId = data?.entity?.id ?? data?.partner_entity_id ?? null;
+    if (entityId == null) return;
+    setFieldEditor({ entityId, anchor });
+  }, []);
 
   const handleUpdateCommission = useCallback(async (commissionId: number, updates: Record<string, unknown>) => {
     await apiPut(`${commissionApiBase}/${commissionId}`, updates);
@@ -1668,6 +1717,12 @@ const PartnersSectionNew: React.FC<SectionProps> = ({ viewMode, isActive, system
     }
   }, [commissions, selectedCommissionId]);
 
+  useEffect(() => {
+    if (fieldEditor && !fieldEditorEntity) {
+      setFieldEditor(null);
+    }
+  }, [fieldEditor, fieldEditorEntity]);
+
   const columnDefs = useMemo<ColDef<PartnerGridRow>[]>(() => {
     const cols: ColDef<PartnerGridRow>[] = [];
     cols.push(buildActivityColumn<PartnerGridRow>());
@@ -1777,8 +1832,7 @@ const PartnersSectionNew: React.FC<SectionProps> = ({ viewMode, isActive, system
         cellRendererParams: {
           fieldOptions: fieldOptionChoices,
           groupedFieldOptions: groupedFieldOptionChoices,
-          onCreateFieldOption: readOnly ? undefined : handleCreateFieldOption,
-          onDeleteFieldOption: readOnly ? undefined : handleDeleteFieldOption,
+          onOpenEditor: readOnly ? undefined : handleOpenFieldEditor,
           disabled: readOnly,
         },
         headerComponent: FieldFilterHeader,
@@ -1799,9 +1853,7 @@ const PartnersSectionNew: React.FC<SectionProps> = ({ viewMode, isActive, system
         cellRenderer: SpecializationCellRenderer,
         cellRendererParams: {
           oborKey: "field",
-          getOptions: getSpecializationOptions,
-          onCreateFieldOption: readOnly ? undefined : createSpecializationOption,
-          onDeleteFieldOption: readOnly ? undefined : handleDeleteSpecializationOption,
+          onOpenEditor: readOnly ? undefined : handleOpenFieldEditor,
           disabled: readOnly,
         },
       },
@@ -1832,7 +1884,7 @@ const PartnersSectionNew: React.FC<SectionProps> = ({ viewMode, isActive, system
     );
 
     return cols;
-  }, [assignableUsers, createSpecializationOption, fieldOptionChoices, fieldOptionsArray, getSpecializationOptions, groupedFieldOptionChoices, handleCreateFieldOption, handleDeleteFieldOption, handleDeleteSpecializationOption, handleFieldFilterChange, handleRegionFilterChange, handleStateFilterChange, onStatusCellClicked, projectStatusOptions, readOnly, systemNamespace, viewMode]);
+  }, [assignableUsers, fieldOptionChoices, fieldOptionsArray, groupedFieldOptionChoices, handleFieldFilterChange, handleOpenFieldEditor, handleRegionFilterChange, handleStateFilterChange, onStatusCellClicked, projectStatusOptions, readOnly, systemNamespace, viewMode]);
 
   const isExternalFilterPresent = useCallback(() => {
     return activeStateFiltersRef.current.size < WORKFLOW_STATUS_VALUES.length ||
@@ -1929,6 +1981,33 @@ const PartnersSectionNew: React.FC<SectionProps> = ({ viewMode, isActive, system
           />
         </div>
       </div>
+
+      {fieldEditor && fieldEditorEntity ? (
+        <SubjectFieldPopover
+          anchor={fieldEditor.anchor}
+          title="Obor"
+          field={{
+            key: "field",
+            label: "Obor",
+            value: fieldEditorEntity.field,
+            type: "multi-value",
+            multiValueEditor: "field-select",
+            options: fieldOptionsArray,
+            specializationValues: parseSpecializationMap(fieldEditorEntity.field_specialization),
+          }}
+          fieldPicker={{
+            fieldOptions: fieldOptionChoices,
+            groupedFieldOptions: groupedFieldOptionChoices,
+            onCreateFieldOption: handleCreateFieldOption,
+            onDeleteFieldOption: handleDeleteFieldOption,
+          }}
+          specializationPicker={specializationPicker}
+          onSave={(key, value) => {
+            void handleUpdateEntity(fieldEditorEntity.id, { [key]: value });
+          }}
+          onClose={() => setFieldEditor(null)}
+        />
+      ) : null}
 
       <EntityCommissionProfilePanel
         open={selectedEntityId !== null}

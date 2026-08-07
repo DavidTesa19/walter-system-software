@@ -6,6 +6,7 @@ import {
 import type { FieldCategory, FieldOption } from "../fieldOptions";
 import { openFieldDropdown } from "./fieldDropdown";
 import { parseMultiValue } from "../multiValue";
+import type { FieldEditorAnchor } from "../components/SubjectFieldPopover";
 
 interface FieldCellParams {
   value: string;
@@ -14,6 +15,14 @@ interface FieldCellParams {
   groupedFieldOptions?: FieldCategory[];
   onCreateFieldOption?: (value: string) => Promise<FieldOption | void> | FieldOption | void;
   onDeleteFieldOption?: (optionId: number) => Promise<void> | void;
+  // Opens the section-owned Obor/Zaměření editor popover for this row. When
+  // supplied it replaces the inline single-select dropdown, because that one
+  // can only ever hold a single value (it would silently drop the extras of a
+  // multi-value Obor) and its writes go through ag-grid's value plumbing
+  // instead of the entity-update path the profile panel uses.
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  onOpenEditor?: (data: any, anchorRect: FieldEditorAnchor) => void;
+  placeholder?: string;
   disabled?: boolean;
   // Ag-grid params
   colDef: any;
@@ -32,13 +41,15 @@ const FieldCellRenderer: React.FC<FieldCellParams> = (params) => {
 
   // A subject can carry several Obor values (stored as a JSON array string).
   const values = parseMultiValue(params.value);
-  const isMulti = values.length > 1;
+  const canOpenEditor = typeof params.onOpenEditor === "function" && !params.disabled;
+  // Without the popover editor only single-value cells can be edited inline.
+  const isInteractive = canOpenEditor || (!params.disabled && values.length <= 1);
 
   const labelForValue = (value: string) =>
     flatFieldOptions.find((option) => option.value === value)?.label ?? value;
 
   const getCurrentLabel = () => {
-    if (values.length === 0) return "Vyberte obor";
+    if (values.length === 0) return params.placeholder ?? "Vyberte obor";
     return values.map(labelForValue).join(", ");
   };
 
@@ -51,21 +62,20 @@ const FieldCellRenderer: React.FC<FieldCellParams> = (params) => {
   };
 
   const handleFieldClick = (e: React.MouseEvent) => {
-    if (params.disabled) {
+    if (!isInteractive) {
       return;
     }
 
-    // With several values the single-select dropdown would overwrite the list,
-    // so multi-value Obor is edited from the profile panel instead.
-    if (isMulti) {
-      return;
-    }
+    const cellRect = (e.target as HTMLElement).closest(".ag-cell")?.getBoundingClientRect();
+    if (!cellRect) return;
 
     e.stopPropagation();
     e.preventDefault();
 
-    const cellRect = (e.target as HTMLElement).closest(".ag-cell")?.getBoundingClientRect();
-    if (!cellRect) return;
+    if (canOpenEditor) {
+      params.onOpenEditor!(params.data, cellRect);
+      return;
+    }
 
     openFieldDropdown({
       anchorRect: cellRect,
@@ -86,14 +96,14 @@ const FieldCellRenderer: React.FC<FieldCellParams> = (params) => {
   return (
     <div
       onClick={handleFieldClick}
-      className={`field-cell-renderer ${params.value ? '' : 'placeholder'}`}
-      title={isMulti ? "Několik oborů — upravte v profilu subjektu" : undefined}
+      className={`field-cell-renderer ${values.length > 0 ? '' : 'placeholder'}`}
+      title={values.length > 1 ? values.map(labelForValue).join(", ") : undefined}
       style={{
         display: "flex",
         alignItems: "center",
         width: "100%",
         height: "100%",
-        cursor: isMulti ? "default" : "pointer",
+        cursor: isInteractive ? "pointer" : "default",
         padding: "0 8px",
         borderRadius: "4px",
         transition: "all 0.2s ease",
@@ -108,8 +118,7 @@ const FieldCellRenderer: React.FC<FieldCellParams> = (params) => {
       }}>
         {currentLabel}
       </span>
-      {/* Down chevron only when the cell opens the single-select dropdown. */}
-      {!isMulti ? (
+      {isInteractive ? (
         <span style={{ marginLeft: "auto", opacity: 0.5, display: "flex", alignItems: "center" }}>
           <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
               <polyline points="6 9 12 15 18 9"></polyline>
