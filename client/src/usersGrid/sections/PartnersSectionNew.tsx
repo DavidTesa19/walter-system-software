@@ -31,6 +31,7 @@ import {
 import { useDealLink } from "../useDealLink";
 import { uploadDocuments } from "../../utils/uploadDocuments";
 import type { SectionProps } from "./SectionTypes";
+import useAutoRefresh from "../hooks/useAutoRefresh";
 import useFieldOptions from "../hooks/useFieldOptions";
 import useFieldSpecializationOptions from "../hooks/useFieldSpecializationOptions";
 import useProfileDocuments from "../hooks/useProfileDocuments";
@@ -53,12 +54,15 @@ import FieldFilterHeader from "../cells/FieldFilterHeader";
 import { REGION_OPTIONS } from "../regions";
 import {
   makeMultiValueFilterGetter,
+  makeOborFilterGetter,
+  makeOborValueGetter,
   makeSingleValueEditable,
   makeSpecializationValueGetter,
   multiValueComparator,
   multiValueFormatter,
   parseSpecializationMap,
   passesMultiValueFilter,
+  resolveRowObor,
 } from "../multiValue";
 import {
   copySubjectToOtherType,
@@ -543,8 +547,12 @@ const PartnersSectionNew: React.FC<SectionProps> = ({ viewMode, isActive, system
   const documentManager = useProfileDocuments(resourceKey, selectedEntityId);
   const notesManager = useProfileNotes(resourceKey, selectedEntityId);
 
-  const fetchData = useCallback(async () => {
-    setIsLoading(true);
+  // `silent` is used by the automatic background refresh: it must not flash the
+  // grid's loading overlay, and a transient failure must leave the data that is
+  // already on screen alone instead of blanking the table.
+  const fetchData = useCallback(async (options?: { silent?: boolean }) => {
+    const silent = options?.silent === true;
+    if (!silent) setIsLoading(true);
     try {
       const [entitiesData, commissionsData] = await Promise.all([
         apiGet<PartnerEntityApi[]>(`${entityApiBase}?status=${status}`),
@@ -701,11 +709,13 @@ const PartnersSectionNew: React.FC<SectionProps> = ({ viewMode, isActive, system
       setGridData(rows);
     } catch (error) {
       console.error("Error fetching partner data:", error);
-      setEntities([]);
-      setCommissions([]);
-      setGridData([]);
+      if (!silent) {
+        setEntities([]);
+        setCommissions([]);
+        setGridData([]);
+      }
     } finally {
-      setIsLoading(false);
+      if (!silent) setIsLoading(false);
     }
   }, [commissionActivityScope, commissionApiBase, entityApiBase, sectionKind, status, subjectActivityScope]);
 
@@ -1695,6 +1705,21 @@ const PartnersSectionNew: React.FC<SectionProps> = ({ viewMode, isActive, system
     fetchData();
   }, [fetchData]);
 
+  const refreshSilently = useCallback(() => {
+    void fetchData({ silent: true });
+  }, [fetchData]);
+
+  // Keep the table in step with the server on its own: a change made in the
+  // profile panel, in another section, another tab or by another user shows up
+  // without anyone reloading the page or re-saving the record. Held off while
+  // something is mid-edit so nothing is replaced under the user.
+  useAutoRefresh(refreshSilently, {
+    enabled: isActive,
+    canRefresh: () => !createModalOpen
+      && !isCreating
+      && (gridRef.current?.api?.getEditingCells?.().length ?? 0) === 0,
+  });
+
   useEffect(() => {
     if (isActive) {
       onRegisterAddHandler(handleAdd);
@@ -1824,7 +1849,8 @@ const PartnersSectionNew: React.FC<SectionProps> = ({ viewMode, isActive, system
         headerName: "Obor",
         filter: true,
         editable: false,
-        filterValueGetter: makeMultiValueFilterGetter("field"),
+        valueGetter: makeOborValueGetter("field"),
+        filterValueGetter: makeOborFilterGetter("field"),
         comparator: multiValueComparator,
         flex: 1,
         minWidth: 110,
@@ -1902,7 +1928,7 @@ const PartnersSectionNew: React.FC<SectionProps> = ({ viewMode, isActive, system
     const fieldSet = activeFieldFiltersRef.current;
     if (fieldSet !== null) {
       if (fieldSet.size === 0) return false;
-      if (!passesMultiValueFilter(node.data?.field, fieldSet)) return false;
+      if (!passesMultiValueFilter(resolveRowObor(node.data), fieldSet)) return false;
     }
     const regionSet = activeRegionFiltersRef.current;
     if (regionSet !== null) {

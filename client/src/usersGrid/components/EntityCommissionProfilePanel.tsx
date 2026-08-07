@@ -324,7 +324,15 @@ export const MultiValueEditor: React.FC<MultiValueEditorProps> = ({ field, onSav
   }, [commitSpecMap, specializationPicker]);
 
   const handleSpecChange = useCallback((oborValue: string, value: string) => {
-    const nextMap: SpecializationMap = { ...specValuesRef.current };
+    // Rebuild from the obor values currently listed, so a key that no longer
+    // lines up with any of them (an obor renamed in the catalog, a record from
+    // an older version) is normalised away by this edit instead of lingering.
+    const allowed = new Set(rowsRef.current.map((row) => row.value.trim()).filter(Boolean));
+    const nextMap: SpecializationMap = {};
+    for (const [key, existing] of Object.entries(specValuesRef.current)) {
+      if (allowed.has(key)) nextMap[key] = existing;
+    }
+
     if (value) {
       nextMap[oborValue] = value;
     } else {

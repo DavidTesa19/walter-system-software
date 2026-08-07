@@ -153,29 +153,60 @@ export const serializeSpecializationMap = (map: SpecializationMap): string | nul
  * Human-readable specialization rendering for grid cells: the specialization
  * values whose obor is still selected, ordered by the obor list. When the obor
  * list is unknown, every stored specialization is shown.
+ *
+ * A stored specialization is never hidden just because its obor key doesn't
+ * line up with the current obor list. Keys can fall out of step with the values
+ * (an obor renamed in the catalog, a row mirror that lagged behind the entity,
+ * a record written by an older version), and blanking the cell in those cases
+ * made the table contradict the profile panel — which shows the same data
+ * straight off the entity. Anything stored is shown; the editor prunes genuinely
+ * orphaned entries the next time the obor list is changed.
  */
 export const formatSpecialization = (specRaw: unknown, oborRaw: unknown, separator = ", "): string => {
   const map = parseSpecializationMap(specRaw);
   const obors = parseMultiValue(oborRaw);
+  const matched = obors.map((obor) => map[obor]).filter(Boolean);
+  // Ordered by the obor list first, then anything left over in the map.
   const values = obors.length > 0
-    ? obors.map((obor) => map[obor]).filter(Boolean)
+    ? [...matched, ...Object.values(map).filter((value) => !matched.includes(value))]
     : Object.values(map);
+
   const seen: string[] = [];
   for (const value of values) {
     if (!seen.includes(value)) seen.push(value);
   }
+
+  // Records written before the obor -> specialization map existed stored a bare
+  // specialization string. Show it rather than nothing.
+  if (seen.length === 0 && typeof specRaw === "string" && specRaw.trim() && !specRaw.trim().startsWith("{")) {
+    return specRaw.trim();
+  }
+
   return seen.join(separator);
 };
 
 /**
- * ag-grid valueGetter for the specialization column. Reads the chosen
- * specialization map off the joined entity and the obor list off the row.
+ * The subject's Obor values for a grid row. The joined entity is the source of
+ * truth — the flat row property is only a mirror rebuilt on each fetch, so it
+ * can lag behind an edit the entity already carries. Falls back to the mirror
+ * when the entity has no value of its own (commission rows mirror the
+ * commission's field in that case).
+ */
+export const resolveRowObor =
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  (data: any, oborKey = "field"): unknown =>
+    data?.entity?.field ?? data?.[oborKey];
+
+/**
+ * ag-grid valueGetter for the specialization column. Reads both the chosen
+ * specialization map and the obor list off the joined entity, so the column can
+ * never disagree with the profile panel about the same subject.
  */
 export const makeSpecializationValueGetter =
   (specSource: (data: any) => unknown, oborKey: string) =>
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   (params: any): string =>
-    formatSpecialization(specSource(params?.data), params?.data?.[oborKey]);
+    formatSpecialization(specSource(params?.data), resolveRowObor(params?.data, oborKey));
 
 // ---------------------------------------------------------------------------
 // ag-grid column helpers — shared so every section renders/sorts/filters the
@@ -200,6 +231,20 @@ export const makeMultiValueFilterGetter =
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   (params: any): string =>
     formatMultiValue(params?.data?.[key]);
+
+/** valueGetter for the Obor column — entity-first, matching the profile panel. */
+export const makeOborValueGetter =
+  (oborKey = "field") =>
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  (params: any): unknown =>
+    resolveRowObor(params?.data, oborKey);
+
+/** filterValueGetter for the Obor column, reading the same entity-first value. */
+export const makeOborFilterGetter =
+  (oborKey = "field") =>
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  (params: any): string =>
+    formatMultiValue(resolveRowObor(params?.data, oborKey));
 
 /**
  * editable predicate for inline grid editing: only allow it while a cell holds

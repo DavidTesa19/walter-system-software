@@ -1,5 +1,5 @@
 import React from "react";
-import { formatSpecialization, parseMultiValue } from "../multiValue";
+import { formatSpecialization, parseMultiValue, resolveRowObor } from "../multiValue";
 import type { FieldEditorAnchor } from "../components/SubjectFieldPopover";
 
 interface SpecializationCellParams {
@@ -23,13 +23,13 @@ interface SpecializationCellParams {
 // as editable here as single-value ones, and the value is persisted through the
 // same entity-update path the profile panel uses.
 const SpecializationCellRenderer: React.FC<SpecializationCellParams> = (params) => {
-  const oborValues = parseMultiValue(params.data?.[params.oborKey]);
+  const oborValues = parseMultiValue(resolveRowObor(params.data, params.oborKey));
   const canOpenEditor = typeof params.onOpenEditor === "function" && !params.disabled;
 
   // The column's valueGetter already formats the stored map; fall back to
   // formatting here so the cell also works without one.
   const currentValue = params.value
-    ?? formatSpecialization(params.data?.entity?.field_specialization, params.data?.[params.oborKey]);
+    ?? formatSpecialization(params.data?.entity?.field_specialization, resolveRowObor(params.data, params.oborKey));
 
   const handleClick = (e: React.MouseEvent) => {
     if (!canOpenEditor) {
