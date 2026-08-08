@@ -24,6 +24,16 @@ export const APPROVAL_STATUS_META: Record<ApprovalStatus, ApprovalStatusMeta> = 
   },
 };
 
+/** Czech label per stored status value — for the inline "Schválení" editor. */
+export const APPROVAL_STATUS_LABEL_MAP: Record<string, string> = Object.fromEntries(
+  Object.values(APPROVAL_STATUS_META).map((meta) => [meta.key, meta.label])
+);
+
+/** Dot colour per stored status value — same palette the cell renderer uses. */
+export const APPROVAL_STATUS_COLOR_MAP: Record<string, string> = Object.fromEntries(
+  Object.values(APPROVAL_STATUS_META).map((meta) => [meta.key, meta.color])
+);
+
 export const getApprovalStatusMeta = (value?: string | null): ApprovalStatusMeta | null => {
   const normalized = `${value ?? ""}`.trim().toLowerCase();
 

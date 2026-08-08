@@ -4469,6 +4469,7 @@ const buildProjectCommissionResponse = (type, commission, entity) => {
     ...commission,
     entity_company_name: entity?.company_name ?? null,
     entity_field: entity?.field ?? null,
+    entity_field_specialization: entity?.field_specialization ?? null,
     entity_location: entity?.location ?? null,
     entity_region: entity?.region ?? null,
     entity_info: entity?.info ?? null,

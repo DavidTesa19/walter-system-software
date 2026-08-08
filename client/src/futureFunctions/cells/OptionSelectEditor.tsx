@@ -20,6 +20,9 @@ interface OptionSelectEditorRef {
 interface OptionSelectEditorParams extends ICellEditorParams {
   values?: OptionValue[];
   colorMap?: Record<string, string>;
+  // Display text per stored value, for columns whose options are stored codes
+  // ("accepted") but shown to the user in Czech ("Schváleno").
+  labelMap?: Record<string, string>;
 }
 
 const OptionSelectEditor = forwardRef<OptionSelectEditorRef, OptionSelectEditorParams>((params, ref) => {
@@ -37,6 +40,12 @@ const OptionSelectEditor = forwardRef<OptionSelectEditorRef, OptionSelectEditorP
     return candidate && typeof candidate === "object" ? candidate : undefined;
   }, [params]);
 
+  const labelMap = useMemo<Record<string, string> | undefined>(() => {
+    if (params.labelMap && typeof params.labelMap === "object") return params.labelMap;
+    const candidate = (params as unknown as { cellEditorParams?: { labelMap?: Record<string, string> } }).cellEditorParams?.labelMap;
+    return candidate && typeof candidate === "object" ? candidate : undefined;
+  }, [params]);
+
   const containerRef = useRef<HTMLDivElement | null>(null);
   const [selected, setSelected] = useState<OptionValue>(() => String(params.value ?? ""));
 
@@ -44,11 +53,19 @@ const OptionSelectEditor = forwardRef<OptionSelectEditorRef, OptionSelectEditorP
     setSelected(String(params.value ?? ""));
   }, [params.value]);
 
+  // Hovering an option previews it (`selected`), but only an explicit pick
+  // counts as a choice. Anything else — clicking away, ag-grid closing the
+  // editor for us — must leave the stored value alone rather than commit
+  // whatever the pointer happened to pass over last.
+  const chosenRef = useRef<OptionValue | null>(null);
+
   const commitSelection = useCallback(
     (value: OptionValue) => {
       const node = params.node;
       const column = params.column;
       const colId = column?.getColId?.() ?? column?.getId?.();
+
+      chosenRef.current = value;
 
       if (node && colId != null) {
         node.setDataValue(colId, value);
@@ -63,10 +80,10 @@ const OptionSelectEditor = forwardRef<OptionSelectEditorRef, OptionSelectEditorP
   useImperativeHandle(
     ref,
     () => ({
-      getValue: () => selected,
+      getValue: () => chosenRef.current ?? String(params.value ?? ""),
       isPopup: () => true
     }),
-    [selected]
+    [params.value]
   );
 
   useEffect(() => {
@@ -138,7 +155,7 @@ const OptionSelectEditor = forwardRef<OptionSelectEditorRef, OptionSelectEditorP
                 }}
               />
             )}
-            {option}
+            {labelMap?.[option] ?? option}
           </button>
         );
       })}

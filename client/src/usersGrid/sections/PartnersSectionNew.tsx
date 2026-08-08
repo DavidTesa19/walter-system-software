@@ -4,6 +4,7 @@ import type { ColDef, IRowNode } from "ag-grid-community";
 import type { PartnerEntity, PartnerCommission, PartnerGridRow } from "../types/entities";
 import ProfileCellRenderer from "../cells/ProfileCellRenderer";
 import AssignedUsersCellRenderer from "../cells/AssignedUsersCellRenderer";
+import AssignedUsersEditor from "../cells/AssignedUsersEditor";
 import EntityCommissionCreateModal, { type OtherSectionOption } from "../components/EntityCommissionCreateModal";
 import EntityCommissionProfilePanel, {
   type EntityData,
@@ -39,7 +40,8 @@ import useProfileNotes from "../hooks/useProfileNotes";
 import { ApproveRestoreCellRenderer, DeleteArchiveCellRenderer, ArchiveCellRenderer } from "../cells/RowActionCellRenderers";
 import { fieldOptions } from "../fieldOptions";
 import { formatProfileDate } from "../utils/profileUtils";
-import { compareApprovalStatuses } from "../utils/approvalStatus";
+import { APPROVAL_STATUS_COLOR_MAP, APPROVAL_STATUS_LABEL_MAP, compareApprovalStatuses } from "../utils/approvalStatus";
+import { buildEntityPatch, buildRowMirror } from "../entitySync";
 import { formatAssignedUsernames, fromAssignmentDraftValue, toAssignmentDraftValue } from "../assignmentUtils";
 import { compareWorkflowStatuses, DEFAULT_WORKFLOW_STATUS, getNormalizedWorkflowStatus, WORKFLOW_STATUS_COLOR_MAP, WORKFLOW_STATUS_VALUES } from "../workflowStatus";
 import useAssignableUsers from "../hooks/useAssignableUsers";
@@ -53,6 +55,7 @@ import StatusFilterHeader from "../cells/StatusFilterHeader";
 import FieldFilterHeader from "../cells/FieldFilterHeader";
 import { REGION_OPTIONS } from "../regions";
 import {
+  makeEntityValueGetter,
   makeMultiValueFilterGetter,
   makeOborFilterGetter,
   makeOborValueGetter,
@@ -62,6 +65,7 @@ import {
   multiValueFormatter,
   parseSpecializationMap,
   passesMultiValueFilter,
+  resolveRowEntityValue,
   resolveRowObor,
 } from "../multiValue";
 import {
@@ -124,6 +128,7 @@ type PartnerCommissionApi = {
   entity_first_name?: string | null;
   entity_last_name?: string | null;
   entity_field?: string | null;
+  entity_field_specialization?: string | null;
   entity_region?: string | null;
   entity_location?: string | null;
   entity_info?: string | null;
@@ -293,7 +298,7 @@ const derivePartnerEntityFromCommission = (commission: PartnerCommissionApi): Pa
     name: joinName(commission.entity_first_name, commission.entity_last_name) || commission.entity_company_name || commission.commission_id.split("-")[0] || String(entityId),
     company: commission.entity_company_name ?? null,
     field: commission.entity_field ?? null,
-    field_specialization: null,
+    field_specialization: commission.entity_field_specialization ?? null,
     region: commission.entity_region ?? null,
     location: commission.entity_location ?? null,
     address: null,
@@ -554,15 +559,22 @@ const PartnersSectionNew: React.FC<SectionProps> = ({ viewMode, isActive, system
     const silent = options?.silent === true;
     if (!silent) setIsLoading(true);
     try {
+      // Subjects are fetched unfiltered on purpose. A commission and its subject
+      // can sit in different approval states, and a row whose subject was
+      // filtered out used to fall back to a stub rebuilt from the commission —
+      // a row the profile panel and the Obor/Zaměření editor could not open at
+      // all, and whose Zaměření cell was always blank. The view's own rows are
+      // still status-filtered below; only the lookup pool is complete.
       const [entitiesData, commissionsData] = await Promise.all([
-        apiGet<PartnerEntityApi[]>(`${entityApiBase}?status=${status}`),
+        apiGet<PartnerEntityApi[]>(entityApiBase),
         apiGet<PartnerCommissionApi[]>(`${commissionApiBase}?status=${status}`)
       ]);
 
-      const normalizedEntities = (Array.isArray(entitiesData) ? entitiesData : []).map(normalizePartnerEntity);
+      const allEntities = (Array.isArray(entitiesData) ? entitiesData : []).map(normalizePartnerEntity);
+      const normalizedEntities = allEntities.filter((entity) => entity.status === status);
       const normalizedCommissions = (Array.isArray(commissionsData) ? commissionsData : []).map(normalizePartnerCommission);
 
-      setEntities(normalizedEntities);
+      setEntities(allEntities);
       setCommissions(normalizedCommissions);
 
       if (sectionKind === "subjects") {
@@ -582,8 +594,13 @@ const PartnersSectionNew: React.FC<SectionProps> = ({ viewMode, isActive, system
             commission_id: primaryCommission?.commission_id || `${entity.entity_id}-000`,
             partner_entity_id: entity.id,
             status: entity.status,
-            assigned_to: primaryCommission?.assigned_to ?? entity.assigned_to ?? null,
-            assigned_user_ids: primaryCommission?.assigned_user_ids ?? entity.assigned_user_ids ?? [],
+            // Subject-first, matching the profile panel's "Přiřazení uživatelé"
+            // for this subject. The primary commission's assignment is only a
+            // fallback for subjects that never had one of their own.
+            assigned_to: entity.assigned_to ?? primaryCommission?.assigned_to ?? null,
+            assigned_user_ids: entity.assigned_user_ids?.length
+              ? entity.assigned_user_ids
+              : (primaryCommission?.assigned_user_ids ?? []),
             priority: primaryCommission?.priority ?? null,
             notes: primaryCommission?.notes ?? null,
             deadline: primaryCommission?.deadline ?? null,
@@ -630,7 +647,7 @@ const PartnersSectionNew: React.FC<SectionProps> = ({ viewMode, isActive, system
 
       const commissionRows: PartnerGridRow[] = normalizedCommissions.map((commission, index) => {
         const rawCommission = (Array.isArray(commissionsData) ? commissionsData : [])[index];
-        const entity = normalizedEntities.find((item) => item.id === commission.partner_entity_id) || derivePartnerEntityFromCommission(rawCommission);
+        const entity = allEntities.find((item) => item.id === commission.partner_entity_id) || derivePartnerEntityFromCommission(rawCommission);
         return {
           ...commission,
           entityOnly: false,
@@ -837,28 +854,23 @@ const PartnersSectionNew: React.FC<SectionProps> = ({ viewMode, isActive, system
     setCreateDraft((current) => ({ ...current, commission: { ...current.commission, [key]: value } }));
   }, []);
 
-  // Apply an Obor / Zaměření edit to the local state right away, so the grid
-  // cell and the profile panel both repaint the moment the value changes
-  // instead of only after the save round-trip and refetch land. The refetch
+  // Apply a subject edit to the local state right away, so the grid cell and
+  // the profile panel both repaint the moment the value changes instead of only
+  // after the save round-trip and refetch land — and so the table can never
+  // show a different value than the profile for the same subject. The refetch
   // still reconciles with whatever the server actually stored.
   const applySubjectFieldPatch = useCallback((entityId: number, updates: Record<string, unknown>) => {
-    const patch: Partial<PartnerEntity> = {};
-    if ("field" in updates) patch.field = (updates.field as string | null) ?? null;
-    if ("field_specialization" in updates) patch.field_specialization = (updates.field_specialization as string | null) ?? null;
+    const patch = buildEntityPatch(updates);
     if (Object.keys(patch).length === 0) return;
 
-    setEntities((prev) => prev.map((entity) => (entity.id === entityId ? { ...entity, ...patch } : entity)));
+    const mirror = buildRowMirror(patch, { mirrorAssignment: sectionKind === "subjects" });
+
+    setEntities((prev) => prev.map((entity) => (entity.id === entityId ? { ...entity, ...patch } as PartnerEntity : entity)));
     setGridData((prev) => prev.map((row) => {
       if (!row.entity || row.entity.id !== entityId) return row;
-      const nextEntity = { ...row.entity, ...patch };
-      return {
-        ...row,
-        entity: nextEntity,
-        // `field` is mirrored flat on the row for the grid column to read.
-        ...("field" in patch ? { field: nextEntity.field || "" } : {}),
-      };
+      return { ...row, ...mirror, entity: { ...row.entity, ...patch } as PartnerEntity };
     }));
-  }, []);
+  }, [sectionKind]);
 
   const handleUpdateEntity = useCallback(async (entityId: number, updates: Record<string, unknown>) => {
     const mappedUpdates = mapPartnerEntityUpdates(updates);
@@ -1631,20 +1643,36 @@ const PartnersSectionNew: React.FC<SectionProps> = ({ viewMode, isActive, system
 
     try {
       if (field === "status" && typeof params.newValue === "string" && projectStatusOptions?.includes(params.newValue)) {
-        if (row.entity && viewMode === "active") {
-          await updateProjectClusterStatus(row, params.newValue);
+        // A subject row stands for the subject and all its zakázky, so approving
+        // or archiving it moves the whole cluster — the same thing the row's
+        // archive/restore buttons do.
+        if (sectionKind === "subjects") {
+          if (row.entity) await updateProjectClusterStatus(row, params.newValue);
           return;
         }
 
-        if (row.entityOnly && row.entity) {
-          await handleUpdateEntity(row.entity.id, { status: params.newValue });
+        if (row.entityOnly) {
+          if (row.entity) await handleUpdateEntity(row.entity.id, { status: params.newValue });
           return;
         }
 
-        if (!row.entityOnly) {
-          await handleUpdateCommission(row.id, { status: params.newValue });
+        await handleUpdateCommission(row.id, { status: params.newValue });
+        return;
+      }
+
+      // Přiřazení: the subject grids show (and edit) the subject's own assigned
+      // users, the zakázky grids the commission's — matching which record the
+      // profile panel shows the same field on.
+      if (field === "assigned_user_ids") {
+        const assignedUserIds = fromAssignmentDraftValue(params.newValue);
+
+        if (sectionKind === "subjects" || row.entityOnly) {
+          if (row.entity) await handleUpdateEntity(row.entity.id, { assigned_user_ids: assignedUserIds });
           return;
         }
+
+        await handleUpdateCommission(row.id, { assigned_user_ids: assignedUserIds });
+        return;
       }
 
       if (field === "state" && typeof params.newValue === "string") {
@@ -1752,20 +1780,26 @@ const PartnersSectionNew: React.FC<SectionProps> = ({ viewMode, isActive, system
     const cols: ColDef<PartnerGridRow>[] = [];
     cols.push(buildActivityColumn<PartnerGridRow>());
     const showApprovalStatusColumn = systemNamespace === "projects";
+    // Editable straight from the table, not only from the profile panel.
+    const approvalStatusEditable = Boolean(projectStatusOptions?.length) && !readOnly;
     const approvalStatusCol: ColDef<PartnerGridRow> = {
       field: "status",
       headerName: "Schválení",
       filter: true,
-      editable: Boolean(projectStatusOptions?.length) && systemNamespace !== "projects",
+      editable: approvalStatusEditable,
       flex: 1,
       minWidth: 130,
       comparator: (left: string | null | undefined, right: string | null | undefined) => compareApprovalStatuses(left, right),
       cellRenderer: ApprovalStatusCellRenderer,
-      ...(projectStatusOptions?.length && systemNamespace !== "projects"
+      ...(approvalStatusEditable
         ? {
             cellEditor: OptionSelectEditor,
             cellEditorPopup: true,
-            cellEditorParams: { values: projectStatusOptions },
+            cellEditorParams: {
+              values: projectStatusOptions,
+              labelMap: APPROVAL_STATUS_LABEL_MAP,
+              colorMap: APPROVAL_STATUS_COLOR_MAP,
+            },
             onCellClicked: onStatusCellClicked,
           }
         : {}),
@@ -1773,7 +1807,7 @@ const PartnersSectionNew: React.FC<SectionProps> = ({ viewMode, isActive, system
     const assignedUsersColumn: ColDef<PartnerGridRow> = {
       field: "assigned_user_ids",
       headerName: "Přiřazení",
-      editable: false,
+      editable: !readOnly,
       sortable: false,
       filter: true,
       minWidth: 128,
@@ -1783,6 +1817,9 @@ const PartnersSectionNew: React.FC<SectionProps> = ({ viewMode, isActive, system
         users: assignableUsers,
         maxVisible: 3
       },
+      cellEditor: AssignedUsersEditor,
+      cellEditorPopup: true,
+      cellEditorParams: { users: assignableUsers },
       filterValueGetter: (params) => formatAssignedUsernames(params.data?.assigned_user_ids, assignableUsers, params.data?.assigned_to) ?? "",
       tooltipValueGetter: (params) => formatAssignedUsernames(params.data?.assigned_user_ids, assignableUsers, params.data?.assigned_to) ?? ""
     };
@@ -1842,7 +1879,7 @@ const PartnersSectionNew: React.FC<SectionProps> = ({ viewMode, isActive, system
         editable: false
       },
       { field: "name", headerName: "Jméno / Název", filter: true, editable: true, flex: 1.5, minWidth: 160 },
-      { field: "company", headerName: "Společnost", filter: true, editable: makeSingleValueEditable("company"), valueFormatter: multiValueFormatter, filterValueGetter: makeMultiValueFilterGetter("company"), comparator: multiValueComparator, flex: 1.5, minWidth: 160 },
+      { field: "company", headerName: "Společnost", filter: true, editable: makeSingleValueEditable("company"), valueGetter: makeEntityValueGetter("company"), valueFormatter: multiValueFormatter, filterValueGetter: makeMultiValueFilterGetter("company"), comparator: multiValueComparator, flex: 1.5, minWidth: 160 },
       workflowStateColumn,
       {
         field: "field",
@@ -1888,6 +1925,7 @@ const PartnersSectionNew: React.FC<SectionProps> = ({ viewMode, isActive, system
         headerName: "Kraj",
         filter: true,
         editable: makeSingleValueEditable("region"),
+        valueGetter: makeEntityValueGetter("region"),
         valueFormatter: multiValueFormatter,
         filterValueGetter: makeMultiValueFilterGetter("region"),
         comparator: multiValueComparator,
@@ -1904,7 +1942,7 @@ const PartnersSectionNew: React.FC<SectionProps> = ({ viewMode, isActive, system
           filterPanelLabel: "Filtrovat kraj",
         },
       },
-      { field: "location", headerName: "Lokalita", filter: true, editable: makeSingleValueEditable("location"), valueFormatter: multiValueFormatter, filterValueGetter: makeMultiValueFilterGetter("location"), comparator: multiValueComparator, flex: 1, minWidth: 110 },
+      { field: "location", headerName: "Lokalita", filter: true, editable: makeSingleValueEditable("location"), valueGetter: makeEntityValueGetter("location"), valueFormatter: multiValueFormatter, filterValueGetter: makeMultiValueFilterGetter("location"), comparator: multiValueComparator, flex: 1, minWidth: 110 },
       { field: "created_at", headerName: "Datum přidání", filter: true, editable: false, flex: 0.95, minWidth: 130, valueFormatter: (params) => formatAddedDate(params.value) },
       ...(viewMode === "active" ? activeSubjectCols : commissionCols)
     );
@@ -1933,7 +1971,7 @@ const PartnersSectionNew: React.FC<SectionProps> = ({ viewMode, isActive, system
     const regionSet = activeRegionFiltersRef.current;
     if (regionSet !== null) {
       if (regionSet.size === 0) return false;
-      if (!passesMultiValueFilter(node.data?.region, regionSet)) return false;
+      if (!passesMultiValueFilter(resolveRowEntityValue(node.data, "region"), regionSet)) return false;
     }
     return true;
   }, []);

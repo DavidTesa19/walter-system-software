@@ -186,12 +186,18 @@ export const formatSpecialization = (specRaw: unknown, oborRaw: unknown, separat
 };
 
 /**
- * The subject's Obor values for a grid row. The joined entity is the source of
- * truth — the flat row property is only a mirror rebuilt on each fetch, so it
- * can lag behind an edit the entity already carries. Falls back to the mirror
- * when the entity has no value of its own (commission rows mirror the
- * commission's field in that case).
+ * A subject attribute for a grid row. The joined entity is the source of truth
+ * — the flat row property is only a mirror rebuilt on each fetch, so it can lag
+ * behind an edit the entity already carries (and the profile panel already
+ * shows). Falls back to the mirror when the entity has no value of its own
+ * (commission rows mirror the commission's own value in that case).
  */
+export const resolveRowEntityValue =
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  (data: any, key: string): unknown =>
+    data?.entity?.[key] ?? data?.[key];
+
+/** The subject's Obor values for a grid row — entity-first, like every other. */
 export const resolveRowObor =
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   (data: any, oborKey = "field"): unknown =>
@@ -225,12 +231,22 @@ export const multiValueFormatter = (params: { value: unknown }): string =>
 export const multiValueComparator = (left: unknown, right: unknown): number =>
   formatMultiValue(left).localeCompare(formatMultiValue(right), "cs");
 
+/**
+ * valueGetter for a subject attribute column — entity-first, so the cell shows
+ * exactly what the profile panel shows for the same subject.
+ */
+export const makeEntityValueGetter =
+  (key: string) =>
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  (params: any): unknown =>
+    resolveRowEntityValue(params?.data, key);
+
 /** filterValueGetter for a column so the built-in filter/search sees the joined text. */
 export const makeMultiValueFilterGetter =
   (key: string) =>
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   (params: any): string =>
-    formatMultiValue(params?.data?.[key]);
+    formatMultiValue(resolveRowEntityValue(params?.data, key));
 
 /** valueGetter for the Obor column — entity-first, matching the profile panel. */
 export const makeOborValueGetter =
@@ -255,4 +271,4 @@ export const makeSingleValueEditable =
   (key: string) =>
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   (params: any): boolean =>
-    parseMultiValue(params?.data?.[key]).length <= 1;
+    parseMultiValue(resolveRowEntityValue(params?.data, key)).length <= 1;
