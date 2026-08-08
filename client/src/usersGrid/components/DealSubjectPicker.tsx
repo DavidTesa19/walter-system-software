@@ -2,6 +2,7 @@ import React, { useEffect, useLayoutEffect, useMemo, useRef, useState } from "re
 import { createPortal } from "react-dom";
 import { normalizeSearchText, type DealSubjectOption } from "../dealLink";
 import { getApprovalStatusMeta } from "../utils/approvalStatus";
+import { REGION_OPTIONS } from "../regions";
 import "./DealSubjectPicker.css";
 
 // Rect of the "+ Připojit …" button the picker is anchored to.
@@ -69,6 +70,111 @@ const FilterSelect: React.FC<{
     ))}
   </select>
 );
+
+// Searchable variant of FilterSelect for Obor / Zaměření: those catalogs can
+// grow large (custom values added freely, unlike the fixed Kraj/Status enums),
+// so plain scrolling through a native <select> doesn't scale. Renders as a
+// normal (non-portaled) child of the picker panel — nested inside its DOM
+// subtree, so the panel's own outside-click/scroll dismissal already treats it
+// as "inside" with no extra wiring, same as any other panel content.
+const FilterCombo: React.FC<{
+  label: string;
+  value: string;
+  options: string[];
+  onChange: (value: string) => void;
+}> = ({ label, value, options, onChange }) => {
+  const comboRef = useRef<HTMLDivElement>(null);
+  const [open, setOpen] = useState(false);
+  const [query, setQuery] = useState("");
+
+  const filteredOptions = useMemo(() => {
+    const term = normalizeSearchText(query);
+    return term ? options.filter((option) => normalizeSearchText(option).includes(term)) : options;
+  }, [options, query]);
+
+  useEffect(() => {
+    if (!open) return;
+    setQuery("");
+    const handlePointerDown = (event: MouseEvent) => {
+      if (comboRef.current?.contains(event.target as Node | null)) return;
+      setOpen(false);
+    };
+    // Deferred so the click that opened the combo doesn't immediately close it.
+    const timer = window.setTimeout(() => document.addEventListener("mousedown", handlePointerDown), 0);
+    return () => {
+      window.clearTimeout(timer);
+      document.removeEventListener("mousedown", handlePointerDown);
+    };
+  }, [open]);
+
+  const select = (next: string) => {
+    onChange(next);
+    setOpen(false);
+  };
+
+  return (
+    <div className="dsp-combo" ref={comboRef} data-dsp-combo="true">
+      <button
+        type="button"
+        className={`dsp-filter dsp-combo-trigger ${value ? "is-set" : ""}`}
+        onClick={() => setOpen((prev) => !prev)}
+        aria-haspopup="listbox"
+        aria-expanded={open}
+      >
+        <span className="dsp-combo-trigger-text">{value || `${label} (vše)`}</span>
+      </button>
+      {open ? (
+        // Keydown is contained here so Escape/typing/arrow keys never reach the
+        // panel's own list-navigation handler while this menu is open.
+        <div
+          className="dsp-combo-menu"
+          role="listbox"
+          aria-label={`Filtr: ${label}`}
+          onKeyDown={(event) => {
+            event.stopPropagation();
+            if (event.key === "Escape") setOpen(false);
+          }}
+        >
+          <input
+            type="text"
+            className="dsp-combo-search"
+            placeholder={`Hledat ${label.toLowerCase()}…`}
+            value={query}
+            autoFocus
+            onChange={(event) => setQuery(event.target.value)}
+          />
+          <div className="dsp-combo-list">
+            <button
+              type="button"
+              role="option"
+              aria-selected={value === ""}
+              className={`dsp-combo-option ${value === "" ? "is-selected" : ""}`}
+              onClick={() => select("")}
+            >
+              {label} (vše)
+            </button>
+            {filteredOptions.length === 0 ? (
+              <div className="dsp-combo-empty">Žádné výsledky.</div>
+            ) : (
+              filteredOptions.map((option) => (
+                <button
+                  key={option}
+                  type="button"
+                  role="option"
+                  aria-selected={value === option}
+                  className={`dsp-combo-option ${value === option ? "is-selected" : ""}`}
+                  onClick={() => select(option)}
+                >
+                  {option}
+                </button>
+              ))
+            )}
+          </div>
+        </div>
+      ) : null}
+    </div>
+  );
+};
 
 interface HoverCard {
   option: DealSubjectOption;
@@ -156,7 +262,11 @@ const DealSubjectPicker: React.FC<DealSubjectPickerProps> = ({
 
   const oborOptions = useMemo(() => unique(options.flatMap((option) => option.obory)), [options]);
   const zamereniOptions = useMemo(() => unique(options.flatMap((option) => option.zamereni)), [options]);
-  const krajOptions = useMemo(() => unique(options.flatMap((option) => option.kraje)), [options]);
+  // Kraj is a fixed 14-region catalog (same one the profile panel's own Kraj
+  // field offers), not an open catalog like Obor — so unlike Obor/Zaměření,
+  // this always lists every region rather than only the ones currently in use.
+  // A subject with no Kraj set simply won't match any of them.
+  const krajOptions = REGION_OPTIONS;
   const statusOptions = useMemo(
     () => orderStatuses(unique(options.map((option) => option.status).filter(Boolean))),
     [options]
@@ -202,7 +312,11 @@ const DealSubjectPicker: React.FC<DealSubjectPickerProps> = ({
     };
 
     const handleKeyDown = (event: KeyboardEvent) => {
-      if (event.key === "Escape") onClose();
+      if (event.key !== "Escape") return;
+      // An open Obor/Zaměření combo consumes Escape itself (its own keydown
+      // handler stops propagation) — this only fires for a real "outside" press.
+      if (document.querySelector("[data-dsp-combo] .dsp-combo-menu")) return;
+      onClose();
     };
 
     // The anchor rect is captured at click time — close instead of drifting.
@@ -327,7 +441,7 @@ const DealSubjectPicker: React.FC<DealSubjectPickerProps> = ({
           <input
             type="text"
             className="dsp-search"
-            placeholder={`Hledat ${typeLabel}… (jméno, obor, kraj…)`}
+            placeholder={`Hledat ${typeLabel}… (jméno)`}
             value={search}
             autoFocus
             onChange={(event) => setSearch(event.target.value)}
@@ -337,8 +451,8 @@ const DealSubjectPicker: React.FC<DealSubjectPickerProps> = ({
           </button>
         </div>
         <div className="dsp-filters">
-          <FilterSelect label="Obor" value={oborFilter} options={oborOptions} onChange={setOborFilter} />
-          <FilterSelect
+          <FilterCombo label="Obor" value={oborFilter} options={oborOptions} onChange={setOborFilter} />
+          <FilterCombo
             label="Zaměření"
             value={zamereniFilter}
             options={zamereniOptions}

@@ -54,7 +54,9 @@ export interface DealSubjectOption {
   phone: string;
   website: string;
   info: string;
-  /** Precomputed lowercase, diacritics-free haystack for the picker search. */
+  /** Precomputed lowercase, diacritics-free "code + name" haystack for the
+   *  picker's search bar. Deliberately excludes Obor/Zaměření/Kraj/contacts —
+   *  those have their own filters. */
   searchText: string;
 }
 
@@ -123,11 +125,10 @@ const buildSubjectOption = (row: Record<string, unknown>): DealSubjectOption => 
     phone,
     website,
     info: str(row.info),
-    searchText: normalizeSearchText(
-      [entityCode, company, personName, ...obory, ...zamereni, ...kraje, ...lokality, email, phone, website]
-        .filter(Boolean)
-        .join(" ")
-    ),
+    // The picker's search bar matches on name only (code + company/person name
+    // — the two things shown in the option's title line), not on Obor/Kraj/
+    // contacts, which have their own dedicated filters.
+    searchText: normalizeSearchText([entityCode, company, personName].filter(Boolean).join(" ")),
   };
 };
 
