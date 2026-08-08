@@ -192,6 +192,7 @@ const DealSubjectInfoCard: React.FC<{ card: HoverCard }> = ({ card }) => {
     ["Jméno", option.personName],
     ["Společnost", option.company],
     ["Obor", option.oboryDisplay.join(", ")],
+    ["Zaměření", option.zamereni.join(", ")],
     ["Kraj", option.kraje.join(", ")],
     ["Lokalita", option.lokality.join(", ")],
     ["Telefon", option.phone],
