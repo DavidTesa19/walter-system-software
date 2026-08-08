@@ -74,6 +74,21 @@
   position: relative;
 }
 
+/* The dot (7px + its 1.5px ring, offset 4px from the edge) needs about 13px of
+   clearance to sit clear of the cell's own right edge. Plain text cells only
+   carry ag-grid's own ~7px default padding, which isn't enough — the dot ends
+   up sitting on top of the last character or two of truncated text (e.g. a
+   long e-mail address). Cells with their own custom renderer padding (Obor,
+   Zaměření, …) already clear this on their own; the extra room here is
+   harmless for them. */
+.ag-theme-quartz .ag-cell.cell-activity--added,
+.ag-theme-quartz .ag-cell.cell-activity--updated,
+.ag-theme-quartz .ag-cell.cell-activity--removed {
+  /* !important to beat ag-grid's own `:where(.ag-ltr) .ag-cell:not(...)`
+     padding-right rule regardless of stylesheet order. */
+  padding-right: 14px !important;
+}
+
 .cell-activity--added::after,
 .cell-activity--updated::after,
 .cell-activity--removed::after {
