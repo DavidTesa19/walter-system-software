@@ -2890,12 +2890,9 @@
   cursor: default;
 }
 
-.ec-deal-slot-select {
-  width: 100%;
-  padding: 0.3rem 0.5rem;
-  border: 1px solid var(--color-border-strong, #cbd5e1);
-  border-radius: 0.5rem;
-  background: var(--color-surface, #ffffff);
-  color: var(--color-text, #1f2937);
-  font-size: 0.82rem;
+/* While its DealSubjectPicker is open. */
+.ec-deal-slot-add.is-open {
+  background: var(--color-accent-soft, #d1fae5);
+  border-style: solid;
+  border-color: var(--color-accent, #0f766e);
 }

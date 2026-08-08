@@ -1,0 +1,291 @@
+/* Rich counterparty picker for the "Propojení zakázky" panel: search + filters
+   + subject list floated under the "+ Připojit …" button, with a hover info
+   card beside it. Styled after SubjectFieldPopover. */
+
+/* No-layout wrapper so outside-click detection covers panel + card at once. */
+.dsp-root {
+  display: contents;
+}
+
+.dsp-panel {
+  position: fixed;
+  z-index: 9990;
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  padding: 0.75rem;
+  border-radius: 12px;
+  background: var(--color-surface, #ffffff);
+  border: 1px solid var(--color-border, #cbd5e1);
+  box-shadow: var(--color-shadow-lg, 0 18px 40px rgba(15, 23, 42, 0.22));
+  font-family: var(--font-body);
+  color: var(--color-text, #0f172a);
+  overscroll-behavior: contain;
+}
+
+.dsp-search-row {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.dsp-search {
+  flex: 1 1 auto;
+  min-width: 0;
+  padding: 0.4rem 0.6rem;
+  border: 1px solid var(--color-border-strong, #cbd5e1);
+  border-radius: 0.5rem;
+  background: var(--color-surface, #ffffff);
+  color: var(--color-text, #0f172a);
+  font-size: 0.82rem;
+  font-family: inherit;
+}
+
+.dsp-search:focus {
+  outline: none;
+  border-color: var(--color-accent, #0f766e);
+}
+
+.dsp-close {
+  flex: 0 0 auto;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 1.5rem;
+  height: 1.5rem;
+  padding: 0;
+  border: none;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--color-text-muted, #64748b);
+  font-size: 1rem;
+  line-height: 1;
+  cursor: pointer;
+}
+
+.dsp-close:hover {
+  background: var(--color-surface-hover, rgba(15, 23, 42, 0.06));
+  color: var(--color-text, #0f172a);
+}
+
+.dsp-filters {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0.35rem;
+}
+
+.dsp-filter {
+  width: 100%;
+  min-width: 0;
+  padding: 0.28rem 0.4rem;
+  border: 1px solid var(--color-border, #e5e7eb);
+  border-radius: 0.5rem;
+  background: var(--color-surface, #ffffff);
+  color: var(--color-text, #0f172a);
+  font-size: 0.76rem;
+  font-family: inherit;
+}
+
+/* A picked filter stands out from the "(vše)" defaults. */
+.dsp-filter.is-set {
+  border-color: var(--color-accent, #0f766e);
+  background: var(--color-accent-soft, #d1fae5);
+  color: var(--color-accent-hover, #0f766e);
+  font-weight: 600;
+}
+
+.dsp-meta {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+}
+
+.dsp-count {
+  font-size: 0.7rem;
+  color: var(--color-text-muted, #64748b);
+}
+
+.dsp-clear {
+  padding: 0;
+  border: none;
+  background: transparent;
+  color: var(--color-accent-hover, #0f766e);
+  font-size: 0.7rem;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.dsp-clear:hover {
+  text-decoration: underline;
+}
+
+.dsp-list {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 0.15rem;
+  margin: 0 -0.35rem;
+  padding: 0 0.35rem;
+}
+
+.dsp-empty {
+  padding: 0.9rem 0.5rem;
+  text-align: center;
+  font-size: 0.8rem;
+  color: var(--color-text-muted, #64748b);
+}
+
+.dsp-option {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.5rem;
+  width: 100%;
+  padding: 0.4rem 0.5rem;
+  border: none;
+  border-radius: 0.5rem;
+  background: transparent;
+  text-align: left;
+  cursor: pointer;
+  font-family: inherit;
+}
+
+.dsp-option.is-active {
+  background: var(--color-accent-soft, #d1fae5);
+}
+
+.dsp-status-dot {
+  flex: 0 0 auto;
+  width: 0.5rem;
+  height: 0.5rem;
+  margin-top: 0.32rem;
+  border-radius: 999px;
+}
+
+.dsp-option-main {
+  flex: 1 1 auto;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.1rem;
+}
+
+.dsp-option-title {
+  display: flex;
+  align-items: baseline;
+  gap: 0.45rem;
+  min-width: 0;
+}
+
+.dsp-option-code {
+  flex: 0 0 auto;
+  font-family: "JetBrains Mono", "Fira Code", monospace;
+  font-size: 0.72rem;
+  font-weight: 700;
+  color: var(--color-accent-hover, #0f766e);
+}
+
+.dsp-option-name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 0.82rem;
+  font-weight: 600;
+  color: var(--color-text, #0f172a);
+}
+
+.dsp-option-sub {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 0.7rem;
+  color: var(--color-text-muted, #64748b);
+}
+
+/* ---- hover info card ---------------------------------------------------- */
+
+.dsp-card {
+  position: fixed;
+  z-index: 9991;
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+  padding: 0.7rem 0.8rem;
+  border-radius: 12px;
+  background: var(--color-surface, #ffffff);
+  border: 1px solid var(--color-border, #cbd5e1);
+  box-shadow: var(--color-shadow-lg, 0 18px 40px rgba(15, 23, 42, 0.22));
+  font-family: var(--font-body);
+  color: var(--color-text, #0f172a);
+  overflow-y: auto;
+  pointer-events: none;
+}
+
+.dsp-card-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+}
+
+.dsp-card-code {
+  font-family: "JetBrains Mono", "Fira Code", monospace;
+  font-size: 0.72rem;
+  font-weight: 700;
+  color: var(--color-accent-hover, #0f766e);
+}
+
+.dsp-card-status {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+  font-size: 0.68rem;
+  font-weight: 600;
+  color: var(--color-text-muted, #64748b);
+}
+
+.dsp-card-status .dsp-status-dot {
+  margin-top: 0;
+}
+
+.dsp-card-name {
+  font-size: 0.88rem;
+  font-weight: 700;
+  color: var(--color-text, #0f172a);
+}
+
+.dsp-card-rows {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 0.2rem 0.6rem;
+  margin: 0;
+}
+
+.dsp-card-rows dt {
+  font-size: 0.68rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+  color: var(--color-text-muted, #64748b);
+  align-self: baseline;
+}
+
+.dsp-card-rows dd {
+  margin: 0;
+  font-size: 0.76rem;
+  color: var(--color-text, #0f172a);
+  overflow-wrap: anywhere;
+}
+
+.dsp-card-info {
+  padding-top: 0.4rem;
+  border-top: 1px solid var(--color-border, #e5e7eb);
+  font-size: 0.72rem;
+  color: var(--color-text-muted, #64748b);
+  display: -webkit-box;
+  -webkit-line-clamp: 4;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}

@@ -14,6 +14,8 @@ import {
   serializeSpecializationMap,
   type SpecializationMap,
 } from "../multiValue";
+import type { DealSubjectOption } from "../dealLink";
+import DealSubjectPicker, { type DealPickerAnchor } from "./DealSubjectPicker";
 import "./EntityCommissionProfilePanel.css";
 
 // Config for the specialization dropdown nested under each Obor value. Options
@@ -98,7 +100,7 @@ export interface DealSlotView {
   linkedCode: string | null;
   linkedName: string | null;
   linkedCommissionId: string | null;
-  options: Array<{ id: number; label: string }>;
+  options: DealSubjectOption[];
   busy: boolean;
   onAttach: (entityId: number) => void;
   onDetach: () => void;
@@ -803,9 +805,16 @@ const FieldGroupComponent: React.FC<FieldGroupComponentProps> = ({ group, onSave
 // =============================================================================
 
 const DealLinkSlotRow: React.FC<{ slot: DealSlotView }> = ({ slot }) => {
-  const [picking, setPicking] = useState(false);
+  const addButtonRef = useRef<HTMLButtonElement>(null);
+  const [pickerAnchor, setPickerAnchor] = useState<DealPickerAnchor | null>(null);
   const linked = slot.linkedCode != null;
   const linkedText = `${slot.linkedCode ?? ''}${slot.linkedName ? ` — ${slot.linkedName}` : ''}`;
+
+  const openPicker = () => {
+    const rect = addButtonRef.current?.getBoundingClientRect();
+    if (!rect) return;
+    setPickerAnchor({ top: rect.top, bottom: rect.bottom, left: rect.left, width: rect.width });
+  };
 
   return (
     <div className={`ec-deal-slot ${slot.self ? 'is-self' : ''} ${linked ? 'is-linked' : ''}`}>
@@ -829,37 +838,31 @@ const DealLinkSlotRow: React.FC<{ slot: DealSlotView }> = ({ slot }) => {
             ×
           </button>
         </span>
-      ) : picking ? (
-        <select
-          className="ec-deal-slot-select"
-          disabled={slot.busy}
-          defaultValue=""
-          autoFocus
-          onChange={(event) => {
-            const value = Number(event.target.value);
-            setPicking(false);
-            if (value) slot.onAttach(value);
-          }}
-          onBlur={() => setPicking(false)}
-        >
-          <option value="" disabled>
-            Vyberte {slot.label.toLowerCase()}…
-          </option>
-          {slot.options.map((option) => (
-            <option key={option.id} value={option.id}>
-              {option.label}
-            </option>
-          ))}
-        </select>
       ) : (
-        <button
-          type="button"
-          className="ec-deal-slot-add"
-          disabled={slot.busy}
-          onClick={() => setPicking(true)}
-        >
-          + Připojit {slot.label.toLowerCase()}
-        </button>
+        <>
+          <button
+            ref={addButtonRef}
+            type="button"
+            className={`ec-deal-slot-add ${pickerAnchor ? 'is-open' : ''}`}
+            disabled={slot.busy}
+            onClick={() => (pickerAnchor ? setPickerAnchor(null) : openPicker())}
+          >
+            + Připojit {slot.label.toLowerCase()}
+          </button>
+          {pickerAnchor ? (
+            <DealSubjectPicker
+              anchor={pickerAnchor}
+              anchorEl={addButtonRef.current}
+              typeLabel={slot.label.toLowerCase()}
+              options={slot.options}
+              onSelect={(entityId) => {
+                setPickerAnchor(null);
+                slot.onAttach(entityId);
+              }}
+              onClose={() => setPickerAnchor(null)}
+            />
+          ) : null}
+        </>
       )}
     </div>
   );

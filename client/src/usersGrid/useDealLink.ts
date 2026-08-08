@@ -137,7 +137,7 @@ export const useDealLink = ({
         linkedCode: slot?.entityCode ?? null,
         linkedName: slot?.name ?? null,
         linkedCommissionId: slot?.commissionId ?? null,
-        options: self ? [] : (optionsByType[type] ?? []).map((option) => ({ id: option.id, label: option.label })),
+        options: self ? [] : (optionsByType[type] ?? []),
         busy: busyType === type,
         onAttach: (entityId: number) => handleAttach(type, entityId),
         onDetach: () => handleDetach(type),
