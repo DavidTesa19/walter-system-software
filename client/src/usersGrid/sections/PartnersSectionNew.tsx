@@ -36,6 +36,7 @@ import useAutoRefresh from "../hooks/useAutoRefresh";
 import useFieldOptions from "../hooks/useFieldOptions";
 import useFieldSpecializationOptions from "../hooks/useFieldSpecializationOptions";
 import useProfileDocuments from "../hooks/useProfileDocuments";
+import useGridColumnLayout from "../hooks/useGridColumnLayout";
 import useProfileNotes from "../hooks/useProfileNotes";
 import { ApproveRestoreCellRenderer, DeleteArchiveCellRenderer, ArchiveCellRenderer } from "../cells/RowActionCellRenderers";
 import { fieldOptions } from "../fieldOptions";
@@ -497,6 +498,7 @@ const PartnersSectionNew: React.FC<SectionProps> = ({ viewMode, isActive, system
   const [fieldEditor, setFieldEditor] = useState<{ entityId: number; anchor: FieldEditorAnchor } | null>(null);
 
   const gridRef = useRef<AgGridReact<PartnerGridRow>>(null);
+  const { containerRef: gridWrapperRef, onGridReady: handleGridReady } = useGridColumnLayout(gridRef);
 
   // Workflow state checkbox filter — use a ref so column defs stay stable when filter changes
   const activeStateFiltersRef = useRef<Set<string>>(new Set(WORKFLOW_STATUS_VALUES));
@@ -2017,11 +2019,15 @@ const PartnersSectionNew: React.FC<SectionProps> = ({ viewMode, isActive, system
         </div>
       )}
       <div className={`grid-container${useContentHeightLayout ? ' grid-container--content-height' : ''}`}>
-        <div className={`grid-wrapper ag-theme-quartz${useContentHeightLayout ? ' grid-wrapper--content-height' : ''}`}>
+        <div
+          ref={gridWrapperRef}
+          className={`grid-wrapper ag-theme-quartz${useContentHeightLayout ? ' grid-wrapper--content-height' : ''}`}
+        >
           <AgGridReact<PartnerGridRow>
             ref={gridRef}
             rowData={gridData}
             columnDefs={columnDefs}
+            onGridReady={handleGridReady}
             popupParent={typeof document !== "undefined" ? document.body : undefined}
             postProcessPopup={(params) => {
               const el = params.ePopup as HTMLElement;

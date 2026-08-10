@@ -5050,8 +5050,8 @@ const deleteEntityCounterpart = async (type, targetNamespace, internalId) => {
   return db[`delete${Type}Entity`](internalId);
 };
 
-const createCommissionCounterpart = async (type, targetNamespace, targetEntityInternalId, sourceRow, actorUserId) => {
-  const payload = pickCoreFields('commission', type, sourceRow);
+const createCommissionCounterpart = async (type, targetNamespace, targetEntityInternalId, sourceRow, actorUserId, overrides = {}) => {
+  const payload = { ...pickCoreFields('commission', type, sourceRow), ...overrides };
   const routeConfig = NAMESPACE_ROUTE_CONFIGS[targetNamespace];
   if (routeConfig) {
     return createNamespaceCommissionRecord(routeConfig, type, targetEntityInternalId, payload, actorUserId);
@@ -5327,7 +5327,13 @@ app.post('/api/deal-link/attach', authenticateToken, async (req, res) => {
     const existing = await findDealMember(targetType, namespace, dealId);
     if (existing) await deleteCommissionCounterpart(targetType, namespace, existing.id);
 
-    const created = await createCommissionCounterpart(targetType, namespace, targetEntity.id, source, actorUserId);
+    // The mirror starts in the same approval state as the commission it was
+    // created from. Without this it would default to "pending" and land in the
+    // counterparty's "Ke schválení" tab, so linking an active commission looked
+    // like it had added nothing at all to the other side's Zakázky grid.
+    const created = await createCommissionCounterpart(targetType, namespace, targetEntity.id, source, actorUserId, {
+      status: source.status || 'accepted',
+    });
     await db.setDealId(resolveTable('commission', targetType, namespace), created.id, dealId);
 
     const refreshedSource = await db.getById(sourceTable, source.id);

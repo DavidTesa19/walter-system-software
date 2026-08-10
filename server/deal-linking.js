@@ -13,9 +13,12 @@
  * commission is created under that counterparty subject and both rows are
  * stamped with the same random `deal_id`. Every commission sharing a `deal_id`
  * (at most one per subject type) forms one deal. Core descriptive fields are
- * kept in sync across the deal members; ids, status, assignment and timestamps
- * stay independent per side. Linking never crosses sections — a deal_id is only
- * ever matched within the same namespace.
+ * kept in sync across the deal members; ids, assignment and timestamps stay
+ * independent per side. The mirror is created in the same approval state as its
+ * source (so linking an active commission puts an active one on the other
+ * side's Zakázky grid) but the two states are independent from then on.
+ * Linking never crosses sections — a deal_id is only ever matched within the
+ * same namespace.
  */
 
 import {
