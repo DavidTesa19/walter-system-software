@@ -396,6 +396,30 @@
   border-color: var(--color-error, #ef4444);
 }
 
+/*
+ * --app-footer-height is only ever consumed here, by .main-content below,
+ * to keep the table-scroll views from growing taller than the viewport minus
+ * the fixed footer. It used to live in index.css, which nothing in the app
+ * actually imports (main.tsx never pulls it in), so the variable was always
+ * undefined: `calc(100vh - var(--app-footer-height) - 16px)` was invalid and
+ * fell back to `auto`, letting .main-content grow to fit its content — which
+ * is harmless for a handful of rows but lets a table with many rows (or many
+ * columns needing its own horizontal scrollbar) push past the footer, with
+ * the footer's `position: fixed` then hiding whatever grew behind it,
+ * including the grid's own horizontal scrollbar. Defined here instead, next
+ * to its only use, so it stays in effect regardless of what else does or
+ * doesn't get imported.
+ */
+:root {
+  --app-footer-height: 88px;
+}
+
+@media (max-width: 960px) {
+  :root {
+    --app-footer-height: 128px;
+  }
+}
+
 .main-content {
   margin-left: 260px;
   width: calc(100% - 260px);

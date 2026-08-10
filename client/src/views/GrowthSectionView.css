@@ -2,6 +2,16 @@
   display: flex;
   flex-direction: column;
   gap: 12px;
+  /* Direct child of .main-content, which has a fixed height (viewport minus
+     footer) and overflow: hidden. Without flex:1/min-height:0 this sizes to
+     its own content instead of stretching to fill that box — .page-container's
+     `height: 100%` then has nothing definite to resolve against, the whole
+     table-section/grid-container/grid-wrapper chain below inherits that
+     content-based sizing instead of shrinking to fit, and a table with many
+     rows grows past the viewport and gets clipped, taking its own horizontal
+     scrollbar with it. */
+  flex: 1;
+  min-height: 0;
 }
 
 .growth-section-view__mode-bar {
