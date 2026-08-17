@@ -2293,6 +2293,7 @@ const TipersSectionNew: React.FC<SectionProps> = ({
           <AgGridReact<TiperGridRow>
             ref={gridRef}
             rowData={gridData}
+            getRowId={(params) => String(params.data.id)}
             columnDefs={columnDefs}
             onGridReady={handleGridReady}
             popupParent={typeof document !== "undefined" ? document.body : undefined}

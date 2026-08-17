@@ -2349,6 +2349,7 @@ const ClientsSectionNew: React.FC<SectionProps> = ({
           <AgGridReact<ClientGridRow>
             ref={gridRef}
             rowData={gridData}
+            getRowId={(params) => String(params.data.id)}
             columnDefs={columnDefs}
             onGridReady={handleGridReady}
             popupParent={typeof document !== "undefined" ? document.body : undefined}
