@@ -68,13 +68,21 @@
   min-height: 0;
 }
 
-.ff-grid-wrapper .ag-layout-normal,
-.ff-grid-wrapper .ag-body,
 .ff-grid-wrapper .ag-overlay,
 .ff-grid-wrapper .ag-overlay-wrapper,
 .ff-grid-wrapper .ag-overlay-no-rows-wrapper,
 .ff-grid-wrapper .ag-overlay-loading-wrapper {
   min-height: 100%;
+}
+
+/* .ag-body sits below .ag-header inside .ag-root, so a 100% min-height makes it
+   overflow the header's worth of space and the last row gets clipped by the
+   wrapper's overflow:hidden. It has to be free to shrink, as in .grid-wrapper. */
+.ff-grid-wrapper .ag-body,
+.ff-grid-wrapper .ag-body-viewport,
+.ff-grid-wrapper .ag-body-horizontal-scroll,
+.ff-grid-wrapper .ag-body-horizontal-scroll-viewport {
+  min-height: 0;
 }
 
 .ff-grid-wrapper:has(.ag-overlay-no-rows-wrapper) {
