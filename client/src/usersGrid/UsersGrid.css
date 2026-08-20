@@ -1,6 +1,6 @@
 /* Styles for UsersGrid page */
 .page-container {
-  padding: 1.25rem 2.5rem 0.75rem;
+  padding: 0.6rem 2.5rem 0.4rem;
   background: var(--color-background);
   color: var(--color-text);
   text-align: center;
@@ -34,7 +34,7 @@
   justify-content: space-between;
   align-items: center;
   text-align: center;
-  margin-bottom: 0.9rem;
+  margin-bottom: 0.6rem;
   gap: 2rem;
 }
 
@@ -71,7 +71,7 @@
   display: flex;
   gap: 0.5rem;
   background: var(--color-surface-alt);
-  padding: 0.25rem;
+  padding: 0.2rem;
   border-radius: 0.75rem;
   box-shadow: var(--color-shadow-sm);
   border: 1px solid var(--color-border);
@@ -80,10 +80,10 @@
 .nav-tab {
   background: transparent;
   border: none;
-  padding: 0.75rem 1.5rem;
+  padding: 0.45rem 1.1rem;
   border-radius: 6px;
   cursor: pointer;
-  font-size: 0.95rem;
+  font-size: 0.9rem;
   font-weight: 500;
   color: var(--color-text-muted);
   transition: all 0.2s;
@@ -129,7 +129,7 @@
 .page-title {
   font-family: var(--font-heading);
   font-weight: 700;
-  font-size: 2.25rem;
+  font-size: 1.5rem;
   margin: 0;
   color: var(--color-text);
 }
@@ -400,11 +400,11 @@
 }
 
 .grid-wrapper {
-  --walter-grid-scroll-spacer: 20px;
+  --walter-grid-scroll-spacer: 10px;
   background: var(--color-surface);
   border: 1px solid var(--color-border);
   border-radius: 1rem;
-  padding: 0.75rem;
+  padding: 0.5rem;
   box-shadow: var(--color-shadow-md);
   margin: 0;
   flex: 1;

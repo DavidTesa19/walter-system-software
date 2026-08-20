@@ -1,7 +1,7 @@
 .general-section-view {
   display: flex;
   flex-direction: column;
-  gap: 12px;
+  gap: 8px;
   /* Direct child of .main-content, which has a fixed height and
      overflow: hidden — stretch to fill it (see GrowthSectionView.css for why
      this matters: without it a table with many rows grows past the viewport

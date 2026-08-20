@@ -3,7 +3,9 @@ import {
   createSessionToken,
   fetchPlaceLocation,
   fetchPlacePredictions,
+  getPlacesError,
   isPlacesConfigured,
+  subscribePlacesError,
   type PlaceLocation,
   type PlacePrediction,
   type PlaceSessionToken,
@@ -50,6 +52,9 @@ const PlaceAutocompleteInput: React.FC<PlaceAutocompleteInputProps> = ({
   const [isOpen, setIsOpen] = useState(false);
   const [highlighted, setHighlighted] = useState(-1);
   const [isResolving, setIsResolving] = useState(false);
+  // Why Google is not answering, when it isn't — shown under the input so a
+  // misconfigured key looks like a misconfigured key rather than a dead field.
+  const [placesError, setPlacesError] = useState<string | null>(() => getPlacesError());
 
   const containerRef = useRef<HTMLDivElement | null>(null);
   const sessionRef = useRef<PlaceSessionToken | null>(null);
@@ -66,6 +71,8 @@ const PlaceAutocompleteInput: React.FC<PlaceAutocompleteInputProps> = ({
   const hasTypedRef = useRef(false);
 
   useEffect(() => () => { mountedRef.current = false; }, []);
+
+  useEffect(() => subscribePlacesError(() => setPlacesError(getPlacesError())), []);
 
   const closeList = useCallback(() => {
     setIsOpen(false);
@@ -195,6 +202,9 @@ const PlaceAutocompleteInput: React.FC<PlaceAutocompleteInputProps> = ({
         onKeyDown={handleKeyDown}
       />
       {isResolving ? <span className="place-autocomplete__status">Načítám…</span> : null}
+      {enabled && placesError && !isOpen ? (
+        <div className="place-autocomplete__error" role="status">{placesError}</div>
+      ) : null}
       {isOpen && predictions.length > 0 ? (
         <ul className="place-autocomplete__list" id={listId} role="listbox">
           {predictions.map((prediction, index) => (

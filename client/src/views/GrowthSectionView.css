@@ -1,7 +1,7 @@
 .growth-section-view {
   display: flex;
   flex-direction: column;
-  gap: 12px;
+  gap: 8px;
   /* Direct child of .main-content, which has a fixed height (viewport minus
      footer) and overflow: hidden. Without flex:1/min-height:0 this sizes to
      its own content instead of stretching to fill that box — .page-container's

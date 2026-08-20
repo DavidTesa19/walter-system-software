@@ -1,7 +1,7 @@
 .projects-section-view {
   display: flex;
   flex-direction: column;
-  gap: 12px;
+  gap: 8px;
   /* Direct child of .main-content, which has a fixed height and
      overflow: hidden — stretch to fill it (see GrowthSectionView.css for why
      this matters: without it a table with many rows grows past the viewport
@@ -21,9 +21,15 @@
 
 .projects-section-view__summary {
   display: flex;
-  flex-direction: column;
-  gap: 6px;
-  padding: 10px 14px;
+  /* One line rather than a stacked row per status: the counts are short, and
+     the two stacked rows cost a full table row of height. Wraps back to
+     several lines when the window is too narrow to fit them. */
+  flex-direction: row;
+  flex-wrap: wrap;
+  align-items: center;
+  column-gap: 18px;
+  row-gap: 4px;
+  padding: 6px 12px;
   border-radius: 12px;
   border: 1px solid var(--color-border, rgba(148, 163, 184, 0.24));
   background:
@@ -50,7 +56,7 @@
   display: inline-flex;
   align-items: center;
   gap: 6px;
-  padding: 4px 10px;
+  padding: 3px 9px;
   border: 1px solid var(--color-border, rgba(148, 163, 184, 0.24));
   border-radius: 999px;
   background: color-mix(in srgb, var(--color-surface-hover, #eef2ff) 82%, transparent);

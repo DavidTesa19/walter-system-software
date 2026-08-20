@@ -18,6 +18,13 @@
   pointer-events: none;
 }
 
+.place-autocomplete__error {
+  margin-top: 3px;
+  font-size: 0.72rem;
+  line-height: 1.35;
+  color: var(--color-error, #dc2626);
+}
+
 .place-autocomplete__list {
   position: absolute;
   z-index: 3000;

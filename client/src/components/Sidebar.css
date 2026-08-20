@@ -440,7 +440,7 @@
   flex-direction: column;
   /* The height above already stops short of the footer, so this only needs to
      be a small visual gap — 2.5rem here cost about two table rows. */
-  padding-bottom: 1rem;
+  padding-bottom: 0.5rem;
   box-sizing: border-box;
 }
 
