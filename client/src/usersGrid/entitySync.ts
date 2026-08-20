@@ -16,10 +16,12 @@ export const ENTITY_PATCH_KEYS = [
   "company",
   "field",
   "field_specialization",
+  "tier",
   "service",
   "budget",
   "region",
   "location",
+  "location_geo",
   "mobile",
   "email",
   "website",
@@ -30,7 +32,7 @@ export const ENTITY_PATCH_KEYS = [
 ] as const;
 
 /** Subject values the grid rows also mirror as a flat row property. */
-const MIRRORED_KEYS = ["name", "company", "field", "region", "location", "mobile", "email"] as const;
+const MIRRORED_KEYS = ["name", "company", "field", "tier", "region", "location", "mobile", "email"] as const;
 
 /**
  * Narrow an update payload down to the subject fields, normalising the values

@@ -14,6 +14,14 @@ import {
   serializeSpecializationMap,
   type SpecializationMap,
 } from "../multiValue";
+import PlaceAutocompleteInput from "./PlaceAutocompleteInput";
+import {
+  buildMapsUrl,
+  formatCoordinates,
+  pruneLocationGeo,
+  serializeLocationGeo,
+  type LocationGeoMap,
+} from "../locationGeo";
 import type { DealSubjectOption } from "../dealLink";
 import DealSubjectPicker, { type DealPickerAnchor } from "./DealSubjectPicker";
 import "./EntityCommissionProfilePanel.css";
@@ -21,6 +29,14 @@ import "./EntityCommissionProfilePanel.css";
 // Config for the specialization dropdown nested under each Obor value. Options
 // are keyed per obor value and persist per namespace, exactly like custom obor
 // options. The chosen values live on the obor field as `specializationValues`.
+// Config for the Google Maps address picker used by the Lokalita field. The
+// coordinates picked for each address are saved as a JSON map under `fieldKey`
+// on the entity, and handed to the field as `placeValues`.
+export interface PlacePickerConfig {
+  // Entity key the serialized address -> coordinates map is saved under.
+  fieldKey: string;
+}
+
 export interface SpecializationPickerConfig {
   // Entity key the serialized obor -> specialization map is saved under.
   fieldKey: string;
@@ -44,11 +60,15 @@ export interface EditableField {
   placeholder?: string;
   // For type === 'multi-value': how each individual value is edited. The stored
   // value is a single scalar (one value) or a JSON array string (several).
-  multiValueEditor?: 'text' | 'select' | 'field-select';
+  multiValueEditor?: 'text' | 'select' | 'field-select' | 'place';
   // For the Obor multi-value field: the current obor -> specialization choices.
   // Rendered as a nested dropdown under each obor row when a specializationPicker
   // is supplied.
   specializationValues?: SpecializationMap;
+  // For the Lokalita multi-value field: the coordinates already stored for each
+  // address. Rendered as a small hint under the row when a placePicker is
+  // supplied.
+  placeValues?: LocationGeoMap;
 }
 
 export interface FieldGroup {
@@ -132,6 +152,7 @@ interface EntityCommissionProfilePanelProps {
   dealLink?: DealLinkConfig | null;
   fieldPicker?: FieldPickerConfig;
   specializationPicker?: SpecializationPickerConfig;
+  placePicker?: PlacePickerConfig;
 
   // Callbacks
   onClose: () => void;
@@ -186,6 +207,7 @@ interface EditableFieldCellProps {
   onSave: (key: string, value: string | boolean | string[] | null) => void;
   fieldPicker?: FieldPickerConfig;
   specializationPicker?: SpecializationPickerConfig;
+  placePicker?: PlacePickerConfig;
 }
 
 const normalizeFieldOptions = (options: EditableField['options']) =>
@@ -256,6 +278,7 @@ interface MultiValueEditorProps {
   onSave: (key: string, value: string | boolean | string[] | null) => void;
   fieldPicker?: FieldPickerConfig;
   specializationPicker?: SpecializationPickerConfig;
+  placePicker?: PlacePickerConfig;
   // Profile panel (default): commit text on blur, so each edit is one save.
   // Create modal: commit on every keystroke, because the form is submitted as a
   // whole and a not-yet-blurred value would otherwise be lost.
@@ -266,11 +289,13 @@ interface MultiValueEditorProps {
 // Kraj, Lokalita). Each value gets its own inline editor plus a remove button,
 // and a "+" adds another. Persisted as a single scalar / JSON array via
 // serializeMultiValue. Reused by the create modal's DraftField.
-export const MultiValueEditor: React.FC<MultiValueEditorProps> = ({ field, onSave, fieldPicker, specializationPicker, commitOnChange = false }) => {
+export const MultiValueEditor: React.FC<MultiValueEditorProps> = ({ field, onSave, fieldPicker, specializationPicker, placePicker, commitOnChange = false }) => {
   const editor = field.multiValueEditor ?? 'text';
   const normalizedOptions = useMemo(() => normalizeFieldOptions(field.options), [field.options]);
   const showSpecialization = editor === 'field-select' && Boolean(specializationPicker);
   const specValues = field.specializationValues ?? {};
+  const usePlacePicker = editor === 'place';
+  const geoValues = field.placeValues ?? {};
 
   const idRef = useRef(0);
   const makeRow = useCallback((value: string): MultiValueRow => ({ id: idRef.current++, value }), []);
@@ -300,6 +325,8 @@ export const MultiValueEditor: React.FC<MultiValueEditorProps> = ({ field, onSav
   // A ref keeps the spec-map handlers stable while always seeing the latest map.
   const specValuesRef = useRef(specValues);
   specValuesRef.current = specValues;
+  const geoValuesRef = useRef(geoValues);
+  geoValuesRef.current = geoValues;
 
   const commit = useCallback((next: MultiValueRow[]) => {
     onSave(field.key, serializeMultiValue(next.map((row) => row.value)));
@@ -325,6 +352,22 @@ export const MultiValueEditor: React.FC<MultiValueEditorProps> = ({ field, onSav
     }
   }, [commitSpecMap, specializationPicker]);
 
+  const commitGeoMap = useCallback((nextMap: LocationGeoMap) => {
+    if (!placePicker) return;
+    onSave(placePicker.fieldKey, serializeLocationGeo(nextMap));
+  }, [onSave, placePicker]);
+
+  // Coordinates only make sense for an address that is still listed, so an
+  // address that was removed or retyped by hand drops its coordinates with it.
+  const pruneGeoMap = useCallback((addresses: string[]) => {
+    if (!placePicker) return;
+    const current = geoValuesRef.current;
+    const nextMap = pruneLocationGeo(current, addresses);
+    if ((serializeLocationGeo(nextMap) ?? "") !== (serializeLocationGeo(current) ?? "")) {
+      commitGeoMap(nextMap);
+    }
+  }, [commitGeoMap, placePicker]);
+
   const handleSpecChange = useCallback((oborValue: string, value: string) => {
     // Rebuild from the obor values currently listed, so a key that no longer
     // lines up with any of them (an obor renamed in the catalog, a record from
@@ -348,7 +391,23 @@ export const MultiValueEditor: React.FC<MultiValueEditorProps> = ({ field, onSav
     setRowsSafe(next);
     commit(next);
     pruneSpecMap(next.map((row) => row.value));
-  }, [commit, pruneSpecMap, setRowsSafe]);
+    pruneGeoMap(next.map((row) => row.value));
+  }, [commit, pruneGeoMap, pruneSpecMap, setRowsSafe]);
+
+  // A suggestion was picked: store the place's formatted address in this row
+  // and its coordinates under that address, in that order, so the two writes
+  // never leave a coordinate keyed to an address the subject does not hold.
+  const handlePlaceSelected = useCallback((id: number, place: { address: string; lat: number; lng: number; placeId: string }) => {
+    const next = rowsRef.current.map((row) => (row.id === id ? { ...row, value: place.address } : row));
+    setRowsSafe(next);
+    commit(next);
+
+    if (!placePicker) return;
+    const addresses = next.map((row) => row.value);
+    const nextMap = pruneLocationGeo(geoValuesRef.current, addresses);
+    nextMap[place.address] = { lat: place.lat, lng: place.lng, place_id: place.placeId };
+    commitGeoMap(nextMap);
+  }, [commit, commitGeoMap, placePicker, setRowsSafe]);
 
   const handleTextChange = useCallback((id: number, value: string) => {
     const next = rowsRef.current.map((row) => (row.id === id ? { ...row, value } : row));
@@ -358,14 +417,16 @@ export const MultiValueEditor: React.FC<MultiValueEditorProps> = ({ field, onSav
 
   const handleTextBlur = useCallback(() => {
     if (!commitOnChange) commit(rowsRef.current);
-  }, [commit, commitOnChange]);
+    pruneGeoMap(rowsRef.current.map((row) => row.value));
+  }, [commit, commitOnChange, pruneGeoMap]);
 
   const handleRemove = useCallback((id: number) => {
     const next = rowsRef.current.filter((row) => row.id !== id);
     setRowsSafe(next);
     commit(next);
     pruneSpecMap(next.map((row) => row.value));
-  }, [commit, pruneSpecMap, setRowsSafe]);
+    pruneGeoMap(next.map((row) => row.value));
+  }, [commit, pruneGeoMap, pruneSpecMap, setRowsSafe]);
 
   const handleAdd = useCallback(() => {
     const row = makeRow("");
@@ -373,10 +434,10 @@ export const MultiValueEditor: React.FC<MultiValueEditorProps> = ({ field, onSav
     setAutoFocusId(row.id);
   }, [makeRow, setRowsSafe]);
 
-  const addLabel = editor === 'select'
-    ? 'Přidat další'
-    : editor === 'field-select'
-      ? 'Přidat další obor'
+  const addLabel = editor === 'field-select'
+    ? 'Přidat další obor'
+    : editor === 'place'
+      ? 'Přidat další adresu'
       : 'Přidat další';
 
   const renderRowEditor = (row: MultiValueRow) => {
@@ -390,6 +451,19 @@ export const MultiValueEditor: React.FC<MultiValueEditorProps> = ({ field, onSav
           onChange={(nextValue) => handleChoice(row.id, nextValue)}
           onCreateFieldOption={fieldPicker.onCreateFieldOption}
           onDeleteFieldOption={fieldPicker.onDeleteFieldOption}
+        />
+      );
+    }
+
+    if (usePlacePicker) {
+      return (
+        <PlaceAutocompleteInput
+          value={row.value}
+          placeholder={field.placeholder || field.label}
+          autoFocus={row.id === autoFocusId}
+          onChange={(nextValue) => handleTextChange(row.id, nextValue)}
+          onCommit={handleTextBlur}
+          onPlaceSelected={(place) => handlePlaceSelected(row.id, place)}
         />
       );
     }
@@ -478,6 +552,23 @@ export const MultiValueEditor: React.FC<MultiValueEditorProps> = ({ field, onSav
     );
   };
 
+  // Read-only confirmation that this address came from Google Maps, linking
+  // out to it. Absent for addresses that were simply typed.
+  const renderCoordinates = (row: MultiValueRow) => {
+    const address = row.value.trim();
+    const coordinates = usePlacePicker && address ? geoValues[address] : undefined;
+    if (!coordinates) return null;
+
+    return (
+      <div className="mv-editor-coordinates">
+        <span aria-hidden="true">📍</span>
+        <a href={buildMapsUrl(address, coordinates)} target="_blank" rel="noopener noreferrer">
+          {formatCoordinates(coordinates)}
+        </a>
+      </div>
+    );
+  };
+
   return (
     <div className="editable-field editing mv-editor">
       {rows.length > 0 ? (
@@ -497,6 +588,7 @@ export const MultiValueEditor: React.FC<MultiValueEditorProps> = ({ field, onSav
                 </button>
               </div>
               {renderSpecialization(row)}
+              {renderCoordinates(row)}
             </div>
           ))}
         </div>
@@ -509,7 +601,7 @@ export const MultiValueEditor: React.FC<MultiValueEditorProps> = ({ field, onSav
   );
 };
 
-const EditableFieldCell: React.FC<EditableFieldCellProps> = ({ field, onSave, fieldPicker, specializationPicker }) => {
+const EditableFieldCell: React.FC<EditableFieldCellProps> = ({ field, onSave, fieldPicker, specializationPicker, placePicker }) => {
 
   const [isEditing, setIsEditing] = useState(false);
   const [editValue, setEditValue] = useState<string | boolean | string[]>(() => getInitialEditValue(field));
@@ -603,7 +695,7 @@ const EditableFieldCell: React.FC<EditableFieldCellProps> = ({ field, onSave, fi
   // Multi-value fields (Obor, Společnost, Kraj, Lokalita) render their own
   // add/remove editor and manage persistence internally.
   if (field.type === 'multi-value') {
-    return <MultiValueEditor field={field} onSave={onSave} fieldPicker={fieldPicker} specializationPicker={specializationPicker} />;
+    return <MultiValueEditor field={field} onSave={onSave} fieldPicker={fieldPicker} specializationPicker={specializationPicker} placePicker={placePicker} />;
   }
 
   // The "Obor" picker is always shown as a clickable dropdown trigger (like the
@@ -780,9 +872,10 @@ interface FieldGroupComponentProps {
   onSave: (key: string, value: string | boolean | string[] | null) => void;
   fieldPicker?: FieldPickerConfig;
   specializationPicker?: SpecializationPickerConfig;
+  placePicker?: PlacePickerConfig;
 }
 
-const FieldGroupComponent: React.FC<FieldGroupComponentProps> = ({ group, onSave, fieldPicker, specializationPicker }) => {
+const FieldGroupComponent: React.FC<FieldGroupComponentProps> = ({ group, onSave, fieldPicker, specializationPicker, placePicker }) => {
   const colorClass = group.color ? `group-${group.color}` : '';
 
   return (
@@ -792,7 +885,7 @@ const FieldGroupComponent: React.FC<FieldGroupComponentProps> = ({ group, onSave
         {group.fields.map(field => (
           <div key={field.key} className={`field-row ${field.isMultiline ? 'multiline' : ''}`}>
             <label className="field-label">{field.label}</label>
-            <EditableFieldCell field={field} onSave={onSave} fieldPicker={fieldPicker} specializationPicker={specializationPicker} />
+            <EditableFieldCell field={field} onSave={onSave} fieldPicker={fieldPicker} specializationPicker={specializationPicker} placePicker={placePicker} />
           </div>
         ))}
       </div>
@@ -908,6 +1001,7 @@ const EntityCommissionProfilePanel: React.FC<EntityCommissionProfilePanelProps> 
   dealLink,
   fieldPicker,
   specializationPicker,
+  placePicker,
   onClose,
   onUpdateEntity,
   onUpdateCommission,
@@ -1196,6 +1290,7 @@ const EntityCommissionProfilePanel: React.FC<EntityCommissionProfilePanelProps> 
                         onSave={handleEntityFieldSave}
                         fieldPicker={fieldPicker}
                         specializationPicker={specializationPicker}
+                        placePicker={placePicker}
                       />
                     ))}
                   </div>

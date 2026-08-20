@@ -409,6 +409,13 @@
  * including the grid's own horizontal scrollbar. Defined here instead, next
  * to its only use, so it stays in effect regardless of what else does or
  * doesn't get imported.
+ *
+ * The value below is only a fallback for the first paint: the footer wraps its
+ * link row on narrower windows, so its real height ranges from ~67px to ~130px
+ * and a fixed guess is wrong at most widths — too small and the table runs
+ * behind the footer, too large and it stops short of it, wasting rows. Footer
+ * measures itself and overwrites this custom property on :root, so the maths
+ * below always uses the height the footer actually has.
  */
 :root {
   --app-footer-height: 88px;
@@ -423,15 +430,17 @@
 .main-content {
   margin-left: 260px;
   width: calc(100% - 260px);
-  min-height: calc(100vh - var(--app-footer-height) - 16px);
-  height: calc(100vh - var(--app-footer-height) - 16px);
-  max-height: calc(100vh - var(--app-footer-height) - 16px);
+  min-height: calc(100vh - var(--app-footer-height) - 8px);
+  height: calc(100vh - var(--app-footer-height) - 8px);
+  max-height: calc(100vh - var(--app-footer-height) - 8px);
   background: var(--color-background);
   color: var(--color-text);
   overflow: auto;
   display: flex;
   flex-direction: column;
-  padding-bottom: 2.5rem;
+  /* The height above already stops short of the footer, so this only needs to
+     be a small visual gap — 2.5rem here cost about two table rows. */
+  padding-bottom: 1rem;
   box-sizing: border-box;
 }
 

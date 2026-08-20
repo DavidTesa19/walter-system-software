@@ -1,11 +1,26 @@
 /* Styles for UsersGrid page */
 .page-container {
-  padding: 2rem 2.5rem 1.5rem;
+  padding: 1.25rem 2.5rem 0.75rem;
   background: var(--color-background);
   color: var(--color-text);
   text-align: center;
-  min-height: 100%;
-  height: 100%;
+  /*
+   * Take the space that is LEFT in the parent, not all of it.
+   *
+   * The section views (.projects-section-view, .growth-section-view,
+   * .general-section-view) put a mode bar and a summary panel above this
+   * element. With `height: 100%` the page container still resolved to the full
+   * height of that flex column, so it started ~160px down and ran ~160px past
+   * the bottom — and since .main-content is `overflow: hidden`, that overflow
+   * was silently cut off: the last rows of a table and the grid's own
+   * horizontal scrollbar ended up below the fold with no way to reach them.
+   *
+   * `flex: 1` + `min-height: 0` sizes it to the remainder instead, so the grid
+   * chain below (.table-section -> .grid-container -> .grid-wrapper) fills
+   * exactly down to the footer and scrolls internally.
+   */
+  flex: 1;
+  min-height: 0;
   overflow: hidden;
   box-sizing: border-box;
   max-width: 100%;
@@ -19,7 +34,7 @@
   justify-content: space-between;
   align-items: center;
   text-align: center;
-  margin-bottom: 1.25rem;
+  margin-bottom: 0.9rem;
   gap: 2rem;
 }
 
@@ -389,7 +404,7 @@
   background: var(--color-surface);
   border: 1px solid var(--color-border);
   border-radius: 1rem;
-  padding: 1rem;
+  padding: 0.75rem;
   box-shadow: var(--color-shadow-md);
   margin: 0;
   flex: 1;

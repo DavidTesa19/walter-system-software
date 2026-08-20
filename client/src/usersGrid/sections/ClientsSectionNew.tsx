@@ -58,6 +58,11 @@ import OptionSelectEditor from "../../futureFunctions/cells/OptionSelectEditor";
 import StatusFilterHeader from "../cells/StatusFilterHeader";
 import FieldFilterHeader from "../cells/FieldFilterHeader";
 import { REGION_OPTIONS } from "../regions";
+import TierCellRenderer from "../cells/TierCellRenderer";
+import PlaceCellEditor from "../cells/PlaceCellEditor";
+import type { PlaceLocation } from "../googlePlaces";
+import { parseLocationGeo, pruneLocationGeo, serializeLocationGeo } from "../locationGeo";
+import { compareTiers, TIER_COLOR_MAP, TIER_EDITOR_LABEL_MAP, TIER_EDITOR_VALUES, TIER_VALUES } from "../tiers";
 import {
   makeEntityValueGetter,
   makeMultiValueFilterGetter,
@@ -93,6 +98,8 @@ type ClientEntityApi = {
   company_name?: string | null;
   field?: string | null;
   field_specialization?: string | null;
+  tier?: string | null;
+  location_geo?: string | null;
   service?: string | null;
   budget?: string | null;
   region?: string | null;
@@ -137,6 +144,8 @@ type ClientCommissionApi = {
   entity_project_name?: string | null;
   entity_field?: string | null;
   entity_field_specialization?: string | null;
+  entity_tier?: string | null;
+  entity_location_geo?: string | null;
   entity_service?: string | null;
   entity_budget?: string | null;
   entity_region?: string | null;
@@ -173,6 +182,8 @@ type ClientCreateDraft = {
     company: string;
     field: string;
     field_specialization: string;
+    tier: string;
+    location_geo: string;
     service: string;
     budget: string;
     mobile: string;
@@ -197,6 +208,10 @@ type ClientCreateDraft = {
   };
 };
 
+// Lokalita is backed by Google Maps; the coordinates of a picked address are
+// stored beside it in this entity column.
+const LOCATION_PLACE_PICKER = { fieldKey: "location_geo" } as const;
+
 const emptyToNull = (value: string) => {
   const trimmed = value.trim();
   return trimmed ? trimmed : null;
@@ -208,6 +223,8 @@ const createDefaultClientDraft = (): ClientCreateDraft => ({
     company: "",
     field: "",
     field_specialization: "",
+    tier: "",
+    location_geo: "",
     service: "",
     budget: "",
     mobile: "",
@@ -242,6 +259,8 @@ const normalizeClientEntity = (entity: ClientEntityApi): ClientEntity => ({
   company: entity.company_name ?? null,
   field: entity.field ?? null,
   field_specialization: entity.field_specialization ?? null,
+  tier: entity.tier ?? null,
+  location_geo: entity.location_geo ?? null,
   service: entity.service ?? null,
   budget: entity.budget ?? null,
   region: entity.region ?? null,
@@ -298,7 +317,7 @@ const mapClientEntityUpdates = (updates: Record<string, unknown>) => {
     else if (key === "mobile") mapped.phone = value;
     else if (key === "assigned_user_ids") mapped.assigned_user_ids = value;
     else if (key === "status") mapped.status = value;
-    else if (["field", "field_specialization", "service", "budget", "region", "location", "email", "website", "info"].includes(key)) mapped[key] = value;
+    else if (["field", "field_specialization", "tier", "location_geo", "service", "budget", "region", "location", "email", "website", "info"].includes(key)) mapped[key] = value;
   }
   return mapped;
 };
@@ -315,6 +334,8 @@ const deriveClientEntityFromCommission = (commission: ClientCommissionApi): Clie
     company: commission.entity_company_name ?? null,
     field: commission.entity_field ?? null,
     field_specialization: commission.entity_field_specialization ?? null,
+    tier: commission.entity_tier ?? null,
+    location_geo: commission.entity_location_geo ?? null,
     service: commission.entity_service ?? null,
     budget: commission.entity_budget ?? null,
     region: commission.entity_region ?? null,
@@ -349,6 +370,7 @@ const buildEntityData = (entity: ClientEntity | null, assignmentOptions: Array<s
         { key: "name", label: "Jméno / Název", value: entity.name, type: "text" },
         { key: "company", label: "Společnost", value: entity.company, type: "multi-value", multiValueEditor: "text" },
         { key: "field", label: "Obor činnosti", value: entity.field, type: "multi-value", multiValueEditor: oborFieldType === "field-select" ? "field-select" : "select", options: fieldOptionsArray, specializationValues: parseSpecializationMap(entity.field_specialization) },
+        { key: "tier", label: "Úroveň", value: entity.tier, type: "select", options: [...TIER_VALUES] },
         { key: "service", label: "Požadovaná služba", value: entity.service, type: "text" },
         { key: "budget", label: "Rozpočet subjektu", value: entity.budget, type: "text" },
         { key: "assigned_user_ids", label: "Přiřazení uživatelé", value: toAssignmentDraftValue(entity.assigned_user_ids), type: "multi-select", options: assignmentOptions },
@@ -368,7 +390,7 @@ const buildEntityData = (entity: ClientEntity | null, assignmentOptions: Array<s
       color: "gray",
       fields: [
         { key: "region", label: "Kraj", value: entity.region, type: "multi-value", multiValueEditor: "select", options: REGION_OPTIONS },
-        { key: "location", label: "Lokalita", value: entity.location, type: "multi-value", multiValueEditor: "text" },
+        { key: "location", label: "Lokalita", value: entity.location, type: "multi-value", multiValueEditor: "place", placeValues: parseLocationGeo(entity.location_geo), placeholder: "Zadejte adresu" },
         { key: "info", label: "Popis / Poznámky", value: entity.info, type: "textarea", isMultiline: true },
       ]
     }
@@ -451,6 +473,8 @@ const buildClientDraftEntityData = (draft: ClientCreateDraft, assignmentOptions:
     company: draft.entity.company,
     field: draft.entity.field,
     field_specialization: draft.entity.field_specialization,
+    tier: draft.entity.tier,
+    location_geo: draft.entity.location_geo,
     service: draft.entity.service,
     budget: draft.entity.budget,
     region: draft.entity.region,
@@ -665,6 +689,7 @@ const ClientsSectionNew: React.FC<SectionProps> = ({
             budget: primaryCommission?.budget ?? null,
             service_position: primaryCommission?.service_position ?? null,
             field: entity.field || primaryCommission?.field || '',
+            tier: entity.tier || '',
             region: entity.region || '',
             location: entity.location || primaryCommission?.location || '',
             category: primaryCommission?.category ?? null,
@@ -711,6 +736,7 @@ const ClientsSectionNew: React.FC<SectionProps> = ({
           name: entity?.name || getCommissionEntityName(rawCommission),
           company: entity?.company || rawCommission?.entity_company_name || '',
           field: entity?.field || rawCommission?.entity_field || commission.field || '',
+          tier: entity?.tier || rawCommission?.entity_tier || '',
           region: entity?.region || rawCommission?.entity_region || '',
           location: entity?.location || rawCommission?.entity_location || commission.location || '',
           mobile: entity?.mobile || rawCommission?.entity_phone || commission.phone || '',
@@ -751,6 +777,7 @@ const ClientsSectionNew: React.FC<SectionProps> = ({
               budget: null,
               service_position: null,
               field: entity.field || '',
+              tier: entity.tier || '',
               region: entity.region || '',
               location: entity.location || '',
               category: null,
@@ -951,6 +978,14 @@ const ClientsSectionNew: React.FC<SectionProps> = ({
       return { ...row, ...mirror, entity: { ...row.entity, ...patch } as ClientEntity };
     }));
   }, [sectionKind]);
+
+  // A grid cell can only hand ag-Grid the address string, so the Lokalita cell
+  // editor drops the picked place here and onCellValueChanged saves the
+  // coordinates in the same request as the address.
+  const pendingPlaceRef = useRef<PlaceLocation | null>(null);
+  const handlePlacePicked = useCallback((place: PlaceLocation) => {
+    pendingPlaceRef.current = place;
+  }, []);
 
   const handleUpdateEntity = useCallback(async (entityId: number, updates: Record<string, unknown>) => {
     try {
@@ -1473,6 +1508,8 @@ const ClientsSectionNew: React.FC<SectionProps> = ({
         phone: emptyToNull(createDraft.entity.mobile),
         email: emptyToNull(createDraft.entity.email),
         website: emptyToNull(createDraft.entity.website),
+        tier: emptyToNull(createDraft.entity.tier),
+        location_geo: emptyToNull(createDraft.entity.location_geo),
         region: emptyToNull(createDraft.entity.region),
         location: emptyToNull(createDraft.entity.location),
         info: emptyToNull(createDraft.entity.info),
@@ -1555,6 +1592,8 @@ const ClientsSectionNew: React.FC<SectionProps> = ({
         phone: emptyToNull(createDraft.entity.mobile),
         email: emptyToNull(createDraft.entity.email),
         website: emptyToNull(createDraft.entity.website),
+        tier: emptyToNull(createDraft.entity.tier),
+        location_geo: emptyToNull(createDraft.entity.location_geo),
         region: emptyToNull(createDraft.entity.region),
         location: emptyToNull(createDraft.entity.location),
         info: emptyToNull(createDraft.entity.info),
@@ -1627,6 +1666,8 @@ const ClientsSectionNew: React.FC<SectionProps> = ({
         mobile: selectedEntity.mobile ?? "",
         email: selectedEntity.email ?? "",
         website: selectedEntity.website ?? "",
+        tier: selectedEntity.tier ?? "",
+        location_geo: selectedEntity.location_geo ?? "",
         region: selectedEntity.region ?? "",
         location: selectedEntity.location ?? "",
         info: selectedEntity.info ?? "",
@@ -1812,13 +1853,38 @@ const ClientsSectionNew: React.FC<SectionProps> = ({
         return;
       }
 
+      // Lokalita is an entity-only attribute too, and the only column whose edit
+      // can carry more than the cell's own value: an address picked from Google
+      // Maps saves its coordinates in the same request.
+      if (field === "location") {
+        if (row.entity) {
+          const picked = pendingPlaceRef.current;
+          pendingPlaceRef.current = null;
+          const updates: Record<string, unknown> = { location: newValue };
+
+          if (picked && picked.address === newValue) {
+            const nextGeo = pruneLocationGeo(parseLocationGeo(row.entity.location_geo), [picked.address]);
+            nextGeo[picked.address] = { lat: picked.lat, lng: picked.lng, place_id: picked.placeId };
+            updates.location_geo = serializeLocationGeo(nextGeo);
+          } else {
+            // Typed by hand — whatever coordinates the old address had no
+            // longer describe this one.
+            const nextGeo = pruneLocationGeo(parseLocationGeo(row.entity.location_geo), [String(newValue ?? "")]);
+            updates.location_geo = serializeLocationGeo(nextGeo);
+          }
+
+          await handleUpdateEntity(row.entity.id, updates);
+        }
+        return;
+      }
+
       // Kraj is an entity-only attribute — always route to the subject, never a commission.
       if (field === "region") {
         if (row.entity) await handleUpdateEntity(row.entity.id, { region: newValue });
         return;
       }
 
-      const entityFields = ['name', 'company', 'field', 'field_specialization', 'location', 'mobile', 'email'];
+      const entityFields = ['name', 'company', 'field', 'field_specialization', 'tier', 'location', 'mobile', 'email'];
 
       if (entityFields.includes(field) && row.entity) {
         await handleUpdateEntity(row.entity.id, { [field]: newValue });
@@ -1954,6 +2020,21 @@ const ClientsSectionNew: React.FC<SectionProps> = ({
       cellEditorParams: { users: assignableUsers },
       filterValueGetter: (params) => formatAssignedUsernames(params.data?.assigned_user_ids, assignableUsers, params.data?.assigned_to) ?? "",
       tooltipValueGetter: (params) => formatAssignedUsernames(params.data?.assigned_user_ids, assignableUsers, params.data?.assigned_to) ?? ""
+    };
+    // Úroveň — a subject-level grade, so it always writes to the entity.
+    const tierColumn: ColDef<ClientGridRow> = {
+      field: "tier",
+      headerName: "Úroveň",
+      filter: true,
+      editable: true,
+      flex: 0.8,
+      minWidth: 110,
+      valueGetter: makeEntityValueGetter("tier"),
+      comparator: (left, right) => compareTiers(left as string, right as string),
+      cellRenderer: TierCellRenderer,
+      cellEditor: OptionSelectEditor,
+      cellEditorPopup: true,
+      cellEditorParams: { values: TIER_EDITOR_VALUES, colorMap: TIER_COLOR_MAP, labelMap: TIER_EDITOR_LABEL_MAP },
     };
     const workflowStateColumn: ColDef<ClientGridRow> = {
       field: "state",
@@ -2099,6 +2180,7 @@ const ClientsSectionNew: React.FC<SectionProps> = ({
         flex: 1.5,
         minWidth: 140
       },
+      tierColumn,
       workflowStateColumn,
       {
         field: "field",
@@ -2172,7 +2254,10 @@ const ClientsSectionNew: React.FC<SectionProps> = ({
         filterValueGetter: makeMultiValueFilterGetter("location"),
         comparator: multiValueComparator,
         flex: 1,
-        minWidth: 100
+        minWidth: 100,
+        cellEditor: PlaceCellEditor,
+        cellEditorPopup: true,
+        cellEditorParams: { onPlacePicked: handlePlacePicked },
       },
       assignedUsersColumn
     );
@@ -2267,7 +2352,7 @@ const ClientsSectionNew: React.FC<SectionProps> = ({
     }
 
     return cols;
-  }, [assignableUsers, fieldOptionChoices, fieldOptionsArray, groupedFieldOptionChoices, handleFieldFilterChange, handleOpenFieldEditor, handleRegionFilterChange, handleStateFilterChange, onStatusCellClicked, projectStatusOptions, readOnly, systemNamespace, viewMode]);
+  }, [assignableUsers, fieldOptionChoices, fieldOptionsArray, groupedFieldOptionChoices, handleFieldFilterChange, handleOpenFieldEditor, handlePlacePicked, handleRegionFilterChange, handleStateFilterChange, onStatusCellClicked, projectStatusOptions, readOnly, systemNamespace, viewMode]);
 
   const isExternalFilterPresent = useCallback(() => {
     return activeStateFiltersRef.current.size < WORKFLOW_STATUS_VALUES.length ||
@@ -2295,7 +2380,12 @@ const ClientsSectionNew: React.FC<SectionProps> = ({
     return true;
   }, []);
 
-  const useContentHeightLayout = gridData.length <= 8;
+  // Only a table with nothing in it shrinks to its content (the compact "no
+  // rows" box). Anything with rows fills the page down to the footer, so the
+  // window always shows as many rows as fit and scrolls through the rest —
+  // hugging the content at up to 8 rows left most of the page empty and made
+  // the table jump between two sizes as rows were added.
+  const useContentHeightLayout = gridData.length === 0;
 
   // Re-run cell class rules whenever seen/actor state changes so per-cell dots clear
   // as soon as a row (or everything) is confirmed.
@@ -2430,6 +2520,7 @@ const ClientsSectionNew: React.FC<SectionProps> = ({
           onDeleteFieldOption: handleDeleteFieldOption,
         }}
         specializationPicker={specializationPicker}
+        placePicker={LOCATION_PLACE_PICKER}
         onClose={closeProfile}
         onUpdateEntity={handleUpdateEntity}
         onUpdateCommission={handleUpdateCommission}
@@ -2488,6 +2579,7 @@ const ClientsSectionNew: React.FC<SectionProps> = ({
           onDeleteFieldOption: handleDeleteFieldOption,
         }}
         specializationPicker={specializationPicker}
+        placePicker={LOCATION_PLACE_PICKER}
         onClose={closeCreateModal}
         onEntityChange={handleDraftEntityChange}
         onCommissionChange={handleDraftCommissionChange}

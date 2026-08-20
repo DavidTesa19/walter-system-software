@@ -1,6 +1,6 @@
 import React, { useCallback, useEffect, useMemo, useRef } from "react";
 import ThemeToggleButton from "../../components/ThemeToggleButton";
-import type { EditableField, FieldGroup, SpecializationPickerConfig } from "./EntityCommissionProfilePanel";
+import type { EditableField, FieldGroup, PlacePickerConfig, SpecializationPickerConfig } from "./EntityCommissionProfilePanel";
 import { MultiValueEditor } from "./EntityCommissionProfilePanel";
 import FieldSelectInput, { type FieldPickerConfig } from "./FieldSelectInput";
 import "./EntityCommissionProfilePanel.css";
@@ -32,6 +32,7 @@ interface EntityCommissionCreateModalProps {
   otherSectionOptions?: OtherSectionOption[];
   fieldPicker?: FieldPickerConfig;
   specializationPicker?: SpecializationPickerConfig;
+  placePicker?: PlacePickerConfig;
   onClose: () => void;
   onEntityChange: (key: string, value: string | string[]) => void;
   onCommissionChange: (key: string, value: string | string[]) => void;
@@ -48,6 +49,7 @@ interface DraftFieldProps {
   disabled?: boolean;
   fieldPicker?: FieldPickerConfig;
   specializationPicker?: SpecializationPickerConfig;
+  placePicker?: PlacePickerConfig;
   onKeyDown?: (event: React.KeyboardEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>, fieldType: FieldGroup["fields"][number]["type"]) => void;
 }
 
@@ -58,7 +60,7 @@ const normalizeFieldOptions = (options: EditableField['options']) =>
       : option
   ));
 
-const DraftField: React.FC<DraftFieldProps> = ({ field, value, onChange, disabled = false, fieldPicker, specializationPicker, onKeyDown }) => {
+const DraftField: React.FC<DraftFieldProps> = ({ field, value, onChange, disabled = false, fieldPicker, specializationPicker, placePicker, onKeyDown }) => {
   // Multi-value fields (Obor, Společnost, Kraj, Lokalita) use the same add/remove
   // editor as the profile panel. The draft stores the serialized scalar / JSON
   // array string, so submission passes it straight through.
@@ -69,6 +71,7 @@ const DraftField: React.FC<DraftFieldProps> = ({ field, value, onChange, disable
         onSave={(key, next) => onChange(key, typeof next === "boolean" ? String(next) : (next ?? ""))}
         fieldPicker={fieldPicker}
         specializationPicker={specializationPicker}
+        placePicker={placePicker}
         commitOnChange
       />
     );
@@ -194,10 +197,11 @@ interface DraftFieldGroupProps {
   disabled?: boolean;
   fieldPicker?: FieldPickerConfig;
   specializationPicker?: SpecializationPickerConfig;
+  placePicker?: PlacePickerConfig;
   onFieldKeyDown?: (event: React.KeyboardEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>, fieldType: FieldGroup["fields"][number]["type"]) => void;
 }
 
-const DraftFieldGroup: React.FC<DraftFieldGroupProps> = ({ group, values, onChange, disabled = false, fieldPicker, specializationPicker, onFieldKeyDown }) => {
+const DraftFieldGroup: React.FC<DraftFieldGroupProps> = ({ group, values, onChange, disabled = false, fieldPicker, specializationPicker, placePicker, onFieldKeyDown }) => {
   const colorClass = group.color ? `group-${group.color}` : "";
 
   return (
@@ -215,6 +219,7 @@ const DraftFieldGroup: React.FC<DraftFieldGroupProps> = ({ group, values, onChan
                 disabled={disabled}
                 fieldPicker={fieldPicker}
                 specializationPicker={specializationPicker}
+                placePicker={placePicker}
                 onKeyDown={onFieldKeyDown}
               />
             </div>
@@ -241,6 +246,7 @@ const EntityCommissionCreateModal: React.FC<EntityCommissionCreateModalProps> = 
   otherSectionOptions,
   fieldPicker,
   specializationPicker,
+  placePicker,
   onClose,
   onEntityChange,
   onCommissionChange,
@@ -433,6 +439,7 @@ const EntityCommissionCreateModal: React.FC<EntityCommissionCreateModalProps> = 
                       onChange={onEntityChange}
                       fieldPicker={fieldPicker}
                       specializationPicker={specializationPicker}
+                      placePicker={placePicker}
                       onFieldKeyDown={handleFieldKeyDown}
                     />
                   ))}

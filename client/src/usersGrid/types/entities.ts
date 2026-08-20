@@ -42,6 +42,11 @@ export interface PartnerEntity extends BaseEntity {
   company: string | null;
   field: string | null;
   field_specialization?: string | null;
+  // Úroveň — Bronze / Silver / Gold / VIP, or null when the subject has none.
+  tier: string | null;
+  // Coordinates for the Lokalita addresses picked from Google Maps, as a JSON
+  // object string keyed by address (see locationGeo.ts).
+  location_geo?: string | null;
   region: string | null;
   location: string | null;
   address: string | null;
@@ -59,6 +64,11 @@ export interface ClientEntity extends BaseEntity {
   company: string | null;
   field: string | null;
   field_specialization?: string | null;
+  // Úroveň — Bronze / Silver / Gold / VIP, or null when the subject has none.
+  tier: string | null;
+  // Coordinates for the Lokalita addresses picked from Google Maps, as a JSON
+  // object string keyed by address (see locationGeo.ts).
+  location_geo?: string | null;
   service: string | null;
   budget: string | null;
   region: string | null;
@@ -78,6 +88,11 @@ export interface TiperEntity extends BaseEntity {
   company: string | null;
   field: string | null;
   field_specialization?: string | null;
+  // Úroveň — Bronze / Silver / Gold / VIP, or null when the subject has none.
+  tier: string | null;
+  // Coordinates for the Lokalita addresses picked from Google Maps, as a JSON
+  // object string keyed by address (see locationGeo.ts).
+  location_geo?: string | null;
   region: string | null;
   location: string | null;
   address: string | null;
@@ -183,6 +198,7 @@ export interface PartnerGridRow extends PartnerCommission {
   company: string;
   field: string;
   field_specialization?: string;
+  tier: string;
   region: string;
   location: string;
   mobile: string;
@@ -211,6 +227,7 @@ export interface ClientGridRow extends ClientCommission {
   company: string;
   field: string;
   field_specialization?: string;
+  tier: string;
   region: string;
   location: string;
   mobile: string;
@@ -239,6 +256,7 @@ export interface TiperGridRow extends TiperCommission {
   company: string;
   field: string;
   field_specialization?: string;
+  tier: string;
   region: string;
   location: string;
   mobile: string;

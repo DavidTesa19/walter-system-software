@@ -1,0 +1,25 @@
+.place-cell-editor {
+  min-width: 260px;
+  padding: 6px;
+  background: var(--color-surface, #ffffff);
+  border: 1px solid var(--color-border, #e2e8f0);
+  border-radius: 0.5rem;
+  box-shadow: var(--color-shadow-md, 0 10px 30px rgba(15, 23, 42, 0.18));
+}
+
+.place-cell-editor .editable-input {
+  width: 100%;
+  box-sizing: border-box;
+  padding: 5px 8px;
+  font-family: var(--font-body, inherit);
+  font-size: 12px;
+  color: var(--color-text, #1e293b);
+  background: var(--color-surface, #ffffff);
+  border: 1px solid var(--color-border, #e2e8f0);
+  border-radius: 0.35rem;
+}
+
+.place-cell-editor .editable-input:focus {
+  outline: none;
+  border-color: var(--color-primary, #2563eb);
+}

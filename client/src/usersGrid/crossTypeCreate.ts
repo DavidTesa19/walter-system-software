@@ -87,11 +87,13 @@ export interface CrossTypeEntitySnapshot {
   company?: string | null;
   field?: string | null;
   field_specialization?: string | null;
+  tier?: string | null;
   mobile?: string | null;
   email?: string | null;
   website?: string | null;
   region?: string | null;
   location?: string | null;
+  location_geo?: string | null;
   info?: string | null;
   assigned_user_ids?: number[] | null;
 }
@@ -135,11 +137,13 @@ export const copySubjectToOtherType = async (
     company_name: emptyToNull(entity.company),
     field: emptyToNull(entity.field),
     field_specialization: emptyToNull(entity.field_specialization),
+    tier: emptyToNull(entity.tier),
     phone: emptyToNull(entity.mobile),
     email: emptyToNull(entity.email),
     website: emptyToNull(entity.website),
     region: emptyToNull(entity.region),
     location: emptyToNull(entity.location),
+    location_geo: emptyToNull(entity.location_geo),
     info: emptyToNull(entity.info),
     assigned_user_ids: entity.assigned_user_ids ?? [],
   };
