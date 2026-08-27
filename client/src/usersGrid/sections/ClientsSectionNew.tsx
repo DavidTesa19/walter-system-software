@@ -567,7 +567,11 @@ const ClientsSectionNew: React.FC<SectionProps> = ({
   const [fieldEditor, setFieldEditor] = useState<{ entityId: number; anchor: FieldEditorAnchor } | null>(null);
 
   const gridRef = useRef<AgGridReact<ClientGridRow>>(null);
-  const { containerRef: gridWrapperRef, onGridReady: handleGridReady } = useGridColumnLayout(gridRef);
+  const {
+    containerRef: gridWrapperRef,
+    onGridReady: handleGridReady,
+    onGridColumnsChanged: handleGridColumnsChanged
+  } = useGridColumnLayout(gridRef);
 
   // Workflow state checkbox filter — use a ref so column defs stay stable when filter changes
   const activeStateFiltersRef = useRef<Set<string>>(new Set(WORKFLOW_STATUS_VALUES));
@@ -2442,6 +2446,7 @@ const ClientsSectionNew: React.FC<SectionProps> = ({
             getRowId={(params) => String(params.data.id)}
             columnDefs={columnDefs}
             onGridReady={handleGridReady}
+            onGridColumnsChanged={handleGridColumnsChanged}
             popupParent={typeof document !== "undefined" ? document.body : undefined}
             postProcessPopup={(params) => {
               const el = params.ePopup as HTMLElement;
