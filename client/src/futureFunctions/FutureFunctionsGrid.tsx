@@ -19,7 +19,7 @@ import { formatProfileDate } from "../usersGrid/utils/profileUtils";
 import { getStoredFutureFunctionsView, setStoredFutureFunctionsView } from "../utils/navigationState";
 import { useActivity } from "../activity/ActivityContext";
 import { FUTURE_FUNCTIONS_RECORD_SCOPE } from "../activity/activityKeys";
-import { buildActivityColumn, makeActivityCellClassRules } from "../activity/gridActivity";
+import { buildActivityColumn } from "../activity/gridActivity";
 import ActivityConfirmAllButton from "../activity/ActivityConfirmAllButton";
 
 ModuleRegistry.registerModules([AllCommunityModule]);
@@ -123,13 +123,7 @@ const FutureFunctionsGrid: React.FC = () => {
   const editSnapshotRef = useRef<Record<number, any>>({});
   const gridApiRef = useRef<any>(null);
 
-  const { markItemsSeen, getItemActivity, getFieldActivity } = useActivity();
-  const getFieldActivityRef = useRef(getFieldActivity);
-  getFieldActivityRef.current = getFieldActivity;
-  const activityCellClassRules = useMemo(
-    () => makeActivityCellClassRules((scope, itemId, entry) => getFieldActivityRef.current(scope, itemId, entry)),
-    []
-  );
+  const { markItemsSeen, getItemActivity } = useActivity();
 
   // Refetch when other views mutate the same resource
   useEffect(() => {
@@ -145,10 +139,9 @@ const FutureFunctionsGrid: React.FC = () => {
       resizable: true,
       sortable: true,
       filter: true,
-      flex: 1,
-      cellClassRules: activityCellClassRules
+      flex: 1
     }),
-    [isReadOnly, activityCellClassRules]
+    [isReadOnly]
   );
 
   const getRowId = useCallback((params: { data: FutureFunction }) => String(params.data.id), []);
@@ -898,10 +891,10 @@ const FutureFunctionsGrid: React.FC = () => {
   const currentColumnDefs = isArchiveView ? archiveColumnDefs : activeColumnDefs;
   const currentOnCellValueChanged = isArchiveView ? onArchiveCellValueChanged : onCellValueChanged;
 
-  // Refresh per-cell dots whenever seen/actor state changes.
+  // Repaint the row activity dots whenever seen/actor state changes.
   useEffect(() => {
     gridApiRef.current?.refreshCells({ force: true });
-  }, [getFieldActivity]);
+  }, [getItemActivity]);
 
   const unseenActivityCount = currentRowData.reduce((count, row) => {
     const state = getItemActivity(

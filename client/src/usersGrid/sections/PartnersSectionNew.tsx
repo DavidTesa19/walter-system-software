@@ -48,7 +48,7 @@ import { compareWorkflowStatuses, DEFAULT_WORKFLOW_STATUS, getNormalizedWorkflow
 import useAssignableUsers from "../hooks/useAssignableUsers";
 import { useActivity } from "../../activity/ActivityContext";
 import { buildCommissionsRecordScope, buildSubjectsRecordScope, getActivitySystem } from "../../activity/activityKeys";
-import { buildActivityColumn, makeActivityCellClassRules, remapFieldActivity } from "../../activity/gridActivity";
+import { buildActivityColumn, remapFieldActivity } from "../../activity/gridActivity";
 import ActivityConfirmAllButton from "../../activity/ActivityConfirmAllButton";
 import type { FieldActivityMap } from "../../activity/activityUtils";
 import OptionSelectEditor from "../../futureFunctions/cells/OptionSelectEditor";
@@ -160,6 +160,9 @@ const ENTITY_ACTIVITY_KEY_MAP: Record<string, string> = {
   company_name: "company",
   phone: "mobile",
 };
+
+// Static, so the grid does not see a new defaultColDef object on every render.
+const GRID_DEFAULT_COL_DEF = { resizable: true, sortable: true };
 
 const FIELD_OPTIONS_ARRAY = fieldOptions.map((opt) => opt.value);
 const PROJECT_SUBJECT_STATUS_OPTIONS = ["accepted", "archived"];
@@ -494,14 +497,7 @@ const buildPartnerDraftCommissionData = (draft: PartnerCreateDraft, status: Part
 
 const PartnersSectionNew: React.FC<SectionProps> = ({ viewMode, isActive, systemNamespace, sectionKind, onRegisterAddHandler, onLoadingChange, readOnly = false }) => {
   const { users: assignableUsers, options: assignmentOptions } = useAssignableUsers();
-  const { markItemSeen, markItemsSeen, getItemActivity, getFieldActivity } = useActivity();
-
-  const getFieldActivityRef = useRef(getFieldActivity);
-  getFieldActivityRef.current = getFieldActivity;
-  const activityCellClassRules = useMemo(
-    () => makeActivityCellClassRules((scope, itemId, entry) => getFieldActivityRef.current(scope, itemId, entry)),
-    []
-  );
+  const { markItemSeen, markItemsSeen, getItemActivity } = useActivity();
   const [entities, setEntities] = useState<PartnerEntity[]>([]);
   const [commissions, setCommissions] = useState<PartnerCommission[]>([]);
   const [gridData, setGridData] = useState<PartnerGridRow[]>([]);
@@ -2071,9 +2067,11 @@ const PartnersSectionNew: React.FC<SectionProps> = ({ viewMode, isActive, system
   // the table jump between two sizes as rows were added.
   const useContentHeightLayout = gridData.length === 0;
 
+  // Repaint the row activity dots whenever seen/actor state changes, so they
+  // clear as soon as a row (or everything) is confirmed.
   useEffect(() => {
     gridRef.current?.api?.refreshCells({ force: true });
-  }, [getFieldActivity]);
+  }, [getItemActivity]);
 
   const unseenActivityCount = gridData.reduce((count, row) => {
     if (!row.activity_scope || row.activity_item_id === null || row.activity_item_id === undefined) {
@@ -2135,7 +2133,7 @@ const PartnersSectionNew: React.FC<SectionProps> = ({ viewMode, isActive, system
             singleClickEdit={true}
             onCellValueChanged={onCellValueChanged}
             onCellEditingStarted={readOnly ? (params) => params.api.stopEditing(true) : undefined}
-            defaultColDef={{ resizable: true, sortable: true, cellClassRules: activityCellClassRules }}
+            defaultColDef={GRID_DEFAULT_COL_DEF}
             suppressRowClickSelection={true}
             loading={isLoading}
             context={gridContext}

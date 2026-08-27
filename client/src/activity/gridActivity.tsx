@@ -1,6 +1,6 @@
-import type { CellClassParams, ColDef } from "ag-grid-community";
+import type { ColDef } from "ag-grid-community";
 import ActivityCellRenderer from "./ActivityCellRenderer";
-import type { FieldActivityMap, FieldActivityState } from "./activityUtils";
+import type { FieldActivityMap } from "./activityUtils";
 
 export const ACTIVITY_COLUMN_ID = "activity";
 
@@ -36,34 +36,13 @@ export const buildActivityColumn = <T,>(): ColDef<T> => ({
   cellRenderer: ActivityCellRenderer,
 });
 
-/**
- * Build cellClassRules (for defaultColDef) that light up individual cells whose
- * field changed since the viewer last confirmed the row. Reads the field-activity
- * map carried on the row and defers the seen/actor decision to the activity context.
+/*
+ * `makeActivityCellClassRules` used to live here, marking individual changed
+ * cells so a per-cell dot could be drawn on them. Both the dot and these rules
+ * have been removed — change state is shown by the row dot in the pinned
+ * activity column above. The rules also cost a resolver call for every cell on
+ * every render, which was pure overhead once the dot was gone.
  */
-export const makeActivityCellClassRules = (
-  getFieldActivity: (
-    scope: string,
-    itemId: string | number,
-    entry: FieldActivityMap[string] | null | undefined,
-  ) => FieldActivityState,
-): NonNullable<ColDef["cellClassRules"]> => {
-  const resolve = (params: CellClassParams): FieldActivityState => {
-    const field = params.colDef?.field;
-    const data = params.data as ActivityRowFields | undefined;
-    if (!field || !data?.activity_scope || data.activity_item_id === null || data.activity_item_id === undefined) {
-      return "none";
-    }
-    const entry = data.activity_field_activity ? data.activity_field_activity[field] : undefined;
-    return getFieldActivity(data.activity_scope, data.activity_item_id, entry);
-  };
-
-  return {
-    "cell-activity--added": (params) => resolve(params) === "added",
-    "cell-activity--updated": (params) => resolve(params) === "updated",
-    "cell-activity--removed": (params) => resolve(params) === "removed",
-  };
-};
 
 /**
  * Rename the keys of a server field-activity map (which uses DB column names) into

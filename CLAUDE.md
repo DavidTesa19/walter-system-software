@@ -54,11 +54,22 @@ These are load-bearing and easy to reintroduce:
 - The min widths on these grids add up to more than the viewport on a normal
   screen, so the subject tables are *expected* to scroll horizontally. Every
   column pinned to its own `minWidth` is the correct rendering, not a bug.
+- **Never change a cell's `position` in CSS.** ag-Grid lays every `.ag-cell` out
+  with `position: absolute` and an explicit `left`. A rule that sets
+  `position: relative` on a cell — the usual reflex when anchoring an `::after`
+  badge — drops exactly those cells back into normal flow, so they render at the
+  wrong offset and paint over their neighbours. This was the cause of the
+  "overlapping text" bug: only the rows carrying a change marker were affected,
+  because only those cells got the class. An `::after` anchors fine to the cell
+  as it is, since `position: absolute` is already a containing block.
 - Prefer ag-Grid's own APIs (`ensureColumnVisible`, `getColumnState`,
   `sizeColumnsToFit`) over hand-computed pixel maths against ag-Grid's internal
   DOM. Its internals (`.ag-center-cols-container` height, the fake horizontal
   scrollbar) are managed by the grid, and CSS or JS that overrides them tends to
   break virtualization and row clipping in ways that are hard to trace.
+- Keep `defaultColDef` referentially stable (a module constant or a `useMemo`).
+  An inline object literal is a new identity on every render, which makes the
+  grid redo column work it did not need to.
 
 ## Verifying grid changes locally
 
@@ -66,9 +77,14 @@ Grid changes are verifiable end to end; do it rather than guessing.
 
 1. `preview_start` the `server` (port 3004) and `client` (port 5173) entries from
    `.claude/launch.json`.
-2. `server/db.json` is tracked and starts with no users. Back it up, then
-   `node server/create-user.js <name> <pass> Admin`.
-3. **Restore `server/db.json` before committing** (`git checkout -- server/db.json`).
+2. The JSON store is **`server/data/db.json`** (not `server/db.json`), and it is
+   **untracked**, so a throwaway login cannot leak into a commit. Create one with
+   `node server/create-user.js <name> <pass> Admin`, then restart the server so
+   it picks the user up.
+3. The login form is a controlled React form, so setting `input.value` directly
+   does not update it. Use the native setter plus an `input` event, then
+   `form.requestSubmit()`:
+   `Object.getOwnPropertyDescriptor(HTMLInputElement.prototype,'value').set.call(el, v); el.dispatchEvent(new Event('input',{bubbles:true}))`
 4. ag-Grid virtualizes columns, so measuring header cells in the DOM undercounts.
    Reach the grid API through the React fiber on `.ag-root-wrapper` (walk
    `.return` until `stateNode.api.getColumnState` exists) and measure via

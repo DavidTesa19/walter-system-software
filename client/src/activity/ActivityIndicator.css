@@ -67,54 +67,20 @@
   padding-right: 0;
 }
 
-/* Per-cell change markers: a small dot in the top-right corner of a changed cell. */
-.cell-activity--added,
-.cell-activity--updated,
-.cell-activity--removed {
-  position: relative;
-}
-
-/* The dot (7px + its 1.5px ring, offset 4px from the edge) needs about 13px of
-   clearance to sit clear of the cell's own right edge. Plain text cells only
-   carry ag-grid's own ~7px default padding, which isn't enough — the dot ends
-   up sitting on top of the last character or two of truncated text (e.g. a
-   long e-mail address). Cells with their own custom renderer padding (Obor,
-   Zaměření, …) already clear this on their own; the extra room here is
-   harmless for them. */
-.ag-theme-quartz .ag-cell.cell-activity--added,
-.ag-theme-quartz .ag-cell.cell-activity--updated,
-.ag-theme-quartz .ag-cell.cell-activity--removed {
-  /* !important to beat ag-grid's own `:where(.ag-ltr) .ag-cell:not(...)`
-     padding-right rule regardless of stylesheet order. */
-  padding-right: 14px !important;
-}
-
-.cell-activity--added::after,
-.cell-activity--updated::after,
-.cell-activity--removed::after {
-  content: "";
-  position: absolute;
-  top: 4px;
-  right: 4px;
-  width: 7px;
-  height: 7px;
-  border-radius: 999px;
-  pointer-events: none;
-  z-index: 2;
-  box-shadow: 0 0 0 1.5px color-mix(in srgb, var(--color-surface, #fff) 85%, transparent);
-}
-
-.cell-activity--added::after {
-  background: linear-gradient(135deg, #14b8a6, #2dd4bf);
-}
-
-.cell-activity--updated::after {
-  background: linear-gradient(135deg, #f59e0b, #fbbf24);
-}
-
-.cell-activity--removed::after {
-  background: linear-gradient(135deg, #ef4444, #f87171);
-}
+/*
+ * There used to be a per-cell change dot here, drawn as an `::after` on cells
+ * carrying a `cell-activity--*` class. It has been removed: change state is
+ * shown by the single row dot in the pinned activity column instead.
+ *
+ * It also had to go because of how it was anchored. ag-Grid lays every
+ * `.ag-cell` out with `position: absolute` and an explicit `left`, and the rule
+ * that anchored the dot set `position: relative` on the marked cells. That took
+ * exactly those cells out of absolute positioning and back into normal flow, so
+ * they rendered at the wrong offset and painted over their neighbours — the
+ * rows with a change dot were the rows whose text appeared overlapped.
+ *
+ * Anything added here in future must not change a cell's `position`.
+ */
 
 /* Thin toolbar above a grid that hosts the confirm-all button. */
 .grid-activity-toolbar {
