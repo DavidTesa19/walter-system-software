@@ -805,3 +805,34 @@
 .ag-overlay-loading-wrapper {
   background: color-mix(in srgb, var(--color-surface) 92%, transparent);
 }
+
+/* Row a sidebar search result pointed at. The section scrolls it into view and
+   keeps this class on it for a few seconds so the hit is obvious.
+
+   Only paint properties here: ag-Grid positions rows itself, so `position`,
+   `transform` and the row height must be left alone. The pulse animates the
+   inset ring only — animating the background instead would fight the static
+   colour and leave the row briefly unpainted when the class comes off. */
+.grid-wrapper .ag-theme-quartz .ag-row.grid-row--search-focus,
+.ag-theme-quartz .ag-row.grid-row--search-focus {
+  background-color: color-mix(in srgb, var(--color-accent) 30%, var(--color-surface));
+  box-shadow: inset 0 0 0 2px color-mix(in srgb, var(--color-accent) 55%, transparent);
+  animation: walter-search-focus-pulse 1.1s ease-in-out 2;
+}
+
+@keyframes walter-search-focus-pulse {
+  0%,
+  100% {
+    box-shadow: inset 0 0 0 2px color-mix(in srgb, var(--color-accent) 55%, transparent);
+  }
+  50% {
+    box-shadow: inset 0 0 0 3px var(--color-accent);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .grid-wrapper .ag-theme-quartz .ag-row.grid-row--search-focus,
+  .ag-theme-quartz .ag-row.grid-row--search-focus {
+    animation: none;
+  }
+}

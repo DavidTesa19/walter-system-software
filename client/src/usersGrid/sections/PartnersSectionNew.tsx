@@ -37,6 +37,7 @@ import useFieldOptions from "../hooks/useFieldOptions";
 import useFieldSpecializationOptions from "../hooks/useFieldSpecializationOptions";
 import useProfileDocuments from "../hooks/useProfileDocuments";
 import useGridColumnLayout from "../hooks/useGridColumnLayout";
+import useGridRowFocus from "../hooks/useGridRowFocus";
 import useProfileNotes from "../hooks/useProfileNotes";
 import { ApproveRestoreCellRenderer, DeleteArchiveCellRenderer, ArchiveCellRenderer } from "../cells/RowActionCellRenderers";
 import { fieldOptions } from "../fieldOptions";
@@ -495,7 +496,7 @@ const buildPartnerDraftCommissionData = (draft: PartnerCreateDraft, status: Part
   }, assignmentOptions)!.groups
 });
 
-const PartnersSectionNew: React.FC<SectionProps> = ({ viewMode, isActive, systemNamespace, sectionKind, onRegisterAddHandler, onLoadingChange, readOnly = false }) => {
+const PartnersSectionNew: React.FC<SectionProps> = ({ viewMode, isActive, systemNamespace, sectionKind, onRegisterAddHandler, onLoadingChange, readOnly = false, focusRecordId, focusRequestKey }) => {
   const { users: assignableUsers, options: assignmentOptions } = useAssignableUsers();
   const { markItemSeen, markItemsSeen, getItemActivity } = useActivity();
   const [entities, setEntities] = useState<PartnerEntity[]>([]);
@@ -523,6 +524,8 @@ const PartnersSectionNew: React.FC<SectionProps> = ({ viewMode, isActive, system
     onGridReady: handleGridReady,
     onGridColumnsChanged: handleGridColumnsChanged
   } = useGridColumnLayout(gridRef);
+  // Scrolls to and marks the row a sidebar search result pointed at.
+  const { rowClassRules } = useGridRowFocus(gridRef, { focusRecordId, focusRequestKey, isActive });
 
   // Workflow state checkbox filter — use a ref so column defs stay stable when filter changes
   const activeStateFiltersRef = useRef<Set<string>>(new Set(WORKFLOW_STATUS_VALUES));
@@ -2117,6 +2120,7 @@ const PartnersSectionNew: React.FC<SectionProps> = ({ viewMode, isActive, system
             rowData={gridData}
             getRowId={(params) => String(params.data.id)}
             columnDefs={columnDefs}
+            rowClassRules={rowClassRules}
             onGridReady={handleGridReady}
             onGridColumnsChanged={handleGridColumnsChanged}
             popupParent={typeof document !== "undefined" ? document.body : undefined}

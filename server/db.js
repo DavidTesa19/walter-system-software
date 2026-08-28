@@ -1724,6 +1724,20 @@ export const db = {
     return result.rows[0] || null;
   },
 
+  // Does this subject still have a commission that is not archived? The archive
+  // routes use it to decide whether the subject should follow its last
+  // commission into the archive. Pending counts as active on purpose: a
+  // commission waiting for approval has not been dealt with yet.
+  async hasActiveCommissions(commissionTable, entityId) {
+    if (!USE_POSTGRES) return null;
+
+    const result = await pool.query(
+      `SELECT 1 FROM ${commissionTable} WHERE entity_id = $1 AND status IS DISTINCT FROM 'archived' LIMIT 1`,
+      [entityId]
+    );
+    return result.rowCount > 0;
+  },
+
   // Get database connection pool (for custom queries)
   getPool() {
     return pool;

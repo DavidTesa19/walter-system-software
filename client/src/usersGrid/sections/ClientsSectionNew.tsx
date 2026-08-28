@@ -37,6 +37,7 @@ import useFieldOptions from "../hooks/useFieldOptions";
 import useFieldSpecializationOptions from "../hooks/useFieldSpecializationOptions";
 import useProfileDocuments from "../hooks/useProfileDocuments";
 import useGridColumnLayout from "../hooks/useGridColumnLayout";
+import useGridRowFocus from "../hooks/useGridRowFocus";
 import useProfileNotes from "../hooks/useProfileNotes";
 import { ApproveRestoreCellRenderer, DeleteArchiveCellRenderer, ArchiveCellRenderer } from "../cells/RowActionCellRenderers";
 import { fieldOptions } from "../fieldOptions";
@@ -534,7 +535,9 @@ const ClientsSectionNew: React.FC<SectionProps> = ({
   sectionKind,
   onRegisterAddHandler,
   onLoadingChange,
-  readOnly = false
+  readOnly = false,
+  focusRecordId,
+  focusRequestKey
 }) => {
   const { users: assignableUsers, options: assignmentOptions } = useAssignableUsers();
   const { markItemSeen, markItemsSeen, getItemActivity } = useActivity();
@@ -566,6 +569,8 @@ const ClientsSectionNew: React.FC<SectionProps> = ({
     onGridReady: handleGridReady,
     onGridColumnsChanged: handleGridColumnsChanged
   } = useGridColumnLayout(gridRef);
+  // Scrolls to and marks the row a sidebar search result pointed at.
+  const { rowClassRules } = useGridRowFocus(gridRef, { focusRecordId, focusRequestKey, isActive });
 
   // Workflow state checkbox filter — use a ref so column defs stay stable when filter changes
   const activeStateFiltersRef = useRef<Set<string>>(new Set(WORKFLOW_STATUS_VALUES));
@@ -2439,6 +2444,7 @@ const ClientsSectionNew: React.FC<SectionProps> = ({
             rowData={gridData}
             getRowId={(params) => String(params.data.id)}
             columnDefs={columnDefs}
+            rowClassRules={rowClassRules}
             onGridReady={handleGridReady}
             onGridColumnsChanged={handleGridColumnsChanged}
             popupParent={typeof document !== "undefined" ? document.body : undefined}

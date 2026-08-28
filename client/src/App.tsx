@@ -198,8 +198,10 @@ const normalizeEntityRow = (raw: Record<string, unknown>): UserInterface => {
   } as UserInterface;
 };
 
-// Normalize raw projects commission API response → UserInterface shape
-const normalizeProjectCommissionRow = (raw: Record<string, unknown>): UserInterface => {
+// Normalize a raw commission API response → UserInterface shape. The public
+// tables and the projects/growth namespaces all return the same commission
+// shape, so the three systems share this normalizer.
+const normalizeCommissionRow = (raw: Record<string, unknown>): UserInterface => {
   const firstName = typeof raw.entity_first_name === 'string' ? raw.entity_first_name : '';
   const lastName = typeof raw.entity_last_name === 'string' ? raw.entity_last_name : '';
   const companyName = typeof raw.entity_company_name === 'string' ? raw.entity_company_name : '';
@@ -301,9 +303,12 @@ const AppContent: React.FC = () => {
 
     if (canAccessStandardSystem(accessScope)) {
       searchSources.push(
-        { table: 'clients', endpoint: (status) => `/clients?status=${status}`, view: (status) => STATUS_TO_STANDARD_VIEW[status] },
-        { table: 'partners', endpoint: (status) => `/partners?status=${status}`, view: (status) => STATUS_TO_STANDARD_VIEW[status] },
-        { table: 'tipers', endpoint: (status) => `/tipers?status=${status}`, view: (status) => STATUS_TO_STANDARD_VIEW[status] },
+        // The commission endpoints, not the legacy /clients|/partners|/tipers
+        // tables: a search result carries the id of the row it should scroll
+        // to, and these grids are built from commissions.
+        { table: 'clients', endpoint: (status) => `/api/client-commissions?status=${status}`, view: (status) => STATUS_TO_STANDARD_VIEW[status], normalize: normalizeCommissionRow },
+        { table: 'partners', endpoint: (status) => `/api/partner-commissions?status=${status}`, view: (status) => STATUS_TO_STANDARD_VIEW[status], normalize: normalizeCommissionRow },
+        { table: 'tipers', endpoint: (status) => `/api/tiper-commissions?status=${status}`, view: (status) => STATUS_TO_STANDARD_VIEW[status], normalize: normalizeCommissionRow },
         { table: 'partner_entities', endpoint: (status) => `/api/partner-entities?status=${status}`, view: (status) => STATUS_TO_ENTITIES_VIEW[status], normalize: normalizeEntityRow },
         { table: 'client_entities', endpoint: (status) => `/api/client-entities?status=${status}`, view: (status) => STATUS_TO_ENTITIES_VIEW[status], normalize: normalizeEntityRow },
         { table: 'tiper_entities', endpoint: (status) => `/api/tiper-entities?status=${status}`, view: (status) => STATUS_TO_ENTITIES_VIEW[status], normalize: normalizeEntityRow }
@@ -312,9 +317,9 @@ const AppContent: React.FC = () => {
 
     if (canAccessProjectsSystem(accessScope)) {
       searchSources.push(
-        { table: 'clients', endpoint: (status) => `/api/projects/client-commissions?status=${status}`, view: (status) => STATUS_TO_PROJECTS_VIEW[status], normalize: normalizeProjectCommissionRow },
-        { table: 'partners', endpoint: (status) => `/api/projects/partner-commissions?status=${status}`, view: (status) => STATUS_TO_PROJECTS_VIEW[status], normalize: normalizeProjectCommissionRow },
-        { table: 'tipers', endpoint: (status) => `/api/projects/tiper-commissions?status=${status}`, view: (status) => STATUS_TO_PROJECTS_VIEW[status], normalize: normalizeProjectCommissionRow },
+        { table: 'clients', endpoint: (status) => `/api/projects/client-commissions?status=${status}`, view: (status) => STATUS_TO_PROJECTS_VIEW[status], normalize: normalizeCommissionRow },
+        { table: 'partners', endpoint: (status) => `/api/projects/partner-commissions?status=${status}`, view: (status) => STATUS_TO_PROJECTS_VIEW[status], normalize: normalizeCommissionRow },
+        { table: 'tipers', endpoint: (status) => `/api/projects/tiper-commissions?status=${status}`, view: (status) => STATUS_TO_PROJECTS_VIEW[status], normalize: normalizeCommissionRow },
         { table: 'partner_entities', endpoint: (status) => `/api/projects/partner-entities?status=${status}`, view: (status) => STATUS_TO_PROJECTS_SUBJECTS_VIEW[status], normalize: normalizeEntityRow },
         { table: 'client_entities', endpoint: (status) => `/api/projects/client-entities?status=${status}`, view: (status) => STATUS_TO_PROJECTS_SUBJECTS_VIEW[status], normalize: normalizeEntityRow },
         { table: 'tiper_entities', endpoint: (status) => `/api/projects/tiper-entities?status=${status}`, view: (status) => STATUS_TO_PROJECTS_SUBJECTS_VIEW[status], normalize: normalizeEntityRow }
@@ -323,9 +328,9 @@ const AppContent: React.FC = () => {
 
     if (canAccessGrowthSystem(accessScope)) {
       searchSources.push(
-        { table: 'clients', endpoint: (status) => `/api/growth/client-commissions?status=${status}`, view: (status) => STATUS_TO_GROWTH_VIEW[status], normalize: normalizeProjectCommissionRow },
-        { table: 'partners', endpoint: (status) => `/api/growth/partner-commissions?status=${status}`, view: (status) => STATUS_TO_GROWTH_VIEW[status], normalize: normalizeProjectCommissionRow },
-        { table: 'tipers', endpoint: (status) => `/api/growth/tiper-commissions?status=${status}`, view: (status) => STATUS_TO_GROWTH_VIEW[status], normalize: normalizeProjectCommissionRow },
+        { table: 'clients', endpoint: (status) => `/api/growth/client-commissions?status=${status}`, view: (status) => STATUS_TO_GROWTH_VIEW[status], normalize: normalizeCommissionRow },
+        { table: 'partners', endpoint: (status) => `/api/growth/partner-commissions?status=${status}`, view: (status) => STATUS_TO_GROWTH_VIEW[status], normalize: normalizeCommissionRow },
+        { table: 'tipers', endpoint: (status) => `/api/growth/tiper-commissions?status=${status}`, view: (status) => STATUS_TO_GROWTH_VIEW[status], normalize: normalizeCommissionRow },
         { table: 'partner_entities', endpoint: (status) => `/api/growth/partner-entities?status=${status}`, view: (status) => STATUS_TO_GROWTH_SUBJECTS_VIEW[status], normalize: normalizeEntityRow },
         { table: 'client_entities', endpoint: (status) => `/api/growth/client-entities?status=${status}`, view: (status) => STATUS_TO_GROWTH_SUBJECTS_VIEW[status], normalize: normalizeEntityRow },
         { table: 'tiper_entities', endpoint: (status) => `/api/growth/tiper-entities?status=${status}`, view: (status) => STATUS_TO_GROWTH_SUBJECTS_VIEW[status], normalize: normalizeEntityRow }
