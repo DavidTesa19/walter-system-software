@@ -19,6 +19,20 @@ const HIGHLIGHT_MS = 4500;
 const LOOKUP_RETRY_MS = 120;
 const LOOKUP_MAX_ATTEMPTS = 30;
 
+/**
+ * The last request key that was actually acted on. Deliberately module scope
+ * rather than a ref: the search target lives in `App` and is never cleared, but
+ * a section unmounts whenever the user switches table tab or leaves the view,
+ * so a per-mount ref forgot that the request had already been serviced. Coming
+ * back to the table then replayed the highlight for a search the user had long
+ * since dismissed — the row lit up green again with an empty search box.
+ *
+ * A key is unique per click (`Date.now()` plus the result id) and only the
+ * section owning that result's table is ever handed it, so one record for the
+ * whole app is enough.
+ */
+let servicedRequestKey: string | null = null;
+
 interface GridRowFocusOptions {
   /** Grid row id the search result points at, or null when nothing is targeted. */
   focusRecordId?: number | null;
@@ -44,7 +58,6 @@ export const useGridRowFocus = <TData extends { id: number }>(
   { focusRecordId, focusRequestKey, isActive = true }: GridRowFocusOptions
 ) => {
   const highlightedIdRef = useRef<number | null>(null);
-  const handledKeyRef = useRef<string | null>(null);
   const timerRef = useRef<number | null>(null);
 
   const redrawRow = useCallback(
@@ -76,7 +89,7 @@ export const useGridRowFocus = <TData extends { id: number }>(
     if (!isActive || !focusRequestKey || focusRecordId === null || focusRecordId === undefined) {
       return;
     }
-    if (handledKeyRef.current === focusRequestKey) {
+    if (servicedRequestKey === focusRequestKey) {
       return;
     }
 
@@ -98,7 +111,7 @@ export const useGridRowFocus = <TData extends { id: number }>(
         return;
       }
 
-      handledKeyRef.current = focusRequestKey;
+      servicedRequestKey = focusRequestKey;
       api.ensureIndexVisible(node.rowIndex, "middle");
 
       clearHighlight();

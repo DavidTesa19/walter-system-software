@@ -289,6 +289,10 @@ const AppContent: React.FC = () => {
   }, [viewMode, isAuthenticated]);
 
   const handleViewChange = useCallback((view: AppView) => {
+    // A search target is a one-shot "jump to this row" instruction. Navigating
+    // by hand afterwards has to drop it, or it keeps forcing the grid back to
+    // the table the search landed on and overriding the user's own choice.
+    setGridSearchTarget(null);
     setViewMode(view);
   }, []);
 
