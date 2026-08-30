@@ -111,6 +111,11 @@ const UsersGrid: React.FC<UsersGridProps> = ({
               ? searchTarget.requestKey
               : null
           }
+          focusOpenProfile={
+            searchTarget?.viewMode === viewMode && searchTarget.table === "clients"
+              ? searchTarget.openProfile === true
+              : false
+          }
         />
       );
     }
@@ -135,6 +140,11 @@ const UsersGrid: React.FC<UsersGridProps> = ({
               ? searchTarget.requestKey
               : null
           }
+          focusOpenProfile={
+            searchTarget?.viewMode === viewMode && searchTarget.table === "partners"
+              ? searchTarget.openProfile === true
+              : false
+          }
         />
       );
     }
@@ -157,6 +167,11 @@ const UsersGrid: React.FC<UsersGridProps> = ({
           searchTarget?.viewMode === viewMode && searchTarget.table === "tipers"
             ? searchTarget.requestKey
             : null
+        }
+        focusOpenProfile={
+          searchTarget?.viewMode === viewMode && searchTarget.table === "tipers"
+            ? searchTarget.openProfile === true
+            : false
         }
       />
     );

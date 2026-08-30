@@ -496,7 +496,7 @@ const buildPartnerDraftCommissionData = (draft: PartnerCreateDraft, status: Part
   }, assignmentOptions)!.groups
 });
 
-const PartnersSectionNew: React.FC<SectionProps> = ({ viewMode, isActive, systemNamespace, sectionKind, onRegisterAddHandler, onLoadingChange, readOnly = false, focusRecordId, focusRequestKey }) => {
+const PartnersSectionNew: React.FC<SectionProps> = ({ viewMode, isActive, systemNamespace, sectionKind, onRegisterAddHandler, onLoadingChange, readOnly = false, focusRecordId, focusRequestKey, focusOpenProfile }) => {
   const { users: assignableUsers, options: assignmentOptions } = useAssignableUsers();
   const { markItemSeen, markItemsSeen, getItemActivity } = useActivity();
   const [entities, setEntities] = useState<PartnerEntity[]>([]);
@@ -514,6 +514,17 @@ const PartnersSectionNew: React.FC<SectionProps> = ({ viewMode, isActive, system
   const [selectedEntityId, setSelectedEntityId] = useState<number | null>(null);
   const [selectedCommissionId, setSelectedCommissionId] = useState<number | null>(null);
 
+  const openProfile = useCallback((row: PartnerGridRow) => {
+    const entityId = row.entity?.id ?? row.partner_entity_id ?? null;
+    if (entityId !== null) setSelectedEntityId(entityId);
+    setSelectedCommissionId(viewMode === "active" ? null : row.primaryCommissionId ?? (row.entityOnly ? null : row.id));
+  }, [viewMode]);
+
+  const closeProfile = useCallback(() => {
+    setSelectedEntityId(null);
+    setSelectedCommissionId(null);
+  }, []);
+
   // Obor / Zaměření editor opened from a grid cell. Owned here rather than by
   // the cell renderer so it survives the rowData replacement each save triggers.
   const [fieldEditor, setFieldEditor] = useState<{ entityId: number; anchor: FieldEditorAnchor } | null>(null);
@@ -525,7 +536,14 @@ const PartnersSectionNew: React.FC<SectionProps> = ({ viewMode, isActive, system
     onGridColumnsChanged: handleGridColumnsChanged
   } = useGridColumnLayout(gridRef);
   // Scrolls to and marks the row a sidebar search result pointed at.
-  const { rowClassRules } = useGridRowFocus(gridRef, { focusRecordId, focusRequestKey, isActive });
+  const { rowClassRules } = useGridRowFocus(gridRef, {
+    focusRecordId,
+    focusRequestKey,
+    isActive,
+    // Set when the search result was opened with its profile button rather
+    // than by clicking the result itself: land on the row, then open its panel.
+    onFocusRow: focusOpenProfile ? openProfile : undefined
+  });
 
   // Workflow state checkbox filter — use a ref so column defs stay stable when filter changes
   const activeStateFiltersRef = useRef<Set<string>>(new Set(WORKFLOW_STATUS_VALUES));
@@ -823,16 +841,6 @@ const PartnersSectionNew: React.FC<SectionProps> = ({ viewMode, isActive, system
     markItemSeen(commissionActivityScope, selectedCommission.id, selectedCommission.updated_at ?? selectedCommission.created_at ?? null);
   }, [commissionActivityScope, markItemSeen, selectedCommission]);
 
-  const openProfile = useCallback((row: PartnerGridRow) => {
-    const entityId = row.entity?.id ?? row.partner_entity_id ?? null;
-    if (entityId !== null) setSelectedEntityId(entityId);
-    setSelectedCommissionId(viewMode === "active" ? null : row.primaryCommissionId ?? (row.entityOnly ? null : row.id));
-  }, [viewMode]);
-
-  const closeProfile = useCallback(() => {
-    setSelectedEntityId(null);
-    setSelectedCommissionId(null);
-  }, []);
 
   const openCreateModal = useCallback((draft?: PartnerCreateDraft) => {
     setCreateDraft(draft ?? createDefaultPartnerDraft());

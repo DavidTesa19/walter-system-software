@@ -120,6 +120,11 @@ const EntitiesSystemView: React.FC<EntitiesSystemViewProps> = ({
               ? searchTarget.requestKey
               : null
           }
+          focusOpenProfile={
+            searchTarget?.viewMode === viewMode && searchTarget.table === 'client_entities'
+              ? searchTarget.openProfile === true
+              : false
+          }
         />
       );
     }
@@ -144,6 +149,11 @@ const EntitiesSystemView: React.FC<EntitiesSystemViewProps> = ({
               ? searchTarget.requestKey
               : null
           }
+          focusOpenProfile={
+            searchTarget?.viewMode === viewMode && searchTarget.table === 'partner_entities'
+              ? searchTarget.openProfile === true
+              : false
+          }
         />
       );
     }
@@ -166,6 +176,11 @@ const EntitiesSystemView: React.FC<EntitiesSystemViewProps> = ({
           searchTarget?.viewMode === viewMode && searchTarget.table === 'tiper_entities'
             ? searchTarget.requestKey
             : null
+        }
+        focusOpenProfile={
+          searchTarget?.viewMode === viewMode && searchTarget.table === 'tiper_entities'
+            ? searchTarget.openProfile === true
+            : false
         }
       />
     );

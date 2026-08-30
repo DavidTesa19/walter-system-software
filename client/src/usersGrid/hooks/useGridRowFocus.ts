@@ -33,7 +33,7 @@ const LOOKUP_MAX_ATTEMPTS = 30;
  */
 let servicedRequestKey: string | null = null;
 
-interface GridRowFocusOptions {
+interface GridRowFocusOptions<TData> {
   /** Grid row id the search result points at, or null when nothing is targeted. */
   focusRecordId?: number | null;
   /**
@@ -42,6 +42,13 @@ interface GridRowFocusOptions {
    */
   focusRequestKey?: string | null;
   isActive?: boolean;
+  /**
+   * Called once with the row's data when the grid has actually landed on it —
+   * used by the sections to open the profile panel when the search result was
+   * opened with its profile button. Kept in a ref inside the hook so passing an
+   * inline arrow does not restart the lookup retries.
+   */
+  onFocusRow?: (data: TData) => void;
 }
 
 /**
@@ -55,10 +62,12 @@ interface GridRowFocusOptions {
  */
 export const useGridRowFocus = <TData extends { id: number }>(
   gridRef: React.RefObject<AgGridReact<TData> | null>,
-  { focusRecordId, focusRequestKey, isActive = true }: GridRowFocusOptions
+  { focusRecordId, focusRequestKey, isActive = true, onFocusRow }: GridRowFocusOptions<TData>
 ) => {
   const highlightedIdRef = useRef<number | null>(null);
   const timerRef = useRef<number | null>(null);
+  const onFocusRowRef = useRef(onFocusRow);
+  onFocusRowRef.current = onFocusRow;
 
   const redrawRow = useCallback(
     (rowId: number | null) => {
@@ -121,6 +130,11 @@ export const useGridRowFocus = <TData extends { id: number }>(
         timerRef.current = null;
         clearHighlight();
       }, HIGHLIGHT_MS);
+
+      const rowData = node?.data;
+      if (rowData) {
+        onFocusRowRef.current?.(rowData);
+      }
     };
 
     attempt();

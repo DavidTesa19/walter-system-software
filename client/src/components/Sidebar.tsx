@@ -12,7 +12,7 @@ interface SidebarProps {
   activeView: AppView;
   onViewChange: (view: AppView) => void;
   onGlobalSearch: (query: string) => Promise<GlobalSearchResult[]>;
-  onSearchNavigate: (result: GlobalSearchResult) => void;
+  onSearchNavigate: (result: GlobalSearchResult, options?: { openProfile?: boolean }) => void;
 }
 
 type SidebarGroupItem = {
@@ -293,8 +293,10 @@ const Sidebar: React.FC<SidebarProps> = ({
     };
   }, [onGlobalSearch, searchQuery]);
 
-  const handleSearchResultClick = (result: GlobalSearchResult) => {
-    onSearchNavigate(result);
+  // `openProfile` is the profile button on the result rather than the result
+  // itself: same jump to the row, but the profile panel opens on arrival.
+  const handleSearchResultClick = (result: GlobalSearchResult, openProfile = false) => {
+    onSearchNavigate(result, { openProfile });
     setIsSearchOpen(false);
     setSearchQuery('');
     setSearchResults([]);
@@ -570,26 +572,57 @@ const Sidebar: React.FC<SidebarProps> = ({
           </div>
 
           {isSearchOpen && (searchQuery.trim() || isSearching) && (
-            <div className="sidebar-search-results">
+            <div className="sidebar-search-results" role="listbox">
               {isSearching ? (
                 <div className="sidebar-search-status">Vyhledávání…</div>
               ) : searchResults.length > 0 ? (
-                searchResults.map((result, index) => (
-                  <button
-                    key={result.id}
-                    type="button"
-                    className={`sidebar-search-result ${highlightedSearchIndex === index ? 'active' : ''}`}
-                    onClick={() => handleSearchResultClick(result)}
-                    onMouseEnter={() => setHighlightedSearchIndex(index)}
-                  >
-                    <span className="sidebar-search-result-title">{result.title}</span>
-                    <span className="sidebar-search-result-subtitle">{result.subtitle}</span>
-                    <span className="sidebar-search-result-location">{result.locationLabel}</span>
-                    {result.matchText && (
-                      <span className="sidebar-search-result-match">{result.matchText}</span>
-                    )}
-                  </button>
-                ))
+                searchResults.map((result, index) => {
+                  const canOpenProfile = Boolean(result.table && typeof result.recordId === 'number');
+                  const meta = [result.locationLabel, result.matchedFields?.join(', ')]
+                    .filter(Boolean)
+                    .join(' · ');
+                  // Both lines are clipped to one line each, so the tooltip is
+                  // where the full text stays readable.
+                  const tooltip = `${result.title}
+${meta}`;
+
+                  return (
+                    <div
+                      key={result.id}
+                      role="option"
+                      aria-selected={highlightedSearchIndex === index}
+                      className={`sidebar-search-result ${highlightedSearchIndex === index ? 'active' : ''}`}
+                      onMouseEnter={() => setHighlightedSearchIndex(index)}
+                    >
+                      <button
+                        type="button"
+                        className="sidebar-search-result-main"
+                        onClick={() => handleSearchResultClick(result)}
+                        title={tooltip}
+                      >
+                        <span className="sidebar-search-result-title">{result.title}</span>
+                        <span className="sidebar-search-result-meta">{meta}</span>
+                      </button>
+                      {canOpenProfile && (
+                        <button
+                          type="button"
+                          className="sidebar-search-result-profile"
+                          onClick={(event) => {
+                            event.stopPropagation();
+                            handleSearchResultClick(result, true);
+                          }}
+                          title="Otevřít profil"
+                          aria-label="Otevřít profil"
+                        >
+                          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+                            <path d="M12 12C14.4853 12 16.5 9.98528 16.5 7.5C16.5 5.01472 14.4853 3 12 3C9.51472 3 7.5 5.01472 7.5 7.5C7.5 9.98528 9.51472 12 12 12Z" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" />
+                            <path d="M4.5 20.25C4.5 16.7982 7.29822 14 10.75 14H13.25C16.7018 14 19.5 16.7982 19.5 20.25" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" />
+                          </svg>
+                        </button>
+                      )}
+                    </div>
+                  );
+                })
               ) : (
                 <div className="sidebar-search-status">Nic nenalezeno</div>
               )}

@@ -11,5 +11,7 @@ export interface SectionProps {
   sectionKind?: "subjects" | "commissions";
   focusRecordId?: number | null;
   focusRequestKey?: string | null;
+  /** Open the focused row's profile panel once the grid has scrolled to it. */
+  focusOpenProfile?: boolean;
   readOnly?: boolean;
 }

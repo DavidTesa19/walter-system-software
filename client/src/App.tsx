@@ -103,13 +103,16 @@ const VIEW_LABELS: Record<AppView, string> = {
   growth_subjects_archived: 'Growth Club - Subjekty - Archiv'
 };
 
+// Deliberately short: a search result pairs this with the view label
+// ("Partneři › Aktuální subjekty"), so spelling out "Subjekty - Partneři" here
+// would just repeat the half of the line that follows it.
 const TABLE_LABELS: Record<SearchTable, string> = {
   clients: 'Klienti',
   partners: 'Partneři',
   tipers: 'Tipaři',
-  partner_entities: 'Subjekty - Partneři',
-  client_entities: 'Subjekty - Klienti',
-  tiper_entities: 'Subjekty - Tipaři'
+  partner_entities: 'Partneři',
+  client_entities: 'Klienti',
+  tiper_entities: 'Tipaři'
 };
 
 const STATUS_TO_STANDARD_VIEW: Record<SearchStatus, AppView> = {
@@ -401,8 +404,7 @@ const AppContent: React.FC = () => {
         results.push({
           id: `view-${view}`,
           title: label,
-          subtitle: 'Sekce aplikace',
-          locationLabel: `Navigace › ${label}`,
+          locationLabel: 'Navigace',
           view
         });
       }
@@ -413,49 +415,41 @@ const AppContent: React.FC = () => {
         return;
       }
 
-      const searchableParts = SEARCH_FIELDS.map(({ key }) => {
+      const fields = SEARCH_FIELDS.map(({ key, label }) => {
         const value = row[key];
-        if (Array.isArray(value)) {
-          return value.join(' ');
-        }
-        return value == null ? '' : String(value);
-      }).filter(Boolean);
+        const asText = Array.isArray(value)
+          ? value.join(', ')
+          : value == null
+            ? ''
+            : String(value);
+        return { key, label, normalized: normalizeSearchText(asText) };
+      }).filter((field) => field.normalized);
 
-      const aggregate = normalizeSearchText(searchableParts.join(' '));
+      const aggregate = fields.map((field) => field.normalized).join(' ');
       if (!tokens.every((token) => aggregate.includes(token))) {
         return;
       }
 
-      SEARCH_FIELDS.forEach(({ key, label }) => {
-        const fieldValue = row[key];
-        const asText = Array.isArray(fieldValue)
-          ? fieldValue.join(', ')
-          : fieldValue == null
-            ? ''
-            : String(fieldValue);
+      // One result per record, not one per field it matched on. A query like
+      // "tom" hits a subject's name, company and e-mail, and three near
+      // identical entries pointing at the same row filled the whole dropdown.
+      //
+      // Name and company are left out: the title is built from exactly those
+      // two, so listing them says nothing the user cannot already read, and the
+      // dropdown is narrow enough that they push the useful labels off the end.
+      const matchedFields = fields
+        .filter((field) => field.key !== 'name' && field.key !== 'company')
+        .filter((field) => tokens.some((token) => field.normalized.includes(token)))
+        .map((field) => field.label);
 
-        if (!asText) {
-          return;
-        }
-
-        const normalizedField = normalizeSearchText(asText);
-        if (!tokens.some((token) => normalizedField.includes(token))) {
-          return;
-        }
-
-        const tableLabel = TABLE_LABELS[table];
-        const viewLabel = VIEW_LABELS[view];
-
-        results.push({
-          id: `${table}-${view}-${row.id}-${String(key)}`,
-          title: getRowTitle(row),
-          subtitle: `${tableLabel} • ${label}`,
-          matchText: asText,
-          locationLabel: `${tableLabel} › ${viewLabel}`,
-          view,
-          table,
-          recordId: row.id
-        });
+      results.push({
+        id: `${table}-${view}-${row.id}`,
+        title: getRowTitle(row),
+        locationLabel: `${TABLE_LABELS[table]} › ${VIEW_LABELS[view]}`,
+        matchedFields,
+        view,
+        table,
+        recordId: row.id
       });
     });
 
@@ -475,36 +469,29 @@ const AppContent: React.FC = () => {
         return;
       }
 
-      FUTURE_FUNCTION_FIELDS.forEach(({ key, label }) => {
+      const matchedFields = FUTURE_FUNCTION_FIELDS.map(({ key, label }) => {
         const fieldValue = row[key];
-        const asText = fieldValue == null ? '' : String(fieldValue);
-        if (!asText) {
-          return;
-        }
+        return { label, normalized: normalizeSearchText(fieldValue == null ? '' : String(fieldValue)) };
+      })
+        .filter((field) => field.normalized && tokens.some((token) => field.normalized.includes(token)))
+        .map((field) => field.label);
 
-        const normalizedField = normalizeSearchText(asText);
-        if (!tokens.some((token) => normalizedField.includes(token))) {
-          return;
-        }
+      const archiveLabel = archived ? ' (archiv)' : '';
 
-        const archiveLabel = archived ? ' (archiv)' : '';
-
-        results.push({
-          id: `ff-${row.id}-${String(key)}`,
-          title: row.name || `Funkce #${row.id}`,
-          subtitle: `Budoucí funkce • ${label}${archiveLabel}`,
-          matchText: asText,
-          locationLabel: `Budoucí funkce${archiveLabel}`,
-          view: 'future',
-          futureFunctionId: row.id
-        });
+      results.push({
+        id: `ff-${row.id}`,
+        title: row.name || `Funkce #${row.id}`,
+        locationLabel: `Budoucí funkce${archiveLabel}`,
+        matchedFields,
+        view: 'future',
+        futureFunctionId: row.id
       });
     });
 
     return results.slice(0, 120);
   }, [accessScope, buildSearchIndex, isViewAllowed]);
 
-  const handleSearchNavigate = useCallback((result: GlobalSearchResult) => {
+  const handleSearchNavigate = useCallback((result: GlobalSearchResult, options?: { openProfile?: boolean }) => {
     setViewMode(result.view);
 
     if (result.table && typeof result.recordId === 'number') {
@@ -512,7 +499,8 @@ const AppContent: React.FC = () => {
         table: result.table,
         recordId: result.recordId,
         requestKey: `${Date.now()}-${result.id}`,
-        viewMode: getGridViewFromAppView(result.view)
+        viewMode: getGridViewFromAppView(result.view),
+        openProfile: options?.openProfile === true
       });
       return;
     }
