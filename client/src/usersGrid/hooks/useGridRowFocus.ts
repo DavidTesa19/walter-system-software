@@ -8,9 +8,6 @@ import type { RowClassParams, RowClassRules } from "ag-grid-community";
  */
 export const SEARCH_FOCUS_ROW_CLASS = "grid-row--search-focus";
 
-/** How long the row stays marked before it goes back to looking like any other. */
-const HIGHLIGHT_MS = 4500;
-
 /**
  * The row is looked up by id, and a click on a search result usually lands
  * before the section has finished fetching its data — so retry for a while
@@ -52,8 +49,15 @@ interface GridRowFocusOptions<TData> {
 }
 
 /**
- * Scrolls the row a global search result points at into view and tints it for a
- * few seconds, so the hit is obvious without the user hunting for it.
+ * Scrolls the row a global search result points at into view and tints it, so
+ * the hit is obvious without the user hunting for it.
+ *
+ * The tint is deliberately not time-based: a row you searched for might still
+ * be the one you're reading three seconds or three minutes later, and having
+ * it fade out from under the user read as the app losing track of it. Instead
+ * it stays until the user clicks that row — the natural "I've found it, thanks"
+ * gesture — via `dismissRow`, which the sections wire into their grid's click
+ * and profile-open handlers.
  *
  * The highlighted id lives in a ref because `rowClassRules` has to stay
  * referentially stable — a new object on every render makes ag-Grid redo work it
@@ -65,7 +69,6 @@ export const useGridRowFocus = <TData extends { id: number }>(
   { focusRecordId, focusRequestKey, isActive = true, onFocusRow }: GridRowFocusOptions<TData>
 ) => {
   const highlightedIdRef = useRef<number | null>(null);
-  const timerRef = useRef<number | null>(null);
   const onFocusRowRef = useRef(onFocusRow);
   onFocusRowRef.current = onFocusRow;
 
@@ -83,11 +86,8 @@ export const useGridRowFocus = <TData extends { id: number }>(
   );
 
   const clearHighlight = useCallback(() => {
-    if (timerRef.current !== null) {
-      window.clearTimeout(timerRef.current);
-      timerRef.current = null;
-    }
     const previous = highlightedIdRef.current;
+    if (previous === null) return;
     highlightedIdRef.current = null;
     redrawRow(previous);
   }, [redrawRow]);
@@ -126,10 +126,6 @@ export const useGridRowFocus = <TData extends { id: number }>(
       clearHighlight();
       highlightedIdRef.current = focusRecordId;
       redrawRow(focusRecordId);
-      timerRef.current = window.setTimeout(() => {
-        timerRef.current = null;
-        clearHighlight();
-      }, HIGHLIGHT_MS);
 
       const rowData = node?.data;
       if (rowData) {
@@ -154,7 +150,17 @@ export const useGridRowFocus = <TData extends { id: number }>(
     []
   );
 
-  return { rowClassRules };
+  /** Turns the tint off if `rowId` is the row currently carrying it. */
+  const dismissRow = useCallback(
+    (rowId: number) => {
+      if (highlightedIdRef.current === rowId) {
+        clearHighlight();
+      }
+    },
+    [clearHighlight]
+  );
+
+  return { rowClassRules, dismissRow };
 };
 
 export default useGridRowFocus;

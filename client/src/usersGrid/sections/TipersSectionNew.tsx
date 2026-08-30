@@ -558,7 +558,7 @@ const TipersSectionNew: React.FC<SectionProps> = ({
     onGridColumnsChanged: handleGridColumnsChanged
   } = useGridColumnLayout(gridRef);
   // Scrolls to and marks the row a sidebar search result pointed at.
-  const { rowClassRules } = useGridRowFocus(gridRef, {
+  const { rowClassRules, dismissRow } = useGridRowFocus(gridRef, {
     focusRecordId,
     focusRequestKey,
     isActive,
@@ -566,6 +566,16 @@ const TipersSectionNew: React.FC<SectionProps> = ({
     // than by clicking the result itself: land on the row, then open its panel.
     onFocusRow: focusOpenProfile ? openProfile : undefined
   });
+
+  // The profile-cell button stops propagation (see ProfileCellRenderer),
+  // so a grid-level cell-click handler never sees this click — it has to be
+  // dismissed here, on the actual user gesture, not in `openProfile` itself
+  // (which also runs from search's own onFocusRow above, where dismissing
+  // would clear the highlight the same instant it was set).
+  const openProfileFromClick = useCallback((row: TiperGridRow) => {
+    dismissRow(row.id);
+    openProfile(row);
+  }, [dismissRow, openProfile]);
 
   // Workflow state checkbox filter — use a ref so column defs stay stable when filter changes
   const activeStateFiltersRef = useRef<Set<string>>(new Set(WORKFLOW_STATUS_VALUES));
@@ -1721,7 +1731,7 @@ const TipersSectionNew: React.FC<SectionProps> = ({
   // ==========================================================================
 
   const gridContext = useMemo(() => ({
-    openProfile,
+    openProfile: openProfileFromClick,
     rowActions: {
       viewMode,
       entityAccusative: viewMode === "active" ? "tipaře" : "tip",
@@ -1731,7 +1741,7 @@ const TipersSectionNew: React.FC<SectionProps> = ({
       onDelete: handleDelete,
       onArchive: handleArchive
     }
-  }), [openProfile, viewMode, handleApprove, handleRestore, handleDelete, handleArchive]);
+  }), [openProfileFromClick, viewMode, handleApprove, handleRestore, handleDelete, handleArchive]);
 
   const onStatusCellClicked = useCallback((params: any) => {
     const field = params.colDef?.field as string | undefined;
@@ -2417,6 +2427,13 @@ const TipersSectionNew: React.FC<SectionProps> = ({
             domLayout={useContentHeightLayout ? 'autoHeight' : 'normal'}
             singleClickEdit={true}
             onCellValueChanged={onCellValueChanged}
+            // A search-result highlight stays on a row until the user acts on
+            // it; an ordinary cell click is that acknowledgement. The profile
+            // button has its own dismissal (see openProfileFromClick) since it
+            // stops propagation and never reaches this handler.
+            onCellClicked={(params: any) => {
+              if (params.data) dismissRow(params.data.id);
+            }}
             onCellEditingStarted={readOnly ? (params) => params.api.stopEditing(true) : undefined}
             defaultColDef={GRID_DEFAULT_COL_DEF}
             suppressRowClickSelection={true}
