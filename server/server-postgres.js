@@ -36,6 +36,7 @@ import {
   entityDisplayName,
   isValidDealRequest,
 } from "./deal-linking.js";
+import { cascadesArchiveToSubject } from "./archive-cascade.js";
 
 dotenv.config();
 
@@ -4529,8 +4530,9 @@ const createEntityCommissionRoutes = (entityTypes) => {
         const updated = await updateCommission(id, { status: "archived" }, getRequestActorUserId(req));
         if (!updated) return res.status(404).json({ error: "Not found" });
         // Nothing left to work on for this subject — archive it alongside its
-        // last commission instead of leaving it in the active table.
-        if (updated.entity_id && (await db.hasActiveCommissions(`${type}_commissions`, updated.entity_id)) === false) {
+        // last commission instead of leaving it in the active table. Partners
+        // opt out of this and are archived by hand; see archive-cascade.js.
+        if (cascadesArchiveToSubject(type) && updated.entity_id && (await db.hasActiveCommissions(`${type}_commissions`, updated.entity_id)) === false) {
           const updateEntity = db[`update${Type}Entity`].bind(db);
           await updateEntity(updated.entity_id, { status: 'archived' }, getRequestActorUserId(req));
         }
@@ -5005,8 +5007,9 @@ const createNamespaceEntityCommissionRoutes = (routeConfig, apiPrefix, entityTyp
           return res.status(404).json({ error: 'Not found' });
         }
         // Nothing left to work on for this subject — archive it alongside its
-        // last commission instead of leaving it in the active table.
-        if (updated.entity_id && (await db.hasActiveCommissions(config.commissionTable, Number(updated.entity_id))) === false) {
+        // last commission instead of leaving it in the active table. Partners
+        // opt out of this and are archived by hand; see archive-cascade.js.
+        if (cascadesArchiveToSubject(type) && updated.entity_id && (await db.hasActiveCommissions(config.commissionTable, Number(updated.entity_id))) === false) {
           await db.update(config.entityTable, Number(updated.entity_id), { status: 'archived' }, getRequestActorUserId(req));
         }
         res.json(await getNamespaceCommissionRecord(routeConfig, type, id));

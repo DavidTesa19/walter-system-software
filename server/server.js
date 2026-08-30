@@ -12,6 +12,7 @@ import jwt from "jsonwebtoken";
 import crypto from "crypto";
 import AdmZip from "adm-zip";
 import * as entityCommissionJson from "./entity-commission-json.js";
+import { cascadesArchiveToSubject } from "./archive-cascade.js";
 import {
   normalizeNotificationEmail,
 } from "./submission-notifications.js";
@@ -3447,12 +3448,8 @@ const ensureMigrated = (db) => {
   return false;
 };
 
-// A subject only belongs in the active tables while it still has work attached
-// to it. Once its last non-archived commission is archived there is nothing
-// left to do with the subject either, so it follows its commissions into the
-// archive instead of lingering in the active view with an empty commission
-// list. Pending counts as active on purpose: a subject waiting for approval has
-// not been dealt with yet.
+// Pending counts as active on purpose: a commission waiting for approval has
+// not been dealt with yet, so its subject still has work attached to it.
 const hasActiveCommissionsForEntity = (commissions, entityId) => {
   if (entityId === null || entityId === undefined) {
     return true;
@@ -3462,6 +3459,15 @@ const hasActiveCommissionsForEntity = (commissions, entityId) => {
       Number(commission.entity_id) === Number(entityId) && commission.status !== "archived"
   );
 };
+
+// A subject of a cascading type only belongs in the active tables while it
+// still has work attached to it. Once its last non-archived commission is
+// archived there is nothing left to do with the subject either, so it follows
+// its commissions into the archive rather than lingering in the active view
+// with an empty commission list. See archive-cascade.js for which types those
+// are — partners are archived by hand.
+const shouldArchiveSubjectWithCommission = (type, commissions, entityId) =>
+  cascadesArchiveToSubject(type) && !hasActiveCommissionsForEntity(commissions, entityId);
 
 // --- PARTNER ENTITIES ---
 
@@ -3740,7 +3746,7 @@ app.post("/api/partner-commissions/:id/archive", authenticateToken, (req, res) =
     ensureMigrated(db);
     const updated = entityCommissionJson.updatePartnerCommission(db, id, { status: "archived" });
     if (!updated) return res.status(404).json({ error: "Not found" });
-    if (!hasActiveCommissionsForEntity(db.partner_commissions, updated.entity_id)) {
+    if (shouldArchiveSubjectWithCommission("partner", db.partner_commissions, updated.entity_id)) {
       entityCommissionJson.updatePartnerEntity(db, updated.entity_id, { status: "archived" });
     }
     if (!writeDb(db)) return res.status(500).json({ error: "Failed to persist" });
@@ -4044,7 +4050,7 @@ app.post("/api/client-commissions/:id/archive", authenticateToken, (req, res) =>
     ensureMigrated(db);
     const updated = entityCommissionJson.updateClientCommission(db, id, { status: "archived" });
     if (!updated) return res.status(404).json({ error: "Not found" });
-    if (!hasActiveCommissionsForEntity(db.client_commissions, updated.entity_id)) {
+    if (shouldArchiveSubjectWithCommission("client", db.client_commissions, updated.entity_id)) {
       entityCommissionJson.updateClientEntity(db, updated.entity_id, { status: "archived" });
     }
     if (!writeDb(db)) return res.status(500).json({ error: "Failed to persist" });
@@ -4348,7 +4354,7 @@ app.post("/api/tiper-commissions/:id/archive", authenticateToken, (req, res) => 
     ensureMigrated(db);
     const updated = entityCommissionJson.updateTiperCommission(db, id, { status: "archived" });
     if (!updated) return res.status(404).json({ error: "Not found" });
-    if (!hasActiveCommissionsForEntity(db.tiper_commissions, updated.entity_id)) {
+    if (shouldArchiveSubjectWithCommission("tiper", db.tiper_commissions, updated.entity_id)) {
       entityCommissionJson.updateTiperEntity(db, updated.entity_id, { status: "archived" });
     }
     if (!writeDb(db)) return res.status(500).json({ error: "Failed to persist" });
@@ -4940,7 +4946,7 @@ const createNamespaceRoutes = (routeConfig, countersStoreKey, ensureFn, apiPrefi
         if (!updated) {
           return res.status(404).json({ error: 'Not found' });
         }
-        if (!hasActiveCommissionsForEntity(store[config.commissionCollection], updated.entity_id)) {
+        if (shouldArchiveSubjectWithCommission(type, store[config.commissionCollection], updated.entity_id)) {
           updateNamespaceEntity(routeConfig, countersStoreKey, ensureFn, type, store, updated.entity_id, { status: 'archived' }, getRequestActorUserId(req));
         }
         if (!writeDb(store)) return res.status(500).json({ error: 'Failed to persist' });
