@@ -1,6 +1,7 @@
 import React, { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
-import { normalizeSearchText, type DealSubjectOption } from "../dealLink";
+import { DEAL_NAMESPACES, normalizeSearchText, type DealSubjectOption } from "../dealLink";
+import { linkableNamespaceLabel, type LinkableNamespace } from "../sectionLink";
 import { getApprovalStatusMeta } from "../utils/approvalStatus";
 import { REGION_OPTIONS } from "../regions";
 import "./DealSubjectPicker.css";
@@ -22,7 +23,9 @@ interface DealSubjectPickerProps {
   // Lower-cased slot label for placeholders, e.g. "partner".
   typeLabel: string;
   options: DealSubjectOption[];
-  onSelect: (id: number) => void;
+  // The whole option, not just its id: ids repeat across sections, so the caller
+  // needs the namespace to know which subject was actually picked.
+  onSelect: (option: DealSubjectOption) => void;
   onClose: () => void;
 }
 
@@ -54,10 +57,11 @@ const FilterSelect: React.FC<{
   value: string;
   options: string[];
   optionLabel?: (value: string) => string;
+  className?: string;
   onChange: (value: string) => void;
-}> = ({ label, value, options, optionLabel, onChange }) => (
+}> = ({ label, value, options, optionLabel, className, onChange }) => (
   <select
-    className={`dsp-filter ${value ? "is-set" : ""}`}
+    className={`dsp-filter ${className ?? ""} ${value ? "is-set" : ""}`}
     value={value}
     onChange={(event) => onChange(event.target.value)}
     aria-label={`Filtr: ${label}`}
@@ -189,6 +193,7 @@ const DealSubjectInfoCard: React.FC<{ card: HoverCard }> = ({ card }) => {
   const { option } = card;
   const statusMeta = getApprovalStatusMeta(option.status);
   const rows: Array<[string, string]> = [
+    ["Sekce", option.namespaceLabel],
     ["Jméno", option.personName],
     ["Společnost", option.company],
     ["Obor", option.oboryDisplay.join(", ")],
@@ -258,6 +263,10 @@ const DealSubjectPicker: React.FC<DealSubjectPickerProps> = ({
   const [zamereniFilter, setZamereniFilter] = useState("");
   const [krajFilter, setKrajFilter] = useState("");
   const [statusFilter, setStatusFilter] = useState("");
+  // Subjects are offered from all three sections at once; this narrows them to
+  // one. Empty (= every section) is the default — cross-section deals are the
+  // point of the picker, so it must not hide the other sections by default.
+  const [sectionFilter, setSectionFilter] = useState("");
   const [card, setCard] = useState<HoverCard | null>(null);
   const [activeIndex, setActiveIndex] = useState(-1);
 
@@ -272,20 +281,26 @@ const DealSubjectPicker: React.FC<DealSubjectPickerProps> = ({
     () => orderStatuses(unique(options.map((option) => option.status).filter(Boolean))),
     [options]
   );
+  // A fixed three-section catalog, like Kraj — always all of them, even if one
+  // currently holds no subjects of this type.
+  const sectionOptions: string[] = DEAL_NAMESPACES;
 
   const filtered = useMemo(() => {
     const terms = normalizeSearchText(search).split(/\s+/).filter(Boolean);
     return options.filter((option) => {
       if (terms.some((term) => !option.searchText.includes(term))) return false;
+      if (sectionFilter && option.namespace !== sectionFilter) return false;
       if (oborFilter && !option.obory.includes(oborFilter)) return false;
       if (zamereniFilter && !option.zamereni.includes(zamereniFilter)) return false;
       if (krajFilter && !option.kraje.includes(krajFilter)) return false;
       if (statusFilter && option.status !== statusFilter) return false;
       return true;
     });
-  }, [options, search, oborFilter, zamereniFilter, krajFilter, statusFilter]);
+  }, [options, search, sectionFilter, oborFilter, zamereniFilter, krajFilter, statusFilter]);
 
-  const hasFilters = Boolean(search || oborFilter || zamereniFilter || krajFilter || statusFilter);
+  const hasFilters = Boolean(
+    search || sectionFilter || oborFilter || zamereniFilter || krajFilter || statusFilter
+  );
 
   // The result list changed under the highlight — drop it and the card.
   useEffect(() => {
@@ -398,7 +413,7 @@ const DealSubjectPicker: React.FC<DealSubjectPickerProps> = ({
       const option = filtered[activeIndex];
       if (option) {
         event.preventDefault();
-        onSelect(option.id);
+        onSelect(option);
       }
       return;
     }
@@ -422,6 +437,7 @@ const DealSubjectPicker: React.FC<DealSubjectPickerProps> = ({
 
   const clearFilters = () => {
     setSearch("");
+    setSectionFilter("");
     setOborFilter("");
     setZamereniFilter("");
     setKrajFilter("");
@@ -452,6 +468,14 @@ const DealSubjectPicker: React.FC<DealSubjectPickerProps> = ({
           </button>
         </div>
         <div className="dsp-filters">
+          <FilterSelect
+            label="Sekce"
+            value={sectionFilter}
+            options={sectionOptions}
+            optionLabel={(value) => linkableNamespaceLabel(value as LinkableNamespace)}
+            className="dsp-filter-section"
+            onChange={setSectionFilter}
+          />
           <FilterCombo label="Obor" value={oborFilter} options={oborOptions} onChange={setOborFilter} />
           <FilterCombo
             label="Zaměření"
@@ -497,7 +521,7 @@ const DealSubjectPicker: React.FC<DealSubjectPickerProps> = ({
               const statusMeta = getApprovalStatusMeta(option.status);
               return (
                 <button
-                  key={option.id}
+                  key={option.key}
                   ref={(el) => {
                     rowRefs.current[index] = el;
                   }}
@@ -506,7 +530,7 @@ const DealSubjectPicker: React.FC<DealSubjectPickerProps> = ({
                   aria-selected={index === activeIndex}
                   className={`dsp-option ${index === activeIndex ? "is-active" : ""}`}
                   onMouseEnter={() => highlight(index)}
-                  onClick={() => onSelect(option.id)}
+                  onClick={() => onSelect(option)}
                 >
                   <span
                     className="dsp-status-dot"
@@ -518,6 +542,12 @@ const DealSubjectPicker: React.FC<DealSubjectPickerProps> = ({
                     <span className="dsp-option-title">
                       <span className="dsp-option-code">{option.entityCode}</span>
                       <span className="dsp-option-name">{option.name || "—"}</span>
+                      <span
+                        className={`dsp-option-section is-${option.namespace}`}
+                        title={`Sekce ${option.namespaceLabel}`}
+                      >
+                        {option.namespaceLabel}
+                      </span>
                     </span>
                     {option.obory.length > 0 || option.kraje.length > 0 ? (
                       <span className="dsp-option-sub">

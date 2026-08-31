@@ -31,10 +31,13 @@ import {
 } from "./section-linking.js";
 import {
   DEAL_TYPES,
+  DEAL_NAMESPACES,
+  dealNamespaceLabel,
   isDealType,
   otherDealTypes,
   entityDisplayName,
   isValidDealRequest,
+  resolveDealTarget,
 } from "./deal-linking.js";
 import { cascadesArchiveToSubject } from "./archive-cascade.js";
 
@@ -5238,15 +5241,22 @@ app.post('/api/section-link/detach', authenticateToken, async (req, res) => {
 });
 
 // =============================================================================
-// DEAL LINKING — connect the client / partner / tiper sides of one commission
-// within a single section (Veřejné / Growth Club / Neveřejné).
+// DEAL LINKING — connect the client / partner / tiper sides of one commission.
+// The three sides may each live in a different section (Veřejné / Growth Club /
+// Neveřejné), so a deal is resolved across all of them.
 // =============================================================================
 
-const findDealMember = async (type, namespace, dealId) => {
+// The one commission of `type` belonging to this deal, wherever it lives.
+// Returns { row, namespace } so callers know which section to write back to.
+const findDealMember = async (type, dealId) => {
   if (!dealId) return null;
-  const table = resolveTable('commission', type, namespace);
-  if (!table) return null;
-  return (await db.getByField(table, 'deal_id', dealId)) || null;
+  for (const ns of DEAL_NAMESPACES) {
+    const table = resolveTable('commission', type, ns);
+    if (!table) continue;
+    const row = await db.getByField(table, 'deal_id', dealId);
+    if (row) return { row, namespace: ns };
+  }
+  return null;
 };
 
 const buildDealSlot = async (type, namespace, commissionRow) => {
@@ -5255,6 +5265,8 @@ const buildDealSlot = async (type, namespace, commissionRow) => {
   const entity = entityTable ? await db.getById(entityTable, Number(commissionRow.entity_id)) : null;
   return {
     type,
+    namespace,
+    namespaceLabel: dealNamespaceLabel(namespace),
     commissionInternalId: commissionRow.id,
     commissionId: commissionRow.commission_id,
     status: commissionRow.status,
@@ -5268,32 +5280,36 @@ const buildDealStatus = async (namespace, sourceType, sourceRow) => {
   const dealId = sourceRow.deal_id || null;
   const slots = {};
   for (const type of DEAL_TYPES) {
-    const row = type === sourceType ? sourceRow : await findDealMember(type, namespace, dealId);
-    slots[type] = await buildDealSlot(type, namespace, row);
+    const member = type === sourceType
+      ? { row: sourceRow, namespace }
+      : await findDealMember(type, dealId);
+    slots[type] = member ? await buildDealSlot(type, member.namespace, member.row) : null;
   }
   return { dealId, slots };
 };
 
-const countDealMembers = async (namespace, dealId) => {
+// How many sides (of the three types) currently share this dealId, across all
+// sections.
+const countDealMembers = async (dealId) => {
   if (!dealId) return 0;
   let count = 0;
   for (const type of DEAL_TYPES) {
-    if (await findDealMember(type, namespace, dealId)) count += 1;
+    if (await findDealMember(type, dealId)) count += 1;
   }
   return count;
 };
 
 // Propagate core-field edits from a just-updated commission to the other sides
-// of its deal (same section, other subject types).
+// of its deal (other subject types, in whichever section they live in).
 const propagateDealFieldSync = async (namespace, sourceType, updatedRow, incomingPayload) => {
   try {
     if (!updatedRow?.deal_id) return;
     for (const targetType of otherDealTypes(sourceType)) {
-      const member = await findDealMember(targetType, namespace, updatedRow.deal_id);
+      const member = await findDealMember(targetType, updatedRow.deal_id);
       if (!member) continue;
       const coreUpdates = pickCoreFields('commission', targetType, incomingPayload || {});
       if (Object.keys(coreUpdates).length === 0) continue;
-      await db.update(resolveTable('commission', targetType, namespace), member.id, coreUpdates);
+      await db.update(resolveTable('commission', targetType, member.namespace), member.row.id, coreUpdates);
     }
   } catch (error) {
     console.error('Error propagating deal sync:', error);
@@ -5317,19 +5333,23 @@ app.get('/api/deal-link/status', authenticateToken, async (req, res) => {
 
 app.post('/api/deal-link/attach', authenticateToken, async (req, res) => {
   try {
-    const { namespace, type, id, targetType, targetEntityId } = req.body || {};
-    if (!isValidDealRequest({ namespace, type, id }) || !isDealType(targetType) || targetType === type) {
+    const { namespace, type, id, targetEntityId } = req.body || {};
+    const target = resolveDealTarget(req.body || {});
+    if (!isValidDealRequest({ namespace, type, id }) || !target) {
       return res.status(400).json({ error: 'Invalid deal-link request' });
     }
     if (targetEntityId === undefined || targetEntityId === null || targetEntityId === '') {
       return res.status(400).json({ error: 'targetEntityId is required' });
     }
+    const { targetType, targetNamespace } = target;
     const actorUserId = getRequestActorUserId(req);
     const sourceTable = resolveTable('commission', type, namespace);
     const source = await db.getById(sourceTable, Number(id));
     if (!source) return res.status(404).json({ error: 'Not found' });
 
-    const targetEntity = await db.getById(resolveTable('entity', targetType, namespace), Number(targetEntityId));
+    // The counterparty subject lives in its own section, which need not be the
+    // source's — that's what makes cross-section deals possible.
+    const targetEntity = await db.getById(resolveTable('entity', targetType, targetNamespace), Number(targetEntityId));
     if (!targetEntity) return res.status(400).json({ error: 'Target subject not found' });
 
     const dealId = source.deal_id || crypto.randomUUID();
@@ -5339,18 +5359,20 @@ app.post('/api/deal-link/attach', authenticateToken, async (req, res) => {
     }
 
     // "Always create a new mirror commission" — if this deal already has a
-    // commission of the target type, delete it first (replacing the side).
-    const existing = await findDealMember(targetType, namespace, dealId);
-    if (existing) await deleteCommissionCounterpart(targetType, namespace, existing.id);
+    // commission of the target type (in any section), delete it first
+    // (replacing the side).
+    const existing = await findDealMember(targetType, dealId);
+    if (existing) await deleteCommissionCounterpart(targetType, existing.namespace, existing.row.id);
 
-    // The mirror starts in the same approval state as the commission it was
-    // created from. Without this it would default to "pending" and land in the
-    // counterparty's "Ke schválení" tab, so linking an active commission looked
-    // like it had added nothing at all to the other side's Zakázky grid.
-    const created = await createCommissionCounterpart(targetType, namespace, targetEntity.id, source, actorUserId, {
+    // The mirror is created under the target subject, so it lands in the target
+    // subject's section. It starts in the same approval state as the commission
+    // it was created from — without this it would default to "pending" and land
+    // in the counterparty's "Ke schválení" tab, so linking an active commission
+    // looked like it had added nothing at all to the other side's Zakázky grid.
+    const created = await createCommissionCounterpart(targetType, targetNamespace, targetEntity.id, source, actorUserId, {
       status: source.status || 'accepted',
     });
-    await db.setDealId(resolveTable('commission', targetType, namespace), created.id, dealId);
+    await db.setDealId(resolveTable('commission', targetType, targetNamespace), created.id, dealId);
 
     const refreshedSource = await db.getById(sourceTable, source.id);
     res.status(201).json(await buildDealStatus(namespace, type, refreshedSource));
@@ -5372,14 +5394,16 @@ app.post('/api/deal-link/detach', authenticateToken, async (req, res) => {
 
     const dealId = source.deal_id;
     if (dealId) {
-      const member = await findDealMember(targetType, namespace, dealId);
-      if (member) await deleteCommissionCounterpart(targetType, namespace, member.id);
+      // The side being dropped is found by type alone — its section is whatever
+      // it was attached from.
+      const member = await findDealMember(targetType, dealId);
+      if (member) await deleteCommissionCounterpart(targetType, member.namespace, member.row.id);
 
       // If the deal has shrunk to a single side, drop the grouping entirely.
-      if ((await countDealMembers(namespace, dealId)) < 2) {
+      if ((await countDealMembers(dealId)) < 2) {
         for (const t of DEAL_TYPES) {
-          const remaining = await findDealMember(t, namespace, dealId);
-          if (remaining) await db.setDealId(resolveTable('commission', t, namespace), remaining.id, null);
+          const remaining = await findDealMember(t, dealId);
+          if (remaining) await db.setDealId(resolveTable('commission', t, remaining.namespace), remaining.row.id, null);
         }
         source.deal_id = null;
       }

@@ -17,14 +17,20 @@
  * independent per side. The mirror is created in the same approval state as its
  * source (so linking an active commission puts an active one on the other
  * side's Zakázky grid) but the two states are independent from then on.
- * Linking never crosses sections — a deal_id is only ever matched within the
- * same namespace.
+ *
+ * A deal is NOT confined to one section. Each of its three sides may live in a
+ * different namespace — a Growth Club client can be joined to a Veřejné partner
+ * and a Neveřejné tipař — so a `deal_id` has to be matched across every
+ * namespace, and the mirror commission is created in the *target subject's*
+ * section, not the source's. The one-per-subject-type rule still holds: a deal
+ * has at most one client, one partner and one tipař, wherever they live.
  */
 
 import {
   COMMISSION_TABLES,
   ENTITY_TABLES,
   COMMISSION_CORE_FIELDS,
+  LINKABLE_NAMESPACES,
   isLinkableNamespace,
 } from "./section-linking.js";
 
@@ -66,3 +72,28 @@ export const isValidDealRequest = ({ namespace, type, id }) =>
   id !== undefined &&
   id !== null &&
   id !== "";
+
+// Every section a deal side may live in. A deal is looked up across all of them,
+// so the search order here is also the order slots resolve in when (through bad
+// data) two sections somehow hold the same type for one deal.
+export const DEAL_NAMESPACES = LINKABLE_NAMESPACES;
+
+export const DEAL_NAMESPACE_LABELS = {
+  public: "Veřejné",
+  growth: "Growth Club",
+  projects: "Neveřejné",
+};
+
+export const dealNamespaceLabel = (namespace) => DEAL_NAMESPACE_LABELS[namespace] ?? namespace;
+
+// The counterparty side of an attach/detach: which subject type, and which
+// section it lives in. `targetNamespace` is optional for backwards compatibility
+// — an older client that omits it means "the same section as the source".
+export const resolveDealTarget = ({ type, namespace, targetType, targetNamespace }) => {
+  // A deal holds at most one side per subject type, and the source commission
+  // already occupies its own type's slot — in any section.
+  if (!isDealType(targetType) || targetType === type) return null;
+  const resolvedNamespace = targetNamespace ?? namespace;
+  if (!isLinkableNamespace(resolvedNamespace)) return null;
+  return { targetType, targetNamespace: resolvedNamespace };
+};

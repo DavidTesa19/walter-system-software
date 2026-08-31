@@ -4,7 +4,7 @@ import {
   DEAL_TYPE_LABELS,
   attachDeal,
   detachDeal,
-  fetchSubjectOptions,
+  fetchSubjectOptionsAcrossSections,
   getDealStatus,
   type DealStatus,
   type DealSubjectOption,
@@ -43,7 +43,8 @@ export const useDealLink = ({
 
   const otherTypes = useMemo(() => DEAL_TYPES.filter((type) => type !== ownType), [ownType]);
 
-  // Load the selectable subjects for the two counterparty types.
+  // Load the selectable subjects for the two counterparty types, from every
+  // section — a side of a deal can be picked out of any of the three.
   useEffect(() => {
     if (!linkableNamespace) {
       setOptionsByType({});
@@ -52,7 +53,7 @@ export const useDealLink = ({
     let cancelled = false;
     Promise.all(
       otherTypes.map((type) =>
-        fetchSubjectOptions(linkableNamespace, type)
+        fetchSubjectOptionsAcrossSections(type)
           .then((options) => [type, options] as const)
           .catch((error) => {
             console.error(`Error loading ${type} subjects for deal link:`, error);
@@ -90,11 +91,18 @@ export const useDealLink = ({
   }, [linkableNamespace, ownType, selectedCommissionId, selectedCommissionDealId]);
 
   const handleAttach = useCallback(
-    async (targetType: DealType, targetEntityId: number) => {
+    async (targetType: DealType, targetNamespace: LinkableNamespace, targetEntityId: number) => {
       if (!linkableNamespace || !selectedCommissionId) return;
       setBusyType(targetType);
       try {
-        const result = await attachDeal(linkableNamespace, ownType, selectedCommissionId, targetType, targetEntityId);
+        const result = await attachDeal(
+          linkableNamespace,
+          ownType,
+          selectedCommissionId,
+          targetType,
+          targetNamespace,
+          targetEntityId
+        );
         setStatus(result);
         if (onChanged) await onChanged();
       } catch (error) {
@@ -137,9 +145,14 @@ export const useDealLink = ({
         linkedCode: slot?.entityCode ?? null,
         linkedName: slot?.name ?? null,
         linkedCommissionId: slot?.commissionId ?? null,
+        // Only worth showing when the side sits in a different section than the
+        // commission being edited — otherwise it's noise on every row.
+        linkedNamespaceLabel:
+          slot && slot.namespace !== linkableNamespace ? slot.namespaceLabel : null,
         options: self ? [] : (optionsByType[type] ?? []),
         busy: busyType === type,
-        onAttach: (entityId: number) => handleAttach(type, entityId),
+        onAttach: (targetNamespace: LinkableNamespace, entityId: number) =>
+          handleAttach(type, targetNamespace, entityId),
         onDetach: () => handleDetach(type),
       };
     });

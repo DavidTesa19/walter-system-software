@@ -23,6 +23,7 @@ import {
   type LocationGeoMap,
 } from "../locationGeo";
 import type { DealSubjectOption } from "../dealLink";
+import type { LinkableNamespace } from "../sectionLink";
 import DealSubjectPicker, { type DealPickerAnchor } from "./DealSubjectPicker";
 import "./EntityCommissionProfilePanel.css";
 
@@ -112,7 +113,8 @@ export interface SectionLinkToggle {
 
 // One of the three sides (Klient / Partner / Tipař) of a commission's deal. The
 // current commission's own type is `self`; the other two can be linked to an
-// existing subject (which spawns a mirror commission) or cleared.
+// existing subject (which spawns a mirror commission) or cleared. The subject
+// may come from any section, so `onAttach` carries the one it was picked from.
 export interface DealSlotView {
   type: 'client' | 'partner' | 'tiper';
   label: string;
@@ -120,9 +122,11 @@ export interface DealSlotView {
   linkedCode: string | null;
   linkedName: string | null;
   linkedCommissionId: string | null;
+  /** Set only when this side lives in a different section than the commission. */
+  linkedNamespaceLabel?: string | null;
   options: DealSubjectOption[];
   busy: boolean;
-  onAttach: (entityId: number) => void;
+  onAttach: (namespace: LinkableNamespace, entityId: number) => void;
   onDetach: () => void;
 }
 
@@ -920,6 +924,11 @@ const DealLinkSlotRow: React.FC<{ slot: DealSlotView }> = ({ slot }) => {
       ) : linked ? (
         <span className="ec-deal-slot-value">
           <span className="ec-deal-slot-name">{linkedText}</span>
+          {slot.linkedNamespaceLabel ? (
+            <span className="ec-deal-slot-section" title={`Sekce ${slot.linkedNamespaceLabel}`}>
+              {slot.linkedNamespaceLabel}
+            </span>
+          ) : null}
           <button
             type="button"
             className="ec-deal-slot-remove"
@@ -948,9 +957,9 @@ const DealLinkSlotRow: React.FC<{ slot: DealSlotView }> = ({ slot }) => {
               anchorEl={addButtonRef.current}
               typeLabel={slot.label.toLowerCase()}
               options={slot.options}
-              onSelect={(entityId) => {
+              onSelect={(option) => {
                 setPickerAnchor(null);
-                slot.onAttach(entityId);
+                slot.onAttach(option.namespace, option.id);
               }}
               onClose={() => setPickerAnchor(null)}
             />
@@ -966,7 +975,8 @@ const DealLinkSection: React.FC<{ config: DealLinkConfig }> = ({ config }) => (
     <div className="ec-deal-link-header">
       <h4 className="ec-linked-commissions-title">{config.title ?? 'Propojení zakázky'}</h4>
       <p className="ec-linked-commissions-subtitle">
-        Klient a Partner tvoří spojenou zakázku, Tipař je nepovinný.
+        Klient a Partner tvoří spojenou zakázku, Tipař je nepovinný. Každou stranu
+        lze vybrat z kterékoli sekce.
       </p>
     </div>
     <div className="ec-deal-link-slots">

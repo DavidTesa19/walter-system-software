@@ -1,14 +1,18 @@
 import { apiGet, apiPost } from "../utils/api";
-import type { LinkableNamespace } from "./sectionLink";
+import { linkableNamespaceLabel, type LinkableNamespace } from "./sectionLink";
 import { formatMultiValue, parseMultiValue, parseSpecializationMap } from "./multiValue";
 
 // Deal linking connects the two (client + partner) or three (+ tiper) SIDES of a
-// single commission within one section. Picking a counterparty subject creates a
-// fresh mirror commission under it, joined to the same deal. See server/deal-linking.js.
+// single commission. Picking a counterparty subject creates a fresh mirror
+// commission under it, joined to the same deal. The counterparty may sit in any
+// section — a Growth Club client can be joined to a Veřejné partner — so every
+// side carries the namespace it lives in. See server/deal-linking.js.
 
 export type DealType = "client" | "partner" | "tiper";
 
 export const DEAL_TYPES: DealType[] = ["client", "partner", "tiper"];
+
+export const DEAL_NAMESPACES: LinkableNamespace[] = ["public", "growth", "projects"];
 
 export const DEAL_TYPE_LABELS: Record<DealType, string> = {
   client: "Klient",
@@ -18,6 +22,9 @@ export const DEAL_TYPE_LABELS: Record<DealType, string> = {
 
 export interface DealSlot {
   type: DealType;
+  /** The section this side's commission lives in. */
+  namespace: LinkableNamespace;
+  namespaceLabel: string;
   commissionInternalId: number;
   commissionId: string;
   status: string;
@@ -36,6 +43,11 @@ export interface DealStatus {
 // the hover info card. Multi-value columns are pre-parsed into value lists.
 export interface DealSubjectOption {
   id: number;
+  /** Internal ids repeat across sections, so lists key on `${namespace}:${id}`. */
+  key: string;
+  /** The section this subject lives in. */
+  namespace: LinkableNamespace;
+  namespaceLabel: string;
   entityCode: string;
   label: string;
   /** Display name: company first, then person name (same source as `label`). */
@@ -78,7 +90,10 @@ const str = (value: unknown): string => String(value ?? "").trim();
 // client-side names in others, and a missing value can be "" as well as null.
 const pick = (...values: unknown[]): unknown => values.find((value) => str(value) !== "");
 
-const buildSubjectOption = (row: Record<string, unknown>): DealSubjectOption => {
+const buildSubjectOption = (
+  row: Record<string, unknown>,
+  namespace: LinkableNamespace
+): DealSubjectOption => {
   // Společnost is a multi-value column — format it so a JSON array string never
   // leaks into the label.
   const company = formatMultiValue(pick(row.company_name, row.company));
@@ -110,6 +125,9 @@ const buildSubjectOption = (row: Record<string, unknown>): DealSubjectOption => 
 
   return {
     id: Number(row.id),
+    key: `${namespace}:${row.id}`,
+    namespace,
+    namespaceLabel: linkableNamespaceLabel(namespace),
     entityCode,
     label: name ? `${entityCode} — ${name}` : entityCode,
     name,
@@ -144,6 +162,7 @@ export const attachDeal = (
   type: DealType,
   commissionId: number,
   targetType: DealType,
+  targetNamespace: LinkableNamespace,
   targetEntityId: number
 ): Promise<DealStatus> =>
   apiPost<DealStatus>("/api/deal-link/attach", {
@@ -151,6 +170,7 @@ export const attachDeal = (
     type,
     id: commissionId,
     targetType,
+    targetNamespace,
     targetEntityId,
   });
 
@@ -167,8 +187,8 @@ export const detachDeal = (
     targetType,
   });
 
-// Load the selectable subjects of a given type in a section, for the counterparty
-// picker. Archived subjects are excluded.
+// Load the selectable subjects of a given type in one section, for the
+// counterparty picker. Archived subjects are excluded.
 export const fetchSubjectOptions = async (
   namespace: LinkableNamespace,
   type: DealType
@@ -176,6 +196,23 @@ export const fetchSubjectOptions = async (
   const rows = await apiGet<Array<Record<string, unknown>>>(entityApiBase(type, namespace));
   return (rows || [])
     .filter((row) => row.status !== "archived")
-    .map(buildSubjectOption)
+    .map((row) => buildSubjectOption(row, namespace))
     .sort((a, b) => a.entityCode.localeCompare(b.entityCode));
+};
+
+// Every selectable subject of a type, across all three sections — a deal side
+// may be picked from any of them. A section that fails to load contributes
+// nothing rather than sinking the whole picker.
+export const fetchSubjectOptionsAcrossSections = async (
+  type: DealType
+): Promise<DealSubjectOption[]> => {
+  const perNamespace = await Promise.all(
+    DEAL_NAMESPACES.map((namespace) =>
+      fetchSubjectOptions(namespace, type).catch((error) => {
+        console.error(`Error loading ${type} subjects from ${namespace}:`, error);
+        return [] as DealSubjectOption[];
+      })
+    )
+  );
+  return perNamespace.flat().sort((a, b) => a.entityCode.localeCompare(b.entityCode));
 };
