@@ -34,6 +34,16 @@ export const SUBJECT_TYPE_TO_DATIVE_PLURAL: Record<SubjectType, string> = {
 export const subjectEntityApiBase = (type: SubjectType, systemNamespace?: string): string =>
   systemNamespace ? `/api/${systemNamespace}/${type}-entities` : `/api/${type}-entities`;
 
+// A cross-type copy is the same subject acting in a different role, and the
+// obor it works in as a partner is rarely the obor it is a client or a tipař
+// for. Both Obor and Zaměření are therefore left empty on every copy for the
+// user to fill in, while the rest of the profile carries over.
+const withoutFieldValues = (payload: Record<string, unknown>): Record<string, unknown> => ({
+  ...payload,
+  field: null,
+  field_specialization: null,
+});
+
 export interface CrossTypeCreateArgs {
   targets: SubjectType[];
   systemNamespace?: string;
@@ -55,14 +65,15 @@ export const createSubjectInOtherTypes = async ({
   commissionPayload,
 }: CrossTypeCreateArgs): Promise<SubjectType[]> => {
   const failed: SubjectType[] = [];
+  const copyPayload = withoutFieldValues(entityPayload);
 
   for (const type of targets) {
     const base = subjectEntityApiBase(type, systemNamespace);
     try {
       if (commissionPayload) {
-        await apiPost(`${base}/with-commission`, { entity: entityPayload, commission: commissionPayload });
+        await apiPost(`${base}/with-commission`, { entity: copyPayload, commission: commissionPayload });
       } else {
-        await apiPost(base, entityPayload);
+        await apiPost(base, copyPayload);
       }
     } catch (error) {
       console.error(`Error creating subject as ${type}:`, error);
@@ -80,13 +91,12 @@ export const createSubjectInOtherTypes = async ({
 // -----------------------------------------------------------------------------
 
 // Shape shared by PartnerEntity / ClientEntity / TiperEntity for the fields
-// that carry over into a copy.
+// that carry over into a copy. Obor (`field`) and Zaměření
+// (`field_specialization`) are deliberately absent — see withoutFieldValues.
 export interface CrossTypeEntitySnapshot {
   status: string;
   name?: string | null;
   company?: string | null;
-  field?: string | null;
-  field_specialization?: string | null;
   tier?: string | null;
   mobile?: string | null;
   email?: string | null;
@@ -131,12 +141,10 @@ export const copySubjectToOtherType = async (
 ): Promise<string> => {
   const base = subjectEntityApiBase(target, systemNamespace);
 
-  const entityPayload = {
+  const entityPayload = withoutFieldValues({
     status: entity.status,
     first_name: emptyToNull(entity.name),
     company_name: emptyToNull(entity.company),
-    field: emptyToNull(entity.field),
-    field_specialization: emptyToNull(entity.field_specialization),
     tier: emptyToNull(entity.tier),
     phone: emptyToNull(entity.mobile),
     email: emptyToNull(entity.email),
@@ -146,7 +154,7 @@ export const copySubjectToOtherType = async (
     location_geo: emptyToNull(entity.location_geo),
     info: emptyToNull(entity.info),
     assigned_user_ids: entity.assigned_user_ids ?? [],
-  };
+  });
 
   if (commission) {
     const commissionPayload = {
