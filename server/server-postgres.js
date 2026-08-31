@@ -17,6 +17,7 @@ import {
 } from "./submission-notifications.js";
 import { notifyPublicSubmission } from "./email.js";
 import {
+  getFieldOptionCatalogScope,
   hasDuplicateFieldOptionValue,
   hasFixedFieldOptionValue,
   normalizeFieldOptionScope,
@@ -239,9 +240,12 @@ const optionalAuth = (req, res, next) => {
   }
 };
 
+// Access is checked against the catalog the scope belongs to, not the scope
+// itself: Veřejné and Growth Club share one catalog, so a Growth-only user has
+// to be able to manage it as well.
 const canAccessFieldOptionScope = (user, scope) => {
-  const normalizedScope = normalizeFieldOptionScope(scope);
-  if (!normalizedScope || !user) {
+  const catalogScope = getFieldOptionCatalogScope(scope);
+  if (!catalogScope || !user) {
     return false;
   }
 
@@ -250,9 +254,8 @@ const canAccessFieldOptionScope = (user, scope) => {
     return true;
   }
 
-  if (normalizedScope === 'standard') return accessScope === 'standard';
-  if (normalizedScope === 'growth') return accessScope === 'growth';
-  return accessScope === 'projects';
+  const userCatalogScope = getFieldOptionCatalogScope(accessScope === 'projects' ? 'project' : accessScope);
+  return userCatalogScope === catalogScope;
 };
 
 const requireFieldOptionScopeAccess = (req, res, scope, { write = false } = {}) => {

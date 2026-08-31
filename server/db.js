@@ -1,40 +1,18 @@
 import pkg from 'pg';
 import dotenv from 'dotenv';
+// Scope handling lives in field-options.js so the JSON and Postgres backends
+// cannot drift apart on which sections share a catalog of obor options.
+import {
+  getFieldOptionCatalogScope,
+  getFieldOptionReplacementTables,
+  getFieldSpecializationReplacementTables,
+  normalizeFieldOptionScope,
+  normalizeFieldOptionValue,
+  REMOVED_FIELD_OPTION_LABEL,
+} from './field-options.js';
 
 dotenv.config();
 const { Pool } = pkg;
-
-const FIELD_OPTION_SCOPES = new Set(['standard', 'project', 'growth']);
-const REMOVED_FIELD_OPTION_LABEL = 'Odstraněno';
-const FIELD_OPTION_REPLACEMENT_TABLES = {
-  standard: [
-    'partners',
-    'clients',
-    'tipers',
-    'partner_entities',
-    'partner_commissions',
-    'client_entities',
-    'client_commissions',
-    'tiper_entities',
-    'tiper_commissions',
-  ],
-  project: [
-    'project_partner_entities',
-    'project_partner_commissions',
-    'project_client_entities',
-    'project_client_commissions',
-    'project_tiper_entities',
-    'project_tiper_commissions',
-  ],
-  growth: [
-    'growth_partner_entities',
-    'growth_partner_commissions',
-    'growth_client_entities',
-    'growth_client_commissions',
-    'growth_tiper_entities',
-    'growth_tiper_commissions',
-  ],
-};
 
 // Database connection configuration
 // Uses PostgreSQL in production (Railway), JSON file in development
@@ -493,6 +471,33 @@ export async function initDatabase() {
     await client.query(`
       CREATE UNIQUE INDEX IF NOT EXISTS idx_field_spec_options_scope_field_value_lower
         ON field_specialization_options (scope, LOWER(field_value), LOWER(value))
+    `);
+
+    // Veřejné and Growth Club used to keep separate catalogs of custom obor and
+    // Zaměření options, so an obor added in one section was missing in the
+    // other. They now share the 'standard' catalog: drop the growth rows the
+    // shared catalog already covers, then move the rest across.
+    await client.query(`
+      DELETE FROM field_options AS growth_option
+       USING field_options AS standard_option
+       WHERE growth_option.scope = 'growth'
+         AND standard_option.scope = 'standard'
+         AND LOWER(growth_option.value) = LOWER(standard_option.value)
+    `);
+    await client.query(`
+      UPDATE field_options SET scope = 'standard' WHERE scope = 'growth'
+    `);
+
+    await client.query(`
+      DELETE FROM field_specialization_options AS growth_option
+       USING field_specialization_options AS standard_option
+       WHERE growth_option.scope = 'growth'
+         AND standard_option.scope = 'standard'
+         AND LOWER(growth_option.field_value) = LOWER(standard_option.field_value)
+         AND LOWER(growth_option.value) = LOWER(standard_option.value)
+    `);
+    await client.query(`
+      UPDATE field_specialization_options SET scope = 'standard' WHERE scope = 'growth'
     `);
 
     // Create calendar events table
@@ -1515,19 +1520,6 @@ async function touchEntityActivityRecords(entityType, entityId) {
   );
 }
 
-const normalizeFieldOptionScope = (scope) => (
-  FIELD_OPTION_SCOPES.has(scope) ? scope : null
-);
-
-const normalizeFieldOptionValue = (value) => {
-  if (typeof value !== 'string') {
-    return null;
-  }
-
-  const trimmed = value.trim();
-  return trimmed ? trimmed : null;
-};
-
 async function replaceDeletedFieldOptionReferences(client, scope, value) {
   const normalizedScope = normalizeFieldOptionScope(scope);
   const normalizedValue = normalizeFieldOptionValue(value);
@@ -1535,7 +1527,7 @@ async function replaceDeletedFieldOptionReferences(client, scope, value) {
     return;
   }
 
-  const tableNames = FIELD_OPTION_REPLACEMENT_TABLES[normalizedScope] ?? [];
+  const tableNames = getFieldOptionReplacementTables(normalizedScope);
   for (const tableName of tableNames) {
     await client.query(
       `UPDATE ${tableName}
@@ -1546,14 +1538,6 @@ async function replaceDeletedFieldOptionReferences(client, scope, value) {
     );
   }
 }
-
-// Only the entity tables carry field_specialization (commissions and the
-// legacy partners/clients/tipers tables don't), unlike FIELD_OPTION_REPLACEMENT_TABLES above.
-const FIELD_SPECIALIZATION_ENTITY_TABLES = {
-  standard: ['partner_entities', 'client_entities', 'tiper_entities'],
-  project: ['project_partner_entities', 'project_client_entities', 'project_tiper_entities'],
-  growth: ['growth_partner_entities', 'growth_client_entities', 'growth_tiper_entities'],
-};
 
 // When a specialization option is deleted, drop it from every subject's
 // obor -> specialization map that had it selected (rather than leaving a
@@ -1566,7 +1550,7 @@ async function replaceDeletedFieldSpecializationOptionReferences(client, scope, 
     return;
   }
 
-  const tableNames = FIELD_SPECIALIZATION_ENTITY_TABLES[normalizedScope] ?? [];
+  const tableNames = getFieldSpecializationReplacementTables(normalizedScope);
   for (const tableName of tableNames) {
     await client.query(
       `UPDATE ${tableName}
@@ -1760,8 +1744,8 @@ export const db = {
   async getFieldOptions(scope) {
     if (!USE_POSTGRES) return null;
 
-    const normalizedScope = normalizeFieldOptionScope(scope);
-    if (!normalizedScope) {
+    const catalogScope = getFieldOptionCatalogScope(scope);
+    if (!catalogScope) {
       throw new Error('Invalid field option scope');
     }
 
@@ -1770,7 +1754,7 @@ export const db = {
          FROM field_options
         WHERE scope = $1
         ORDER BY created_at ASC, id ASC`,
-      [normalizedScope]
+      [catalogScope]
     );
     return result.rows;
   },
@@ -1778,9 +1762,9 @@ export const db = {
   async createFieldOption(scope, value) {
     if (!USE_POSTGRES) return null;
 
-    const normalizedScope = normalizeFieldOptionScope(scope);
+    const catalogScope = getFieldOptionCatalogScope(scope);
     const normalizedValue = normalizeFieldOptionValue(value);
-    if (!normalizedScope || !normalizedValue) {
+    if (!catalogScope || !normalizedValue) {
       throw new Error('Invalid field option payload');
     }
 
@@ -1788,7 +1772,7 @@ export const db = {
       `INSERT INTO field_options (scope, value)
        VALUES ($1, $2)
        RETURNING id, scope, value, created_at, updated_at`,
-      [normalizedScope, normalizedValue]
+      [catalogScope, normalizedValue]
     );
 
     return result.rows[0] ?? null;
@@ -1833,8 +1817,8 @@ export const db = {
   async getFieldSpecializationOptions(scope) {
     if (!USE_POSTGRES) return null;
 
-    const normalizedScope = normalizeFieldOptionScope(scope);
-    if (!normalizedScope) {
+    const catalogScope = getFieldOptionCatalogScope(scope);
+    if (!catalogScope) {
       throw new Error('Invalid field option scope');
     }
 
@@ -1843,7 +1827,7 @@ export const db = {
          FROM field_specialization_options
         WHERE scope = $1
         ORDER BY created_at ASC, id ASC`,
-      [normalizedScope]
+      [catalogScope]
     );
     return result.rows;
   },
@@ -1851,10 +1835,10 @@ export const db = {
   async createFieldSpecializationOption(scope, fieldValue, value) {
     if (!USE_POSTGRES) return null;
 
-    const normalizedScope = normalizeFieldOptionScope(scope);
+    const catalogScope = getFieldOptionCatalogScope(scope);
     const normalizedField = normalizeFieldOptionValue(fieldValue);
     const normalizedValue = normalizeFieldOptionValue(value);
-    if (!normalizedScope || !normalizedField || !normalizedValue) {
+    if (!catalogScope || !normalizedField || !normalizedValue) {
       throw new Error('Invalid specialization option payload');
     }
 
@@ -1862,7 +1846,7 @@ export const db = {
       `INSERT INTO field_specialization_options (scope, field_value, value)
        VALUES ($1, $2, $3)
        RETURNING id, scope, field_value, value, created_at, updated_at`,
-      [normalizedScope, normalizedField, normalizedValue]
+      [catalogScope, normalizedField, normalizedValue]
     );
 
     return result.rows[0] ?? null;

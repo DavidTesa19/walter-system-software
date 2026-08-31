@@ -18,7 +18,9 @@ import {
 } from "./submission-notifications.js";
 import { notifyPublicSubmission } from "./email.js";
 import {
+  getFieldOptionCatalogScope,
   getFieldOptionReplacementTables,
+  getFieldSpecializationReplacementTables,
   hasDuplicateFieldOptionValue,
   hasFixedFieldOptionValue,
   normalizeFieldOptionScope,
@@ -1273,6 +1275,38 @@ app.use(
 );
 app.use(express.json());
 
+// Veřejné and Growth Club used to keep separate catalogs of custom obor and
+// Zaměření options, so an obor added in one section was missing in the other.
+// They now share the 'standard' catalog: fold the old per-section rows into it
+// on read, dropping the ones the shared catalog already covers.
+const foldFieldOptionCatalogScopes = (entries, buildKey) => {
+  if (!Array.isArray(entries)) {
+    return [];
+  }
+
+  const seen = new Set();
+  const folded = [];
+  for (const entry of entries) {
+    const catalogScope = getFieldOptionCatalogScope(entry?.scope);
+    if (!catalogScope) {
+      folded.push(entry);
+      continue;
+    }
+
+    const key = buildKey(catalogScope, entry);
+    if (seen.has(key)) {
+      continue;
+    }
+
+    seen.add(key);
+    folded.push(entry.scope === catalogScope ? entry : { ...entry, scope: catalogScope });
+  }
+
+  return folded;
+};
+
+const comparableFieldOptionValue = (value) => String(value ?? '').trim().toLocaleLowerCase('cs');
+
 function readDb() {
   try {
     const raw = fs.readFileSync(DATA_FILE, "utf8");
@@ -1343,12 +1377,16 @@ function readDb() {
     if (!Array.isArray(obj.growth_tiper_commissions)) {
       obj.growth_tiper_commissions = [];
     }
-    if (!Array.isArray(obj.field_options)) {
-      obj.field_options = [];
-    }
-    if (!Array.isArray(obj.field_specialization_options)) {
-      obj.field_specialization_options = [];
-    }
+    obj.field_options = foldFieldOptionCatalogScopes(
+      obj.field_options,
+      (catalogScope, entry) => `${catalogScope}::${comparableFieldOptionValue(entry?.value)}`
+    );
+    obj.field_specialization_options = foldFieldOptionCatalogScopes(
+      obj.field_specialization_options,
+      (catalogScope, entry) => (
+        `${catalogScope}::${comparableFieldOptionValue(entry?.field_value)}::${comparableFieldOptionValue(entry?.value)}`
+      )
+    );
     if (!Array.isArray(obj.documents)) {
       obj.documents = [];
     }
@@ -1618,9 +1656,12 @@ const getNextFieldSpecializationOptionId = (store) => {
   return store.field_specialization_options.reduce((maxId, item) => Math.max(maxId, Number(item.id) || 0), 0) + 1;
 };
 
+// Access is checked against the catalog the scope belongs to, not the scope
+// itself: Veřejné and Growth Club share one catalog, so a Growth-only user has
+// to be able to manage it as well.
 const canAccessFieldOptionScope = (user, scope) => {
-  const normalizedScope = normalizeFieldOptionScope(scope);
-  if (!normalizedScope || !user) {
+  const catalogScope = getFieldOptionCatalogScope(scope);
+  if (!catalogScope || !user) {
     return false;
   }
 
@@ -1629,9 +1670,8 @@ const canAccessFieldOptionScope = (user, scope) => {
     return true;
   }
 
-  if (normalizedScope === 'standard') return accessScope === 'standard';
-  if (normalizedScope === 'growth') return accessScope === 'growth';
-  return accessScope === 'projects';
+  const userCatalogScope = getFieldOptionCatalogScope(accessScope === 'projects' ? 'project' : accessScope);
+  return userCatalogScope === catalogScope;
 };
 
 const requireFieldOptionScopeAccess = (req, res, scope, { write = false } = {}) => {
@@ -1679,14 +1719,6 @@ const replaceDeletedFieldOptionReferencesInStore = (store, scope, value, actorUs
   }
 };
 
-// Only the entity tables carry field_specialization (commissions and the
-// legacy partners/clients/tipers tables don't), unlike getFieldOptionReplacementTables above.
-const FIELD_SPECIALIZATION_ENTITY_TABLES = {
-  standard: ['partner_entities', 'client_entities', 'tiper_entities'],
-  project: ['project_partner_entities', 'project_client_entities', 'project_tiper_entities'],
-  growth: ['growth_partner_entities', 'growth_client_entities', 'growth_tiper_entities'],
-};
-
 const parseSpecializationMapForCleanup = (raw) => {
   if (typeof raw !== 'string') return {};
   const trimmed = raw.trim();
@@ -1714,7 +1746,7 @@ const replaceDeletedFieldSpecializationOptionReferencesInStore = (store, scope, 
     return;
   }
 
-  for (const tableName of FIELD_SPECIALIZATION_ENTITY_TABLES[normalizedScope] ?? []) {
+  for (const tableName of getFieldSpecializationReplacementTables(normalizedScope)) {
     if (!Array.isArray(store[tableName])) {
       continue;
     }
@@ -2001,11 +2033,12 @@ app.get("/field-options", authenticateToken, (req, res) => {
     return;
   }
 
+  const catalogScope = getFieldOptionCatalogScope(scope);
   const store = readDb();
   ensureFieldOptionsCollection(store);
 
   const options = store.field_options
-    .filter((entry) => entry.scope === scope)
+    .filter((entry) => entry.scope === catalogScope)
     .sort((left, right) => {
       const leftCreatedAt = left.created_at ?? '';
       const rightCreatedAt = right.created_at ?? '';
@@ -2029,10 +2062,11 @@ app.post("/field-options", authenticateToken, (req, res) => {
     return res.status(400).json({ error: 'Field option value is required' });
   }
 
+  const catalogScope = getFieldOptionCatalogScope(scope);
   const store = readDb();
   ensureFieldOptionsCollection(store);
 
-  const existingOptions = store.field_options.filter((entry) => entry.scope === scope);
+  const existingOptions = store.field_options.filter((entry) => entry.scope === catalogScope);
   if (hasFixedFieldOptionValue(scope, value) || hasDuplicateFieldOptionValue(existingOptions, value)) {
     return res.status(409).json({ error: 'Field option already exists' });
   }
@@ -2040,7 +2074,7 @@ app.post("/field-options", authenticateToken, (req, res) => {
   const newFieldOption = createAuditedJsonRecord(
     {
       id: getNextFieldOptionId(store),
-      scope,
+      scope: catalogScope,
       value,
     },
     getRequestActorUserId(req)
@@ -2090,11 +2124,12 @@ app.get("/field-specialization-options", authenticateToken, (req, res) => {
     return;
   }
 
+  const catalogScope = getFieldOptionCatalogScope(scope);
   const store = readDb();
   ensureFieldSpecializationOptionsCollection(store);
 
   const options = store.field_specialization_options
-    .filter((entry) => entry.scope === scope)
+    .filter((entry) => entry.scope === catalogScope)
     .sort((left, right) => {
       const leftCreatedAt = left.created_at ?? '';
       const rightCreatedAt = right.created_at ?? '';
@@ -2123,12 +2158,13 @@ app.post("/field-specialization-options", authenticateToken, (req, res) => {
     return res.status(400).json({ error: 'Field specialization value is required' });
   }
 
+  const catalogScope = getFieldOptionCatalogScope(scope);
   const store = readDb();
   ensureFieldSpecializationOptionsCollection(store);
 
   const comparisonFieldValue = fieldValue.toLocaleLowerCase('cs');
   const existingOptions = store.field_specialization_options.filter(
-    (entry) => entry.scope === scope
+    (entry) => entry.scope === catalogScope
       && String(entry.field_value ?? '').trim().toLocaleLowerCase('cs') === comparisonFieldValue
   );
   if (hasDuplicateFieldOptionValue(existingOptions, value)) {
@@ -2138,7 +2174,7 @@ app.post("/field-specialization-options", authenticateToken, (req, res) => {
   const newFieldSpecializationOption = createAuditedJsonRecord(
     {
       id: getNextFieldSpecializationOptionId(store),
-      scope,
+      scope: catalogScope,
       field_value: fieldValue,
       value,
     },

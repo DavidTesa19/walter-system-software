@@ -71,15 +71,50 @@ const loadStandardFieldOptionValues = () => {
   }
 };
 
+// Only the entity tables carry field_specialization (commissions and the
+// legacy partners/clients/tipers tables don't), unlike FIELD_OPTION_REPLACEMENT_TABLES above.
+const FIELD_SPECIALIZATION_ENTITY_TABLES = {
+  standard: ['partner_entities', 'client_entities', 'tiper_entities'],
+  project: ['project_partner_entities', 'project_client_entities', 'project_tiper_entities'],
+  growth: ['growth_partner_entities', 'growth_client_entities', 'growth_tiper_entities'],
+};
+
 const FIXED_FIELD_OPTION_VALUES_BY_SCOPE = {
   standard: loadStandardFieldOptionValues(),
   project: PROJECT_FIXED_FIELD_OPTION_VALUES,
   growth: loadStandardFieldOptionValues(),
 };
 
+// Veřejné (standard) and Growth Club (growth) share ONE catalog of custom obor
+// and Zaměření options: an obor added in either section has to be offered in
+// the other one too, so both scopes are stored under the 'standard' catalog.
+// Projects keeps a catalog of its own, because its fixed base list of obory is
+// a different list to begin with.
+const FIELD_OPTION_CATALOG_SCOPES = {
+  standard: 'standard',
+  project: 'project',
+  growth: 'standard',
+};
+
 export const normalizeFieldOptionScope = (scope) => (
   VALID_FIELD_OPTION_SCOPES.has(scope) ? scope : null
 );
+
+// The scope a request's options are stored under. Always use this — never the
+// raw request scope — when reading, writing or de-duplicating stored options.
+export const getFieldOptionCatalogScope = (scope) => {
+  const normalizedScope = normalizeFieldOptionScope(scope);
+  return normalizedScope ? FIELD_OPTION_CATALOG_SCOPES[normalizedScope] ?? null : null;
+};
+
+// Every section sharing that catalog, i.e. every section whose subjects can
+// reference one of its options.
+export const getFieldOptionScopesInCatalog = (scope) => {
+  const catalogScope = getFieldOptionCatalogScope(scope);
+  return catalogScope
+    ? [...VALID_FIELD_OPTION_SCOPES].filter((entry) => FIELD_OPTION_CATALOG_SCOPES[entry] === catalogScope)
+    : [];
+};
 
 export const normalizeFieldOptionValue = (value) => {
   if (typeof value !== 'string') {
@@ -118,7 +153,12 @@ export const hasDuplicateFieldOptionValue = (entries, value) => {
   return entries.some((entry) => normalizeComparisonValue(String(entry?.value ?? '')) === comparisonValue);
 };
 
-export const getFieldOptionReplacementTables = (scope) => {
-  const normalizedScope = normalizeFieldOptionScope(scope);
-  return normalizedScope ? [...(FIELD_OPTION_REPLACEMENT_TABLES[normalizedScope] ?? [])] : [];
-};
+// Deleting an option deletes it for every section sharing the catalog, so the
+// dangling references have to be cleaned up in all of their tables.
+export const getFieldOptionReplacementTables = (scope) => (
+  getFieldOptionScopesInCatalog(scope).flatMap((entry) => FIELD_OPTION_REPLACEMENT_TABLES[entry] ?? [])
+);
+
+export const getFieldSpecializationReplacementTables = (scope) => (
+  getFieldOptionScopesInCatalog(scope).flatMap((entry) => FIELD_SPECIALIZATION_ENTITY_TABLES[entry] ?? [])
+);
