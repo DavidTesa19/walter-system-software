@@ -2,11 +2,15 @@ import { apiGet, apiPost } from "../utils/api";
 import { linkableNamespaceLabel, type LinkableNamespace } from "./sectionLink";
 import { formatMultiValue, parseMultiValue, parseSpecializationMap } from "./multiValue";
 
-// Deal linking connects the two (client + partner) or three (+ tiper) SIDES of a
-// single commission. Picking a counterparty subject creates a fresh mirror
-// commission under it, joined to the same deal. The counterparty may sit in any
-// section — a Growth Club client can be joined to a Veřejné partner — so every
-// side carries the namespace it lives in. See server/deal-linking.js.
+// Deal linking connects the participants of a single commission — its clients,
+// its partners and its tipaři. Picking a subject creates a fresh mirror
+// commission under it, joined to the same deal.
+//
+// A deal takes ANY NUMBER of participants of EACH type: two clients splitting
+// one job, three partners fulfilling it together. Each subject joins a deal
+// once. Participants may sit in any section — a Growth Club client can be
+// joined to a Veřejné partner — so every one carries the namespace it lives in.
+// See server/deal-linking.js.
 
 export type DealType = "client" | "partner" | "tiper";
 
@@ -18,6 +22,13 @@ export const DEAL_TYPE_LABELS: Record<DealType, string> = {
   client: "Klient",
   partner: "Partner",
   tiper: "Tipař",
+};
+
+/** Accusative, for "Připojit ___" — the label alone reads as a heading. */
+export const DEAL_TYPE_AS_LABELS: Record<DealType, string> = {
+  client: "klienta",
+  partner: "partnera",
+  tiper: "tipaře",
 };
 
 export interface DealSlot {
@@ -35,8 +46,35 @@ export interface DealSlot {
 
 export interface DealStatus {
   dealId: string | null;
-  slots: Record<DealType, DealSlot | null>;
+  /**
+   * The deal's participants, grouped by type. The commission the panel is open
+   * on always leads its own type's list.
+   */
+  slots: Record<DealType, DealSlot[]>;
 }
+
+/**
+ * Read a status payload into the list-per-type shape.
+ *
+ * A server that predates multi-party deals answers with one slot (or null) per
+ * type instead of a list; normalising here means a client deployed ahead of its
+ * backend still renders the single participant it gets rather than breaking.
+ */
+const normalizeDealStatus = (raw: unknown): DealStatus => {
+  const status = (raw ?? {}) as { dealId?: string | null; slots?: Partial<Record<DealType, unknown>> };
+  const slots = {} as Record<DealType, DealSlot[]>;
+
+  for (const type of DEAL_TYPES) {
+    const value = status.slots?.[type];
+    slots[type] = Array.isArray(value)
+      ? (value as DealSlot[])
+      : value
+        ? [value as DealSlot]
+        : [];
+  }
+
+  return { dealId: status.dealId ?? null, slots };
+};
 
 // A selectable counterparty subject, enriched with the profile fields the
 // picker needs for searching, filtering (Obor / Zaměření / Kraj / Status) and
@@ -150,14 +188,16 @@ const buildSubjectOption = (
   };
 };
 
-export const getDealStatus = (
+export const getDealStatus = async (
   namespace: LinkableNamespace,
   type: DealType,
   commissionId: number
 ): Promise<DealStatus> =>
-  apiGet<DealStatus>(`/api/deal-link/status?namespace=${namespace}&type=${type}&id=${commissionId}`);
+  normalizeDealStatus(
+    await apiGet<unknown>(`/api/deal-link/status?namespace=${namespace}&type=${type}&id=${commissionId}`)
+  );
 
-export const attachDeal = (
+export const attachDeal = async (
   namespace: LinkableNamespace,
   type: DealType,
   commissionId: number,
@@ -165,27 +205,39 @@ export const attachDeal = (
   targetNamespace: LinkableNamespace,
   targetEntityId: number
 ): Promise<DealStatus> =>
-  apiPost<DealStatus>("/api/deal-link/attach", {
-    namespace,
-    type,
-    id: commissionId,
-    targetType,
-    targetNamespace,
-    targetEntityId,
-  });
+  normalizeDealStatus(
+    await apiPost<unknown>("/api/deal-link/attach", {
+      namespace,
+      type,
+      id: commissionId,
+      targetType,
+      targetNamespace,
+      targetEntityId,
+    })
+  );
 
-export const detachDeal = (
+/**
+ * Drop one participant from the deal. A type can hold several of them, so the
+ * one to remove is named by its own commission (id + section), not by type.
+ */
+export const detachDeal = async (
   namespace: LinkableNamespace,
   type: DealType,
   commissionId: number,
-  targetType: DealType
+  targetType: DealType,
+  targetCommissionId: number,
+  targetNamespace: LinkableNamespace
 ): Promise<DealStatus> =>
-  apiPost<DealStatus>("/api/deal-link/detach", {
-    namespace,
-    type,
-    id: commissionId,
-    targetType,
-  });
+  normalizeDealStatus(
+    await apiPost<unknown>("/api/deal-link/detach", {
+      namespace,
+      type,
+      id: commissionId,
+      targetType,
+      targetCommissionId,
+      targetNamespace,
+    })
+  );
 
 // Load the selectable subjects of a given type in one section, for the
 // counterparty picker. Archived subjects are excluded.

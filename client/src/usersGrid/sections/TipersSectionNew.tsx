@@ -155,6 +155,7 @@ type TiperCommissionApi = {
   updated_by_user_id?: number | null;
   field_activity?: FieldActivityMap | null;
   link_id?: string | null;
+  deal_id?: string | null;
 };
 
 // Server field-activity uses DB column names; map them to the grid's field names.
@@ -296,7 +297,8 @@ const normalizeTiperCommission = (commission: TiperCommissionApi): TiperCommissi
   created_by_user_id: commission.created_by_user_id ?? null,
   updated_by_user_id: commission.updated_by_user_id ?? null,
   field_activity: commission.field_activity ?? null,
-  link_id: commission.link_id ?? null
+  link_id: commission.link_id ?? null,
+  deal_id: commission.deal_id ?? null
 });
 
 const getCommissionEntityName = (commission: TiperCommissionApi) =>

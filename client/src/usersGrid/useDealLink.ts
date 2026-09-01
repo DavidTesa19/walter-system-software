@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import {
   DEAL_TYPES,
+  DEAL_TYPE_AS_LABELS,
   DEAL_TYPE_LABELS,
   attachDeal,
   detachDeal,
@@ -11,7 +12,7 @@ import {
   type DealType,
 } from "./dealLink";
 import type { LinkableNamespace } from "./sectionLink";
-import type { DealLinkConfig, DealSlotView } from "./components/EntityCommissionProfilePanel";
+import type { DealLinkConfig, DealMemberView, DealSlotView } from "./components/EntityCommissionProfilePanel";
 
 interface UseDealLinkArgs {
   // The subject type of the section this commission lives in.
@@ -26,9 +27,13 @@ interface UseDealLinkArgs {
 
 /**
  * Wires the "Propojení zakázky" panel: loads the deal status for the selected
- * commission, loads the selectable counterparty subjects, and exposes
- * attach/detach handlers. Returns the DealLinkConfig for the profile panel, or
- * null when there's nothing to link (no commission / non-linkable section).
+ * commission, loads the selectable subjects, and exposes attach/detach
+ * handlers. Returns the DealLinkConfig for the profile panel, or null when
+ * there's nothing to link (no commission / non-linkable section).
+ *
+ * A deal holds any number of participants of each type, so every type — the
+ * commission's own included — offers a picker and lists what is already on the
+ * deal.
  */
 export const useDealLink = ({
   ownType,
@@ -41,10 +46,9 @@ export const useDealLink = ({
   const [busyType, setBusyType] = useState<DealType | null>(null);
   const [optionsByType, setOptionsByType] = useState<Partial<Record<DealType, DealSubjectOption[]>>>({});
 
-  const otherTypes = useMemo(() => DEAL_TYPES.filter((type) => type !== ownType), [ownType]);
-
-  // Load the selectable subjects for the two counterparty types, from every
-  // section — a side of a deal can be picked out of any of the three.
+  // Load the selectable subjects for every type, from every section — a
+  // participant can be picked out of any of the three, and a second client can
+  // be joined to a client's own commission.
   useEffect(() => {
     if (!linkableNamespace) {
       setOptionsByType({});
@@ -52,7 +56,7 @@ export const useDealLink = ({
     }
     let cancelled = false;
     Promise.all(
-      otherTypes.map((type) =>
+      DEAL_TYPES.map((type) =>
         fetchSubjectOptionsAcrossSections(type)
           .then((options) => [type, options] as const)
           .catch((error) => {
@@ -68,7 +72,7 @@ export const useDealLink = ({
     return () => {
       cancelled = true;
     };
-  }, [linkableNamespace, otherTypes]);
+  }, [linkableNamespace]);
 
   // Load the deal status for the selected commission.
   useEffect(() => {
@@ -116,11 +120,22 @@ export const useDealLink = ({
   );
 
   const handleDetach = useCallback(
-    async (targetType: DealType) => {
+    async (
+      targetType: DealType,
+      targetCommissionId: number,
+      targetNamespace: LinkableNamespace
+    ) => {
       if (!linkableNamespace || !selectedCommissionId) return;
       setBusyType(targetType);
       try {
-        const result = await detachDeal(linkableNamespace, ownType, selectedCommissionId, targetType);
+        const result = await detachDeal(
+          linkableNamespace,
+          ownType,
+          selectedCommissionId,
+          targetType,
+          targetCommissionId,
+          targetNamespace
+        );
         setStatus(result);
         if (onChanged) await onChanged();
       } catch (error) {
@@ -135,27 +150,54 @@ export const useDealLink = ({
 
   return useMemo<DealLinkConfig | null>(() => {
     if (!linkableNamespace || !selectedCommissionId) return null;
+
     const slots: DealSlotView[] = DEAL_TYPES.map((type) => {
-      const slot = status?.slots?.[type] ?? null;
-      const self = type === ownType;
+      const isOwnType = type === ownType;
+      const dealSlots = status?.slots?.[type] ?? [];
+
+      const members: DealMemberView[] = dealSlots.map((slot) => {
+        // The commission the panel is open on: it is on the deal by definition
+        // and leaves it by dropping the others, so it carries no remove button.
+        const self = isOwnType
+          && slot.namespace === linkableNamespace
+          && slot.commissionInternalId === selectedCommissionId;
+
+        return {
+          key: `${slot.namespace}:${slot.commissionInternalId}`,
+          code: slot.entityCode,
+          name: slot.name,
+          commissionId: slot.commissionId,
+          // Only worth showing when the participant sits in a different section
+          // than the commission being edited — otherwise it's noise on every row.
+          namespaceLabel: slot.namespace !== linkableNamespace ? slot.namespaceLabel : null,
+          self,
+          onDetach: self
+            ? undefined
+            : () => handleDetach(type, slot.commissionInternalId, slot.namespace),
+        };
+      });
+
+      // A subject joins a deal once, so the ones already on it are not offered
+      // again — including this commission's own subject.
+      const attached = new Set(
+        dealSlots
+          .filter((slot) => slot.entityInternalId !== null)
+          .map((slot) => `${slot.namespace}:${slot.entityInternalId}`)
+      );
+
       return {
         type,
         label: DEAL_TYPE_LABELS[type],
-        self,
-        linkedCode: slot?.entityCode ?? null,
-        linkedName: slot?.name ?? null,
-        linkedCommissionId: slot?.commissionId ?? null,
-        // Only worth showing when the side sits in a different section than the
-        // commission being edited — otherwise it's noise on every row.
-        linkedNamespaceLabel:
-          slot && slot.namespace !== linkableNamespace ? slot.namespaceLabel : null,
-        options: self ? [] : (optionsByType[type] ?? []),
+        addLabel: DEAL_TYPE_AS_LABELS[type],
+        self: isOwnType,
+        members,
+        options: (optionsByType[type] ?? []).filter((option) => !attached.has(option.key)),
         busy: busyType === type,
         onAttach: (targetNamespace: LinkableNamespace, entityId: number) =>
           handleAttach(type, targetNamespace, entityId),
-        onDetach: () => handleDetach(type),
       };
     });
+
     return { slots };
   }, [linkableNamespace, selectedCommissionId, status, ownType, optionsByType, busyType, handleAttach, handleDetach]);
 };

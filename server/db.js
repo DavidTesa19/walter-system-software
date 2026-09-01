@@ -1662,6 +1662,19 @@ export const db = {
     return result.rows[0] || null;
   },
 
+  // Every record with this column value. Used where a value groups a set rather
+  // than identifying one row — a deal_id, say, which any number of commissions
+  // can share.
+  async getAllByField(table, field, value) {
+    if (!USE_POSTGRES) return [];
+
+    const result = await pool.query(
+      `SELECT * FROM ${table} WHERE "${field}" = $1 ORDER BY id`,
+      [value]
+    );
+    return result.rows;
+  },
+
   // Set the section-link pairing id directly, bypassing activity/updated_at
   // bookkeeping since this is internal plumbing, not a user-visible edit.
   async setLinkId(table, id, linkId) {

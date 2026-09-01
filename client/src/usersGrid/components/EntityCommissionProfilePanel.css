@@ -2798,9 +2798,25 @@
 .ec-deal-slot {
   display: grid;
   grid-template-columns: 5.5rem 1fr;
-  align-items: center;
+  align-items: start;
   gap: 0.6rem;
   min-height: 2.1rem;
+}
+
+.ec-deal-slot .ec-deal-slot-label {
+  /* Keeps the role label level with the first participant now that the column
+     beside it can grow to several rows. */
+  padding-top: 0.35rem;
+}
+
+/* A role can hold several participants, each on its own line, with the "add
+   another" button trailing them. */
+.ec-deal-slot-members {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 0.3rem;
+  min-width: 0;
 }
 
 .ec-deal-slot-label {
@@ -2827,7 +2843,7 @@
   color: var(--color-text, #1f2937);
 }
 
-.ec-deal-slot.is-self .ec-deal-slot-name {
+.ec-deal-slot-value.self .ec-deal-slot-name {
   color: var(--color-accent-hover, #0f766e);
 }
 
@@ -2882,7 +2898,7 @@
 }
 
 .ec-deal-slot-add {
-  justify-self: start;
+  align-self: flex-start;
   padding: 0.28rem 0.6rem;
   border: 1px dashed var(--color-border-strong, #cbd5e1);
   border-radius: 0.5rem;

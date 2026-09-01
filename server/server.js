@@ -43,9 +43,9 @@ import {
   DEAL_NAMESPACES,
   dealNamespaceLabel,
   isDealType,
-  otherDealTypes,
   entityDisplayName,
   isValidDealRequest,
+  MIN_DEAL_MEMBERS,
   resolveDealTarget,
 } from "./deal-linking.js";
 
@@ -5273,21 +5273,28 @@ app.post('/api/section-link/detach', authenticateToken, (req, res) => {
 });
 
 // =============================================================================
-// DEAL LINKING — connect the client / partner / tiper sides of one commission.
-// The three sides may each live in a different section (Veřejné / Growth Club /
-// Neveřejné), so a deal is resolved across all of them.
+// DEAL LINKING — connect the clients / partners / tipaři of one commission.
+// A deal holds any number of participants of each type, and each of them may
+// live in a different section (Veřejné / Growth Club / Neveřejné), so a deal is
+// resolved across all of them.
 // =============================================================================
 
-// The one commission of `type` belonging to this deal, wherever it lives.
-// Returns { row, namespace } so callers know which section to write back to.
-const findDealMemberRow = (db, type, dealId) => {
-  if (!dealId) return null;
+// Every commission of `type` belonging to this deal, wherever it lives. Each
+// entry carries the namespace so callers know which section to write back to.
+const findDealMemberRows = (db, type, dealId) => {
+  if (!dealId) return [];
+  const members = [];
   for (const ns of DEAL_NAMESPACES) {
-    const row = getSectionLinkRows(db, 'commission', type, ns).find((r) => r.deal_id === dealId);
-    if (row) return { row, namespace: ns };
+    for (const row of getSectionLinkRows(db, 'commission', type, ns)) {
+      if (row.deal_id === dealId) members.push({ row, namespace: ns });
+    }
   }
-  return null;
+  return members;
 };
+
+// Is this member the very row the request is acting on?
+const isSameCommission = (member, namespace, row) =>
+  member.namespace === namespace && Number(member.row.id) === Number(row.id);
 
 const buildDealSlot = (db, type, namespace, commissionRow) => {
   if (!commissionRow) return null;
@@ -5306,37 +5313,45 @@ const buildDealSlot = (db, type, namespace, commissionRow) => {
   };
 };
 
+// Each type's participants, as a list. The commission the panel is open on
+// always leads its own type's list, even before the deal has an id of its own.
 const buildDealStatus = (db, namespace, sourceType, sourceRow) => {
   const dealId = sourceRow.deal_id || null;
   const slots = {};
   for (const type of DEAL_TYPES) {
-    const member = type === sourceType
-      ? { row: sourceRow, namespace }
-      : findDealMemberRow(db, type, dealId);
-    slots[type] = member ? buildDealSlot(db, type, member.namespace, member.row) : null;
+    let members = findDealMemberRows(db, type, dealId);
+    if (type === sourceType) {
+      members = [
+        { row: sourceRow, namespace },
+        ...members.filter((member) => !isSameCommission(member, namespace, sourceRow)),
+      ];
+    }
+    slots[type] = members.map((member) => buildDealSlot(db, type, member.namespace, member.row));
   }
   return { dealId, slots };
 };
 
-// How many sides (of the three types) currently share this dealId, across all
+// How many commissions currently share this dealId, of any type, across all
 // sections.
 const countDealMembers = (db, dealId) => {
   if (!dealId) return 0;
-  return DEAL_TYPES.reduce((count, type) => count + (findDealMemberRow(db, type, dealId) ? 1 : 0), 0);
+  return DEAL_TYPES.reduce((count, type) => count + findDealMemberRows(db, type, dealId).length, 0);
 };
 
-// Propagate core-field edits from a just-updated commission to the other sides
-// of its deal (other subject types, in whichever section they live in).
-// Ids/status/assignment stay independent per side, exactly like the
-// cross-section link sync.
+// Propagate core-field edits from a just-updated commission to every other
+// participant of its deal, in whichever section each of them lives. Ids/status/
+// assignment stay independent per side, exactly like the cross-section link
+// sync. A deal can hold several participants of the source's own type, so that
+// type is walked too — skipping only the row the edit came from.
 const propagateDealFieldSync = (db, namespace, sourceType, updatedRow, incomingPayload) => {
   if (!updatedRow?.deal_id) return;
-  for (const targetType of otherDealTypes(sourceType)) {
-    const member = findDealMemberRow(db, targetType, updatedRow.deal_id);
-    if (!member) continue;
+  for (const targetType of DEAL_TYPES) {
     const coreUpdates = pickCoreFields('commission', targetType, incomingPayload || {});
     if (Object.keys(coreUpdates).length === 0) continue;
-    Object.assign(member.row, coreUpdates, { updated_at: new Date().toISOString() });
+    for (const member of findDealMemberRows(db, targetType, updatedRow.deal_id)) {
+      if (targetType === sourceType && isSameCommission(member, namespace, updatedRow)) continue;
+      Object.assign(member.row, coreUpdates, { updated_at: new Date().toISOString() });
+    }
   }
 };
 
@@ -5383,11 +5398,17 @@ app.post('/api/deal-link/attach', authenticateToken, (req, res) => {
     const dealId = source.deal_id || crypto.randomUUID();
     source.deal_id = dealId;
 
-    // "Always create a new mirror commission" — if this deal already has a
-    // commission of the target type (in any section), delete it first
-    // (replacing the side).
-    const existing = findDealMemberRow(db, targetType, dealId);
-    if (existing) deleteCommissionCounterpart(db, targetType, existing.namespace, existing.row.id);
+    // A deal takes any number of participants per type, but each subject joins
+    // it once — picking one that is already on the deal is a no-op rather than
+    // a second identical mirror commission under it. That also covers picking
+    // the source commission's own subject.
+    const alreadyOnDeal = findDealMemberRows(db, targetType, dealId).some(
+      (member) => member.namespace === targetNamespace && Number(member.row.entity_id) === Number(targetEntity.id)
+    );
+    if (alreadyOnDeal) {
+      if (!writeDb(db)) return res.status(500).json({ error: 'Failed to persist' });
+      return res.json(buildDealStatus(db, namespace, type, source));
+    }
 
     // The mirror is created under the target subject, so it lands in the target
     // subject's section. It starts in the same approval state as the commission
@@ -5410,8 +5431,8 @@ app.post('/api/deal-link/attach', authenticateToken, (req, res) => {
 
 app.post('/api/deal-link/detach', authenticateToken, (req, res) => {
   try {
-    const { namespace, type, id, targetType } = req.body || {};
-    if (!isValidDealRequest({ namespace, type, id }) || !isDealType(targetType) || targetType === type) {
+    const { namespace, type, id, targetType, targetCommissionId, targetNamespace } = req.body || {};
+    if (!isValidDealRequest({ namespace, type, id }) || !isDealType(targetType)) {
       return res.status(400).json({ error: 'Invalid deal-link request' });
     }
     const db = readDb();
@@ -5422,16 +5443,28 @@ app.post('/api/deal-link/detach', authenticateToken, (req, res) => {
 
     const dealId = source.deal_id;
     if (dealId) {
-      // The side being dropped is found by type alone — its section is whatever
-      // it was attached from.
-      const member = findDealMemberRow(db, targetType, dealId);
-      if (member) deleteCommissionCounterpart(db, targetType, member.namespace, member.row.id);
+      // A type can hold several participants now, so the one being dropped is
+      // named by its commission id. The commission the panel is open on is
+      // never a candidate — it leaves a deal by dropping the others.
+      const candidates = findDealMemberRows(db, targetType, dealId).filter(
+        (member) => !(targetType === type && isSameCommission(member, namespace, source))
+      );
+      const targeted = targetCommissionId === undefined || targetCommissionId === null || targetCommissionId === ''
+        // No id given: an older client, which only ever had one side per type.
+        ? candidates
+        : candidates.filter((member) => (
+          Number(member.row.id) === Number(targetCommissionId)
+          && (!targetNamespace || member.namespace === targetNamespace)
+        ));
 
-      // If the deal has shrunk to a single side, drop the grouping entirely.
-      if (countDealMembers(db, dealId) < 2) {
+      for (const member of targeted) {
+        deleteCommissionCounterpart(db, targetType, member.namespace, member.row.id);
+      }
+
+      // If the deal has shrunk to a single commission, drop the grouping.
+      if (countDealMembers(db, dealId) < MIN_DEAL_MEMBERS) {
         for (const t of DEAL_TYPES) {
-          const remaining = findDealMemberRow(db, t, dealId);
-          if (remaining) remaining.row.deal_id = null;
+          for (const remaining of findDealMemberRows(db, t, dealId)) remaining.row.deal_id = null;
         }
       }
     }

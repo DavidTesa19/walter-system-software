@@ -132,23 +132,36 @@ export interface SectionLinkToggle {
   onChange: (checked: boolean) => void;
 }
 
-// One of the three sides (Klient / Partner / Tipař) of a commission's deal. The
-// current commission's own type is `self`; the other two can be linked to an
-// existing subject (which spawns a mirror commission) or cleared. The subject
-// may come from any section, so `onAttach` carries the one it was picked from.
+// One participant of a commission's deal: a subject of some type, together with
+// the mirror commission that joins it to the deal.
+export interface DealMemberView {
+  /** Stable list key — internal ids repeat across sections. */
+  key: string;
+  code: string | null;
+  name: string | null;
+  commissionId: string | null;
+  /** Set only when this participant lives in a different section than the commission. */
+  namespaceLabel?: string | null;
+  /** The commission the panel is open on. It has no remove button of its own. */
+  self: boolean;
+  onDetach?: () => void;
+}
+
+// One role (Klient / Partner / Tipař) of a commission's deal, holding every
+// participant of that type. `self` marks the type of the section the panel is
+// open in — that role always lists this commission, and can still take further
+// participants beside it. A participant may come from any section, so `onAttach`
+// carries the one it was picked from.
 export interface DealSlotView {
   type: 'client' | 'partner' | 'tiper';
   label: string;
   self: boolean;
-  linkedCode: string | null;
-  linkedName: string | null;
-  linkedCommissionId: string | null;
-  /** Set only when this side lives in a different section than the commission. */
-  linkedNamespaceLabel?: string | null;
+  /** Accusative form of `label`, for the "Připojit ___" button. */
+  addLabel: string;
+  members: DealMemberView[];
   options: DealSubjectOption[];
   busy: boolean;
   onAttach: (namespace: LinkableNamespace, entityId: number) => void;
-  onDetach: () => void;
 }
 
 export interface DealLinkConfig {
@@ -936,11 +949,40 @@ const FieldGroupComponent: React.FC<FieldGroupComponentProps> = ({ group, onSave
 // DEAL LINK SECTION — the three sides (Klient / Partner / Tipař) of a commission
 // =============================================================================
 
+const DealLinkMemberRow: React.FC<{ member: DealMemberView; busy: boolean }> = ({ member, busy }) => {
+  const text = `${member.code ?? ''}${member.name ? ` — ${member.name}` : ''}` || '—';
+
+  return (
+    <span className={`ec-deal-slot-value ${member.self ? 'self' : ''}`}>
+      <span className="ec-deal-slot-name" title={member.commissionId ?? undefined}>{text}</span>
+      {member.self ? <span className="ec-deal-slot-tag">tato zakázka</span> : null}
+      {member.namespaceLabel ? (
+        <span className="ec-deal-slot-section" title={`Sekce ${member.namespaceLabel}`}>
+          {member.namespaceLabel}
+        </span>
+      ) : null}
+      {member.onDetach ? (
+        <button
+          type="button"
+          className="ec-deal-slot-remove"
+          disabled={busy}
+          onClick={member.onDetach}
+          title="Zrušit propojení"
+          aria-label="Zrušit propojení"
+        >
+          ×
+        </button>
+      ) : null}
+    </span>
+  );
+};
+
+// Every participant of one role, plus the button that adds another. A deal can
+// hold several of each, so the add button stays available once the role has
+// members — including on the commission's own role.
 const DealLinkSlotRow: React.FC<{ slot: DealSlotView }> = ({ slot }) => {
   const addButtonRef = useRef<HTMLButtonElement>(null);
   const [pickerAnchor, setPickerAnchor] = useState<DealPickerAnchor | null>(null);
-  const linked = slot.linkedCode != null;
-  const linkedText = `${slot.linkedCode ?? ''}${slot.linkedName ? ` — ${slot.linkedName}` : ''}`;
 
   const openPicker = () => {
     const rect = addButtonRef.current?.getBoundingClientRect();
@@ -949,58 +991,35 @@ const DealLinkSlotRow: React.FC<{ slot: DealSlotView }> = ({ slot }) => {
   };
 
   return (
-    <div className={`ec-deal-slot ${slot.self ? 'is-self' : ''} ${linked ? 'is-linked' : ''}`}>
+    <div className={`ec-deal-slot ${slot.self ? 'is-self' : ''} ${slot.members.length > 0 ? 'is-linked' : ''}`}>
       <span className="ec-deal-slot-label">{slot.label}</span>
-      {slot.self ? (
-        <span className="ec-deal-slot-value self">
-          <span className="ec-deal-slot-name">{linked ? linkedText : '—'}</span>
-          <span className="ec-deal-slot-tag">tato zakázka</span>
-        </span>
-      ) : linked ? (
-        <span className="ec-deal-slot-value">
-          <span className="ec-deal-slot-name">{linkedText}</span>
-          {slot.linkedNamespaceLabel ? (
-            <span className="ec-deal-slot-section" title={`Sekce ${slot.linkedNamespaceLabel}`}>
-              {slot.linkedNamespaceLabel}
-            </span>
-          ) : null}
-          <button
-            type="button"
-            className="ec-deal-slot-remove"
-            disabled={slot.busy}
-            onClick={slot.onDetach}
-            title="Zrušit propojení"
-            aria-label="Zrušit propojení"
-          >
-            ×
-          </button>
-        </span>
-      ) : (
-        <>
-          <button
-            ref={addButtonRef}
-            type="button"
-            className={`ec-deal-slot-add ${pickerAnchor ? 'is-open' : ''}`}
-            disabled={slot.busy}
-            onClick={() => (pickerAnchor ? setPickerAnchor(null) : openPicker())}
-          >
-            + Připojit {slot.label.toLowerCase()}
-          </button>
-          {pickerAnchor ? (
-            <DealSubjectPicker
-              anchor={pickerAnchor}
-              anchorEl={addButtonRef.current}
-              typeLabel={slot.label.toLowerCase()}
-              options={slot.options}
-              onSelect={(option) => {
-                setPickerAnchor(null);
-                slot.onAttach(option.namespace, option.id);
-              }}
-              onClose={() => setPickerAnchor(null)}
-            />
-          ) : null}
-        </>
-      )}
+      <div className="ec-deal-slot-members">
+        {slot.members.map((member) => (
+          <DealLinkMemberRow key={member.key} member={member} busy={slot.busy} />
+        ))}
+        <button
+          ref={addButtonRef}
+          type="button"
+          className={`ec-deal-slot-add ${pickerAnchor ? 'is-open' : ''}`}
+          disabled={slot.busy || slot.options.length === 0}
+          onClick={() => (pickerAnchor ? setPickerAnchor(null) : openPicker())}
+        >
+          + Připojit {slot.addLabel}
+        </button>
+        {pickerAnchor ? (
+          <DealSubjectPicker
+            anchor={pickerAnchor}
+            anchorEl={addButtonRef.current}
+            typeLabel={slot.addLabel}
+            options={slot.options}
+            onSelect={(option) => {
+              setPickerAnchor(null);
+              slot.onAttach(option.namespace, option.id);
+            }}
+            onClose={() => setPickerAnchor(null)}
+          />
+        ) : null}
+      </div>
     </div>
   );
 };
@@ -1010,8 +1029,8 @@ const DealLinkSection: React.FC<{ config: DealLinkConfig }> = ({ config }) => (
     <div className="ec-deal-link-header">
       <h4 className="ec-linked-commissions-title">{config.title ?? 'Propojení zakázky'}</h4>
       <p className="ec-linked-commissions-subtitle">
-        Klient a Partner tvoří spojenou zakázku, Tipař je nepovinný. Každou stranu
-        lze vybrat z kterékoli sekce.
+        Klient a Partner tvoří spojenou zakázku, Tipař je nepovinný. Ke každé roli
+        lze připojit více subjektů a každý z nich vybrat z kterékoli sekce.
       </p>
     </div>
     <div className="ec-deal-link-slots">
