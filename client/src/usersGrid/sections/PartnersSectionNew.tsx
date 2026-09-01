@@ -16,6 +16,7 @@ import EntityCommissionProfilePanel, {
 import SubjectFieldPopover, { type FieldEditorAnchor } from "../components/SubjectFieldPopover";
 import FieldCellRenderer from "../cells/FieldCellRenderer";
 import SpecializationCellRenderer from "../cells/SpecializationCellRenderer";
+import HierarchyCellRenderer from "../cells/HierarchyCellRenderer";
 import StatusCellRenderer from "../cells/StatusCellRenderer";
 import ApprovalStatusCellRenderer from "../cells/ApprovalStatusCellRenderer";
 import { mapViewToStatus } from "../constants";
@@ -40,7 +41,6 @@ import useGridColumnLayout from "../hooks/useGridColumnLayout";
 import useGridRowFocus from "../hooks/useGridRowFocus";
 import useProfileNotes from "../hooks/useProfileNotes";
 import { ApproveRestoreCellRenderer, DeleteArchiveCellRenderer, ArchiveCellRenderer } from "../cells/RowActionCellRenderers";
-import { fieldOptions } from "../fieldOptions";
 import { formatProfileDate } from "../utils/profileUtils";
 import { APPROVAL_STATUS_COLOR_MAP, APPROVAL_STATUS_LABEL_MAP, compareApprovalStatuses } from "../utils/approvalStatus";
 import { buildEntityPatch, buildRowMirror } from "../entitySync";
@@ -56,10 +56,8 @@ import OptionSelectEditor from "../../futureFunctions/cells/OptionSelectEditor";
 import StatusFilterHeader from "../cells/StatusFilterHeader";
 import FieldFilterHeader from "../cells/FieldFilterHeader";
 import { REGION_OPTIONS } from "../regions";
+import { buildCompanyBranches } from "../hierarchy";
 import TierCellRenderer from "../cells/TierCellRenderer";
-import PlaceCellEditor from "../cells/PlaceCellEditor";
-import type { PlaceLocation } from "../googlePlaces";
-import { parseLocationGeo, pruneLocationGeo, serializeLocationGeo } from "../locationGeo";
 import { compareTiers, TIER_COLOR_MAP, TIER_EDITOR_LABEL_MAP, TIER_EDITOR_VALUES, TIER_VALUES } from "../tiers";
 import {
   makeEntityValueGetter,
@@ -70,10 +68,11 @@ import {
   makeSpecializationValueGetter,
   multiValueComparator,
   multiValueFormatter,
-  parseSpecializationMap,
   passesMultiValueFilter,
+  multiValueColumn,
   resolveRowEntityValue,
   resolveRowObor,
+  resolveRowSpecialization,
 } from "../multiValue";
 import {
   copySubjectToOtherType,
@@ -96,8 +95,10 @@ type PartnerEntityApi = {
   company_name?: string | null;
   field?: string | null;
   field_specialization?: string | null;
+  company_structure?: string | null;
   tier?: string | null;
   location_geo?: string | null;
+  region_structure?: string | null;
   region?: string | null;
   location?: string | null;
   info?: string | null;
@@ -138,8 +139,10 @@ type PartnerCommissionApi = {
   entity_last_name?: string | null;
   entity_field?: string | null;
   entity_field_specialization?: string | null;
+  entity_company_structure?: string | null;
   entity_tier?: string | null;
   entity_location_geo?: string | null;
+  entity_region_structure?: string | null;
   entity_region?: string | null;
   entity_location?: string | null;
   entity_info?: string | null;
@@ -165,7 +168,6 @@ const ENTITY_ACTIVITY_KEY_MAP: Record<string, string> = {
 // Static, so the grid does not see a new defaultColDef object on every render.
 const GRID_DEFAULT_COL_DEF = { resizable: true, sortable: true };
 
-const FIELD_OPTIONS_ARRAY = fieldOptions.map((opt) => opt.value);
 const PROJECT_SUBJECT_STATUS_OPTIONS = ["accepted", "archived"];
 const PROJECT_COMMISSION_STATUS_OPTIONS = ["accepted", "pending", "archived"];
 
@@ -175,6 +177,8 @@ type PartnerCreateDraft = {
     company: string;
     field: string;
     field_specialization: string;
+    company_structure: string;
+    region_structure: string;
     tier: string;
     location_geo: string;
     region: string;
@@ -216,6 +220,8 @@ const createDefaultPartnerDraft = (): PartnerCreateDraft => ({
     company: "",
     field: "",
     field_specialization: "",
+    company_structure: "",
+    region_structure: "",
     tier: "",
     location_geo: "",
     region: "",
@@ -249,8 +255,10 @@ const normalizePartnerEntity = (entity: PartnerEntityApi): PartnerEntity => ({
   company: entity.company_name ?? null,
   field: entity.field ?? null,
   field_specialization: entity.field_specialization ?? null,
+  company_structure: entity.company_structure ?? null,
   tier: entity.tier ?? null,
   location_geo: entity.location_geo ?? null,
+  region_structure: entity.region_structure ?? null,
   region: entity.region ?? null,
   location: entity.location ?? null,
   address: null,
@@ -305,7 +313,7 @@ const mapPartnerEntityUpdates = (updates: Record<string, unknown>) => {
     else if (key === "mobile") mapped.phone = value;
     else if (key === "assigned_user_ids") mapped.assigned_user_ids = value;
     else if (key === "status") mapped.status = value;
-    else if (["field", "field_specialization", "tier", "location_geo", "region", "location", "email", "website", "info"].includes(key)) mapped[key] = value;
+    else if (["field", "field_specialization", "company_structure", "region_structure", "tier", "location_geo", "region", "location", "email", "website", "info"].includes(key)) mapped[key] = value;
   }
 
   return mapped;
@@ -323,8 +331,10 @@ const derivePartnerEntityFromCommission = (commission: PartnerCommissionApi): Pa
     company: commission.entity_company_name ?? null,
     field: commission.entity_field ?? null,
     field_specialization: commission.entity_field_specialization ?? null,
+    company_structure: commission.entity_company_structure ?? null,
     tier: commission.entity_tier ?? null,
     location_geo: commission.entity_location_geo ?? null,
+    region_structure: commission.entity_region_structure ?? null,
     region: commission.entity_region ?? null,
     location: commission.entity_location ?? null,
     address: null,
@@ -342,7 +352,31 @@ const derivePartnerEntityFromCommission = (commission: PartnerCommissionApi): Pa
   };
 };
 
-const buildEntityData = (entity: PartnerEntity | null, assignmentOptions: Array<string | { value: string; label: string; description?: string }>, fieldOptionsArray: string[] = FIELD_OPTIONS_ARRAY, oborFieldType: "select" | "field-select" = "field-select"): EntityData | null => {
+// A subject with several companies is shown as one row per company: the same
+// record, the same id and the same profile, but each row carrying only that
+// company's Obor and Zaměření (see hierarchy.ts). The cells, the column filters
+// and the Obor filter panel all read through `row.branch`, so filtering by an
+// obor keeps exactly the companies that have it.
+//
+// ag-grid identifies rows by id, which is no longer unique once a subject is
+// split, so every row also carries a `rowKey`.
+const expandCompanyRows = (rows: PartnerGridRow[]): PartnerGridRow[] =>
+  rows.flatMap((row): PartnerGridRow[] => {
+    const branches = buildCompanyBranches(row.entity);
+    if (branches.length === 0) return [{ ...row, rowKey: String(row.id), branch: undefined, branchIndex: undefined }];
+
+    return branches.map((branch, index) => ({
+      ...row,
+      rowKey: `${row.id}#${index}`,
+      branch,
+      branchIndex: index,
+      company: branch.company ?? "",
+      field: branch.field ?? "",
+      field_specialization: branch.field_specialization ?? "",
+    }));
+  });
+
+const buildEntityData = (entity: PartnerEntity | null, assignmentOptions: Array<string | { value: string; label: string; description?: string }>): EntityData | null => {
   if (!entity) return null;
 
   const groups: FieldGroup[] = [
@@ -351,8 +385,15 @@ const buildEntityData = (entity: PartnerEntity | null, assignmentOptions: Array<
       color: "purple",
       fields: [
         { key: "name", label: "Jméno / Název", value: entity.name, type: "text" },
-        { key: "company", label: "Společnost", value: entity.company, type: "multi-value", multiValueEditor: "text" },
-        { key: "field", label: "Obor", value: entity.field, type: "multi-value", multiValueEditor: oborFieldType === "field-select" ? "field-select" : "select", options: fieldOptionsArray, specializationValues: parseSpecializationMap(entity.field_specialization) },
+        {
+          key: "company_structure",
+          label: "Společnost / Obor",
+          value: entity.company_structure ?? null,
+          type: "hierarchy",
+          hierarchyKind: "company",
+          hierarchySource: entity,
+          placeholder: "Název společnosti",
+        },
         { key: "tier", label: "Úroveň", value: entity.tier, type: "select", options: [...TIER_VALUES] },
         { key: "assigned_user_ids", label: "Přiřazení uživatelé", value: toAssignmentDraftValue(entity.assigned_user_ids), type: "multi-select", options: assignmentOptions }
       ]
@@ -361,17 +402,24 @@ const buildEntityData = (entity: PartnerEntity | null, assignmentOptions: Array<
       title: "Kontakty",
       color: "green",
       fields: [
-        { key: "mobile", label: "Telefon", value: entity.mobile, type: "text" },
-        { key: "email", label: "E-mail", value: entity.email, type: "text" },
-        { key: "website", label: "Web", value: entity.website, type: "text" }
+        { key: "mobile", label: "Telefon", value: entity.mobile, type: "multi-value", multiValueEditor: "text", placeholder: "Telefonní číslo" },
+        { key: "email", label: "E-mail", value: entity.email, type: "multi-value", multiValueEditor: "text", placeholder: "E-mailová adresa" },
+        { key: "website", label: "Web", value: entity.website, type: "multi-value", multiValueEditor: "text", placeholder: "Webová adresa" }
       ]
     },
     {
       title: "Další informace",
       color: "gray",
       fields: [
-        { key: "region", label: "Kraj", value: entity.region, type: "multi-value", multiValueEditor: "select", options: REGION_OPTIONS },
-        { key: "location", label: "Lokalita", value: entity.location, type: "multi-value", multiValueEditor: "place", placeValues: parseLocationGeo(entity.location_geo), placeholder: "Zadejte adresu" },
+        {
+          key: "region_structure",
+          label: "Kraj / Lokalita",
+          value: entity.region_structure ?? null,
+          type: "hierarchy",
+          hierarchyKind: "region",
+          hierarchySource: entity,
+          hierarchyParentOptions: REGION_OPTIONS,
+        },
         { key: "info", label: "Info", value: entity.info, type: "textarea", isMultiline: true }
       ]
     }
@@ -441,7 +489,7 @@ const buildLinkedCommissionItems = (commissions: PartnerCommission[], assignedUs
   }))
   .sort((left, right) => left.commission_id.localeCompare(right.commission_id));
 
-const buildPartnerDraftEntityData = (draft: PartnerCreateDraft, assignmentOptions: Array<string | { value: string; label: string; description?: string }>, fieldOptionsArray: string[] = FIELD_OPTIONS_ARRAY): EntityData => ({
+const buildPartnerDraftEntityData = (draft: PartnerCreateDraft, assignmentOptions: Array<string | { value: string; label: string; description?: string }>): EntityData => ({
   id: 0,
   entity_id: "Nový partner",
   groups: buildEntityData({
@@ -452,6 +500,8 @@ const buildPartnerDraftEntityData = (draft: PartnerCreateDraft, assignmentOption
     company: draft.entity.company,
     field: draft.entity.field,
     field_specialization: draft.entity.field_specialization,
+    company_structure: draft.entity.company_structure,
+    region_structure: draft.entity.region_structure,
     tier: draft.entity.tier,
     location_geo: draft.entity.location_geo,
     region: draft.entity.region,
@@ -465,7 +515,7 @@ const buildPartnerDraftEntityData = (draft: PartnerCreateDraft, assignmentOption
     assigned_user_ids: fromAssignmentDraftValue(draft.entity.assigned_user_ids),
     created_at: undefined,
     updated_at: undefined
-  }, assignmentOptions, fieldOptionsArray, "field-select")!.groups
+  }, assignmentOptions)!.groups
 });
 
 const buildPartnerDraftCommissionData = (draft: PartnerCreateDraft, status: PartnerCommissionApi["status"], assignmentOptions: Array<string | { value: string; label: string; description?: string }>): CommissionData => ({
@@ -527,7 +577,7 @@ const PartnersSectionNew: React.FC<SectionProps> = ({ viewMode, isActive, system
 
   // Obor / Zaměření editor opened from a grid cell. Owned here rather than by
   // the cell renderer so it survives the rowData replacement each save triggers.
-  const [fieldEditor, setFieldEditor] = useState<{ entityId: number; anchor: FieldEditorAnchor } | null>(null);
+  const [fieldEditor, setFieldEditor] = useState<{ entityId: number; anchor: FieldEditorAnchor; kind: "company" | "region" } | null>(null);
 
   const gridRef = useRef<AgGridReact<PartnerGridRow>>(null);
   const {
@@ -697,7 +747,7 @@ const PartnersSectionNew: React.FC<SectionProps> = ({ viewMode, isActive, system
         });
 
         rows.sort((left, right) => left.entity_id.localeCompare(right.entity_id));
-        setGridData(rows);
+        setGridData(expandCompanyRows(rows));
         return;
       }
 
@@ -783,7 +833,7 @@ const PartnersSectionNew: React.FC<SectionProps> = ({ viewMode, isActive, system
 
       rows.sort((left, right) => left.commission_id.localeCompare(right.commission_id));
 
-      setGridData(rows);
+      setGridData(expandCompanyRows(rows));
     } catch (error) {
       console.error("Error fetching partner data:", error);
       if (!silent) {
@@ -823,7 +873,7 @@ const PartnersSectionNew: React.FC<SectionProps> = ({ viewMode, isActive, system
   const selectedEntity = useMemo(() => selectedEntityId === null ? null : entities.find((entity) => entity.id === selectedEntityId) || null, [entities, selectedEntityId]);
   const selectedCommission = useMemo(() => selectedCommissionId === null ? null : commissions.find((commission) => commission.id === selectedCommissionId) || null, [commissions, selectedCommissionId]);
   const linkedCommissions = useMemo(() => selectedEntityId === null ? [] : buildLinkedCommissionItems(commissions.filter((commission) => commission.partner_entity_id === selectedEntityId), assignableUsers), [assignableUsers, commissions, selectedEntityId]);
-  const entityData = useMemo(() => buildEntityData(selectedEntity, assignmentOptions, fieldOptionsArray), [assignmentOptions, fieldOptionsArray, selectedEntity]);
+  const entityData = useMemo(() => buildEntityData(selectedEntity, assignmentOptions), [assignmentOptions, selectedEntity]);
 
   // Subject behind the grid-cell Obor / Zaměření editor, read from live state so
   // the popover shows saved values immediately (and closes if the row is gone).
@@ -832,7 +882,7 @@ const PartnersSectionNew: React.FC<SectionProps> = ({ viewMode, isActive, system
     return entities.find((entity) => entity.id === fieldEditor.entityId) ?? null;
   }, [entities, fieldEditor]);
   const commissionData = useMemo(() => buildCommissionData(selectedCommission, assignmentOptions), [assignmentOptions, selectedCommission]);
-  const draftEntityData = useMemo(() => buildPartnerDraftEntityData(createDraft, assignmentOptions, fieldOptionsArray), [assignmentOptions, createDraft, fieldOptionsArray]);
+  const draftEntityData = useMemo(() => buildPartnerDraftEntityData(createDraft, assignmentOptions), [assignmentOptions, createDraft]);
   const draftCommissionData = useMemo(() => buildPartnerDraftCommissionData(createDraft, status, assignmentOptions), [assignmentOptions, createDraft, status]);
 
   useEffect(() => {
@@ -916,19 +966,34 @@ const PartnersSectionNew: React.FC<SectionProps> = ({ viewMode, isActive, system
     const mirror = buildRowMirror(patch, { mirrorAssignment: sectionKind === "subjects" });
 
     setEntities((prev) => prev.map((entity) => (entity.id === entityId ? { ...entity, ...patch } as PartnerEntity : entity)));
-    setGridData((prev) => prev.map((row) => {
-      if (!row.entity || row.entity.id !== entityId) return row;
-      return { ...row, ...mirror, entity: { ...row.entity, ...patch } as PartnerEntity };
-    }));
+    setGridData((prev) => {
+      const next: typeof prev = [];
+      const rebuilt = new Set<number>();
+
+      for (const row of prev) {
+        if (!row.entity || row.entity.id !== entityId) {
+          next.push(row);
+          continue;
+        }
+
+        // The subject's per-company rows all share one record id; the first of
+        // them stands in for the record and is re-split from the patched
+        // subject, so a company added or removed by this edit shows up at once.
+        if (rebuilt.has(row.id)) continue;
+        rebuilt.add(row.id);
+
+        next.push(...expandCompanyRows([
+          { ...row, ...mirror, entity: { ...row.entity, ...patch } as PartnerEntity },
+        ]));
+      }
+
+      return next;
+    });
   }, [sectionKind]);
 
   // A grid cell can only hand ag-Grid the address string, so the Lokalita cell
   // editor drops the picked place here and onCellValueChanged saves the
   // coordinates in the same request as the address.
-  const pendingPlaceRef = useRef<PlaceLocation | null>(null);
-  const handlePlacePicked = useCallback((place: PlaceLocation) => {
-    pendingPlaceRef.current = place;
-  }, []);
 
   const handleUpdateEntity = useCallback(async (entityId: number, updates: Record<string, unknown>) => {
     const mappedUpdates = mapPartnerEntityUpdates(updates);
@@ -948,7 +1013,13 @@ const PartnersSectionNew: React.FC<SectionProps> = ({ viewMode, isActive, system
   const handleOpenFieldEditor = useCallback((data: PartnerGridRow | undefined, anchor: FieldEditorAnchor) => {
     const entityId = data?.entity?.id ?? data?.partner_entity_id ?? null;
     if (entityId == null) return;
-    setFieldEditor({ entityId, anchor });
+    setFieldEditor({ entityId, anchor, kind: "company" });
+  }, []);
+
+  const handleOpenRegionEditor = useCallback((data: PartnerGridRow | undefined, anchor: FieldEditorAnchor) => {
+    const entityId = data?.entity?.id ?? data?.partner_entity_id ?? null;
+    if (entityId == null) return;
+    setFieldEditor({ entityId, anchor, kind: "region" });
   }, []);
 
   const handleUpdateCommission = useCallback(async (commissionId: number, updates: Record<string, unknown>) => {
@@ -1430,6 +1501,8 @@ const PartnersSectionNew: React.FC<SectionProps> = ({ viewMode, isActive, system
         company_name: emptyToNull(createDraft.entity.company),
         field: emptyToNull(createDraft.entity.field),
         field_specialization: emptyToNull(createDraft.entity.field_specialization),
+        company_structure: emptyToNull(createDraft.entity.company_structure),
+        region_structure: emptyToNull(createDraft.entity.region_structure),
         phone: emptyToNull(createDraft.entity.mobile),
         email: emptyToNull(createDraft.entity.email),
         website: emptyToNull(createDraft.entity.website),
@@ -1512,6 +1585,8 @@ const PartnersSectionNew: React.FC<SectionProps> = ({ viewMode, isActive, system
         company_name: emptyToNull(createDraft.entity.company),
         field: emptyToNull(createDraft.entity.field),
         field_specialization: emptyToNull(createDraft.entity.field_specialization),
+        company_structure: emptyToNull(createDraft.entity.company_structure),
+        region_structure: emptyToNull(createDraft.entity.region_structure),
         phone: emptyToNull(createDraft.entity.mobile),
         email: emptyToNull(createDraft.entity.email),
         website: emptyToNull(createDraft.entity.website),
@@ -1584,6 +1659,8 @@ const PartnersSectionNew: React.FC<SectionProps> = ({ viewMode, isActive, system
         company: selectedEntity.company ?? "",
         field: selectedEntity.field ?? "",
         field_specialization: selectedEntity.field_specialization ?? "",
+        company_structure: selectedEntity.company_structure ?? "",
+        region_structure: selectedEntity.region_structure ?? "",
         tier: selectedEntity.tier ?? "",
         location_geo: selectedEntity.location_geo ?? "",
         region: selectedEntity.region ?? "",
@@ -1763,30 +1840,6 @@ const PartnersSectionNew: React.FC<SectionProps> = ({ viewMode, isActive, system
         return;
       }
 
-      // Lokalita is an entity-only attribute too, and the only column whose edit
-      // can carry more than the cell's own value: an address picked from Google
-      // Maps saves its coordinates in the same request.
-      if (field === "location") {
-        if (row.entity) {
-          const picked = pendingPlaceRef.current;
-          pendingPlaceRef.current = null;
-          const updates: Record<string, unknown> = { location: params.newValue };
-
-          if (picked && picked.address === params.newValue) {
-            const nextGeo = pruneLocationGeo(parseLocationGeo(row.entity.location_geo), [picked.address]);
-            nextGeo[picked.address] = { lat: picked.lat, lng: picked.lng, place_id: picked.placeId };
-            updates.location_geo = serializeLocationGeo(nextGeo);
-          } else {
-            // Typed by hand — whatever coordinates the old address had no
-            // longer describe this one.
-            const nextGeo = pruneLocationGeo(parseLocationGeo(row.entity.location_geo), [String(params.newValue ?? "")]);
-            updates.location_geo = serializeLocationGeo(nextGeo);
-          }
-
-          await handleUpdateEntity(row.entity.id, updates);
-        }
-        return;
-      }
 
       // Kraj is an entity-only attribute — always route to the subject, never a commission.
       if (field === "region") {
@@ -1948,8 +2001,8 @@ const PartnersSectionNew: React.FC<SectionProps> = ({ viewMode, isActive, system
     };
     const activeSubjectCols: ColDef<PartnerGridRow>[] = [
       ...(showApprovalStatusColumn ? [approvalStatusCol] : []),
-      { field: "mobile", headerName: "Telefon", filter: true, editable: true, flex: 1, minWidth: 120 },
-      { field: "email", headerName: "E-mail", filter: true, editable: true, flex: 1.2, minWidth: 170 },
+      { field: "mobile", headerName: "Telefon", filter: true, ...multiValueColumn("mobile"), flex: 1, minWidth: 120 },
+      { field: "email", headerName: "E-mail", filter: true, ...multiValueColumn("email"), flex: 1.2, minWidth: 170 },
       assignedUsersColumn,
       { field: "commission_count", headerName: "Počet zakázek", filter: true, editable: false, flex: 0.9, minWidth: 120 }
     ];
@@ -2015,7 +2068,7 @@ const PartnersSectionNew: React.FC<SectionProps> = ({ viewMode, isActive, system
         headerName: "Zaměření",
         filter: true,
         editable: false,
-        valueGetter: makeSpecializationValueGetter((data) => data?.entity?.field_specialization, "field"),
+        valueGetter: makeSpecializationValueGetter(resolveRowSpecialization, "field"),
         flex: 1,
         minWidth: 120,
         cellRenderer: SpecializationCellRenderer,
@@ -2029,15 +2082,19 @@ const PartnersSectionNew: React.FC<SectionProps> = ({ viewMode, isActive, system
         field: "region",
         headerName: "Kraj",
         filter: true,
-        editable: makeSingleValueEditable("region"),
+        editable: false,
         valueGetter: makeEntityValueGetter("region"),
         valueFormatter: multiValueFormatter,
         filterValueGetter: makeMultiValueFilterGetter("region"),
         comparator: multiValueComparator,
         flex: 1,
         minWidth: 130,
-        cellEditor: "agSelectCellEditor",
-        cellEditorParams: { values: ["", ...REGION_OPTIONS] },
+        cellRenderer: HierarchyCellRenderer,
+        cellRendererParams: {
+          onOpenEditor: readOnly ? undefined : handleOpenRegionEditor,
+          placeholder: "Vyberte kraj",
+          disabled: readOnly,
+        },
         headerComponent: FieldFilterHeader,
         headerComponentParams: {
           filterRef: activeRegionFiltersRef,
@@ -2047,13 +2104,13 @@ const PartnersSectionNew: React.FC<SectionProps> = ({ viewMode, isActive, system
           filterPanelLabel: "Filtrovat kraj",
         },
       },
-      { field: "location", headerName: "Lokalita", filter: true, editable: makeSingleValueEditable("location"), valueGetter: makeEntityValueGetter("location"), valueFormatter: multiValueFormatter, filterValueGetter: makeMultiValueFilterGetter("location"), comparator: multiValueComparator, flex: 1, minWidth: 110, cellEditor: PlaceCellEditor, cellEditorPopup: true, cellEditorParams: { onPlacePicked: handlePlacePicked } },
+      { field: "location", headerName: "Lokalita", filter: true, editable: false, valueGetter: makeEntityValueGetter("location"), valueFormatter: multiValueFormatter, filterValueGetter: makeMultiValueFilterGetter("location"), comparator: multiValueComparator, flex: 1, minWidth: 110, cellRenderer: HierarchyCellRenderer, cellRendererParams: { onOpenEditor: readOnly ? undefined : handleOpenRegionEditor, placeholder: "Zadejte adresu", disabled: readOnly } },
       { field: "created_at", headerName: "Datum přidání", filter: true, editable: false, flex: 0.95, minWidth: 130, valueFormatter: (params) => formatAddedDate(params.value) },
       ...(viewMode === "active" ? activeSubjectCols : commissionCols)
     );
 
     return cols;
-  }, [assignableUsers, fieldOptionChoices, fieldOptionsArray, groupedFieldOptionChoices, handleFieldFilterChange, handleOpenFieldEditor, handlePlacePicked, handleRegionFilterChange, handleStateFilterChange, onStatusCellClicked, projectStatusOptions, readOnly, systemNamespace, viewMode]);
+  }, [assignableUsers, fieldOptionChoices, fieldOptionsArray, groupedFieldOptionChoices, handleFieldFilterChange, handleOpenFieldEditor, handleOpenRegionEditor, handleRegionFilterChange, handleStateFilterChange, onStatusCellClicked, projectStatusOptions, readOnly, systemNamespace, viewMode]);
 
   const isExternalFilterPresent = useCallback(() => {
     return activeStateFiltersRef.current.size < WORKFLOW_STATUS_VALUES.length ||
@@ -2094,7 +2151,10 @@ const PartnersSectionNew: React.FC<SectionProps> = ({ viewMode, isActive, system
     gridRef.current?.api?.refreshCells({ force: true });
   }, [getItemActivity]);
 
-  const unseenActivityCount = gridData.reduce((count, row) => {
+  // One entry per record, not per per-company row.
+  const activityRows = gridData.filter((row) => (row.branchIndex ?? 0) === 0);
+
+  const unseenActivityCount = activityRows.reduce((count, row) => {
     if (!row.activity_scope || row.activity_item_id === null || row.activity_item_id === undefined) {
       return count;
     }
@@ -2110,7 +2170,7 @@ const PartnersSectionNew: React.FC<SectionProps> = ({ viewMode, isActive, system
   }, 0);
 
   const handleConfirmAllActivity = useCallback(() => {
-    const entries = gridData
+    const entries = activityRows
       .filter((row) => row.activity_scope && row.activity_item_id !== null && row.activity_item_id !== undefined)
       .map((row) => ({
         scope: row.activity_scope as string,
@@ -2119,7 +2179,7 @@ const PartnersSectionNew: React.FC<SectionProps> = ({ viewMode, isActive, system
       }));
     markItemsSeen(entries);
     gridRef.current?.api?.refreshCells({ force: true });
-  }, [gridData, markItemsSeen]);
+  }, [activityRows, markItemsSeen]);
 
   return (
     <>
@@ -2136,7 +2196,7 @@ const PartnersSectionNew: React.FC<SectionProps> = ({ viewMode, isActive, system
           <AgGridReact<PartnerGridRow>
             ref={gridRef}
             rowData={gridData}
-            getRowId={(params) => String(params.data.id)}
+            getRowId={(params) => params.data.rowKey ?? String(params.data.id)}
             columnDefs={columnDefs}
             rowClassRules={rowClassRules}
             onGridReady={handleGridReady}
@@ -2175,16 +2235,28 @@ const PartnersSectionNew: React.FC<SectionProps> = ({ viewMode, isActive, system
       {fieldEditor && fieldEditorEntity ? (
         <SubjectFieldPopover
           anchor={fieldEditor.anchor}
-          title="Obor"
-          field={{
-            key: "field",
-            label: "Obor",
-            value: fieldEditorEntity.field,
-            type: "multi-value",
-            multiValueEditor: "field-select",
-            options: fieldOptionsArray,
-            specializationValues: parseSpecializationMap(fieldEditorEntity.field_specialization),
-          }}
+          title={fieldEditor.kind === "region" ? "Kraj / Lokalita" : "Společnost / Obor"}
+          field={
+            fieldEditor.kind === "region"
+              ? {
+                  key: "region_structure",
+                  label: "Kraj / Lokalita",
+                  value: fieldEditorEntity.region_structure ?? null,
+                  type: "hierarchy",
+                  hierarchyKind: "region",
+                  hierarchySource: fieldEditorEntity,
+                  hierarchyParentOptions: REGION_OPTIONS,
+                }
+              : {
+                  key: "company_structure",
+                  label: "Společnost / Obor",
+                  value: fieldEditorEntity.company_structure ?? null,
+                  type: "hierarchy",
+                  hierarchyKind: "company",
+                  hierarchySource: fieldEditorEntity,
+                  placeholder: "Název společnosti",
+                }
+          }
           fieldPicker={{
             fieldOptions: fieldOptionChoices,
             groupedFieldOptions: groupedFieldOptionChoices,
@@ -2192,8 +2264,11 @@ const PartnersSectionNew: React.FC<SectionProps> = ({ viewMode, isActive, system
             onDeleteFieldOption: handleDeleteFieldOption,
           }}
           specializationPicker={specializationPicker}
-          onSave={(key, value) => {
-            void handleUpdateEntity(fieldEditorEntity.id, { [key]: value });
+          onSave={(keyOrUpdates, value) => {
+            void handleUpdateEntity(
+              fieldEditorEntity.id,
+              typeof keyOrUpdates === "string" ? { [keyOrUpdates]: value ?? null } : keyOrUpdates
+            );
           }}
           onClose={() => setFieldEditor(null)}
         />

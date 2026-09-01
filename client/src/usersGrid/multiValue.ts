@@ -186,22 +186,45 @@ export const formatSpecialization = (specRaw: unknown, oborRaw: unknown, separat
 };
 
 /**
- * A subject attribute for a grid row. The joined entity is the source of truth
- * — the flat row property is only a mirror rebuilt on each fetch, so it can lag
- * behind an edit the entity already carries (and the profile panel already
- * shows). Falls back to the mirror when the entity has no value of its own
- * (commission rows mirror the commission's own value in that case).
+ * A subject attribute for a grid row.
+ *
+ * Branch first: a subject with several companies is shown as one row per
+ * company (see hierarchy.ts), and such a row carries the values of *its* branch
+ * under `row.branch`. A key the branch owns wins even when it is empty — a
+ * company with no obor of its own must render an empty Obor cell, not the whole
+ * subject's list.
+ *
+ * Otherwise the joined entity is the source of truth — the flat row property is
+ * only a mirror rebuilt on each fetch, so it can lag behind an edit the entity
+ * already carries (and the profile panel already shows). Falls back to the
+ * mirror when the entity has no value of its own (commission rows mirror the
+ * commission's own value in that case).
  */
 export const resolveRowEntityValue =
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  (data: any, key: string): unknown =>
-    data?.entity?.[key] ?? data?.[key];
+  (data: any, key: string): unknown => {
+    const branch = data?.branch;
+    if (branch && key in branch) return branch[key];
+    return data?.entity?.[key] ?? data?.[key];
+  };
 
-/** The subject's Obor values for a grid row — entity-first, like every other. */
+/** The subject's Obor values for a grid row — branch-first, then entity. */
 export const resolveRowObor =
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  (data: any, oborKey = "field"): unknown =>
-    data?.entity?.field ?? data?.[oborKey];
+  (data: any, oborKey = "field"): unknown => {
+    const branch = data?.branch;
+    if (branch && "field" in branch) return branch.field;
+    return data?.entity?.field ?? data?.[oborKey];
+  };
+
+/** The subject's Zaměření map for a grid row — branch-first, then entity. */
+export const resolveRowSpecialization =
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  (data: any, key = "field_specialization"): unknown => {
+    const branch = data?.branch;
+    if (branch && key in branch) return branch[key];
+    return data?.entity?.[key] ?? data?.[key];
+  };
 
 /**
  * ag-grid valueGetter for the specialization column. Reads both the chosen
@@ -271,4 +294,20 @@ export const makeSingleValueEditable =
   (key: string) =>
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   (params: any): boolean =>
-    parseMultiValue(resolveRowEntityValue(params?.data, key)).length <= 1;
+    // A per-company row shows a slice of the subject, so an inline edit there
+    // would silently rewrite the whole subject with just that slice.
+    !params?.data?.branch
+    && parseMultiValue(resolveRowEntityValue(params?.data, key)).length <= 1;
+
+/**
+ * The column props every multi-value subject column shares: entity-first (and
+ * branch-first) reading, joined display, joined filtering and sorting, and
+ * inline editing only while the cell holds a single value.
+ */
+export const multiValueColumn = (key: string) => ({
+  editable: makeSingleValueEditable(key),
+  valueGetter: makeEntityValueGetter(key),
+  valueFormatter: multiValueFormatter,
+  filterValueGetter: makeMultiValueFilterGetter(key),
+  comparator: multiValueComparator,
+});

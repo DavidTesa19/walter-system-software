@@ -15,6 +15,8 @@ import {
   type SpecializationMap,
 } from "../multiValue";
 import PlaceAutocompleteInput from "./PlaceAutocompleteInput";
+import HierarchyEditor, { type HierarchyKind } from "./HierarchyEditor";
+import type { CompanySource, RegionSource } from "../hierarchy";
 import {
   buildMapsUrl,
   formatCoordinates,
@@ -55,7 +57,7 @@ export interface EditableField {
   key: string;
   label: string;
   value: string | boolean | string[] | null;
-  type: 'text' | 'textarea' | 'select' | 'field-select' | 'multi-select' | 'multi-value' | 'boolean' | 'date';
+  type: 'text' | 'textarea' | 'select' | 'field-select' | 'multi-select' | 'multi-value' | 'hierarchy' | 'boolean' | 'date';
   options?: Array<string | { value: string; label: string; description?: string }>;
   isMultiline?: boolean;
   placeholder?: string;
@@ -70,7 +72,26 @@ export interface EditableField {
   // address. Rendered as a small hint under the row when a placePicker is
   // supplied.
   placeValues?: LocationGeoMap;
+  // For type === 'hierarchy': which nested tree to edit, and the subject values
+  // it is read from / written back to (see hierarchy.ts). A hierarchy field
+  // owns several columns at once, so it saves a whole batch of updates rather
+  // than the single `key`/`value` pair the other types use.
+  hierarchyKind?: HierarchyKind;
+  hierarchySource?: (CompanySource & RegionSource) | null;
+  // For a Kraj hierarchy: the Kraj options offered at the top level.
+  hierarchyParentOptions?: string[];
 }
+
+/**
+ * Persisting one field edit. Most fields save a single key; a hierarchy field
+ * saves the tree column together with the flat mirror columns it derives, so it
+ * hands over a whole record and the panel writes them in one update.
+ */
+export type FieldSaveValue = string | boolean | string[] | null;
+export type FieldSaveHandler = (
+  keyOrUpdates: string | Record<string, FieldSaveValue>,
+  value?: FieldSaveValue
+) => void;
 
 export interface FieldGroup {
   title: string;
@@ -208,7 +229,7 @@ type ProfilePanelView = 'details' | 'documents';
 
 interface EditableFieldCellProps {
   field: EditableField;
-  onSave: (key: string, value: string | boolean | string[] | null) => void;
+  onSave: FieldSaveHandler;
   fieldPicker?: FieldPickerConfig;
   specializationPicker?: SpecializationPickerConfig;
   placePicker?: PlacePickerConfig;
@@ -279,7 +300,7 @@ interface MultiValueRow {
 
 interface MultiValueEditorProps {
   field: EditableField;
-  onSave: (key: string, value: string | boolean | string[] | null) => void;
+  onSave: FieldSaveHandler;
   fieldPicker?: FieldPickerConfig;
   specializationPicker?: SpecializationPickerConfig;
   placePicker?: PlacePickerConfig;
@@ -698,6 +719,20 @@ const EditableFieldCell: React.FC<EditableFieldCellProps> = ({ field, onSave, fi
 
   // Multi-value fields (Obor, Společnost, Kraj, Lokalita) render their own
   // add/remove editor and manage persistence internally.
+  if (field.type === 'hierarchy') {
+    return (
+      <HierarchyEditor
+        kind={field.hierarchyKind ?? 'company'}
+        source={field.hierarchySource}
+        onSave={(updates) => onSave(updates)}
+        fieldPicker={fieldPicker}
+        specializationPicker={specializationPicker}
+        regionOptions={field.hierarchyParentOptions}
+        parentPlaceholder={field.placeholder}
+      />
+    );
+  }
+
   if (field.type === 'multi-value') {
     return <MultiValueEditor field={field} onSave={onSave} fieldPicker={fieldPicker} specializationPicker={specializationPicker} placePicker={placePicker} />;
   }
@@ -873,7 +908,7 @@ const EditableFieldCell: React.FC<EditableFieldCellProps> = ({ field, onSave, fi
 
 interface FieldGroupComponentProps {
   group: FieldGroup;
-  onSave: (key: string, value: string | boolean | string[] | null) => void;
+  onSave: FieldSaveHandler;
   fieldPicker?: FieldPickerConfig;
   specializationPicker?: SpecializationPickerConfig;
   placePicker?: PlacePickerConfig;
@@ -1073,16 +1108,20 @@ const EntityCommissionProfilePanel: React.FC<EntityCommissionProfilePanelProps> 
     onUploadDocument || onUploadDocuments || onCreateFolder || onDeleteDocument || onArchiveDocument || documentsLoading || visibleDocuments.length > 0 || archivedDocuments.length > 0
   );
 
-  const handleEntityFieldSave = useCallback((key: string, value: string | boolean | string[] | null) => {
-    if (entity && onUpdateEntity) {
-      onUpdateEntity(entity.id, { [key]: value });
-    }
+  const handleEntityFieldSave = useCallback<FieldSaveHandler>((keyOrUpdates, value) => {
+    if (!entity || !onUpdateEntity) return;
+    onUpdateEntity(
+      entity.id,
+      typeof keyOrUpdates === 'string' ? { [keyOrUpdates]: value ?? null } : keyOrUpdates
+    );
   }, [entity, onUpdateEntity]);
 
-  const handleCommissionFieldSave = useCallback((key: string, value: string | boolean | string[] | null) => {
-    if (commission && onUpdateCommission) {
-      onUpdateCommission(commission.id, { [key]: value });
-    }
+  const handleCommissionFieldSave = useCallback<FieldSaveHandler>((keyOrUpdates, value) => {
+    if (!commission || !onUpdateCommission) return;
+    onUpdateCommission(
+      commission.id,
+      typeof keyOrUpdates === 'string' ? { [keyOrUpdates]: value ?? null } : keyOrUpdates
+    );
   }, [commission, onUpdateCommission]);
 
   const handleStartNoteEdit = useCallback((note: ProfileNote) => {

@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef } from "react";
 import type { AgGridReact } from "ag-grid-react";
-import type { RowClassParams, RowClassRules } from "ag-grid-community";
+import type { IRowNode, RowClassParams, RowClassRules } from "ag-grid-community";
 
 /**
  * Class the grid puts on the row a global-search result pointed at. Styled in
@@ -72,17 +72,40 @@ export const useGridRowFocus = <TData extends { id: number }>(
   const onFocusRowRef = useRef(onFocusRow);
   onFocusRowRef.current = onFocusRow;
 
+  /**
+   * The rows standing for one record. Usually exactly one, but a subject with
+   * several companies is drawn as one row per company (see hierarchy.ts), each
+   * under its own ag-grid row id — so the record is found by its data rather
+   * than by `getRowNode`, which only knows the composite key.
+   */
+  const findRowNodes = useCallback(
+    (rowId: number) => {
+      const api = gridRef.current?.api;
+      if (!api || api.isDestroyed()) return [];
+
+      const direct = api.getRowNode(String(rowId));
+      if (direct) return [direct];
+
+      const nodes: IRowNode<TData>[] = [];
+      api.forEachNode((node) => {
+        if (node.data?.id === rowId) nodes.push(node);
+      });
+      return nodes;
+    },
+    [gridRef]
+  );
+
   const redrawRow = useCallback(
     (rowId: number | null) => {
       if (rowId === null) return;
       const api = gridRef.current?.api;
       if (!api || api.isDestroyed()) return;
-      const node = api.getRowNode(String(rowId));
-      if (node) {
-        api.redrawRows({ rowNodes: [node] });
+      const rowNodes = findRowNodes(rowId);
+      if (rowNodes.length > 0) {
+        api.redrawRows({ rowNodes });
       }
     },
-    [gridRef]
+    [findRowNodes, gridRef]
   );
 
   const clearHighlight = useCallback(() => {
@@ -108,7 +131,7 @@ export const useGridRowFocus = <TData extends { id: number }>(
     const attempt = () => {
       retryTimer = null;
       const api = gridRef.current?.api;
-      const node = api && !api.isDestroyed() ? api.getRowNode(String(focusRecordId)) : null;
+      const node = api && !api.isDestroyed() ? findRowNodes(focusRecordId)[0] ?? null : null;
 
       // No node yet (still loading), or the row exists but a filter is hiding
       // it so it has no place to scroll to.
@@ -140,7 +163,7 @@ export const useGridRowFocus = <TData extends { id: number }>(
         window.clearTimeout(retryTimer);
       }
     };
-  }, [clearHighlight, focusRecordId, focusRequestKey, gridRef, isActive, redrawRow]);
+  }, [clearHighlight, findRowNodes, focusRecordId, focusRequestKey, gridRef, isActive, redrawRow]);
 
   const rowClassRules = useMemo<RowClassRules<TData>>(
     () => ({

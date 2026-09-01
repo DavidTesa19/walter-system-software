@@ -5,6 +5,8 @@
 // linked, and are created in the same namespace as the primary record.
 
 import { apiPost } from "../utils/api";
+import { serializeCompanyStructure } from "./hierarchy";
+import { parseMultiValue } from "./multiValue";
 
 export type SubjectType = "partner" | "client" | "tiper";
 
@@ -42,7 +44,15 @@ const withoutFieldValues = (payload: Record<string, unknown>): Record<string, un
   ...payload,
   field: null,
   field_specialization: null,
+  // The Společnost → Obor → Zaměření tree carries the obors too, so it is
+  // rebuilt from the companies alone; the copy keeps who the subject is and
+  // drops what it does.
+  company_structure: emptyCompanyStructure(payload.company_name),
 });
+
+// The companies the copy keeps, with no obor attached to any of them.
+const emptyCompanyStructure = (companyName: unknown): string | null =>
+  serializeCompanyStructure(parseMultiValue(companyName).map((company) => ({ company, fields: [] })));
 
 export interface CrossTypeCreateArgs {
   targets: SubjectType[];
@@ -104,6 +114,7 @@ export interface CrossTypeEntitySnapshot {
   region?: string | null;
   location?: string | null;
   location_geo?: string | null;
+  region_structure?: string | null;
   info?: string | null;
   assigned_user_ids?: number[] | null;
 }
@@ -152,6 +163,7 @@ export const copySubjectToOtherType = async (
     region: emptyToNull(entity.region),
     location: emptyToNull(entity.location),
     location_geo: emptyToNull(entity.location_geo),
+    region_structure: emptyToNull(entity.region_structure),
     info: emptyToNull(entity.info),
     assigned_user_ids: entity.assigned_user_ids ?? [],
   });

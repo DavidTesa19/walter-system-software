@@ -1,4 +1,5 @@
 import type { FieldActivityMap } from "../../activity/activityUtils";
+import type { CompanyBranch } from "../hierarchy";
 
 // ============================================================================
 // ENTITY TYPES (Subjects) - The people/companies
@@ -42,6 +43,12 @@ export interface PartnerEntity extends BaseEntity {
   company: string | null;
   field: string | null;
   field_specialization?: string | null;
+  // Společnost → Obor → Zaměření, as a JSON array string (see hierarchy.ts).
+  // `company`, `field` and `field_specialization` are its flat mirrors.
+  company_structure?: string | null;
+  // Kraj → Lokalita, as a JSON array string. `region` and `location` are its
+  // flat mirrors.
+  region_structure?: string | null;
   // Úroveň — Bronze / Silver / Gold / VIP, or null when the subject has none.
   tier: string | null;
   // Coordinates for the Lokalita addresses picked from Google Maps, as a JSON
@@ -64,6 +71,12 @@ export interface ClientEntity extends BaseEntity {
   company: string | null;
   field: string | null;
   field_specialization?: string | null;
+  // Společnost → Obor → Zaměření, as a JSON array string (see hierarchy.ts).
+  // `company`, `field` and `field_specialization` are its flat mirrors.
+  company_structure?: string | null;
+  // Kraj → Lokalita, as a JSON array string. `region` and `location` are its
+  // flat mirrors.
+  region_structure?: string | null;
   // Úroveň — Bronze / Silver / Gold / VIP, or null when the subject has none.
   tier: string | null;
   // Coordinates for the Lokalita addresses picked from Google Maps, as a JSON
@@ -88,6 +101,12 @@ export interface TiperEntity extends BaseEntity {
   company: string | null;
   field: string | null;
   field_specialization?: string | null;
+  // Společnost → Obor → Zaměření, as a JSON array string (see hierarchy.ts).
+  // `company`, `field` and `field_specialization` are its flat mirrors.
+  company_structure?: string | null;
+  // Kraj → Lokalita, as a JSON array string. `region` and `location` are its
+  // flat mirrors.
+  region_structure?: string | null;
   // Úroveň — Bronze / Silver / Gold / VIP, or null when the subject has none.
   tier: string | null;
   // Coordinates for the Lokalita addresses picked from Google Maps, as a JSON
@@ -203,6 +222,13 @@ export interface PartnerGridRow extends PartnerCommission {
   location: string;
   mobile: string;
   email: string;
+  // ag-grid row identity. A subject with several companies is shown as one row
+  // per company, so the record id alone is no longer unique — see `branch`.
+  rowKey?: string;
+  // The company slice this row shows, when the subject was split. Absent on an
+  // ordinary (unsplit) row.
+  branch?: CompanyBranch;
+  branchIndex?: number;
   entity: PartnerEntity | null;
 }
 
@@ -232,6 +258,13 @@ export interface ClientGridRow extends ClientCommission {
   location: string;
   mobile: string;
   email: string;
+  // ag-grid row identity. A subject with several companies is shown as one row
+  // per company, so the record id alone is no longer unique — see `branch`.
+  rowKey?: string;
+  // The company slice this row shows, when the subject was split. Absent on an
+  // ordinary (unsplit) row.
+  branch?: CompanyBranch;
+  branchIndex?: number;
   entity: ClientEntity | null;
 }
 
@@ -261,6 +294,13 @@ export interface TiperGridRow extends TiperCommission {
   location: string;
   mobile: string;
   email: string;
+  // ag-grid row identity. A subject with several companies is shown as one row
+  // per company, so the record id alone is no longer unique — see `branch`.
+  rowKey?: string;
+  // The company slice this row shows, when the subject was split. Absent on an
+  // ordinary (unsplit) row.
+  branch?: CompanyBranch;
+  branchIndex?: number;
   entity: TiperEntity | null;
 }
 

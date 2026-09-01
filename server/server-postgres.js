@@ -4577,7 +4577,7 @@ const PROJECT_ROUTE_CONFIG = {
     counterKey: 'project_partner',
     commissionKey: 'project_partner',
     entityDefaults: { company_name: 'Nová společnost' },
-    entityFields: ['status', 'company_name', 'field', 'location', 'region', 'info', 'category', 'first_name', 'last_name', 'email', 'phone', 'website', 'assigned_to', 'assigned_user_ids', 'field_specialization', 'tier', 'location_geo'],
+    entityFields: ['status', 'company_name', 'field', 'location', 'region', 'info', 'category', 'first_name', 'last_name', 'email', 'phone', 'website', 'assigned_to', 'assigned_user_ids', 'field_specialization', 'company_structure', 'region_structure', 'tier', 'location_geo'],
     commissionFields: ['status', 'position', 'budget', 'state', 'assigned_to', 'assigned_user_ids', 'field', 'service_position', 'location', 'info', 'category', 'deadline', 'priority', 'phone', 'commission_value', 'is_tipped', 'notes']
   },
   client: {
@@ -4586,7 +4586,7 @@ const PROJECT_ROUTE_CONFIG = {
     counterKey: 'project_client',
     commissionKey: 'project_client',
     entityDefaults: { company_name: 'Nová společnost' },
-    entityFields: ['status', 'company_name', 'field', 'service', 'location', 'region', 'info', 'category', 'budget', 'first_name', 'last_name', 'email', 'phone', 'website', 'assigned_to', 'assigned_user_ids', 'field_specialization', 'tier', 'location_geo'],
+    entityFields: ['status', 'company_name', 'field', 'service', 'location', 'region', 'info', 'category', 'budget', 'first_name', 'last_name', 'email', 'phone', 'website', 'assigned_to', 'assigned_user_ids', 'field_specialization', 'company_structure', 'region_structure', 'tier', 'location_geo'],
     commissionFields: ['status', 'project_name', 'position', 'budget', 'state', 'assigned_to', 'assigned_user_ids', 'field', 'service_position', 'location', 'info', 'category', 'deadline', 'priority', 'phone', 'commission_value', 'is_tipped', 'notes']
   },
   tiper: {
@@ -4595,7 +4595,7 @@ const PROJECT_ROUTE_CONFIG = {
     counterKey: 'project_tiper',
     commissionKey: 'project_tiper',
     entityDefaults: {},
-    entityFields: ['status', 'company_name', 'field', 'location', 'region', 'info', 'category', 'first_name', 'last_name', 'email', 'phone', 'website', 'assigned_to', 'assigned_user_ids', 'field_specialization', 'tier', 'location_geo'],
+    entityFields: ['status', 'company_name', 'field', 'location', 'region', 'info', 'category', 'first_name', 'last_name', 'email', 'phone', 'website', 'assigned_to', 'assigned_user_ids', 'field_specialization', 'company_structure', 'region_structure', 'tier', 'location_geo'],
     commissionFields: ['status', 'position', 'budget', 'state', 'assigned_to', 'assigned_user_ids', 'field', 'service_position', 'location', 'info', 'category', 'deadline', 'priority', 'phone', 'linked_entity_type', 'linked_commission_id', 'commission_value', 'is_tipped', 'notes']
   }
 };
@@ -4607,7 +4607,7 @@ const GROWTH_ROUTE_CONFIG = {
     counterKey: 'growth_partner',
     commissionKey: 'growth_partner',
     entityDefaults: { company_name: 'Nová společnost' },
-    entityFields: ['status', 'company_name', 'field', 'location', 'region', 'info', 'category', 'first_name', 'last_name', 'email', 'phone', 'website', 'assigned_to', 'assigned_user_ids', 'field_specialization', 'tier', 'location_geo'],
+    entityFields: ['status', 'company_name', 'field', 'location', 'region', 'info', 'category', 'first_name', 'last_name', 'email', 'phone', 'website', 'assigned_to', 'assigned_user_ids', 'field_specialization', 'company_structure', 'region_structure', 'tier', 'location_geo'],
     commissionFields: ['status', 'position', 'budget', 'state', 'assigned_to', 'assigned_user_ids', 'field', 'service_position', 'location', 'info', 'category', 'deadline', 'priority', 'phone', 'commission_value', 'is_tipped', 'notes']
   },
   client: {
@@ -4616,7 +4616,7 @@ const GROWTH_ROUTE_CONFIG = {
     counterKey: 'growth_client',
     commissionKey: 'growth_client',
     entityDefaults: { company_name: 'Nová společnost' },
-    entityFields: ['status', 'company_name', 'field', 'service', 'location', 'region', 'info', 'category', 'budget', 'first_name', 'last_name', 'email', 'phone', 'website', 'assigned_to', 'assigned_user_ids', 'field_specialization', 'tier', 'location_geo'],
+    entityFields: ['status', 'company_name', 'field', 'service', 'location', 'region', 'info', 'category', 'budget', 'first_name', 'last_name', 'email', 'phone', 'website', 'assigned_to', 'assigned_user_ids', 'field_specialization', 'company_structure', 'region_structure', 'tier', 'location_geo'],
     commissionFields: ['status', 'project_name', 'position', 'budget', 'state', 'assigned_to', 'assigned_user_ids', 'field', 'service_position', 'location', 'info', 'category', 'deadline', 'priority', 'phone', 'commission_value', 'is_tipped', 'notes']
   },
   tiper: {
@@ -4625,7 +4625,7 @@ const GROWTH_ROUTE_CONFIG = {
     counterKey: 'growth_tiper',
     commissionKey: 'growth_tiper',
     entityDefaults: {},
-    entityFields: ['status', 'company_name', 'field', 'location', 'region', 'info', 'category', 'first_name', 'last_name', 'email', 'phone', 'website', 'assigned_to', 'assigned_user_ids', 'field_specialization', 'tier', 'location_geo'],
+    entityFields: ['status', 'company_name', 'field', 'location', 'region', 'info', 'category', 'first_name', 'last_name', 'email', 'phone', 'website', 'assigned_to', 'assigned_user_ids', 'field_specialization', 'company_structure', 'region_structure', 'tier', 'location_geo'],
     commissionFields: ['status', 'position', 'budget', 'state', 'assigned_to', 'assigned_user_ids', 'field', 'service_position', 'location', 'info', 'category', 'deadline', 'priority', 'phone', 'linked_entity_type', 'linked_commission_id', 'commission_value', 'is_tipped', 'notes']
   }
 };
@@ -4673,6 +4673,8 @@ const buildProjectCommissionResponse = (type, commission, entity) => {
     entity_company_name: entity?.company_name ?? null,
     entity_field: entity?.field ?? null,
     entity_field_specialization: entity?.field_specialization ?? null,
+    entity_company_structure: entity?.company_structure ?? null,
+    entity_region_structure: entity?.region_structure ?? null,
     entity_tier: entity?.tier ?? null,
     entity_location_geo: entity?.location_geo ?? null,
     entity_location: entity?.location ?? null,

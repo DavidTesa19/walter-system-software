@@ -3,8 +3,10 @@ import { createPortal } from "react-dom";
 import {
   MultiValueEditor,
   type EditableField,
+  type FieldSaveHandler,
   type SpecializationPickerConfig,
 } from "./EntityCommissionProfilePanel";
+import HierarchyEditor from "./HierarchyEditor";
 import type { FieldPickerConfig } from "./FieldSelectInput";
 import "./SubjectFieldPopover.css";
 
@@ -22,7 +24,7 @@ interface SubjectFieldPopoverProps {
   field: EditableField;
   fieldPicker?: FieldPickerConfig;
   specializationPicker?: SpecializationPickerConfig;
-  onSave: (key: string, value: string | boolean | string[] | null) => void;
+  onSave: FieldSaveHandler;
   onClose: () => void;
 }
 
@@ -30,9 +32,10 @@ const MIN_WIDTH = 300;
 const MAX_WIDTH = 380;
 const MARGIN = 8;
 
-// Grid-cell counterpart to the profile panel's Obor block: the very same
-// MultiValueEditor (add/remove obor values, each with its nested Zaměření
-// picker), floated under the clicked cell.
+// Grid-cell counterpart to a nested block of the profile panel: the very same
+// editor the panel uses for that field (the Společnost → Obor → Zaměření tree,
+// the Kraj → Lokalita tree, or a flat multi-value list), floated under the
+// clicked cell.
 //
 // It is rendered by the section rather than by the cell renderer on purpose —
 // saving refetches and replaces the grid's whole rowData, which destroys and
@@ -133,12 +136,24 @@ const SubjectFieldPopover: React.FC<SubjectFieldPopoverProps> = ({
           ×
         </button>
       </div>
-      <MultiValueEditor
-        field={field}
-        onSave={onSave}
-        fieldPicker={fieldPicker}
-        specializationPicker={specializationPicker}
-      />
+      {field.type === "hierarchy" ? (
+        <HierarchyEditor
+          kind={field.hierarchyKind ?? "company"}
+          source={field.hierarchySource}
+          onSave={(updates) => onSave(updates)}
+          fieldPicker={fieldPicker}
+          specializationPicker={specializationPicker}
+          regionOptions={field.hierarchyParentOptions}
+          parentPlaceholder={field.placeholder}
+        />
+      ) : (
+        <MultiValueEditor
+          field={field}
+          onSave={onSave}
+          fieldPicker={fieldPicker}
+          specializationPicker={specializationPicker}
+        />
+      )}
     </div>,
     document.body
   );

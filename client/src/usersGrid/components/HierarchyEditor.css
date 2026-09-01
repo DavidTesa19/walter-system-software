@@ -1,0 +1,172 @@
+/* Nested subject trees — Společnost → Obor → Zaměření and Kraj → Lokalita.
+   Built to sit next to the flat multi-value editor (.mv-editor), so the two
+   read as the same control at different depths. */
+
+.editable-field.hier-editor {
+  display: flex;
+  flex-direction: column;
+  gap: 0.55rem;
+  align-items: stretch;
+}
+
+/* Inside the create modal every field is already wrapped in a padded
+   `.ec-create-field` box, so the editor's own box would double up. */
+.ec-create-field > .editable-field.hier-editor {
+  padding: 0;
+  border: none;
+  background: none;
+  box-shadow: none;
+}
+
+.hier-branches {
+  display: flex;
+  flex-direction: column;
+  gap: 0.6rem;
+}
+
+/* One Společnost (or Kraj) together with everything nested under it. */
+.hier-branch {
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+  padding: 0.45rem;
+  border-radius: 10px;
+  border: 1px solid color-mix(in srgb, var(--color-primary, #3b82f6) 22%, transparent);
+  background: color-mix(in srgb, var(--color-primary, #3b82f6) 4%, transparent);
+}
+
+.hier-row {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+}
+
+/* The children of one branch, indented and tied to it by a rule. */
+.hier-children {
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+  margin-left: 0.7rem;
+  padding-left: 0.7rem;
+  border-left: 2px solid color-mix(in srgb, var(--color-primary, #3b82f6) 35%, transparent);
+}
+
+.hier-child {
+  display: flex;
+  flex-direction: column;
+  gap: 0.3rem;
+}
+
+/* Third level: the Zaměření chosen under one Obor. */
+.hier-grandchild {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  margin-left: 0.9rem;
+  padding-left: 0.75rem;
+  border-left: 2px solid color-mix(in srgb, var(--color-primary, #3b82f6) 25%, transparent);
+}
+
+.hier-grandchild .ec-field-select-trigger {
+  flex: 1;
+  min-width: 0;
+}
+
+.hier-level-label {
+  flex-shrink: 0;
+  font-size: 0.72rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+  color: var(--color-text-muted, #64748b);
+}
+
+.hier-input {
+  flex: 1;
+  min-width: 0;
+}
+
+/* The Obor / Zaměření pickers are buttons that already look like inputs. */
+.hier-input .ec-field-select-trigger {
+  width: 100%;
+}
+
+.hier-coordinates {
+  display: flex;
+  align-items: center;
+  gap: 0.3rem;
+  margin-left: 0.9rem;
+  padding-left: 0.75rem;
+  font-size: 0.72rem;
+  color: var(--color-text-muted, #64748b);
+}
+
+.hier-coordinates a {
+  color: inherit;
+  text-decoration: none;
+  border-bottom: 1px dotted currentColor;
+}
+
+.hier-coordinates a:hover {
+  color: var(--color-primary, #2563eb);
+}
+
+.hier-remove {
+  flex-shrink: 0;
+  width: 28px;
+  height: 28px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 1.1rem;
+  line-height: 1;
+  border-radius: 8px;
+  border: 1px solid var(--color-border, rgba(100, 116, 139, 0.28));
+  background: var(--color-surface, rgba(255, 255, 255, 0.6));
+  color: var(--color-text-muted, #64748b);
+  cursor: pointer;
+  transition: color 0.15s ease, background-color 0.15s ease, border-color 0.15s ease;
+}
+
+.hier-remove.small {
+  width: 24px;
+  height: 24px;
+  font-size: 1rem;
+}
+
+.hier-remove:hover {
+  color: var(--color-danger, #dc2626);
+  border-color: color-mix(in srgb, var(--color-danger, #dc2626) 45%, transparent);
+  background: color-mix(in srgb, var(--color-danger, #dc2626) 12%, var(--color-surface, #ffffff));
+}
+
+.hier-add {
+  align-self: flex-start;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  padding: 0.35rem 0.7rem;
+  font-size: 0.8rem;
+  font-weight: 600;
+  border-radius: 8px;
+  border: 1px dashed color-mix(in srgb, var(--color-primary, #3b82f6) 45%, var(--color-border, #cbd5e1));
+  background: color-mix(in srgb, var(--color-primary, #3b82f6) 8%, transparent);
+  color: var(--color-primary, #2563eb);
+  cursor: pointer;
+  transition: background-color 0.15s ease, border-color 0.15s ease;
+}
+
+.hier-add.small {
+  padding: 0.25rem 0.55rem;
+  font-size: 0.74rem;
+}
+
+.hier-add:hover {
+  background: color-mix(in srgb, var(--color-primary, #3b82f6) 16%, transparent);
+  border-color: var(--color-primary, #3b82f6);
+}
+
+.hier-add-icon {
+  font-size: 0.95em;
+  line-height: 1;
+}

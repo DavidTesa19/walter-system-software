@@ -10,6 +10,10 @@ import {
   normalizeFieldOptionValue,
   REMOVED_FIELD_OPTION_LABEL,
 } from './field-options.js';
+import {
+  removeSpecializationFromCompanyStructure,
+  renameFieldInCompanyStructure,
+} from './subject-structure.js';
 
 dotenv.config();
 const { Pool } = pkg;
@@ -1184,6 +1188,19 @@ export async function initDatabase() {
       await client.query(`ALTER TABLE ${tableName} ADD COLUMN IF NOT EXISTS location_geo TEXT`);
     }
 
+    // The two nested subject trees, each a JSON array string (see the client's
+    // hierarchy.ts):
+    //   company_structure  Společnost → Obor → Zaměření
+    //   region_structure   Kraj → Lokalita
+    // The flat columns above (company_name / field / field_specialization and
+    // region / location) stay as their derived mirrors, so every existing
+    // reader keeps working and a record written by an older client is still
+    // readable.
+    for (const tableName of regionColumnTables) {
+      await client.query(`ALTER TABLE ${tableName} ADD COLUMN IF NOT EXISTS company_structure TEXT`);
+      await client.query(`ALTER TABLE ${tableName} ADD COLUMN IF NOT EXISTS region_structure TEXT`);
+    }
+
     // link_id — pairs a row with its counterpart(s) in the other sections
     // (Veřejné, Growth Club, Neveřejné) so they can be kept in sync. A row
     // can be linked to one or both other sections, sharing the same link_id.
@@ -1520,6 +1537,28 @@ async function touchEntityActivityRecords(entityType, entityId) {
   );
 }
 
+// The Společnost tree holds the same obor and zaměření values as the flat
+// columns, and wins on read — so a catalog deletion has to be applied to it too,
+// or the tree would put the dangling value straight back. Deletions are rare and
+// the affected row counts small, so the trees are rewritten row by row rather
+// than picked apart in SQL.
+async function rewriteCompanyStructures(client, tableNames, transform) {
+  for (const tableName of tableNames) {
+    const { rows } = await client.query(
+      `SELECT id, company_structure FROM ${tableName} WHERE company_structure LIKE '[%'`
+    );
+
+    for (const row of rows) {
+      const next = transform(row.company_structure);
+      if (next === row.company_structure) continue;
+      await client.query(
+        `UPDATE ${tableName} SET company_structure = $1, updated_at = CURRENT_TIMESTAMP WHERE id = $2`,
+        [next, row.id]
+      );
+    }
+  }
+}
+
 async function replaceDeletedFieldOptionReferences(client, scope, value) {
   const normalizedScope = normalizeFieldOptionScope(scope);
   const normalizedValue = normalizeFieldOptionValue(value);
@@ -1537,6 +1576,10 @@ async function replaceDeletedFieldOptionReferences(client, scope, value) {
       [REMOVED_FIELD_OPTION_LABEL, normalizedValue]
     );
   }
+
+  await rewriteCompanyStructures(client, tableNames, (raw) =>
+    renameFieldInCompanyStructure(raw, normalizedValue, REMOVED_FIELD_OPTION_LABEL)
+  );
 }
 
 // When a specialization option is deleted, drop it from every subject's
@@ -1564,6 +1607,10 @@ async function replaceDeletedFieldSpecializationOptionReferences(client, scope, 
       [normalizedField, normalizedValue]
     );
   }
+
+  await rewriteCompanyStructures(client, tableNames, (raw) =>
+    removeSpecializationFromCompanyStructure(raw, normalizedField, normalizedValue)
+  );
 }
 
 // Generic database operations
@@ -2609,10 +2656,10 @@ export const db = {
 
     const entityId = await this.getNextEntityId('partner');
     const { rows } = await pool.query(
-      `INSERT INTO partner_entities (entity_id, status, company_name, field, location, region, info, category, first_name, last_name, email, phone, website, assigned_to, assigned_user_ids, field_specialization, tier, location_geo)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18)
+      `INSERT INTO partner_entities (entity_id, status, company_name, field, location, region, info, category, first_name, last_name, email, phone, website, assigned_to, assigned_user_ids, field_specialization, tier, location_geo, company_structure, region_structure)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20)
        RETURNING *`,
-      [entityId, data.status || 'accepted', data.company_name, data.field, data.location, data.region ?? null, data.info, data.category, data.first_name, data.last_name, data.email, data.phone, data.website, data.assigned_to ?? null, data.assigned_user_ids ?? [], data.field_specialization ?? null, data.tier ?? null, data.location_geo ?? null]
+      [entityId, data.status || 'accepted', data.company_name, data.field, data.location, data.region ?? null, data.info, data.category, data.first_name, data.last_name, data.email, data.phone, data.website, data.assigned_to ?? null, data.assigned_user_ids ?? [], data.field_specialization ?? null, data.tier ?? null, data.location_geo ?? null, data.company_structure ?? null, data.region_structure ?? null]
     );
     return applyCreateActor('partner_entities', rows[0], actorUserId);
   },
@@ -2654,6 +2701,8 @@ export const db = {
         e.company_name as e_company_name,
         e.field as e_field,
         e.field_specialization as e_field_specialization,
+        e.company_structure as e_company_structure,
+        e.region_structure as e_region_structure,
         e.tier as e_tier,
         e.location_geo as e_location_geo,
         e.location as e_location,
@@ -2709,6 +2758,8 @@ export const db = {
       entity_company_name: row.e_company_name,
       entity_field: row.e_field,
       entity_field_specialization: row.e_field_specialization,
+      entity_company_structure: row.e_company_structure,
+      entity_region_structure: row.e_region_structure,
       entity_tier: row.e_tier,
       entity_location_geo: row.e_location_geo,
       entity_location: row.e_location,
@@ -2733,6 +2784,8 @@ export const db = {
         e.company_name as e_company_name,
         e.field as e_field,
         e.field_specialization as e_field_specialization,
+        e.company_structure as e_company_structure,
+        e.region_structure as e_region_structure,
         e.tier as e_tier,
         e.location_geo as e_location_geo,
         e.location as e_location,
@@ -2783,6 +2836,8 @@ export const db = {
       entity_company_name: row.e_company_name,
       entity_field: row.e_field,
       entity_field_specialization: row.e_field_specialization,
+      entity_company_structure: row.e_company_structure,
+      entity_region_structure: row.e_region_structure,
       entity_tier: row.e_tier,
       entity_location_geo: row.e_location_geo,
       entity_location: row.e_location,
@@ -2877,10 +2932,10 @@ export const db = {
 
     const entityId = await this.getNextEntityId('client');
     const { rows } = await pool.query(
-      `INSERT INTO client_entities (entity_id, status, company_name, field, service, location, region, info, category, budget, first_name, last_name, email, phone, website, assigned_to, assigned_user_ids, field_specialization, tier, location_geo)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20)
+      `INSERT INTO client_entities (entity_id, status, company_name, field, service, location, region, info, category, budget, first_name, last_name, email, phone, website, assigned_to, assigned_user_ids, field_specialization, tier, location_geo, company_structure, region_structure)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22)
        RETURNING *`,
-      [entityId, data.status || 'accepted', data.company_name, data.field, data.service, data.location, data.region ?? null, data.info, data.category, data.budget, data.first_name, data.last_name, data.email, data.phone, data.website, data.assigned_to ?? null, data.assigned_user_ids ?? [], data.field_specialization ?? null, data.tier ?? null, data.location_geo ?? null]
+      [entityId, data.status || 'accepted', data.company_name, data.field, data.service, data.location, data.region ?? null, data.info, data.category, data.budget, data.first_name, data.last_name, data.email, data.phone, data.website, data.assigned_to ?? null, data.assigned_user_ids ?? [], data.field_specialization ?? null, data.tier ?? null, data.location_geo ?? null, data.company_structure ?? null, data.region_structure ?? null]
     );
     return applyCreateActor('client_entities', rows[0], actorUserId);
   },
@@ -2922,6 +2977,8 @@ export const db = {
         e.company_name as e_company_name,
         e.field as e_field,
         e.field_specialization as e_field_specialization,
+        e.company_structure as e_company_structure,
+        e.region_structure as e_region_structure,
         e.tier as e_tier,
         e.location_geo as e_location_geo,
         e.service as e_service,
@@ -2977,6 +3034,8 @@ export const db = {
       entity_company_name: row.e_company_name,
       entity_field: row.e_field,
       entity_field_specialization: row.e_field_specialization,
+      entity_company_structure: row.e_company_structure,
+      entity_region_structure: row.e_region_structure,
       entity_tier: row.e_tier,
       entity_location_geo: row.e_location_geo,
       entity_service: row.e_service,
@@ -3003,6 +3062,8 @@ export const db = {
         e.company_name as e_company_name,
         e.field as e_field,
         e.field_specialization as e_field_specialization,
+        e.company_structure as e_company_structure,
+        e.region_structure as e_region_structure,
         e.tier as e_tier,
         e.location_geo as e_location_geo,
         e.service as e_service,
@@ -3055,6 +3116,8 @@ export const db = {
       entity_company_name: row.e_company_name,
       entity_field: row.e_field,
       entity_field_specialization: row.e_field_specialization,
+      entity_company_structure: row.e_company_structure,
+      entity_region_structure: row.e_region_structure,
       entity_tier: row.e_tier,
       entity_location_geo: row.e_location_geo,
       entity_service: row.e_service,
@@ -3150,10 +3213,10 @@ export const db = {
 
     const entityId = await this.getNextEntityId('tiper');
     const { rows } = await pool.query(
-      `INSERT INTO tiper_entities (entity_id, status, company_name, first_name, last_name, field, location, region, info, category, email, phone, website, assigned_to, assigned_user_ids, field_specialization, tier, location_geo)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18)
+      `INSERT INTO tiper_entities (entity_id, status, company_name, first_name, last_name, field, location, region, info, category, email, phone, website, assigned_to, assigned_user_ids, field_specialization, tier, location_geo, company_structure, region_structure)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20)
        RETURNING *`,
-      [entityId, data.status || 'accepted', data.company_name, data.first_name, data.last_name, data.field, data.location, data.region ?? null, data.info, data.category, data.email, data.phone, data.website, data.assigned_to ?? null, data.assigned_user_ids ?? [], data.field_specialization ?? null, data.tier ?? null, data.location_geo ?? null]
+      [entityId, data.status || 'accepted', data.company_name, data.first_name, data.last_name, data.field, data.location, data.region ?? null, data.info, data.category, data.email, data.phone, data.website, data.assigned_to ?? null, data.assigned_user_ids ?? [], data.field_specialization ?? null, data.tier ?? null, data.location_geo ?? null, data.company_structure ?? null, data.region_structure ?? null]
     );
     return applyCreateActor('tiper_entities', rows[0], actorUserId);
   },
@@ -3197,6 +3260,8 @@ export const db = {
         e.last_name as e_last_name,
         e.field as e_field,
         e.field_specialization as e_field_specialization,
+        e.company_structure as e_company_structure,
+        e.region_structure as e_region_structure,
         e.tier as e_tier,
         e.location_geo as e_location_geo,
         e.location as e_location,
@@ -3250,6 +3315,8 @@ export const db = {
       entity_last_name: row.e_last_name,
       entity_field: row.e_field,
       entity_field_specialization: row.e_field_specialization,
+      entity_company_structure: row.e_company_structure,
+      entity_region_structure: row.e_region_structure,
       entity_tier: row.e_tier,
       entity_location_geo: row.e_location_geo,
       entity_location: row.e_location,
@@ -3274,6 +3341,8 @@ export const db = {
         e.last_name as e_last_name,
         e.field as e_field,
         e.field_specialization as e_field_specialization,
+        e.company_structure as e_company_structure,
+        e.region_structure as e_region_structure,
         e.tier as e_tier,
         e.location_geo as e_location_geo,
         e.location as e_location,
@@ -3324,6 +3393,8 @@ export const db = {
       entity_last_name: row.e_last_name,
       entity_field: row.e_field,
       entity_field_specialization: row.e_field_specialization,
+      entity_company_structure: row.e_company_structure,
+      entity_region_structure: row.e_region_structure,
       entity_tier: row.e_tier,
       entity_location_geo: row.e_location_geo,
       entity_location: row.e_location,

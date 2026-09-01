@@ -28,6 +28,10 @@ import {
   REMOVED_FIELD_OPTION_LABEL,
 } from "./field-options.js";
 import {
+  removeSpecializationFromCompanyStructure,
+  renameFieldInCompanyStructure,
+} from "./subject-structure.js";
+import {
   otherNamespaces,
   isLinkableNamespace,
   resolveTable,
@@ -1711,11 +1715,29 @@ const replaceDeletedFieldOptionReferencesInStore = (store, scope, value, actorUs
       continue;
     }
 
-    store[tableName] = store[tableName].map((record) => (
-      record?.field === normalizedValue
-        ? updateAuditedJsonRecord(record, { field: REMOVED_FIELD_OPTION_LABEL }, actorUserId)
-        : record
-    ));
+    store[tableName] = store[tableName].map((record) => {
+      // The Společnost tree holds the same obor value, and wins on read — so it
+      // has to be renamed along with the flat column.
+      const structure = renameFieldInCompanyStructure(
+        record?.company_structure,
+        normalizedValue,
+        REMOVED_FIELD_OPTION_LABEL
+      );
+      const renamedStructure = structure !== record?.company_structure;
+
+      if (record?.field !== normalizedValue && !renamedStructure) {
+        return record;
+      }
+
+      return updateAuditedJsonRecord(
+        record,
+        {
+          ...(record?.field === normalizedValue ? { field: REMOVED_FIELD_OPTION_LABEL } : {}),
+          ...(renamedStructure ? { company_structure: structure } : {}),
+        },
+        actorUserId
+      );
+    });
   }
 };
 
@@ -1753,15 +1775,29 @@ const replaceDeletedFieldSpecializationOptionReferencesInStore = (store, scope, 
 
     store[tableName] = store[tableName].map((record) => {
       const map = parseSpecializationMapForCleanup(record?.field_specialization);
-      if (map[normalizedField] !== normalizedValue) {
+      const hasMapping = map[normalizedField] === normalizedValue;
+
+      // Same value again inside the Společnost tree, which wins on read.
+      const structure = removeSpecializationFromCompanyStructure(
+        record?.company_structure,
+        normalizedField,
+        normalizedValue
+      );
+      const clearedStructure = structure !== record?.company_structure;
+
+      if (!hasMapping && !clearedStructure) {
         return record;
       }
 
       const nextMap = { ...map };
       delete nextMap[normalizedField];
+
       return updateAuditedJsonRecord(
         record,
-        { field_specialization: serializeSpecializationMapForCleanup(nextMap) },
+        {
+          ...(hasMapping ? { field_specialization: serializeSpecializationMapForCleanup(nextMap) } : {}),
+          ...(clearedStructure ? { company_structure: structure } : {}),
+        },
         actorUserId
       );
     });
@@ -4429,7 +4465,7 @@ const PROJECT_JSON_CONFIG = {
     counterKey: 'project_partner',
     entityPrefix: 'PP',
     entityDefaults: { company_name: 'Nová společnost' },
-    entityFields: ['status', 'company_name', 'field', 'location', 'region', 'info', 'category', 'first_name', 'last_name', 'email', 'phone', 'website', 'assigned_to', 'assigned_user_ids', 'field_specialization', 'tier', 'location_geo'],
+    entityFields: ['status', 'company_name', 'field', 'location', 'region', 'info', 'category', 'first_name', 'last_name', 'email', 'phone', 'website', 'assigned_to', 'assigned_user_ids', 'field_specialization', 'company_structure', 'region_structure', 'tier', 'location_geo'],
     commissionFields: ['status', 'position', 'budget', 'state', 'assigned_to', 'assigned_user_ids', 'field', 'service_position', 'location', 'info', 'category', 'deadline', 'priority', 'phone', 'commission_value', 'is_tipped', 'notes']
   },
   client: {
@@ -4438,7 +4474,7 @@ const PROJECT_JSON_CONFIG = {
     counterKey: 'project_client',
     entityPrefix: 'PK',
     entityDefaults: { company_name: 'Nová společnost' },
-    entityFields: ['status', 'company_name', 'field', 'service', 'location', 'region', 'info', 'category', 'budget', 'first_name', 'last_name', 'email', 'phone', 'website', 'assigned_to', 'assigned_user_ids', 'field_specialization', 'tier', 'location_geo'],
+    entityFields: ['status', 'company_name', 'field', 'service', 'location', 'region', 'info', 'category', 'budget', 'first_name', 'last_name', 'email', 'phone', 'website', 'assigned_to', 'assigned_user_ids', 'field_specialization', 'company_structure', 'region_structure', 'tier', 'location_geo'],
     commissionFields: ['status', 'project_name', 'position', 'budget', 'state', 'assigned_to', 'assigned_user_ids', 'field', 'service_position', 'location', 'info', 'category', 'deadline', 'priority', 'phone', 'commission_value', 'is_tipped', 'notes']
   },
   tiper: {
@@ -4447,7 +4483,7 @@ const PROJECT_JSON_CONFIG = {
     counterKey: 'project_tiper',
     entityPrefix: 'PT',
     entityDefaults: {},
-    entityFields: ['status', 'company_name', 'field', 'location', 'region', 'info', 'category', 'first_name', 'last_name', 'email', 'phone', 'website', 'assigned_to', 'assigned_user_ids', 'field_specialization', 'tier', 'location_geo'],
+    entityFields: ['status', 'company_name', 'field', 'location', 'region', 'info', 'category', 'first_name', 'last_name', 'email', 'phone', 'website', 'assigned_to', 'assigned_user_ids', 'field_specialization', 'company_structure', 'region_structure', 'tier', 'location_geo'],
     commissionFields: ['status', 'position', 'budget', 'state', 'assigned_to', 'assigned_user_ids', 'field', 'service_position', 'location', 'info', 'category', 'deadline', 'priority', 'phone', 'linked_entity_type', 'linked_commission_id', 'commission_value', 'is_tipped', 'notes']
   }
 };
@@ -4459,7 +4495,7 @@ const GROWTH_JSON_CONFIG = {
     counterKey: 'growth_partner',
     entityPrefix: 'GP',
     entityDefaults: { company_name: 'Nová společnost' },
-    entityFields: ['status', 'company_name', 'field', 'location', 'region', 'info', 'category', 'first_name', 'last_name', 'email', 'phone', 'website', 'assigned_to', 'assigned_user_ids', 'field_specialization', 'tier', 'location_geo'],
+    entityFields: ['status', 'company_name', 'field', 'location', 'region', 'info', 'category', 'first_name', 'last_name', 'email', 'phone', 'website', 'assigned_to', 'assigned_user_ids', 'field_specialization', 'company_structure', 'region_structure', 'tier', 'location_geo'],
     commissionFields: ['status', 'position', 'budget', 'state', 'assigned_to', 'assigned_user_ids', 'field', 'service_position', 'location', 'info', 'category', 'deadline', 'priority', 'phone', 'commission_value', 'is_tipped', 'notes']
   },
   client: {
@@ -4468,7 +4504,7 @@ const GROWTH_JSON_CONFIG = {
     counterKey: 'growth_client',
     entityPrefix: 'GK',
     entityDefaults: { company_name: 'Nová společnost' },
-    entityFields: ['status', 'company_name', 'field', 'service', 'location', 'region', 'info', 'category', 'budget', 'first_name', 'last_name', 'email', 'phone', 'website', 'assigned_to', 'assigned_user_ids', 'field_specialization', 'tier', 'location_geo'],
+    entityFields: ['status', 'company_name', 'field', 'service', 'location', 'region', 'info', 'category', 'budget', 'first_name', 'last_name', 'email', 'phone', 'website', 'assigned_to', 'assigned_user_ids', 'field_specialization', 'company_structure', 'region_structure', 'tier', 'location_geo'],
     commissionFields: ['status', 'project_name', 'position', 'budget', 'state', 'assigned_to', 'assigned_user_ids', 'field', 'service_position', 'location', 'info', 'category', 'deadline', 'priority', 'phone', 'commission_value', 'is_tipped', 'notes']
   },
   tiper: {
@@ -4477,7 +4513,7 @@ const GROWTH_JSON_CONFIG = {
     counterKey: 'growth_tiper',
     entityPrefix: 'GT',
     entityDefaults: {},
-    entityFields: ['status', 'company_name', 'field', 'location', 'region', 'info', 'category', 'first_name', 'last_name', 'email', 'phone', 'website', 'assigned_to', 'assigned_user_ids', 'field_specialization', 'tier', 'location_geo'],
+    entityFields: ['status', 'company_name', 'field', 'location', 'region', 'info', 'category', 'first_name', 'last_name', 'email', 'phone', 'website', 'assigned_to', 'assigned_user_ids', 'field_specialization', 'company_structure', 'region_structure', 'tier', 'location_geo'],
     commissionFields: ['status', 'position', 'budget', 'state', 'assigned_to', 'assigned_user_ids', 'field', 'service_position', 'location', 'info', 'category', 'deadline', 'priority', 'phone', 'linked_entity_type', 'linked_commission_id', 'commission_value', 'is_tipped', 'notes']
   }
 };
@@ -4540,6 +4576,8 @@ const buildProjectCommissionResponse = (type, commission, entity) => {
     entity_company_name: entity?.company_name ?? null,
     entity_field: entity?.field ?? null,
     entity_field_specialization: entity?.field_specialization ?? null,
+    entity_company_structure: entity?.company_structure ?? null,
+    entity_region_structure: entity?.region_structure ?? null,
     entity_tier: entity?.tier ?? null,
     entity_location_geo: entity?.location_geo ?? null,
     entity_location: entity?.location ?? null,

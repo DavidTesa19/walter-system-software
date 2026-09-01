@@ -1,5 +1,5 @@
 import React from "react";
-import { formatSpecialization, parseMultiValue, resolveRowObor } from "../multiValue";
+import { formatSpecialization, parseMultiValue, resolveRowObor, resolveRowSpecialization } from "../multiValue";
 import type { FieldEditorAnchor } from "../components/SubjectFieldPopover";
 
 interface SpecializationCellParams {
@@ -29,7 +29,7 @@ const SpecializationCellRenderer: React.FC<SpecializationCellParams> = (params) 
   // The column's valueGetter already formats the stored map; fall back to
   // formatting here so the cell also works without one.
   const currentValue = params.value
-    ?? formatSpecialization(params.data?.entity?.field_specialization, resolveRowObor(params.data, params.oborKey));
+    ?? formatSpecialization(resolveRowSpecialization(params.data), resolveRowObor(params.data, params.oborKey));
 
   const handleClick = (e: React.MouseEvent) => {
     if (!canOpenEditor) {

@@ -2,6 +2,7 @@ import React, { useCallback, useEffect, useMemo, useRef } from "react";
 import ThemeToggleButton from "../../components/ThemeToggleButton";
 import type { EditableField, FieldGroup, PlacePickerConfig, SpecializationPickerConfig } from "./EntityCommissionProfilePanel";
 import { MultiValueEditor } from "./EntityCommissionProfilePanel";
+import HierarchyEditor from "./HierarchyEditor";
 import FieldSelectInput, { type FieldPickerConfig } from "./FieldSelectInput";
 import "./EntityCommissionProfilePanel.css";
 
@@ -68,10 +69,38 @@ const DraftField: React.FC<DraftFieldProps> = ({ field, value, onChange, disable
     return (
       <MultiValueEditor
         field={{ ...field, value: value ?? "" }}
-        onSave={(key, next) => onChange(key, typeof next === "boolean" ? String(next) : (next ?? ""))}
+        onSave={(keyOrUpdates, next) => {
+          if (typeof keyOrUpdates !== "string") {
+            for (const [key, entry] of Object.entries(keyOrUpdates)) {
+              onChange(key, typeof entry === "boolean" ? String(entry) : (entry ?? ""));
+            }
+            return;
+          }
+          onChange(keyOrUpdates, typeof next === "boolean" ? String(next) : (next ?? ""));
+        }}
         fieldPicker={fieldPicker}
         specializationPicker={specializationPicker}
         placePicker={placePicker}
+        commitOnChange
+      />
+    );
+  }
+
+  // A hierarchy field owns several draft keys at once (the tree plus the flat
+  // mirrors it derives), so it writes them one after another — the draft state
+  // updates functionally, so the batch lands whole.
+  if (field.type === "hierarchy") {
+    return (
+      <HierarchyEditor
+        kind={field.hierarchyKind ?? "company"}
+        source={field.hierarchySource}
+        onSave={(updates) => {
+          for (const [key, entry] of Object.entries(updates)) onChange(key, entry ?? "");
+        }}
+        fieldPicker={fieldPicker}
+        specializationPicker={specializationPicker}
+        regionOptions={field.hierarchyParentOptions}
+        parentPlaceholder={field.placeholder}
         commitOnChange
       />
     );

@@ -16,6 +16,7 @@ import EntityCommissionProfilePanel, {
 import SubjectFieldPopover, { type FieldEditorAnchor } from "../components/SubjectFieldPopover";
 import FieldCellRenderer from "../cells/FieldCellRenderer";
 import SpecializationCellRenderer from "../cells/SpecializationCellRenderer";
+import HierarchyCellRenderer from "../cells/HierarchyCellRenderer";
 import StatusCellRenderer from "../cells/StatusCellRenderer";
 import ApprovalStatusCellRenderer from "../cells/ApprovalStatusCellRenderer";
 import { mapViewToStatus } from "../constants";
@@ -40,7 +41,6 @@ import useGridColumnLayout from "../hooks/useGridColumnLayout";
 import useGridRowFocus from "../hooks/useGridRowFocus";
 import useProfileNotes from "../hooks/useProfileNotes";
 import { ApproveRestoreCellRenderer, DeleteArchiveCellRenderer, ArchiveCellRenderer } from "../cells/RowActionCellRenderers";
-import { fieldOptions } from "../fieldOptions";
 import {
   formatAssignedUsernames,
   fromAssignmentDraftValue,
@@ -59,10 +59,8 @@ import OptionSelectEditor from "../../futureFunctions/cells/OptionSelectEditor";
 import StatusFilterHeader from "../cells/StatusFilterHeader";
 import FieldFilterHeader from "../cells/FieldFilterHeader";
 import { REGION_OPTIONS } from "../regions";
+import { buildCompanyBranches } from "../hierarchy";
 import TierCellRenderer from "../cells/TierCellRenderer";
-import PlaceCellEditor from "../cells/PlaceCellEditor";
-import type { PlaceLocation } from "../googlePlaces";
-import { parseLocationGeo, pruneLocationGeo, serializeLocationGeo } from "../locationGeo";
 import { compareTiers, TIER_COLOR_MAP, TIER_EDITOR_LABEL_MAP, TIER_EDITOR_VALUES, TIER_VALUES } from "../tiers";
 import {
   makeEntityValueGetter,
@@ -73,10 +71,11 @@ import {
   makeSpecializationValueGetter,
   multiValueComparator,
   multiValueFormatter,
-  parseSpecializationMap,
   passesMultiValueFilter,
+  multiValueColumn,
   resolveRowEntityValue,
   resolveRowObor,
+  resolveRowSpecialization,
 } from "../multiValue";
 import {
   copySubjectToOtherType,
@@ -99,8 +98,10 @@ type ClientEntityApi = {
   company_name?: string | null;
   field?: string | null;
   field_specialization?: string | null;
+  company_structure?: string | null;
   tier?: string | null;
   location_geo?: string | null;
+  region_structure?: string | null;
   service?: string | null;
   budget?: string | null;
   region?: string | null;
@@ -145,8 +146,10 @@ type ClientCommissionApi = {
   entity_project_name?: string | null;
   entity_field?: string | null;
   entity_field_specialization?: string | null;
+  entity_company_structure?: string | null;
   entity_tier?: string | null;
   entity_location_geo?: string | null;
+  entity_region_structure?: string | null;
   entity_service?: string | null;
   entity_budget?: string | null;
   entity_region?: string | null;
@@ -175,7 +178,6 @@ const ENTITY_ACTIVITY_KEY_MAP: Record<string, string> = {
 // Static, so the grid does not see a new defaultColDef object on every render.
 const GRID_DEFAULT_COL_DEF = { resizable: true, sortable: true };
 
-const FIELD_OPTIONS_ARRAY = fieldOptions.map((opt) => opt.value);
 const PROJECT_SUBJECT_STATUS_OPTIONS = ["accepted", "archived"];
 const PROJECT_COMMISSION_STATUS_OPTIONS = ["accepted", "pending", "archived"];
 const joinName = (...parts: Array<string | null | undefined>) => parts.filter((part): part is string => Boolean(part && part.trim())).join(" ").trim();
@@ -186,6 +188,8 @@ type ClientCreateDraft = {
     company: string;
     field: string;
     field_specialization: string;
+    company_structure: string;
+    region_structure: string;
     tier: string;
     location_geo: string;
     service: string;
@@ -227,6 +231,8 @@ const createDefaultClientDraft = (): ClientCreateDraft => ({
     company: "",
     field: "",
     field_specialization: "",
+    company_structure: "",
+    region_structure: "",
     tier: "",
     location_geo: "",
     service: "",
@@ -263,8 +269,10 @@ const normalizeClientEntity = (entity: ClientEntityApi): ClientEntity => ({
   company: entity.company_name ?? null,
   field: entity.field ?? null,
   field_specialization: entity.field_specialization ?? null,
+  company_structure: entity.company_structure ?? null,
   tier: entity.tier ?? null,
   location_geo: entity.location_geo ?? null,
+  region_structure: entity.region_structure ?? null,
   service: entity.service ?? null,
   budget: entity.budget ?? null,
   region: entity.region ?? null,
@@ -321,7 +329,7 @@ const mapClientEntityUpdates = (updates: Record<string, unknown>) => {
     else if (key === "mobile") mapped.phone = value;
     else if (key === "assigned_user_ids") mapped.assigned_user_ids = value;
     else if (key === "status") mapped.status = value;
-    else if (["field", "field_specialization", "tier", "location_geo", "service", "budget", "region", "location", "email", "website", "info"].includes(key)) mapped[key] = value;
+    else if (["field", "field_specialization", "company_structure", "region_structure", "tier", "location_geo", "service", "budget", "region", "location", "email", "website", "info"].includes(key)) mapped[key] = value;
   }
   return mapped;
 };
@@ -338,8 +346,10 @@ const deriveClientEntityFromCommission = (commission: ClientCommissionApi): Clie
     company: commission.entity_company_name ?? null,
     field: commission.entity_field ?? null,
     field_specialization: commission.entity_field_specialization ?? null,
+    company_structure: commission.entity_company_structure ?? null,
     tier: commission.entity_tier ?? null,
     location_geo: commission.entity_location_geo ?? null,
+    region_structure: commission.entity_region_structure ?? null,
     service: commission.entity_service ?? null,
     budget: commission.entity_budget ?? null,
     region: commission.entity_region ?? null,
@@ -359,11 +369,35 @@ const deriveClientEntityFromCommission = (commission: ClientCommissionApi): Clie
   };
 };
 
+// A subject with several companies is shown as one row per company: the same
+// record, the same id and the same profile, but each row carrying only that
+// company's Obor and Zaměření (see hierarchy.ts). The cells, the column filters
+// and the Obor filter panel all read through `row.branch`, so filtering by an
+// obor keeps exactly the companies that have it.
+//
+// ag-grid identifies rows by id, which is no longer unique once a subject is
+// split, so every row also carries a `rowKey`.
+const expandCompanyRows = (rows: ClientGridRow[]): ClientGridRow[] =>
+  rows.flatMap((row): ClientGridRow[] => {
+    const branches = buildCompanyBranches(row.entity);
+    if (branches.length === 0) return [{ ...row, rowKey: String(row.id), branch: undefined, branchIndex: undefined }];
+
+    return branches.map((branch, index) => ({
+      ...row,
+      rowKey: `${row.id}#${index}`,
+      branch,
+      branchIndex: index,
+      company: branch.company ?? "",
+      field: branch.field ?? "",
+      field_specialization: branch.field_specialization ?? "",
+    }));
+  });
+
 // =============================================================================
 // BUILD ENTITY DATA FOR PROFILE PANEL
 // =============================================================================
 
-const buildEntityData = (entity: ClientEntity | null, assignmentOptions: Array<string | { value: string; label: string; description?: string }>, fieldOptionsArray: string[] = FIELD_OPTIONS_ARRAY, oborFieldType: "select" | "field-select" = "field-select"): EntityData | null => {
+const buildEntityData = (entity: ClientEntity | null, assignmentOptions: Array<string | { value: string; label: string; description?: string }>): EntityData | null => {
   if (!entity) return null;
 
   const groups: FieldGroup[] = [
@@ -372,8 +406,15 @@ const buildEntityData = (entity: ClientEntity | null, assignmentOptions: Array<s
       color: "purple",
       fields: [
         { key: "name", label: "Jméno / Název", value: entity.name, type: "text" },
-        { key: "company", label: "Společnost", value: entity.company, type: "multi-value", multiValueEditor: "text" },
-        { key: "field", label: "Obor činnosti", value: entity.field, type: "multi-value", multiValueEditor: oborFieldType === "field-select" ? "field-select" : "select", options: fieldOptionsArray, specializationValues: parseSpecializationMap(entity.field_specialization) },
+        {
+          key: "company_structure",
+          label: "Společnost / Obor činnosti",
+          value: entity.company_structure ?? null,
+          type: "hierarchy",
+          hierarchyKind: "company",
+          hierarchySource: entity,
+          placeholder: "Název společnosti",
+        },
         { key: "tier", label: "Úroveň", value: entity.tier, type: "select", options: [...TIER_VALUES] },
         { key: "service", label: "Požadovaná služba", value: entity.service, type: "text" },
         { key: "budget", label: "Rozpočet subjektu", value: entity.budget, type: "text" },
@@ -384,17 +425,24 @@ const buildEntityData = (entity: ClientEntity | null, assignmentOptions: Array<s
       title: "Kontaktní údaje",
       color: "green",
       fields: [
-        { key: "mobile", label: "Telefon", value: entity.mobile, type: "text" },
-        { key: "email", label: "E-mail", value: entity.email, type: "text" },
-        { key: "website", label: "Webové stránky", value: entity.website, type: "text" },
+        { key: "mobile", label: "Telefon", value: entity.mobile, type: "multi-value", multiValueEditor: "text", placeholder: "Telefonní číslo" },
+        { key: "email", label: "E-mail", value: entity.email, type: "multi-value", multiValueEditor: "text", placeholder: "E-mailová adresa" },
+        { key: "website", label: "Webové stránky", value: entity.website, type: "multi-value", multiValueEditor: "text", placeholder: "Webová adresa" },
       ]
     },
     {
       title: "Informace o klientovi",
       color: "gray",
       fields: [
-        { key: "region", label: "Kraj", value: entity.region, type: "multi-value", multiValueEditor: "select", options: REGION_OPTIONS },
-        { key: "location", label: "Lokalita", value: entity.location, type: "multi-value", multiValueEditor: "place", placeValues: parseLocationGeo(entity.location_geo), placeholder: "Zadejte adresu" },
+        {
+          key: "region_structure",
+          label: "Kraj / Lokalita",
+          value: entity.region_structure ?? null,
+          type: "hierarchy",
+          hierarchyKind: "region",
+          hierarchySource: entity,
+          hierarchyParentOptions: REGION_OPTIONS,
+        },
         { key: "info", label: "Popis / Poznámky", value: entity.info, type: "textarea", isMultiline: true },
       ]
     }
@@ -466,7 +514,7 @@ const buildLinkedCommissionItems = (commissions: ClientCommission[], assignedUse
   }))
   .sort((left, right) => left.commission_id.localeCompare(right.commission_id));
 
-const buildClientDraftEntityData = (draft: ClientCreateDraft, assignmentOptions: Array<string | { value: string; label: string; description?: string }>, fieldOptionsArray: string[] = FIELD_OPTIONS_ARRAY): EntityData => ({
+const buildClientDraftEntityData = (draft: ClientCreateDraft, assignmentOptions: Array<string | { value: string; label: string; description?: string }>): EntityData => ({
   id: 0,
   entity_id: "Nový klient",
   groups: buildEntityData({
@@ -477,6 +525,8 @@ const buildClientDraftEntityData = (draft: ClientCreateDraft, assignmentOptions:
     company: draft.entity.company,
     field: draft.entity.field,
     field_specialization: draft.entity.field_specialization,
+    company_structure: draft.entity.company_structure,
+    region_structure: draft.entity.region_structure,
     tier: draft.entity.tier,
     location_geo: draft.entity.location_geo,
     service: draft.entity.service,
@@ -492,7 +542,7 @@ const buildClientDraftEntityData = (draft: ClientCreateDraft, assignmentOptions:
     assigned_user_ids: fromAssignmentDraftValue(draft.entity.assigned_user_ids),
     created_at: undefined,
     updated_at: undefined
-  }, assignmentOptions, fieldOptionsArray, "field-select")!.groups
+  }, assignmentOptions)!.groups
 });
 
 const buildClientDraftCommissionData = (draft: ClientCreateDraft, status: ClientCommissionApi["status"], assignmentOptions: Array<string | { value: string; label: string; description?: string }>): CommissionData => ({
@@ -573,7 +623,7 @@ const ClientsSectionNew: React.FC<SectionProps> = ({
 
   // Obor / Zaměření editor opened from a grid cell. Owned here rather than by
   // the cell renderer so it survives the rowData replacement each save triggers.
-  const [fieldEditor, setFieldEditor] = useState<{ entityId: number; anchor: FieldEditorAnchor } | null>(null);
+  const [fieldEditor, setFieldEditor] = useState<{ entityId: number; anchor: FieldEditorAnchor; kind: "company" | "region" } | null>(null);
 
   const gridRef = useRef<AgGridReact<ClientGridRow>>(null);
   const {
@@ -751,7 +801,7 @@ const ClientsSectionNew: React.FC<SectionProps> = ({
         });
 
         rows.sort((left, right) => left.entity_id.localeCompare(right.entity_id));
-        setGridData(rows);
+        setGridData(expandCompanyRows(rows));
         return;
       }
 
@@ -839,7 +889,7 @@ const ClientsSectionNew: React.FC<SectionProps> = ({
 
       rows.sort((left, right) => left.commission_id.localeCompare(right.commission_id));
 
-      setGridData(rows);
+      setGridData(expandCompanyRows(rows));
     } catch (error) {
       console.error("Error fetching client data:", error);
       if (!silent) {
@@ -898,7 +948,7 @@ const ClientsSectionNew: React.FC<SectionProps> = ({
     );
   }, [assignableUsers, commissions, selectedEntityId]);
 
-  const entityData = useMemo(() => buildEntityData(selectedEntity, assignmentOptions, fieldOptionsArray), [assignmentOptions, fieldOptionsArray, selectedEntity]);
+  const entityData = useMemo(() => buildEntityData(selectedEntity, assignmentOptions), [assignmentOptions, selectedEntity]);
 
   // Subject behind the grid-cell Obor / Zaměření editor, read from live state so
   // the popover shows saved values immediately (and closes if the row is gone).
@@ -907,7 +957,7 @@ const ClientsSectionNew: React.FC<SectionProps> = ({
     return entities.find((entity) => entity.id === fieldEditor.entityId) ?? null;
   }, [entities, fieldEditor]);
   const commissionData = useMemo(() => buildCommissionData(selectedCommission, assignmentOptions), [assignmentOptions, selectedCommission]);
-  const draftEntityData = useMemo(() => buildClientDraftEntityData(createDraft, assignmentOptions, fieldOptionsArray), [assignmentOptions, createDraft, fieldOptionsArray]);
+  const draftEntityData = useMemo(() => buildClientDraftEntityData(createDraft, assignmentOptions), [assignmentOptions, createDraft]);
   const draftCommissionData = useMemo(() => buildClientDraftCommissionData(createDraft, status, assignmentOptions), [assignmentOptions, createDraft, status]);
 
   useEffect(() => {
@@ -995,19 +1045,34 @@ const ClientsSectionNew: React.FC<SectionProps> = ({
     const mirror = buildRowMirror(patch, { mirrorAssignment: sectionKind === "subjects" });
 
     setEntities((prev) => prev.map((entity) => (entity.id === entityId ? { ...entity, ...patch } as ClientEntity : entity)));
-    setGridData((prev) => prev.map((row) => {
-      if (!row.entity || row.entity.id !== entityId) return row;
-      return { ...row, ...mirror, entity: { ...row.entity, ...patch } as ClientEntity };
-    }));
+    setGridData((prev) => {
+      const next: typeof prev = [];
+      const rebuilt = new Set<number>();
+
+      for (const row of prev) {
+        if (!row.entity || row.entity.id !== entityId) {
+          next.push(row);
+          continue;
+        }
+
+        // The subject's per-company rows all share one record id; the first of
+        // them stands in for the record and is re-split from the patched
+        // subject, so a company added or removed by this edit shows up at once.
+        if (rebuilt.has(row.id)) continue;
+        rebuilt.add(row.id);
+
+        next.push(...expandCompanyRows([
+          { ...row, ...mirror, entity: { ...row.entity, ...patch } as ClientEntity },
+        ]));
+      }
+
+      return next;
+    });
   }, [sectionKind]);
 
   // A grid cell can only hand ag-Grid the address string, so the Lokalita cell
   // editor drops the picked place here and onCellValueChanged saves the
   // coordinates in the same request as the address.
-  const pendingPlaceRef = useRef<PlaceLocation | null>(null);
-  const handlePlacePicked = useCallback((place: PlaceLocation) => {
-    pendingPlaceRef.current = place;
-  }, []);
 
   const handleUpdateEntity = useCallback(async (entityId: number, updates: Record<string, unknown>) => {
     try {
@@ -1028,7 +1093,13 @@ const ClientsSectionNew: React.FC<SectionProps> = ({
   const handleOpenFieldEditor = useCallback((data: ClientGridRow | undefined, anchor: FieldEditorAnchor) => {
     const entityId = data?.entity?.id ?? data?.client_entity_id ?? null;
     if (entityId == null) return;
-    setFieldEditor({ entityId, anchor });
+    setFieldEditor({ entityId, anchor, kind: "company" });
+  }, []);
+
+  const handleOpenRegionEditor = useCallback((data: ClientGridRow | undefined, anchor: FieldEditorAnchor) => {
+    const entityId = data?.entity?.id ?? data?.client_entity_id ?? null;
+    if (entityId == null) return;
+    setFieldEditor({ entityId, anchor, kind: "region" });
   }, []);
 
   const handleUpdateCommission = useCallback(async (commissionId: number, updates: Record<string, unknown>) => {
@@ -1525,6 +1596,8 @@ const ClientsSectionNew: React.FC<SectionProps> = ({
         company_name: emptyToNull(createDraft.entity.company),
         field: emptyToNull(createDraft.entity.field),
         field_specialization: emptyToNull(createDraft.entity.field_specialization),
+        company_structure: emptyToNull(createDraft.entity.company_structure),
+        region_structure: emptyToNull(createDraft.entity.region_structure),
         service: emptyToNull(createDraft.entity.service),
         budget: emptyToNull(createDraft.entity.budget),
         phone: emptyToNull(createDraft.entity.mobile),
@@ -1609,6 +1682,8 @@ const ClientsSectionNew: React.FC<SectionProps> = ({
         company_name: emptyToNull(createDraft.entity.company),
         field: emptyToNull(createDraft.entity.field),
         field_specialization: emptyToNull(createDraft.entity.field_specialization),
+        company_structure: emptyToNull(createDraft.entity.company_structure),
+        region_structure: emptyToNull(createDraft.entity.region_structure),
         service: emptyToNull(createDraft.entity.service),
         budget: emptyToNull(createDraft.entity.budget),
         phone: emptyToNull(createDraft.entity.mobile),
@@ -1683,6 +1758,8 @@ const ClientsSectionNew: React.FC<SectionProps> = ({
         company: selectedEntity.company ?? "",
         field: selectedEntity.field ?? "",
         field_specialization: selectedEntity.field_specialization ?? "",
+        company_structure: selectedEntity.company_structure ?? "",
+        region_structure: selectedEntity.region_structure ?? "",
         service: selectedEntity.service ?? "",
         budget: selectedEntity.budget ?? "",
         mobile: selectedEntity.mobile ?? "",
@@ -1875,30 +1952,6 @@ const ClientsSectionNew: React.FC<SectionProps> = ({
         return;
       }
 
-      // Lokalita is an entity-only attribute too, and the only column whose edit
-      // can carry more than the cell's own value: an address picked from Google
-      // Maps saves its coordinates in the same request.
-      if (field === "location") {
-        if (row.entity) {
-          const picked = pendingPlaceRef.current;
-          pendingPlaceRef.current = null;
-          const updates: Record<string, unknown> = { location: newValue };
-
-          if (picked && picked.address === newValue) {
-            const nextGeo = pruneLocationGeo(parseLocationGeo(row.entity.location_geo), [picked.address]);
-            nextGeo[picked.address] = { lat: picked.lat, lng: picked.lng, place_id: picked.placeId };
-            updates.location_geo = serializeLocationGeo(nextGeo);
-          } else {
-            // Typed by hand — whatever coordinates the old address had no
-            // longer describe this one.
-            const nextGeo = pruneLocationGeo(parseLocationGeo(row.entity.location_geo), [String(newValue ?? "")]);
-            updates.location_geo = serializeLocationGeo(nextGeo);
-          }
-
-          await handleUpdateEntity(row.entity.id, updates);
-        }
-        return;
-      }
 
       // Kraj is an entity-only attribute — always route to the subject, never a commission.
       if (field === "region") {
@@ -2234,7 +2287,7 @@ const ClientsSectionNew: React.FC<SectionProps> = ({
         headerName: "Zaměření",
         filter: true,
         editable: false,
-        valueGetter: makeSpecializationValueGetter((data) => data?.entity?.field_specialization, "field"),
+        valueGetter: makeSpecializationValueGetter(resolveRowSpecialization, "field"),
         flex: 1,
         minWidth: 120,
         cellRenderer: SpecializationCellRenderer,
@@ -2248,15 +2301,19 @@ const ClientsSectionNew: React.FC<SectionProps> = ({
         field: "region",
         headerName: "Kraj",
         filter: true,
-        editable: makeSingleValueEditable("region"),
+        editable: false,
         valueGetter: makeEntityValueGetter("region"),
         valueFormatter: multiValueFormatter,
         filterValueGetter: makeMultiValueFilterGetter("region"),
         comparator: multiValueComparator,
         flex: 1,
         minWidth: 130,
-        cellEditor: "agSelectCellEditor",
-        cellEditorParams: { values: ["", ...REGION_OPTIONS] },
+        cellRenderer: HierarchyCellRenderer,
+        cellRendererParams: {
+          onOpenEditor: readOnly ? undefined : handleOpenRegionEditor,
+          placeholder: "Vyberte kraj",
+          disabled: readOnly,
+        },
         headerComponent: FieldFilterHeader,
         headerComponentParams: {
           filterRef: activeRegionFiltersRef,
@@ -2270,16 +2327,19 @@ const ClientsSectionNew: React.FC<SectionProps> = ({
         field: "location",
         headerName: "Lokalita",
         filter: true,
-        editable: makeSingleValueEditable("location"),
+        editable: false,
         valueGetter: makeEntityValueGetter("location"),
         valueFormatter: multiValueFormatter,
         filterValueGetter: makeMultiValueFilterGetter("location"),
         comparator: multiValueComparator,
         flex: 1,
         minWidth: 100,
-        cellEditor: PlaceCellEditor,
-        cellEditorPopup: true,
-        cellEditorParams: { onPlacePicked: handlePlacePicked },
+        cellRenderer: HierarchyCellRenderer,
+        cellRendererParams: {
+          onOpenEditor: readOnly ? undefined : handleOpenRegionEditor,
+          placeholder: "Zadejte adresu",
+          disabled: readOnly,
+        },
       },
       assignedUsersColumn
     );
@@ -2293,7 +2353,7 @@ const ClientsSectionNew: React.FC<SectionProps> = ({
           field: "mobile",
           headerName: "Telefon",
           filter: true,
-          editable: true,
+          ...multiValueColumn("mobile"),
           flex: 1,
           minWidth: 120
         },
@@ -2301,7 +2361,7 @@ const ClientsSectionNew: React.FC<SectionProps> = ({
           field: "email",
           headerName: "E-mail",
           filter: true,
-          editable: true,
+          ...multiValueColumn("email"),
           flex: 1.2,
           minWidth: 170
         },
@@ -2374,7 +2434,7 @@ const ClientsSectionNew: React.FC<SectionProps> = ({
     }
 
     return cols;
-  }, [assignableUsers, fieldOptionChoices, fieldOptionsArray, groupedFieldOptionChoices, handleFieldFilterChange, handleOpenFieldEditor, handlePlacePicked, handleRegionFilterChange, handleStateFilterChange, onStatusCellClicked, projectStatusOptions, readOnly, systemNamespace, viewMode]);
+  }, [assignableUsers, fieldOptionChoices, fieldOptionsArray, groupedFieldOptionChoices, handleFieldFilterChange, handleOpenFieldEditor, handleOpenRegionEditor, handleRegionFilterChange, handleStateFilterChange, onStatusCellClicked, projectStatusOptions, readOnly, systemNamespace, viewMode]);
 
   const isExternalFilterPresent = useCallback(() => {
     return activeStateFiltersRef.current.size < WORKFLOW_STATUS_VALUES.length ||
@@ -2415,7 +2475,10 @@ const ClientsSectionNew: React.FC<SectionProps> = ({
     gridRef.current?.api?.refreshCells({ force: true });
   }, [getItemActivity]);
 
-  const unseenActivityCount = gridData.reduce((count, row) => {
+  // One entry per record, not per per-company row.
+  const activityRows = gridData.filter((row) => (row.branchIndex ?? 0) === 0);
+
+  const unseenActivityCount = activityRows.reduce((count, row) => {
     if (!row.activity_scope || row.activity_item_id === null || row.activity_item_id === undefined) {
       return count;
     }
@@ -2431,7 +2494,7 @@ const ClientsSectionNew: React.FC<SectionProps> = ({
   }, 0);
 
   const handleConfirmAllActivity = useCallback(() => {
-    const entries = gridData
+    const entries = activityRows
       .filter((row) => row.activity_scope && row.activity_item_id !== null && row.activity_item_id !== undefined)
       .map((row) => ({
         scope: row.activity_scope as string,
@@ -2440,7 +2503,7 @@ const ClientsSectionNew: React.FC<SectionProps> = ({
       }));
     markItemsSeen(entries);
     gridRef.current?.api?.refreshCells({ force: true });
-  }, [gridData, markItemsSeen]);
+  }, [activityRows, markItemsSeen]);
 
   // ==========================================================================
   // RENDER
@@ -2461,7 +2524,7 @@ const ClientsSectionNew: React.FC<SectionProps> = ({
           <AgGridReact<ClientGridRow>
             ref={gridRef}
             rowData={gridData}
-            getRowId={(params) => String(params.data.id)}
+            getRowId={(params) => params.data.rowKey ?? String(params.data.id)}
             columnDefs={columnDefs}
             rowClassRules={rowClassRules}
             onGridReady={handleGridReady}
@@ -2500,16 +2563,28 @@ const ClientsSectionNew: React.FC<SectionProps> = ({
       {fieldEditor && fieldEditorEntity ? (
         <SubjectFieldPopover
           anchor={fieldEditor.anchor}
-          title="Obor činnosti"
-          field={{
-            key: "field",
-            label: "Obor činnosti",
-            value: fieldEditorEntity.field,
-            type: "multi-value",
-            multiValueEditor: "field-select",
-            options: fieldOptionsArray,
-            specializationValues: parseSpecializationMap(fieldEditorEntity.field_specialization),
-          }}
+          title={fieldEditor.kind === "region" ? "Kraj / Lokalita" : "Společnost / Obor činnosti"}
+          field={
+            fieldEditor.kind === "region"
+              ? {
+                  key: "region_structure",
+                  label: "Kraj / Lokalita",
+                  value: fieldEditorEntity.region_structure ?? null,
+                  type: "hierarchy",
+                  hierarchyKind: "region",
+                  hierarchySource: fieldEditorEntity,
+                  hierarchyParentOptions: REGION_OPTIONS,
+                }
+              : {
+                  key: "company_structure",
+                  label: "Společnost / Obor činnosti",
+                  value: fieldEditorEntity.company_structure ?? null,
+                  type: "hierarchy",
+                  hierarchyKind: "company",
+                  hierarchySource: fieldEditorEntity,
+                  placeholder: "Název společnosti",
+                }
+          }
           fieldPicker={{
             fieldOptions: fieldOptionChoices,
             groupedFieldOptions: groupedFieldOptionChoices,
@@ -2517,8 +2592,11 @@ const ClientsSectionNew: React.FC<SectionProps> = ({
             onDeleteFieldOption: handleDeleteFieldOption,
           }}
           specializationPicker={specializationPicker}
-          onSave={(key, value) => {
-            void handleUpdateEntity(fieldEditorEntity.id, { [key]: value });
+          onSave={(keyOrUpdates, value) => {
+            void handleUpdateEntity(
+              fieldEditorEntity.id,
+              typeof keyOrUpdates === "string" ? { [keyOrUpdates]: value ?? null } : keyOrUpdates
+            );
           }}
           onClose={() => setFieldEditor(null)}
         />
