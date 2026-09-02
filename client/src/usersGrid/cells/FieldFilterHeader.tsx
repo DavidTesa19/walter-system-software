@@ -1,9 +1,17 @@
-import React, { forwardRef, useEffect, useImperativeHandle, useRef, useState } from "react";
+import React, { forwardRef, useEffect, useImperativeHandle, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import type { IHeaderParams } from "ag-grid-community";
 
 const EMPTY_VALUE = "";
 const EMPTY_LABEL = "(Žádný)";
+
+// Czech values are routinely typed without diacritics, so match on a stripped,
+// lowercased form rather than the raw string.
+const normalizeForSearch = (value: string) =>
+  value
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase();
 
 export interface FieldFilterHeaderParams extends IHeaderParams {
   filterRef: React.MutableRefObject<Set<string> | null>;
@@ -27,11 +35,22 @@ const FieldFilterHeader = forwardRef<any, FieldFilterHeaderParams>((props, ref) 
   const [isOpen, setIsOpen] = useState(false);
   const [sortDir, setSortDir] = useState<"asc" | "desc" | null>(null);
   const [dropdownPos, setDropdownPos] = useState<DropdownPos>({ top: 0, left: 0, maxHeight: 400 });
+  const [search, setSearch] = useState("");
   const buttonRef = useRef<HTMLButtonElement>(null);
   const dropdownRef = useRef<HTMLDivElement>(null);
+  const searchRef = useRef<HTMLInputElement>(null);
 
   // All available option values including blank
   const allValues = [...props.fieldOptions, EMPTY_VALUE];
+
+  const query = normalizeForSearch(search.trim());
+  const visibleOptions = useMemo(
+    () => (query ? props.fieldOptions.filter((v) => normalizeForSearch(v).includes(query)) : props.fieldOptions),
+    [props.fieldOptions, query]
+  );
+  const showEmptyOption = !query || normalizeForSearch(EMPTY_LABEL).includes(query);
+  // What "Vše"/"Žádné" act on: everything, or just what the search narrowed to.
+  const visibleValues = showEmptyOption ? [...visibleOptions, EMPTY_VALUE] : visibleOptions;
 
   useImperativeHandle(ref, () => ({
     refresh(newParams: FieldFilterHeaderParams) {
@@ -95,8 +114,16 @@ const FieldFilterHeader = forwardRef<any, FieldFilterHeaderParams>((props, ref) 
         maxHeight: Math.max(spaceAbove, MIN_HEIGHT),
       });
     }
+    setSearch("");
     setIsOpen((prev) => !prev);
   };
+
+  // Fresh search box on every open, focused so the user can type straight away.
+  useEffect(() => {
+    if (!isOpen) return;
+    const timer = setTimeout(() => searchRef.current?.focus(), 0);
+    return () => clearTimeout(timer);
+  }, [isOpen]);
 
   const getChecked = (value: string) => {
     if (localFilters === null) return true;
@@ -123,17 +150,33 @@ const FieldFilterHeader = forwardRef<any, FieldFilterHeaderParams>((props, ref) 
     props.onFilterChange(normalized);
   };
 
+  const apply = (next: Set<string> | null) => {
+    const normalized = next !== null && next.size >= allValues.length ? null : next;
+    setLocalFilters(normalized);
+    props.onFilterChange(normalized);
+  };
+
   const selectAll = (e: React.MouseEvent) => {
     e.stopPropagation();
-    setLocalFilters(null);
-    props.onFilterChange(null);
+    if (!query) {
+      apply(null);
+      return;
+    }
+    // Narrowed by a search — only add what is currently listed.
+    const next = new Set(localFilters === null ? allValues : localFilters);
+    visibleValues.forEach((v) => next.add(v));
+    apply(next);
   };
 
   const clearAll = (e: React.MouseEvent) => {
     e.stopPropagation();
-    const empty = new Set<string>();
-    setLocalFilters(empty);
-    props.onFilterChange(empty);
+    if (!query) {
+      apply(new Set<string>());
+      return;
+    }
+    const next = new Set(localFilters === null ? allValues : localFilters);
+    visibleValues.forEach((v) => next.delete(v));
+    apply(next);
   };
 
   const isFilterActive = localFilters !== null;
@@ -318,9 +361,111 @@ const FieldFilterHeader = forwardRef<any, FieldFilterHeaderParams>((props, ref) 
               </div>
             </div>
 
+            {/* Search box — also fixed, so it never scrolls away */}
+            <div
+              style={{
+                flexShrink: 0,
+                position: "relative",
+                padding: "8px 10px",
+                borderBottom: `1px solid ${isDark ? "#2d3550" : "#f0f4f8"}`,
+              }}
+            >
+              <svg
+                width="12"
+                height="12"
+                viewBox="0 0 16 16"
+                fill="none"
+                stroke={isDark ? "#6b7280" : "#94a3b8"}
+                strokeWidth="1.8"
+                style={{ position: "absolute", left: "19px", top: "50%", transform: "translateY(-50%)" }}
+              >
+                <circle cx="7" cy="7" r="4.5" />
+                <path d="M10.5 10.5L14 14" strokeLinecap="round" />
+              </svg>
+              <input
+                ref={searchRef}
+                type="text"
+                value={search}
+                onChange={(e) => setSearch(e.target.value)}
+                onMouseDown={(e) => e.stopPropagation()}
+                onClick={(e) => e.stopPropagation()}
+                onKeyDown={(e) => {
+                  e.stopPropagation();
+                  if (e.key === "Escape") {
+                    if (search) {
+                      e.preventDefault();
+                      setSearch("");
+                    } else {
+                      setIsOpen(false);
+                    }
+                  }
+                }}
+                placeholder="Hledat…"
+                style={{
+                  width: "100%",
+                  boxSizing: "border-box",
+                  padding: search ? "5px 26px 5px 26px" : "5px 8px 5px 26px",
+                  fontSize: "12px",
+                  fontFamily: "inherit",
+                  color: isDark ? "#e2e8f0" : "#1e293b",
+                  background: isDark ? "#161a27" : "#f8fafc",
+                  border: `1px solid ${isDark ? "#2d3550" : "#e2e8f0"}`,
+                  borderRadius: "6px",
+                  outline: "none",
+                }}
+                onFocus={(e) => {
+                  (e.currentTarget as HTMLElement).style.borderColor = "#793bf6";
+                }}
+                onBlur={(e) => {
+                  (e.currentTarget as HTMLElement).style.borderColor = isDark ? "#2d3550" : "#e2e8f0";
+                }}
+              />
+              {search && (
+                <button
+                  onMouseDown={(e) => e.stopPropagation()}
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    setSearch("");
+                    searchRef.current?.focus();
+                  }}
+                  title="Vymazat hledání"
+                  style={{
+                    position: "absolute",
+                    right: "17px",
+                    top: "50%",
+                    transform: "translateY(-50%)",
+                    background: "none",
+                    border: "none",
+                    cursor: "pointer",
+                    padding: "2px",
+                    lineHeight: 1,
+                    color: isDark ? "#6b7280" : "#94a3b8",
+                    display: "flex",
+                  }}
+                >
+                  <svg width="10" height="10" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="2">
+                    <path d="M3 3l10 10M13 3L3 13" strokeLinecap="round" />
+                  </svg>
+                </button>
+              )}
+            </div>
+
             {/* Scrollable list — takes all remaining height */}
             <div style={{ flex: 1, overflowY: "auto", padding: "4px 0" }}>
-              {props.fieldOptions.map((value) => {
+              {visibleOptions.length === 0 && !showEmptyOption && (
+                <div
+                  style={{
+                    padding: "14px 12px",
+                    fontSize: "12px",
+                    fontStyle: "italic",
+                    color: isDark ? "#6b7280" : "#94a3b8",
+                    textAlign: "center",
+                  }}
+                >
+                  Nic nenalezeno
+                </div>
+              )}
+              {visibleOptions.map((value) => {
                 const checked = getChecked(value);
                 return (
                   <div
@@ -372,6 +517,7 @@ const FieldFilterHeader = forwardRef<any, FieldFilterHeaderParams>((props, ref) 
               })}
 
               {/* Empty-value option — separated by a thin rule */}
+              {showEmptyOption && (
               <div
                 onMouseDown={(e) => e.stopPropagation()}
                 onClick={() => toggle(EMPTY_VALUE)}
@@ -419,6 +565,7 @@ const FieldFilterHeader = forwardRef<any, FieldFilterHeaderParams>((props, ref) 
                   {EMPTY_LABEL}
                 </span>
               </div>
+              )}
             </div>
           </div>,
           document.body
