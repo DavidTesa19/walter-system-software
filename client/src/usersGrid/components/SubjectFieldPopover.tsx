@@ -74,6 +74,9 @@ const SubjectFieldPopover: React.FC<SubjectFieldPopoverProps> = ({
       // panel's DOM subtree, so without this check every click inside it would
       // read as a click "outside" and close the panel mid-selection.
       if (target?.closest?.("[data-field-dropdown]")) return;
+      // Same for the "Vybrat na mapě" dialog a Lokalita row opens, which is
+      // likewise rendered at the end of the body rather than inside this panel.
+      if (target?.closest?.("[data-place-map-dialog]")) return;
       onClose();
     };
 
@@ -92,6 +95,7 @@ const SubjectFieldPopover: React.FC<SubjectFieldPopoverProps> = ({
       // it, must not count as the surroundings moving.
       if (isInsidePanel(target)) return;
       if (target?.closest?.("[data-field-dropdown]")) return;
+      if (target?.closest?.("[data-place-map-dialog]")) return;
       onClose();
     };
 

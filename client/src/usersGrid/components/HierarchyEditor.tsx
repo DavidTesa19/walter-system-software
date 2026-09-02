@@ -3,6 +3,7 @@ import FieldSelectInput, { type FieldPickerConfig } from "./FieldSelectInput";
 import PlaceAutocompleteInput from "./PlaceAutocompleteInput";
 import { SPECIALIZATION_DROPDOWN_LABELS } from "../cells/fieldDropdown";
 import type { SpecializationPickerConfig } from "./EntityCommissionProfilePanel";
+import type { PlaceLocation } from "../googlePlaces";
 import { buildMapsUrl, formatCoordinates, type LocationCoordinates } from "../locationGeo";
 import {
   companyStructureUpdates,
@@ -256,18 +257,55 @@ const HierarchyEditor: React.FC<HierarchyEditorProps> = ({
     if (!commitOnChange) commit(branchesRef.current);
   }, [commit, commitOnChange]);
 
-  // A suggestion was picked: the row takes the place's formatted address and
-  // its coordinates are saved under that address in the same update, so a
-  // coordinate is never keyed to an address the subject does not hold.
+  // A place was picked — from the suggestions or off the map. The row takes the
+  // place's formatted address and its coordinates are saved under that address
+  // in the same update, so a coordinate is never keyed to an address the
+  // subject does not hold.
+  //
+  // Google also knows which Kraj the address falls in, so a branch that has
+  // none yet is filed under it: it either takes that kraj as its own, or — if
+  // the subject already has a branch for that kraj — hands the address over to
+  // it, because two branches naming one kraj is not a shape the tree survives
+  // (the flat Kraj mirror de-duplicates, and reading the tree back can then no
+  // longer tell which of them an address belongs to).
+  //
+  // A Kraj the user already chose is left alone: the tree is theirs to group
+  // by, and an address may well be filed under a neighbouring kraj on purpose.
   const handlePlaceSelected = useCallback(
-    (branchId: number, childId: number, place: { address: string; lat: number; lng: number; placeId: string }) => {
-      const next = patchChild(branchId, childId, { value: place.address });
+    (branchId: number, childId: number, place: PlaceLocation) => {
+      let next = patchChild(branchId, childId, { value: place.address });
+
+      const branch = next.find((row) => row.id === branchId);
+      const child = branch?.children.find((entry) => entry.id === childId);
+      const fileUnderRegion =
+        Boolean(place.region) && !branch?.value.trim() && (regionOptions ?? []).includes(place.region);
+
+      if (fileUnderRegion) {
+        const existing = next.find((row) => row.id !== branchId && row.value.trim() === place.region);
+
+        if (existing && child) {
+          next = next
+            .map((row) => {
+              if (row.id === branchId) return { ...row, children: row.children.filter((entry) => entry.id !== childId) };
+              if (row.id === existing.id) return { ...row, children: [...row.children, child] };
+              return row;
+            })
+            // The empty branch the address was typed into goes with it, unless
+            // it holds something else of its own.
+            .filter((row) => row.id !== branchId || row.value.trim() || row.children.length > 0);
+        } else {
+          next = next.map((row) => (row.id === branchId ? { ...row, value: place.region } : row));
+        }
+
+        setBranchesSafe(next);
+      }
+
       commit(next, {
         address: place.address,
         coordinates: { lat: place.lat, lng: place.lng, place_id: place.placeId },
       });
     },
-    [commit, patchChild]
+    [commit, patchChild, regionOptions, setBranchesSafe]
   );
 
   const handleSpecializationChange = useCallback(
@@ -371,6 +409,7 @@ const HierarchyEditor: React.FC<HierarchyEditorProps> = ({
         value={child.value}
         placeholder={labels.childPlaceholder}
         autoFocus={child.id === autoFocusId}
+        coordinates={geoRef.current[child.value.trim()]}
         onChange={(value) => handleChildText(row.id, child.id, value)}
         onCommit={handleChildBlur}
         onPlaceSelected={(place) => handlePlaceSelected(row.id, child.id, place)}

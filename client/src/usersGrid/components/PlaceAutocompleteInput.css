@@ -8,6 +8,40 @@
   box-sizing: border-box;
 }
 
+/* "Vybrat na mapě" — sits inside the field, so the address row stays one line. */
+.place-autocomplete.has-map .place-autocomplete__input {
+  padding-right: 1.9rem;
+}
+
+.place-autocomplete__map-button {
+  position: absolute;
+  right: 0.25rem;
+  top: 50%;
+  transform: translateY(-50%);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 1.4rem;
+  height: 1.4rem;
+  padding: 0;
+  border: none;
+  border-radius: 0.3rem;
+  background: transparent;
+  cursor: pointer;
+  font-size: 0.85rem;
+  line-height: 1;
+  opacity: 0.65;
+}
+
+.place-autocomplete__map-button:hover {
+  opacity: 1;
+  background: var(--color-surface-hover, #f1f5f9);
+}
+
+.place-autocomplete.has-map .place-autocomplete__status {
+  right: 2.1rem;
+}
+
 .place-autocomplete__status {
   position: absolute;
   right: 0.6rem;

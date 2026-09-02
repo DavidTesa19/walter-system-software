@@ -499,6 +499,7 @@ export const MultiValueEditor: React.FC<MultiValueEditorProps> = ({ field, onSav
           value={row.value}
           placeholder={field.placeholder || field.label}
           autoFocus={row.id === autoFocusId}
+          coordinates={geoValues[row.value.trim()]}
           onChange={(nextValue) => handleTextChange(row.id, nextValue)}
           onCommit={handleTextBlur}
           onPlaceSelected={(place) => handlePlaceSelected(row.id, place)}

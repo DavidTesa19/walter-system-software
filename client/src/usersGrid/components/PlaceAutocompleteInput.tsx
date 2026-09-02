@@ -10,6 +10,8 @@ import {
   type PlacePrediction,
   type PlaceSessionToken,
 } from "../googlePlaces";
+import MapPickerDialog from "./MapPickerDialog";
+import type { LocationCoordinates } from "../locationGeo";
 import "./PlaceAutocompleteInput.css";
 
 interface PlaceAutocompleteInputProps {
@@ -17,6 +19,11 @@ interface PlaceAutocompleteInputProps {
   placeholder?: string;
   autoFocus?: boolean;
   disabled?: boolean;
+  /**
+   * The coordinates already stored for this address, when it came from Google.
+   * Only used to open the map on the right spot.
+   */
+  coordinates?: LocationCoordinates | null;
   /** Free typing — the address is whatever the user wrote, with no coordinates. */
   onChange: (value: string) => void;
   /** Typing finished (blur / Enter) without picking a suggestion. */
@@ -32,15 +39,19 @@ const DEBOUNCE_MS = 250;
  *
  * Types like an ordinary text input, but after a short pause it offers matching
  * places underneath; picking one writes the place's formatted address and hands
- * the caller its coordinates. With no API key configured (or if Google is
- * unreachable) no dropdown ever appears and this behaves exactly like the plain
- * input it replaces — the user can always just type an address.
+ * the caller its coordinates. The button on the right opens the same thing on a
+ * map, for an address that is easier to point at than to spell.
+ *
+ * With no API key configured (or if Google is unreachable) neither the dropdown
+ * nor the map button appears, and this behaves exactly like the plain input it
+ * replaces — the user can always just type an address.
  */
 const PlaceAutocompleteInput: React.FC<PlaceAutocompleteInputProps> = ({
   value,
   placeholder,
   autoFocus,
   disabled,
+  coordinates,
   onChange,
   onCommit,
   onPlaceSelected,
@@ -52,6 +63,7 @@ const PlaceAutocompleteInput: React.FC<PlaceAutocompleteInputProps> = ({
   const [isOpen, setIsOpen] = useState(false);
   const [highlighted, setHighlighted] = useState(-1);
   const [isResolving, setIsResolving] = useState(false);
+  const [isMapOpen, setIsMapOpen] = useState(false);
   // Why Google is not answering, when it isn't — shown under the input so a
   // misconfigured key looks like a misconfigured key rather than a dead field.
   const [placesError, setPlacesError] = useState<string | null>(() => getPlacesError());
@@ -179,8 +191,21 @@ const PlaceAutocompleteInput: React.FC<PlaceAutocompleteInputProps> = ({
     }
   };
 
+  // A place chosen on the map arrives complete — address, coordinates, Kraj —
+  // so it takes the same path as a picked suggestion.
+  const handleMapConfirm = useCallback((place: PlaceLocation) => {
+    setIsMapOpen(false);
+    applyingRef.current = true;
+    hasTypedRef.current = false;
+    requestIdRef.current++;
+    closeList();
+    onPlaceSelected(place);
+  }, [closeList, onPlaceSelected]);
+
+  const showMapButton = enabled && !disabled;
+
   return (
-    <div className="place-autocomplete" ref={containerRef}>
+    <div className={`place-autocomplete${showMapButton ? " has-map" : ""}`} ref={containerRef}>
       <input
         type="text"
         className="editable-input place-autocomplete__input"
@@ -201,6 +226,28 @@ const PlaceAutocompleteInput: React.FC<PlaceAutocompleteInputProps> = ({
         onBlur={() => window.setTimeout(() => { if (mountedRef.current) onCommit?.(); }, 150)}
         onKeyDown={handleKeyDown}
       />
+      {showMapButton ? (
+        <button
+          type="button"
+          className="place-autocomplete__map-button"
+          title="Vybrat na mapě"
+          aria-label="Vybrat na mapě"
+          // The input commits on blur; opening the map must not let that
+          // half-typed text be saved on the way there.
+          onMouseDown={(event) => event.preventDefault()}
+          onClick={() => setIsMapOpen(true)}
+        >
+          🗺
+        </button>
+      ) : null}
+      {isMapOpen ? (
+        <MapPickerDialog
+          address={value}
+          coordinates={coordinates}
+          onCancel={() => setIsMapOpen(false)}
+          onConfirm={handleMapConfirm}
+        />
+      ) : null}
       {isResolving ? <span className="place-autocomplete__status">Načítám…</span> : null}
       {enabled && placesError && !isOpen ? (
         <div className="place-autocomplete__error" role="status">{placesError}</div>

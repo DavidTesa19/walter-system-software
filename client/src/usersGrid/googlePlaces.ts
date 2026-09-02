@@ -1,16 +1,25 @@
 // Google Maps place lookup for the subject "Lokalita" field.
 //
-// The user types freely; as they type we ask Google for matching places and
-// offer them in a dropdown. Picking one replaces the text with the place's
-// formatted address and hands back its coordinates and place id, which the
-// caller stores alongside the address (see locationGeo.ts).
+// Two ways in, both ending at the same answer — a real Google place rather than
+// a line of typed text:
+//
+//   * the user types and picks from the suggestion dropdown, or
+//   * the user opens the map and drops a pin on it (see MapPickerDialog), which
+//     is reverse-geocoded back into an address.
+//
+// Either way the caller gets the place's formatted address, its coordinates,
+// its place id and the Kraj it falls in; the address goes in the field and the
+// rest is stored beside it (see locationGeo.ts).
 //
 // The whole thing is optional: without VITE_GOOGLE_MAPS_API_KEY — or if the
 // script fails to load, or the key is rejected — every helper here reports "no
 // places" and the field stays the plain text input it has always been.
 //
-// Requires the "Places API" and "Maps JavaScript API" to be enabled on the key,
-// which should be restricted by HTTP referrer to the app's own domains.
+// Requires "Places API", "Maps JavaScript API" and "Geocoding API" (the last
+// one only for the map's drop-a-pin lookup) to be enabled on the key, which
+// should be restricted by HTTP referrer to the app's own domains.
+
+import { matchRegionOption } from "./regions";
 
 export interface PlacePrediction {
   placeId: string;
@@ -27,6 +36,12 @@ export interface PlaceLocation {
   address: string;
   lat: number;
   lng: number;
+  /**
+   * The Kraj the address falls in, as one of REGION_OPTIONS — "" when Google
+   * did not say, or said something the list has no entry for. Callers use it to
+   * fill in an empty Kraj; a Kraj the user already chose is never overwritten.
+   */
+  region: string;
 }
 
 /** Opaque per-edit token; Google bills a whole "session" rather than each keystroke. */
@@ -176,6 +191,101 @@ const toText = (value: unknown): string => {
 };
 
 /**
+ * The Kraj of a Google result, from its address components.
+ *
+ * The two Places generations and the Geocoder each name the same fields
+ * differently (`longText`/`shortText`/`types` vs `long_name`/`short_name`/
+ * `types`), so read both shapes and let the region list decide what the names
+ * mean (see regions.ts).
+ */
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+const regionFromComponents = (components: any[] | null | undefined): string => {
+  if (!Array.isArray(components)) return "";
+
+  let adminArea = "";
+  let countryCode = "";
+
+  for (const component of components) {
+    const types: string[] = component?.types ?? [];
+    if (!Array.isArray(types)) continue;
+    if (!adminArea && types.includes("administrative_area_level_1")) {
+      adminArea = toText(component.longText ?? component.long_name);
+    }
+    if (!countryCode && types.includes("country")) {
+      countryCode = toText(component.shortText ?? component.short_name);
+    }
+  }
+
+  return matchRegionOption(adminArea, countryCode);
+};
+
+const toLatLng = (location: unknown): { lat: number; lng: number } | null => {
+  // A LatLng exposes lat()/lng(); a LatLngLiteral has them as numbers.
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const raw = location as any;
+  const lat = typeof raw?.lat === "function" ? raw.lat() : raw?.lat;
+  const lng = typeof raw?.lng === "function" ? raw.lng() : raw?.lng;
+  if (typeof lat !== "number" || typeof lng !== "number") return null;
+  return { lat, lng };
+};
+
+/**
+ * The `maps` library — `Map` and the classic `Marker` — for the map dialog.
+ * Null whenever places are unavailable, which is the dialog's cue not to open.
+ */
+export const loadMapsLibrary = async (): Promise<AnyRecord | null> => {
+  // Loading the script at all is what loadPlacesLibrary does; the map lives on
+  // the same `google.maps` namespace once it has.
+  const places = await loadPlacesLibrary();
+  if (!places) return null;
+
+  const maps = getMaps();
+  if (!maps) return null;
+
+  try {
+    if (typeof maps.importLibrary === "function") await maps.importLibrary("maps");
+  } catch (error) {
+    console.error("Google Maps map library failed to load:", error);
+    setPlacesError("Mapu se nepodařilo načíst — je pro klíč povolené Maps JavaScript API?");
+    return null;
+  }
+
+  return maps.Map ? maps : null;
+};
+
+/**
+ * The address at a point on the map, for a pin the user dropped or dragged.
+ * Null when the lookup fails, which leaves the pin's coordinates as the only
+ * thing known about it — the dialog then keeps whatever address text it had.
+ */
+export const reverseGeocode = async (lat: number, lng: number): Promise<PlaceLocation | null> => {
+  const maps = await loadMapsLibrary();
+  if (!maps?.Geocoder) return null;
+
+  try {
+    const geocoder = new maps.Geocoder();
+    const response = await geocoder.geocode({ location: { lat, lng }, language: "cs", region: "cz" });
+    const result = response?.results?.[0];
+    if (!result) return null;
+
+    setPlacesError(null);
+    // The pin is the truth about where the place is; the geocoded result only
+    // names it, so its own (snapped) coordinates are deliberately not used.
+    return {
+      placeId: result.place_id ?? "",
+      address: toText(result.formatted_address),
+      lat,
+      lng,
+      region: regionFromComponents(result.address_components),
+    };
+  } catch (error) {
+    console.error("Google reverse geocoding failed:", error);
+    setPlacesError("Adresu pro vybraný bod se nepodařilo načíst — je pro klíč povolené Geocoding API?");
+    return null;
+  }
+};
+
+/**
  * Suggestions for what the user has typed so far.
  *
  * Tries the current Places API first and falls back to the legacy one when it
@@ -270,7 +380,10 @@ export const fetchPlacePredictions = async (
   return [];
 };
 
-/** The chosen place's formatted address and coordinates. Null on any failure. */
+/**
+ * The chosen place's formatted address, coordinates and Kraj. Null on any
+ * failure.
+ */
 export const fetchPlaceLocation = async (
   placeId: string,
   sessionToken: PlaceSessionToken | null
@@ -283,14 +396,15 @@ export const fetchPlaceLocation = async (
   try {
     if (places.Place) {
       const place = new places.Place({ id: placeId, ...(sessionToken ? { sessionToken } : {}) });
-      await place.fetchFields({ fields: ["formattedAddress", "location", "displayName"] });
+      await place.fetchFields({
+        fields: ["formattedAddress", "location", "displayName", "addressComponents"],
+      });
 
-      const lat = typeof place.location?.lat === "function" ? place.location.lat() : place.location?.lat;
-      const lng = typeof place.location?.lng === "function" ? place.location.lng() : place.location?.lng;
+      const coordinates = toLatLng(place.location);
       const address = toText(place.formattedAddress) || toText(place.displayName);
 
-      if (typeof lat !== "number" || typeof lng !== "number" || !address) return null;
-      return { placeId, address, lat, lng };
+      if (!coordinates || !address) return null;
+      return { placeId, address, ...coordinates, region: regionFromComponents(place.addressComponents) };
     }
 
     if (places.PlacesService) {
@@ -300,7 +414,7 @@ export const fetchPlaceLocation = async (
         service.getDetails(
           {
             placeId,
-            fields: ["formatted_address", "geometry", "name"],
+            fields: ["formatted_address", "geometry", "name", "address_components"],
             ...(sessionToken ? { sessionToken } : {}),
           },
           // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -308,13 +422,16 @@ export const fetchPlaceLocation = async (
         );
       });
 
-      const location = details?.geometry?.location;
-      const lat = typeof location?.lat === "function" ? location.lat() : location?.lat;
-      const lng = typeof location?.lng === "function" ? location.lng() : location?.lng;
+      const coordinates = toLatLng(details?.geometry?.location);
       const address = details?.formatted_address ?? details?.name ?? "";
 
-      if (typeof lat !== "number" || typeof lng !== "number" || !address) return null;
-      return { placeId, address, lat, lng };
+      if (!coordinates || !address) return null;
+      return {
+        placeId,
+        address,
+        ...coordinates,
+        region: regionFromComponents(details?.address_components),
+      };
     }
   } catch (error) {
     console.error("Google Places details failed:", error);
