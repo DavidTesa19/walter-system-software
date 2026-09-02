@@ -23,6 +23,15 @@
   border-radius: 0.75rem;
   box-shadow: var(--color-shadow-lg, 0 24px 60px rgba(15, 23, 42, 0.28));
   color: var(--color-text, #1e293b);
+  /* The dialog is portalled to <body>, which carries no app font of its own,
+     so the font has to be set here rather than inherited from a container. */
+  font-family: var(--font-body, 'Inter', system-ui, sans-serif);
+}
+
+/* Form controls do not inherit the page font, so they need saying explicitly. */
+.map-picker input,
+.map-picker button {
+  font-family: inherit;
 }
 
 .map-picker__header {
