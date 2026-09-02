@@ -170,6 +170,78 @@ export interface DealLinkConfig {
   optional?: 'tiper';
 }
 
+// =============================================================================
+// SUBJECT ROLES — every commission of one subject, grouped by the role it plays
+// =============================================================================
+//
+// The same real subject can be registered as a Klient, a Partner and a Tipař,
+// each as its own record in its own section. The panel is only ever open on ONE
+// of those records, so these three tables show the whole picture and let a
+// commission be moved from one of the subject's roles to another.
+// See subjectLink.ts.
+
+/** One of the subject's role records, shown as a chip in a role table's header. */
+export interface SubjectRoleIdentityView {
+  key: string;
+  code: string | null;
+  name: string | null;
+  /** Set only when the record sits in a different section than the panel. */
+  namespaceLabel?: string | null;
+  /** The record the panel is open on. */
+  self: boolean;
+  onUnlink?: () => void;
+}
+
+/** "Move this commission to the Partner side" — one button per other role. */
+export interface SubjectRoleMoveTarget {
+  role: 'client' | 'partner' | 'tiper';
+  label: string;
+  onMove: () => void;
+}
+
+export interface SubjectRoleCommissionView {
+  key: string;
+  commissionId: string;
+  status: string;
+  title: string;
+  subtitle?: string | null;
+  /** Set only when the commission sits in a different section than the panel. */
+  namespaceLabel?: string | null;
+  /** Set only when the commission hangs off another of the subject's records. */
+  entityCode?: string | null;
+  /** Editable right here, because it belongs to the record the panel is open on. */
+  own: boolean;
+  selected: boolean;
+  onOpen: () => void;
+  moveTargets: SubjectRoleMoveTarget[];
+}
+
+export interface SubjectRoleTableView {
+  role: 'client' | 'partner' | 'tiper';
+  label: string;
+  /** The role of the section the panel is open in. */
+  own: boolean;
+  identities: SubjectRoleIdentityView[];
+  items: SubjectRoleCommissionView[];
+  /** Accusative label for the buttons ("partnera"). */
+  addLabel: string;
+  /** Plural noun for the empty state ("zakázky" / "tipy"). */
+  itemsLabel: string;
+  busy: boolean;
+  /** Records of this role that may be bound to the subject, once loaded. */
+  linkOptions: DealSubjectOption[];
+  linkOptionsLoading: boolean;
+  /** Called when the link picker opens, so its options load only on demand. */
+  onLoadLinkOptions?: () => void;
+  onLink?: (namespace: LinkableNamespace, entityId: number) => void;
+  onCreate?: () => void;
+}
+
+export interface SubjectRolesConfig {
+  tables: SubjectRoleTableView[];
+  loading: boolean;
+}
+
 interface EntityCommissionProfilePanelProps {
   open: boolean;
   entityType: 'partner' | 'client' | 'tiper';
@@ -188,6 +260,7 @@ interface EntityCommissionProfilePanelProps {
   entitySectionLinks?: SectionLinkToggle[];
   commissionSectionLinks?: SectionLinkToggle[];
   dealLink?: DealLinkConfig | null;
+  subjectRoles?: SubjectRolesConfig | null;
   fieldPicker?: FieldPickerConfig;
   specializationPicker?: SpecializationPickerConfig;
   placePicker?: PlacePickerConfig;
@@ -1042,6 +1115,164 @@ const DealLinkSection: React.FC<{ config: DealLinkConfig }> = ({ config }) => (
   </div>
 );
 
+
+// =============================================================================
+// SUBJECT ROLE TABLES — the subject's commissions as Klient / Partner / Tipař
+// =============================================================================
+
+const SubjectRoleIdentityChip: React.FC<{ identity: SubjectRoleIdentityView; busy: boolean }> = ({ identity, busy }) => (
+  <span className={`ec-subject-identity ${identity.self ? 'self' : ''}`}>
+    <span className="ec-subject-identity-name">
+      {`${identity.code ?? ''}${identity.name ? ` — ${identity.name}` : ''}` || '—'}
+    </span>
+    {identity.self ? <span className="ec-subject-identity-tag">tento záznam</span> : null}
+    {identity.namespaceLabel ? (
+      <span className="ec-subject-identity-section" title={`Sekce ${identity.namespaceLabel}`}>
+        {identity.namespaceLabel}
+      </span>
+    ) : null}
+    {identity.onUnlink ? (
+      <button
+        type="button"
+        className="ec-subject-identity-remove"
+        disabled={busy}
+        onClick={identity.onUnlink}
+        title="Odpojit od subjektu"
+        aria-label="Odpojit od subjektu"
+      >
+        ×
+      </button>
+    ) : null}
+  </span>
+);
+
+const SubjectRoleCommissionRow: React.FC<{ item: SubjectRoleCommissionView; busy: boolean }> = ({ item, busy }) => (
+  <div className={`ec-linked-commission-item ${item.selected ? 'selected' : ''} ${item.own ? '' : 'is-foreign'}`}>
+    <div className="ec-linked-commission-main">
+      <div className="ec-linked-commission-topline">
+        <span className="ec-linked-commission-id">{item.commissionId}</span>
+        {renderApprovalStatusBadge(item.status, true)}
+        {item.namespaceLabel ? (
+          <span className="ec-subject-role-section" title={`Sekce ${item.namespaceLabel}`}>{item.namespaceLabel}</span>
+        ) : null}
+        {item.entityCode ? (
+          <span className="ec-subject-role-owner" title="Záznam, pod kterým zakázka leží">{item.entityCode}</span>
+        ) : null}
+      </div>
+      <div className="ec-linked-commission-title">{item.title}</div>
+      {item.subtitle ? <div className="ec-linked-commission-subline">{item.subtitle}</div> : null}
+      {item.moveTargets.length > 0 ? (
+        <div className="ec-subject-role-moves">
+          <span className="ec-subject-role-moves-label">Přesunout na stranu:</span>
+          {item.moveTargets.map((target) => (
+            <button
+              key={target.role}
+              type="button"
+              className="ec-subject-role-move"
+              disabled={busy}
+              onClick={target.onMove}
+            >
+              {target.label}
+            </button>
+          ))}
+        </div>
+      ) : null}
+    </div>
+    <button
+      type="button"
+      className="ec-linked-commission-open"
+      onClick={item.onOpen}
+      title={item.own ? 'Otevřít detail zakázky' : 'Otevřít v sekci, kde zakázka leží'}
+    >
+      {item.own ? 'Otevřít' : 'Přejít'}
+    </button>
+  </div>
+);
+
+/**
+ * One role's table: which of the subject's records plays that role, and every
+ * commission hanging off them. A role the subject has no record for still gets
+ * a table, so binding an existing record (or creating one) is one click away.
+ */
+const SubjectRoleTableSection: React.FC<{ table: SubjectRoleTableView }> = ({ table }) => {
+  const linkButtonRef = useRef<HTMLButtonElement>(null);
+  const [pickerAnchor, setPickerAnchor] = useState<DealPickerAnchor | null>(null);
+
+  const openPicker = () => {
+    const rect = linkButtonRef.current?.getBoundingClientRect();
+    if (!rect) return;
+    table.onLoadLinkOptions?.();
+    setPickerAnchor({ top: rect.top, bottom: rect.bottom, left: rect.left, width: rect.width });
+  };
+
+  return (
+    <section className={`ec-subject-role ${table.own ? 'is-own' : ''}`}>
+      <header className="ec-subject-role-header">
+        <div className="ec-subject-role-heading">
+          <h5 className="ec-subject-role-title">{table.label}</h5>
+          <span className="ec-subject-role-count">{table.items.length}</span>
+          {table.own ? <span className="ec-subject-role-tag">tato sekce</span> : null}
+        </div>
+        <div className="ec-subject-role-identities">
+          {table.identities.map((identity) => (
+            <SubjectRoleIdentityChip key={identity.key} identity={identity} busy={table.busy} />
+          ))}
+          {table.onLink ? (
+            <button
+              ref={linkButtonRef}
+              type="button"
+              className={`ec-subject-role-link ${pickerAnchor ? 'is-open' : ''}`}
+              disabled={table.busy}
+              onClick={() => (pickerAnchor ? setPickerAnchor(null) : openPicker())}
+            >
+              + Propojit {table.addLabel}
+            </button>
+          ) : null}
+          {table.onCreate ? (
+            <button
+              type="button"
+              className="ec-subject-role-create"
+              disabled={table.busy}
+              onClick={table.onCreate}
+            >
+              + Vytvořit {table.addLabel}
+            </button>
+          ) : null}
+          {pickerAnchor && table.onLink ? (
+            table.linkOptionsLoading ? null : (
+              <DealSubjectPicker
+                anchor={pickerAnchor}
+                anchorEl={linkButtonRef.current}
+                typeLabel={table.addLabel}
+                options={table.linkOptions}
+                onSelect={(option) => {
+                  setPickerAnchor(null);
+                  table.onLink?.(option.namespace, option.id);
+                }}
+                onClose={() => setPickerAnchor(null)}
+              />
+            )
+          ) : null}
+        </div>
+      </header>
+
+      {table.identities.length === 0 ? (
+        <p className="ec-subject-role-empty">
+          Subjekt zatím nemá záznam v roli {table.label}.
+        </p>
+      ) : table.items.length === 0 ? (
+        <p className="ec-subject-role-empty">Žádné {table.itemsLabel}.</p>
+      ) : (
+        <div className="ec-subject-role-list">
+          {table.items.map((item) => (
+            <SubjectRoleCommissionRow key={item.key} item={item} busy={table.busy} />
+          ))}
+        </div>
+      )}
+    </section>
+  );
+};
+
 // =============================================================================
 // MAIN COMPONENT
 // =============================================================================
@@ -1064,6 +1295,7 @@ const EntityCommissionProfilePanel: React.FC<EntityCommissionProfilePanelProps> 
   entitySectionLinks,
   commissionSectionLinks,
   dealLink,
+  subjectRoles,
   fieldPicker,
   specializationPicker,
   placePicker,
@@ -1124,6 +1356,7 @@ const EntityCommissionProfilePanel: React.FC<EntityCommissionProfilePanelProps> 
 
   const commissionLabel = entityType === 'tiper' ? 'Tip / Zakázka' : 'Zakázka';
   const hasLinkedCommissions = linkedCommissions.length > 0;
+  const hasSubjectRoles = Boolean(subjectRoles && subjectRoles.tables.length > 0);
   const showDocumentsSection = Boolean(
     onUploadDocument || onUploadDocuments || onCreateFolder || onDeleteDocument || onArchiveDocument || documentsLoading || visibleDocuments.length > 0 || archivedDocuments.length > 0
   );
@@ -1392,7 +1625,36 @@ const EntityCommissionProfilePanel: React.FC<EntityCommissionProfilePanelProps> 
                     </div>
                   ) : null}
                   <div className="ec-column-content">
-                    {hasLinkedCommissions ? (
+                    {hasSubjectRoles ? (
+                      <div className="ec-subject-roles-section">
+                        <div className="ec-linked-commissions-header">
+                          <div>
+                            <h4 className="ec-linked-commissions-title">Zakázky subjektu</h4>
+                            <p className="ec-linked-commissions-subtitle">
+                              Vše, na čem subjekt figuruje — jako klient, jako partner i jako tipař.
+                            </p>
+                          </div>
+                          <div className="ec-linked-commissions-actions">
+                            {onRemoveCommission && commission ? (
+                              <button type="button" className="ec-header-action danger" onClick={onRemoveCommission}>
+                                Odebrat zakázku
+                              </button>
+                            ) : null}
+                            {onCreateCommission ? (
+                              <button type="button" className="ec-header-action secondary" onClick={onCreateCommission}>
+                                Přidat zakázku
+                              </button>
+                            ) : null}
+                          </div>
+                        </div>
+
+                        <div className="ec-subject-role-tables">
+                          {subjectRoles!.tables.map((table) => (
+                            <SubjectRoleTableSection key={table.role} table={table} />
+                          ))}
+                        </div>
+                      </div>
+                    ) : hasLinkedCommissions ? (
                       <div className="ec-linked-commissions-section">
                         <div className="ec-linked-commissions-header">
                           <div>
@@ -1440,29 +1702,6 @@ const EntityCommissionProfilePanel: React.FC<EntityCommissionProfilePanelProps> 
                             </div>
                           ))}
                         </div>
-
-                        {commission ? (
-                          <div className="ec-linked-commission-detail">
-                            <div className="ec-linked-commission-detail-header">
-                              <h4 className="ec-linked-commissions-title">Detail zakázky</h4>
-                              <span className="ec-column-id">{commission.commission_id}</span>
-                            </div>
-                            {dealLink ? <DealLinkSection config={dealLink} /> : null}
-                            <div className="ec-linked-commission-detail-groups">
-                              {commission.groups.map((group, idx) => (
-                                <FieldGroupComponent
-                                  key={`commission-${idx}`}
-                                  group={group}
-                                  onSave={handleCommissionFieldSave}
-                                />
-                              ))}
-                            </div>
-                          </div>
-                        ) : (
-                          <div className="ec-linked-commission-placeholder">
-                            Vyberte zakázku ze seznamu pro otevření detailu.
-                          </div>
-                        )}
                       </div>
                     ) : (
                       <div className="ec-no-commission-state">
@@ -1474,6 +1713,31 @@ const EntityCommissionProfilePanel: React.FC<EntityCommissionProfilePanelProps> 
                         ) : null}
                       </div>
                     )}
+
+                    {hasSubjectRoles || hasLinkedCommissions ? (
+                      commission ? (
+                        <div className="ec-linked-commission-detail">
+                          <div className="ec-linked-commission-detail-header">
+                            <h4 className="ec-linked-commissions-title">Detail zakázky</h4>
+                            <span className="ec-column-id">{commission.commission_id}</span>
+                          </div>
+                          {dealLink ? <DealLinkSection config={dealLink} /> : null}
+                          <div className="ec-linked-commission-detail-groups">
+                            {commission.groups.map((group, idx) => (
+                              <FieldGroupComponent
+                                key={`commission-${idx}`}
+                                group={group}
+                                onSave={handleCommissionFieldSave}
+                              />
+                            ))}
+                          </div>
+                        </div>
+                      ) : (
+                        <div className="ec-linked-commission-placeholder">
+                          Vyberte zakázku ze seznamu pro otevření detailu.
+                        </div>
+                      )
+                    ) : null}
                   </div>
                 </div>
               </div>

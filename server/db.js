@@ -1231,6 +1231,21 @@ export async function initDatabase() {
       await client.query(`ALTER TABLE ${tableName} ADD COLUMN IF NOT EXISTS deal_id VARCHAR(64)`);
     }
 
+    // subject_id — groups the entity rows that are the SAME real-world subject
+    // acting in different ROLES (a company registered as both a client and a
+    // partner), across every section. Where link_id pairs one row with itself in
+    // another section, subject_id pairs a client row with the partner/tipař row
+    // standing for the same subject. See subject-identity.js.
+    const subjectIdColumnTables = [
+      'client_entities', 'growth_client_entities', 'project_client_entities',
+      'partner_entities', 'growth_partner_entities', 'project_partner_entities',
+      'tiper_entities', 'growth_tiper_entities', 'project_tiper_entities',
+    ];
+
+    for (const tableName of subjectIdColumnTables) {
+      await client.query(`ALTER TABLE ${tableName} ADD COLUMN IF NOT EXISTS subject_id VARCHAR(64)`);
+    }
+
     const activityActorColumnTables = [
       'partners',
       'clients',
@@ -1695,6 +1710,18 @@ export const db = {
     const result = await pool.query(
       `UPDATE ${table} SET deal_id = $1 WHERE id = $2 RETURNING *`,
       [dealId, id]
+    );
+    return result.rows[0] || null;
+  },
+
+  // Set the subject-identity grouping id directly (the same subject acting as
+  // client / partner / tipař). Same internal-plumbing rationale as setLinkId.
+  async setSubjectId(table, id, subjectId) {
+    if (!USE_POSTGRES) return null;
+
+    const result = await pool.query(
+      `UPDATE ${table} SET subject_id = $1 WHERE id = $2 RETURNING *`,
+      [subjectId, id]
     );
     return result.rows[0] || null;
   },

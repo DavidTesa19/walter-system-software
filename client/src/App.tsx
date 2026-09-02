@@ -32,6 +32,7 @@ import type { FutureFunction } from './futureFunctions/futureFunction.interface'
 import { apiGet } from './utils/api';
 import { getStoredAppView, setStoredAppView } from './utils/navigationState';
 import { ActivityProvider } from './activity/ActivityContext';
+import { SubjectNavigationProvider, type SubjectNavigationRequest } from './utils/subjectNavigation';
 import './components/Sidebar.css';
 
 type SearchField = keyof UserInterface;
@@ -508,6 +509,46 @@ const AppContent: React.FC = () => {
     setGridSearchTarget(null);
   }, []);
 
+  /**
+   * Jump to a commission that belongs to another of a subject's roles.
+   *
+   * The profile panel lists everything a subject takes part in — as Klient, as
+   * Partner and as Tipař — but each of those is a record of its own, in its own
+   * section, and only the section that owns a record can edit it. Picking a
+   * foreign row therefore switches to that section and reopens the profile
+   * there, on the right subject and the right zakázka, reusing the same
+   * scroll-and-open machinery the global search drives.
+   */
+  const handleSubjectNavigate = useCallback((request: SubjectNavigationRequest) => {
+    const status: SearchStatus = request.status === 'pending' || request.status === 'archived'
+      ? request.status
+      : 'accepted';
+    const viewByNamespace = request.namespace === 'growth'
+      ? STATUS_TO_GROWTH_VIEW
+      : request.namespace === 'projects'
+        ? STATUS_TO_PROJECTS_VIEW
+        : STATUS_TO_STANDARD_VIEW;
+    const view = viewByNamespace[status];
+    if (!isViewAllowed(view)) {
+      alert('Na tuto sekci nemáte přístup.');
+      return;
+    }
+
+    const table: SearchTable = request.type === 'client'
+      ? 'clients'
+      : request.type === 'partner' ? 'partners' : 'tipers';
+
+    setViewMode(view);
+    setGridSearchTarget({
+      table,
+      recordId: request.commissionInternalId,
+      requestKey: `${Date.now()}-subject-${request.namespace}-${request.type}-${request.commissionInternalId}`,
+      viewMode: getGridViewFromAppView(view),
+      openProfile: true,
+      openCommissionId: request.commissionInternalId
+    });
+  }, [isViewAllowed]);
+
   if (!isAuthenticated) {
     return <Login />;
   }
@@ -542,6 +583,7 @@ const AppContent: React.FC = () => {
 
   return (
     <ActivityProvider userId={user?.id} username={user?.username} accessScope={accessScope} isAdmin={isAdmin} activeView={viewMode}>
+      <SubjectNavigationProvider value={handleSubjectNavigate}>
       <div style={{ display: 'flex' }}>
         <Sidebar
           activeView={viewMode}
@@ -597,6 +639,7 @@ const AppContent: React.FC = () => {
         </div>
         {!isFullscreenView && <Footer />}
       </div>
+      </SubjectNavigationProvider>
     </ActivityProvider>
   );
 };

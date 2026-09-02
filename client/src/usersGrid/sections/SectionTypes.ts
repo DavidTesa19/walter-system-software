@@ -13,5 +13,11 @@ export interface SectionProps {
   focusRequestKey?: string | null;
   /** Open the focused row's profile panel once the grid has scrolled to it. */
   focusOpenProfile?: boolean;
+  /**
+   * Select this commission in the panel that `focusOpenProfile` opens. Set when
+   * the jump came from another of the subject's roles, where landing on the
+   * right zakázka is the point of the jump rather than on the row's default.
+   */
+  focusOpenCommissionId?: number | null;
   readOnly?: boolean;
 }

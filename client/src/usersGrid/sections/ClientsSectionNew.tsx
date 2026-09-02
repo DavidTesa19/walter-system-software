@@ -78,13 +78,13 @@ import {
   resolveRowSpecialization,
 } from "../multiValue";
 import {
-  copySubjectToOtherType,
   createSubjectInOtherTypes,
   SUBJECT_TYPE_AS_LABEL,
   SUBJECT_TYPE_LABEL,
-  SUBJECT_TYPE_TO_DATIVE_PLURAL,
   type SubjectType,
 } from "../crossTypeCreate";
+import { attachSubjectIdentity } from "../subjectLink";
+import useSubjectRoles from "../useSubjectRoles";
 
 // The other subject types a new client can also be created as.
 const CLIENT_OTHER_TYPES: SubjectType[] = ["partner", "tiper"];
@@ -590,7 +590,8 @@ const ClientsSectionNew: React.FC<SectionProps> = ({
   readOnly = false,
   focusRecordId,
   focusRequestKey,
-  focusOpenProfile
+  focusOpenProfile,
+  focusOpenCommissionId
 }) => {
   const { users: assignableUsers, options: assignmentOptions } = useAssignableUsers();
   const { markItemSeen, markItemsSeen, getItemActivity } = useActivity();
@@ -612,10 +613,13 @@ const ClientsSectionNew: React.FC<SectionProps> = ({
   const [selectedEntityId, setSelectedEntityId] = useState<number | null>(null);
   const [selectedCommissionId, setSelectedCommissionId] = useState<number | null>(null);
 
-  const openProfile = useCallback((row: ClientGridRow) => {
+  // `commissionId` is set when the panel is opened AT a commission — jumping in
+  // from another of the subject's roles, where that zakázka is the whole point
+  // of the jump — rather than at whatever the row happens to lead with.
+  const openProfile = useCallback((row: ClientGridRow, commissionId?: number | null) => {
     const entityId = row.entity?.id ?? row.client_entity_id ?? null;
     if (entityId !== null) setSelectedEntityId(entityId);
-    setSelectedCommissionId(viewMode === "active" ? null : row.primaryCommissionId ?? (row.entityOnly ? null : row.id));
+    setSelectedCommissionId(commissionId ?? (viewMode === "active" ? null : row.primaryCommissionId ?? (row.entityOnly ? null : row.id)));
   }, [viewMode]);
 
   const closeProfile = useCallback(() => {
@@ -640,7 +644,7 @@ const ClientsSectionNew: React.FC<SectionProps> = ({
     isActive,
     // Set when the search result was opened with its profile button rather
     // than by clicking the result itself: land on the row, then open its panel.
-    onFocusRow: focusOpenProfile ? openProfile : undefined
+    onFocusRow: focusOpenProfile ? (row: ClientGridRow) => openProfile(row, focusOpenCommissionId ?? null) : undefined
   });
 
   // The profile-cell button stops propagation (see ProfileCellRenderer),
@@ -1221,32 +1225,6 @@ const ClientsSectionNew: React.FC<SectionProps> = ({
     }
   }, [selectedCommission, linkableNamespace, fetchData]);
 
-  // "Vytvořit i jako Partnera / Tipaře" checkboxes shown alongside an existing
-  // client's profile — same action as the create-modal option, run after the
-  // fact. Once a copy has been created for a type it stays checked (and the
-  // checkbox no longer re-triggers creation) until a different subject is opened.
-  const [copyingOtherType, setCopyingOtherType] = useState<SubjectType | null>(null);
-  const [copiedOtherTypes, setCopiedOtherTypes] = useState<SubjectType[]>([]);
-
-  useEffect(() => {
-    setCopiedOtherTypes([]);
-  }, [selectedEntityId]);
-
-  const handleCopyToOtherType = useCallback(async (type: SubjectType) => {
-    if (!selectedEntity) return;
-    setCopyingOtherType(type);
-    try {
-      const entityId = await copySubjectToOtherType(type, systemNamespace, selectedEntity, selectedCommission);
-      setCopiedOtherTypes((prev) => (prev.includes(type) ? prev : [...prev, type]));
-      alert(`Klient byl zkopírován jako ${SUBJECT_TYPE_LABEL[type].toLowerCase()} ${entityId}.`);
-    } catch (error) {
-      console.error(`Error copying client to ${type}:`, error);
-      alert(`Chyba při kopírování klienta ${SUBJECT_TYPE_TO_DATIVE_PLURAL[type]}.`);
-    } finally {
-      setCopyingOtherType(null);
-    }
-  }, [selectedCommission, selectedEntity, systemNamespace]);
-
   const entitySectionLinkToggles = useMemo<SectionLinkToggle[]>(() => {
     if (!linkableNamespace || !selectedEntity) return [];
     return otherLinkableNamespaces(linkableNamespace).map((ns) => ({
@@ -1263,6 +1241,23 @@ const ClientsSectionNew: React.FC<SectionProps> = ({
     linkableNamespace,
     selectedCommissionId: selectedCommission?.id ?? null,
     selectedCommissionDealId: selectedCommission?.deal_id ?? null,
+    onChanged: fetchData,
+  });
+
+  // Every commission the subject takes part in, in all three roles — the panel
+  // can only edit this section's own record, so the other roles' rows link out
+  // to the section that owns them.
+  const subjectRoles = useSubjectRoles({
+    ownType: "client",
+    linkableNamespace,
+    selectedEntityId,
+    status,
+    linkedCommissions,
+    selectedCommissionId,
+    onSelectCommission: setSelectedCommissionId,
+    untitledLabel: "Bez názvu zakázky",
+    formatAssigned: (assignedUserIds, fallback) => formatAssignedUsernames(assignedUserIds, assignableUsers, fallback) ?? "",
+    readOnly,
     onChanged: fetchData,
   });
 
@@ -1305,20 +1300,27 @@ const ClientsSectionNew: React.FC<SectionProps> = ({
 
   // Profile-panel equivalent of "Vytvořit i jako Partnera / Tipaře" — same two
   // options as the create modal, available after the subject already exists.
+  // Profile-panel equivalent of "Vytvořit i jako ..." — the same checkboxes the
+  // create modal offers, driven by the subject's role tables: ticked once the
+  // subject has a record in that role, and ticking one creates it (linked, so
+  // its zakázky show up in this very panel).
   const entityTypeCopyToggles = useMemo<SectionLinkToggle[]>(() => {
     if (!selectedEntity) return [];
-    return CLIENT_OTHER_TYPES.map((type) => ({
-      key: `type:${type}`,
-      label: `Vytvořit i jako ${SUBJECT_TYPE_AS_LABEL[type]}`,
-      checked: copiedOtherTypes.includes(type),
-      busy: copyingOtherType === type,
-      onChange: (checked: boolean) => {
-        if (checked && !copiedOtherTypes.includes(type)) {
-          void handleCopyToOtherType(type);
-        }
-      },
-    }));
-  }, [copiedOtherTypes, copyingOtherType, handleCopyToOtherType, selectedEntity]);
+    return CLIENT_OTHER_TYPES.map((type) => {
+      const table = subjectRoles?.tables.find((entry) => entry.role === type);
+      return {
+        key: `type:${type}`,
+        label: `Vytvořit i jako ${SUBJECT_TYPE_AS_LABEL[type]}`,
+        checked: (table?.identities.length ?? 0) > 0,
+        busy: table?.busy ?? false,
+        // `onCreate` is only offered while the role is still empty, so a ticked
+        // box cannot spawn a second record for the same role.
+        onChange: (checked: boolean) => {
+          if (checked) table?.onCreate?.();
+        },
+      };
+    });
+  }, [selectedEntity, subjectRoles]);
 
   const entityProfileToggles = useMemo<SectionLinkToggle[]>(
     () => [...entitySectionLinkToggles, ...entityTypeCopyToggles],
@@ -1589,6 +1591,28 @@ const ClientsSectionNew: React.FC<SectionProps> = ({
     }
   }, [commissionApiBase, commissions, fetchData, gridData, updateProjectClusterStatus]);
 
+  // Binds the "Vytvořit i jako ..." copies to the subject they were copied from,
+  // so all three roles' zakázky show up in one profile panel. A failure here
+  // leaves the copies standing as independent records rather than rolling back.
+  const linkCreatedSubjects = useCallback(async (
+    entityInternalId: number | null,
+    created: Array<{ type: SubjectType; entityInternalId: number }>
+  ) => {
+    if (!linkableNamespace || entityInternalId === null || created.length === 0) return;
+    for (const copy of created) {
+      try {
+        await attachSubjectIdentity(
+          { namespace: linkableNamespace, type: "client", entityId: entityInternalId, status },
+          copy.type,
+          linkableNamespace,
+          copy.entityInternalId
+        );
+      } catch (error) {
+        console.error(`Error linking created ${copy.type} to the subject:`, error);
+      }
+    }
+  }, [linkableNamespace, status]);
+
   const handleCreateWithCommission = useCallback(async () => {
     setIsCreating(true);
     try {
@@ -1649,10 +1673,13 @@ const ClientsSectionNew: React.FC<SectionProps> = ({
       }
 
       if (createAlsoTypes.length > 0) {
-        const failed = await createSubjectInOtherTypes({ targets: createAlsoTypes, systemNamespace, entityPayload, commissionPayload });
-        if (failed.length > 0) {
-          alert(`Klient byl vytvořen, ale nepodařilo se vytvořit jako: ${failed.map((type) => SUBJECT_TYPE_LABEL[type]).join(", ")}.`);
+        const crossType = await createSubjectInOtherTypes({ targets: createAlsoTypes, systemNamespace, entityPayload, commissionPayload });
+        if (crossType.failed.length > 0) {
+          alert(`Klient byl vytvořen, ale nepodařilo se vytvořit jako: ${crossType.failed.map((type) => SUBJECT_TYPE_LABEL[type]).join(", ")}.`);
         }
+        // The copies are the SAME subject in another role, so bind them to the
+        // primary record — that is what puts their zakázky in its profile panel.
+        await linkCreatedSubjects(response?.entity?.id ?? null, crossType.created);
       }
 
       setCreateModalOpen(false);
@@ -1673,7 +1700,7 @@ const ClientsSectionNew: React.FC<SectionProps> = ({
     } finally {
       setIsCreating(false);
     }
-  }, [createAlsoTypes, createDraft, fetchData, linkTargetNamespaces, linkableNamespace, status, systemNamespace, uploadCreateDocuments]);
+  }, [createAlsoTypes, createDraft, linkCreatedSubjects, fetchData, linkTargetNamespaces, linkableNamespace, status, systemNamespace, uploadCreateDocuments]);
 
   const handleCreateEntityOnly = useCallback(async () => {
     setIsCreating(true);
@@ -1717,10 +1744,13 @@ const ClientsSectionNew: React.FC<SectionProps> = ({
       }
 
       if (createAlsoTypes.length > 0) {
-        const failed = await createSubjectInOtherTypes({ targets: createAlsoTypes, systemNamespace, entityPayload });
-        if (failed.length > 0) {
-          alert(`Klient byl vytvořen, ale nepodařilo se vytvořit jako: ${failed.map((type) => SUBJECT_TYPE_LABEL[type]).join(", ")}.`);
+        const crossType = await createSubjectInOtherTypes({ targets: createAlsoTypes, systemNamespace, entityPayload });
+        if (crossType.failed.length > 0) {
+          alert(`Klient byl vytvořen, ale nepodařilo se vytvořit jako: ${crossType.failed.map((type) => SUBJECT_TYPE_LABEL[type]).join(", ")}.`);
         }
+        // The copies are the SAME subject in another role, so bind them to the
+        // primary record — that is what puts their zakázky in its profile panel.
+        await linkCreatedSubjects(entity?.id ?? null, crossType.created);
       }
 
       setCreateModalOpen(false);
@@ -1741,7 +1771,7 @@ const ClientsSectionNew: React.FC<SectionProps> = ({
     } finally {
       setIsCreating(false);
     }
-  }, [createAlsoTypes, createDraft, entityApiBase, fetchData, linkTargetNamespaces, linkableNamespace, status, systemNamespace, uploadCreateDocuments]);
+  }, [createAlsoTypes, createDraft, linkCreatedSubjects, entityApiBase, fetchData, linkTargetNamespaces, linkableNamespace, status, systemNamespace, uploadCreateDocuments]);
 
   const handleCreate = useCallback(async () => {
     if (includeCommission) {
@@ -2620,6 +2650,7 @@ const ClientsSectionNew: React.FC<SectionProps> = ({
         entitySectionLinks={entityProfileToggles}
         commissionSectionLinks={commissionSectionLinkToggles}
         dealLink={dealLink}
+        subjectRoles={subjectRoles}
         fieldPicker={{
           fieldOptions: fieldOptionChoices,
           groupedFieldOptions: groupedFieldOptionChoices,

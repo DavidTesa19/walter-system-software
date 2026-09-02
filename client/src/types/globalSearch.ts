@@ -30,4 +30,10 @@ export interface GridSearchNavigationTarget {
    * its profile panel.
    */
   openProfile?: boolean;
+  /**
+   * Commission to select in the panel `openProfile` opens. Set when the jump
+   * came from another of a subject's roles (see subjectNavigation.ts), where
+   * landing on that particular zakázka is the point of the jump.
+   */
+  openCommissionId?: number | null;
 }

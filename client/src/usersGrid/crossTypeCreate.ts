@@ -1,8 +1,9 @@
 // Cross-type creation: when adding a subject in one section (Partneři / Klienti
 // / Tipaři) the user can tick "Vytvořit i jako ..." to create the same subject
-// as one or both of the other two types at the same time. The copies are
-// independent records (same as the profile panel's "Zkopírovat jako ..."), not
-// linked, and are created in the same namespace as the primary record.
+// as one or both of the other two types at the same time. Each copy is a record
+// of its own, in the same namespace as the primary, and the caller binds it to
+// the primary as the SAME subject in another role (see subjectLink.ts) — that is
+// what makes all three roles' commissions visible from one profile panel.
 
 import { apiPost } from "../utils/api";
 import { serializeCompanyStructure } from "./hierarchy";
@@ -23,14 +24,6 @@ export const SUBJECT_TYPE_AS_LABEL: Record<SubjectType, string> = {
   partner: "Partnera",
   client: "Klienta",
   tiper: "Tipaře",
-};
-
-// "k partnerům" / "ke klientům" / "k tipařům" — dative plural with the
-// preposition, for error messages ("Chyba při kopírování ... k ___.").
-export const SUBJECT_TYPE_TO_DATIVE_PLURAL: Record<SubjectType, string> = {
-  partner: "k partnerům",
-  client: "ke klientům",
-  tiper: "k tipařům",
 };
 
 export const subjectEntityApiBase = (type: SubjectType, systemNamespace?: string): string =>
@@ -63,132 +56,41 @@ export interface CrossTypeCreateArgs {
   commissionPayload?: Record<string, unknown> | null;
 }
 
+export interface CrossTypeCreateResult {
+  /** Types whose copy could not be created. */
+  failed: SubjectType[];
+  /** The copies that were created, for binding them to the primary subject. */
+  created: Array<{ type: SubjectType; entityInternalId: number }>;
+}
+
 /**
- * Create independent copies of a just-created subject in the given other types.
- * Never throws — returns the list of types that failed so the caller can warn
- * the user without rolling back the primary record.
+ * Create copies of a just-created subject in the given other types. Never
+ * throws — a type that fails lands in `failed` so the caller can warn the user
+ * without rolling back the primary record, and the ones that succeeded come
+ * back in `created` for the caller to link as the same subject.
  */
 export const createSubjectInOtherTypes = async ({
   targets,
   systemNamespace,
   entityPayload,
   commissionPayload,
-}: CrossTypeCreateArgs): Promise<SubjectType[]> => {
+}: CrossTypeCreateArgs): Promise<CrossTypeCreateResult> => {
   const failed: SubjectType[] = [];
+  const created: Array<{ type: SubjectType; entityInternalId: number }> = [];
   const copyPayload = withoutFieldValues(entityPayload);
 
   for (const type of targets) {
     const base = subjectEntityApiBase(type, systemNamespace);
     try {
-      if (commissionPayload) {
-        await apiPost(`${base}/with-commission`, { entity: copyPayload, commission: commissionPayload });
-      } else {
-        await apiPost(base, copyPayload);
-      }
+      const entityInternalId = commissionPayload
+        ? (await apiPost<{ entity?: { id?: number } }>(`${base}/with-commission`, { entity: copyPayload, commission: commissionPayload }))?.entity?.id
+        : (await apiPost<{ id?: number }>(base, copyPayload))?.id;
+      if (typeof entityInternalId === "number") created.push({ type, entityInternalId });
     } catch (error) {
       console.error(`Error creating subject as ${type}:`, error);
       failed.push(type);
     }
   }
 
-  return failed;
-};
-
-// -----------------------------------------------------------------------------
-// Copying an EXISTING subject (from the profile panel) into another type. Used
-// by the "Vytvořit i jako ..." toggles shown alongside a subject's profile —
-// the same action as the create-time checkboxes, just run after the fact.
-// -----------------------------------------------------------------------------
-
-// Shape shared by PartnerEntity / ClientEntity / TiperEntity for the fields
-// that carry over into a copy. Obor (`field`) and Zaměření
-// (`field_specialization`) are deliberately absent — see withoutFieldValues.
-export interface CrossTypeEntitySnapshot {
-  status: string;
-  name?: string | null;
-  company?: string | null;
-  tier?: string | null;
-  mobile?: string | null;
-  email?: string | null;
-  website?: string | null;
-  region?: string | null;
-  location?: string | null;
-  location_geo?: string | null;
-  region_structure?: string | null;
-  info?: string | null;
-  assigned_user_ids?: number[] | null;
-}
-
-// Shape shared by PartnerCommission / ClientCommission / TiperCommission for
-// the fields that carry over into a copy.
-export interface CrossTypeCommissionSnapshot {
-  status: string;
-  position?: string | null;
-  service_position?: string | null;
-  assigned_user_ids?: number[] | null;
-  budget?: string | null;
-  commission_value?: string | null;
-  priority?: string | null;
-  state?: string | null;
-  deadline?: string | null;
-  notes?: string | null;
-}
-
-const emptyToNull = (value: string | null | undefined): string | null => {
-  const trimmed = (value ?? "").trim();
-  return trimmed ? trimmed : null;
-};
-
-/**
- * Copy an existing subject (and optionally its selected commission) into
- * another subject type, mirroring the payload the create-time "Vytvořit i
- * jako ..." option sends. Returns the new record's entity_id.
- */
-export const copySubjectToOtherType = async (
-  target: SubjectType,
-  systemNamespace: string | undefined,
-  entity: CrossTypeEntitySnapshot,
-  commission?: CrossTypeCommissionSnapshot | null
-): Promise<string> => {
-  const base = subjectEntityApiBase(target, systemNamespace);
-
-  const entityPayload = withoutFieldValues({
-    status: entity.status,
-    first_name: emptyToNull(entity.name),
-    company_name: emptyToNull(entity.company),
-    tier: emptyToNull(entity.tier),
-    phone: emptyToNull(entity.mobile),
-    email: emptyToNull(entity.email),
-    website: emptyToNull(entity.website),
-    region: emptyToNull(entity.region),
-    location: emptyToNull(entity.location),
-    location_geo: emptyToNull(entity.location_geo),
-    region_structure: emptyToNull(entity.region_structure),
-    info: emptyToNull(entity.info),
-    assigned_user_ids: entity.assigned_user_ids ?? [],
-  });
-
-  if (commission) {
-    const commissionPayload = {
-      status: commission.status,
-      position: emptyToNull(commission.position),
-      service_position: emptyToNull(commission.service_position),
-      assigned_user_ids: commission.assigned_user_ids ?? [],
-      budget: emptyToNull(commission.budget),
-      commission_value: emptyToNull(commission.commission_value),
-      priority: emptyToNull(commission.priority),
-      state: emptyToNull(commission.state),
-      deadline: emptyToNull(commission.deadline),
-      notes: emptyToNull(commission.notes),
-    };
-
-    const response = await apiPost<{ entity: { entity_id: string } }>(`${base}/with-commission`, {
-      entity: entityPayload,
-      commission: commissionPayload,
-    });
-    return response?.entity?.entity_id ?? "";
-  }
-
-  const response = await apiPost<{ entity_id: string }>(base, entityPayload);
-  return response?.entity_id ?? "";
+  return { failed, created };
 };

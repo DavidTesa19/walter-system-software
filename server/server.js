@@ -48,6 +48,16 @@ import {
   MIN_DEAL_MEMBERS,
   resolveDealTarget,
 } from "./deal-linking.js";
+import {
+  MIN_SUBJECT_IDENTITIES,
+  SUBJECT_NAMESPACES,
+  SUBJECT_ROLES,
+  isSubjectRole,
+  isValidSubjectRequest,
+  subjectCommissionSummary,
+  subjectIdentityKey,
+  subjectNamespaceLabel,
+} from "./subject-identity.js";
 
 // Load environment variables
 dotenv.config();
@@ -5474,6 +5484,371 @@ app.post('/api/deal-link/detach', authenticateToken, (req, res) => {
   } catch (error) {
     console.error('Error detaching deal link:', error);
     res.status(500).json({ error: error.message || 'Failed to detach deal link' });
+  }
+});
+
+// =============================================================================
+// SUBJECT IDENTITY — the same subject acting as Klient / Partner / Tipař.
+//
+// A subject is stored once per role, so its commissions used to be visible only
+// from the one section the profile panel happened to be open in. `subject_id`
+// ties those role records together; these routes read and edit that grouping,
+// and move a commission from one of the subject's roles to another.
+// See subject-identity.js.
+// =============================================================================
+
+const findSubjectEntitiesBySubjectId = (db, type, namespace, subjectId) =>
+  getSectionLinkRows(db, 'entity', type, namespace).filter((row) => row.subject_id === subjectId);
+
+/**
+ * Every entity row that is the same real subject as `startRow`: the transitive
+ * closure over `subject_id` (the same subject in another role) and `link_id`
+ * (the same row mirrored into another section).
+ */
+const collectSubjectIdentities = (db, type, namespace, startRow) => {
+  const found = new Map();
+  const queue = [{ type, namespace, row: startRow }];
+
+  while (queue.length > 0) {
+    const current = queue.shift();
+    const key = subjectIdentityKey(current.type, current.namespace, current.row.id);
+    if (found.has(key)) continue;
+    found.set(key, current);
+
+    if (current.row.subject_id) {
+      for (const role of SUBJECT_ROLES) {
+        for (const ns of SUBJECT_NAMESPACES) {
+          for (const row of findSubjectEntitiesBySubjectId(db, role, ns, current.row.subject_id)) {
+            queue.push({ type: role, namespace: ns, row });
+          }
+        }
+      }
+    }
+
+    if (current.row.link_id) {
+      for (const ns of otherNamespaces(current.namespace)) {
+        const twin = findSectionLinkRowByLinkId(getSectionLinkRows(db, 'entity', current.type, ns), current.row.link_id);
+        if (twin) queue.push({ type: current.type, namespace: ns, row: twin });
+      }
+    }
+  }
+
+  return [...found.values()];
+};
+
+/**
+ * The row together with its cross-section mirrors. Those are the same record,
+ * not separate identities, so they join and leave a subject group as one.
+ */
+const collectSubjectLinkTwins = (db, type, namespace, row) => {
+  const twins = [{ type, namespace, row }];
+  if (!row.link_id) return twins;
+  for (const ns of otherNamespaces(namespace)) {
+    const twin = findSectionLinkRowByLinkId(getSectionLinkRows(db, 'entity', type, ns), row.link_id);
+    if (twin) twins.push({ type, namespace: ns, row: twin });
+  }
+  return twins;
+};
+
+const buildSubjectIdentityView = (identity, selfKey) => ({
+  key: subjectIdentityKey(identity.type, identity.namespace, identity.row.id),
+  type: identity.type,
+  namespace: identity.namespace,
+  namespaceLabel: subjectNamespaceLabel(identity.namespace),
+  entityInternalId: identity.row.id,
+  entityCode: identity.row.entity_id,
+  name: entityDisplayName(identity.row),
+  status: identity.row.status,
+  self: subjectIdentityKey(identity.type, identity.namespace, identity.row.id) === selfKey,
+});
+
+/**
+ * The subject's identities and commissions, grouped by role. `status` scopes the
+ * commissions to the tab the panel was opened from, so the three role tables
+ * agree with the grid behind them instead of mixing archived rows into the
+ * active view.
+ */
+const buildSubjectStatus = (db, namespace, type, sourceRow, status) => {
+  const identities = collectSubjectIdentities(db, type, namespace, sourceRow);
+  const selfKey = subjectIdentityKey(type, namespace, sourceRow.id);
+  const roles = {};
+
+  for (const role of SUBJECT_ROLES) {
+    const roleIdentities = identities.filter((identity) => identity.type === role);
+    const commissions = [];
+
+    for (const identity of roleIdentities) {
+      for (const row of getSectionLinkRows(db, 'commission', role, identity.namespace)) {
+        if (Number(row.entity_id) !== Number(identity.row.id)) continue;
+        if (status && row.status !== status) continue;
+        commissions.push({
+          ...subjectCommissionSummary(row),
+          type: role,
+          namespace: identity.namespace,
+          namespaceLabel: subjectNamespaceLabel(identity.namespace),
+          entityInternalId: identity.row.id,
+          entityCode: identity.row.entity_id,
+          entityName: entityDisplayName(identity.row),
+          self: subjectIdentityKey(role, identity.namespace, identity.row.id) === selfKey,
+        });
+      }
+    }
+
+    commissions.sort((left, right) => String(left.commissionId).localeCompare(String(right.commissionId)));
+    roles[role] = {
+      identities: roleIdentities.map((identity) => buildSubjectIdentityView(identity, selfKey)),
+      commissions,
+    };
+  }
+
+  return {
+    subjectId: sourceRow.subject_id || null,
+    ownType: type,
+    ownNamespace: namespace,
+    ownEntityInternalId: sourceRow.id,
+    roles,
+  };
+};
+
+/**
+ * Create the subject's record in another role and stamp both with one
+ * `subject_id`. The copy carries the descriptive profile over; it is created in
+ * the requested section, which need not be the source's.
+ */
+const createSubjectRoleRecord = (db, type, namespace, sourceRow, targetType, targetNamespace, actorUserId) => {
+  const created = createEntityCounterpart(db, targetType, targetNamespace, sourceRow, actorUserId);
+  const createdRow = findSectionLinkRowById(getSectionLinkRows(db, 'entity', targetType, targetNamespace), created.id);
+  if (!createdRow) return null;
+
+  const subjectId = sourceRow.subject_id || crypto.randomUUID();
+  createdRow.subject_id = subjectId;
+  // A brand-new role record is its own row, never a section mirror of the source.
+  createdRow.link_id = null;
+  for (const identity of collectSubjectIdentities(db, type, namespace, sourceRow)) {
+    identity.row.subject_id = subjectId;
+  }
+  return createdRow;
+};
+
+/**
+ * The subject's record in `targetType`: the one named by `targetEntityId`, else
+ * whichever the identity group already holds (preferring the source's own
+ * section), else a fresh one created and linked on the spot.
+ */
+const resolveSubjectRoleRecord = (db, type, namespace, sourceRow, targetType, targetNamespace, targetEntityId, actorUserId) => {
+  if (targetEntityId !== undefined && targetEntityId !== null && targetEntityId !== '') {
+    return findSectionLinkRowById(getSectionLinkRows(db, 'entity', targetType, targetNamespace), targetEntityId);
+  }
+
+  const candidates = collectSubjectIdentities(db, type, namespace, sourceRow)
+    .filter((identity) => identity.type === targetType);
+  const preferred = candidates.find((identity) => identity.namespace === targetNamespace)
+    ?? candidates.find((identity) => identity.namespace === namespace)
+    ?? candidates[0];
+  if (preferred) return preferred.row;
+
+  return createSubjectRoleRecord(db, type, namespace, sourceRow, targetType, targetNamespace, actorUserId);
+};
+
+app.get('/api/subject-link/status', authenticateToken, (req, res) => {
+  try {
+    const { namespace, type, id, status } = req.query || {};
+    if (!isValidSubjectRequest({ namespace, type, id })) {
+      return res.status(400).json({ error: 'Invalid subject-link request' });
+    }
+    const db = readDb();
+    ensureMigrated(db);
+    const source = findSectionLinkRowById(getSectionLinkRows(db, 'entity', type, namespace), id);
+    if (!source) return res.status(404).json({ error: 'Not found' });
+    res.json(buildSubjectStatus(db, namespace, type, source, status || null));
+  } catch (error) {
+    console.error('Error fetching subject-link status:', error);
+    res.status(500).json({ error: error.message || 'Failed to fetch subject-link status' });
+  }
+});
+
+app.post('/api/subject-link/attach', authenticateToken, (req, res) => {
+  try {
+    const { namespace, type, id, targetType, targetNamespace, targetEntityId, status } = req.body || {};
+    if (!isValidSubjectRequest({ namespace, type, id }) || !isSubjectRole(targetType) || !isLinkableNamespace(targetNamespace)) {
+      return res.status(400).json({ error: 'Invalid subject-link request' });
+    }
+    if (targetEntityId === undefined || targetEntityId === null || targetEntityId === '') {
+      return res.status(400).json({ error: 'targetEntityId is required' });
+    }
+    const db = readDb();
+    ensureMigrated(db);
+
+    const source = findSectionLinkRowById(getSectionLinkRows(db, 'entity', type, namespace), id);
+    if (!source) return res.status(404).json({ error: 'Not found' });
+    const target = findSectionLinkRowById(getSectionLinkRows(db, 'entity', targetType, targetNamespace), targetEntityId);
+    if (!target) return res.status(400).json({ error: 'Target subject not found' });
+
+    // Either side may already carry an identity of its own, and each drags its
+    // cross-section mirrors along, so the two groups merge under one id.
+    const group = [
+      ...collectSubjectIdentities(db, type, namespace, source),
+      ...collectSubjectIdentities(db, targetType, targetNamespace, target),
+    ];
+    const subjectId = source.subject_id || target.subject_id || crypto.randomUUID();
+    for (const identity of group) identity.row.subject_id = subjectId;
+
+    if (!writeDb(db)) return res.status(500).json({ error: 'Failed to persist' });
+    res.status(201).json(buildSubjectStatus(db, namespace, type, source, status || null));
+  } catch (error) {
+    console.error('Error attaching subject link:', error);
+    res.status(500).json({ error: error.message || 'Failed to attach subject link' });
+  }
+});
+
+// Create the subject's record in another role and link it in one step — the
+// "Vytvořit" button on an empty role table.
+app.post('/api/subject-link/create', authenticateToken, (req, res) => {
+  try {
+    const { namespace, type, id, targetType, targetNamespace, status } = req.body || {};
+    const resolvedTargetNamespace = targetNamespace || namespace;
+    if (!isValidSubjectRequest({ namespace, type, id }) || !isSubjectRole(targetType) || !isLinkableNamespace(resolvedTargetNamespace)) {
+      return res.status(400).json({ error: 'Invalid subject-link request' });
+    }
+    const db = readDb();
+    ensureMigrated(db);
+    const actorUserId = getRequestActorUserId(req);
+
+    const source = findSectionLinkRowById(getSectionLinkRows(db, 'entity', type, namespace), id);
+    if (!source) return res.status(404).json({ error: 'Not found' });
+
+    const created = createSubjectRoleRecord(db, type, namespace, source, targetType, resolvedTargetNamespace, actorUserId);
+    if (!created) return res.status(500).json({ error: 'Failed to create subject record' });
+
+    if (!writeDb(db)) return res.status(500).json({ error: 'Failed to persist' });
+    res.status(201).json(buildSubjectStatus(db, namespace, type, source, status || null));
+  } catch (error) {
+    console.error('Error creating subject role record:', error);
+    res.status(500).json({ error: error.message || 'Failed to create subject record' });
+  }
+});
+
+app.post('/api/subject-link/detach', authenticateToken, (req, res) => {
+  try {
+    const { namespace, type, id, targetType, targetNamespace, targetEntityId, status } = req.body || {};
+    if (!isValidSubjectRequest({ namespace, type, id }) || !isSubjectRole(targetType) || !isLinkableNamespace(targetNamespace)) {
+      return res.status(400).json({ error: 'Invalid subject-link request' });
+    }
+    const db = readDb();
+    ensureMigrated(db);
+
+    const source = findSectionLinkRowById(getSectionLinkRows(db, 'entity', type, namespace), id);
+    if (!source) return res.status(404).json({ error: 'Not found' });
+    const target = findSectionLinkRowById(getSectionLinkRows(db, 'entity', targetType, targetNamespace), targetEntityId);
+    if (!target) return res.status(400).json({ error: 'Target subject not found' });
+    if (targetType === type && targetNamespace === namespace && Number(target.id) === Number(source.id)) {
+      return res.status(400).json({ error: 'A subject cannot be unlinked from itself' });
+    }
+
+    for (const twin of collectSubjectLinkTwins(db, targetType, targetNamespace, target)) {
+      twin.row.subject_id = null;
+    }
+
+    // One record left is not a group any more.
+    const remaining = collectSubjectIdentities(db, type, namespace, source);
+    if (remaining.filter((identity) => identity.row.subject_id).length < MIN_SUBJECT_IDENTITIES) {
+      for (const identity of remaining) identity.row.subject_id = null;
+    }
+
+    if (!writeDb(db)) return res.status(500).json({ error: 'Failed to persist' });
+    res.json(buildSubjectStatus(db, namespace, type, source, status || null));
+  } catch (error) {
+    console.error('Error detaching subject link:', error);
+    res.status(500).json({ error: error.message || 'Failed to detach subject link' });
+  }
+});
+
+/**
+ * Move one commission from the role it currently sits under to another role of
+ * the SAME subject — "this job is one we did for them as a partner, not as a
+ * client". The row is recreated under the target role's record and the original
+ * deleted, keeping its deal, its approval state and its assignment. The target
+ * record is created and linked on the fly when the subject has none yet.
+ *
+ * Only fields the target role's table actually has survive the move (see
+ * COMMISSION_CORE_FIELDS): a client commission's Název projektu has nowhere to
+ * land on the partner side, so the caller warns before asking for the move.
+ */
+app.post('/api/subject-link/move-commission', authenticateToken, (req, res) => {
+  try {
+    const {
+      namespace, type, id,
+      commissionNamespace, commissionType, commissionId,
+      targetType, targetNamespace, targetEntityId, status,
+    } = req.body || {};
+    const sourceNamespace = commissionNamespace || namespace;
+    const sourceType = commissionType || type;
+    const resolvedTargetNamespace = targetNamespace || sourceNamespace;
+    if (!isValidSubjectRequest({ namespace, type, id })
+      || !isSubjectRole(sourceType) || !isLinkableNamespace(sourceNamespace)
+      || !isSubjectRole(targetType) || !isLinkableNamespace(resolvedTargetNamespace)
+      || commissionId === undefined || commissionId === null || commissionId === '') {
+      return res.status(400).json({ error: 'Invalid subject-link request' });
+    }
+    const db = readDb();
+    ensureMigrated(db);
+    const actorUserId = getRequestActorUserId(req);
+
+    const subject = findSectionLinkRowById(getSectionLinkRows(db, 'entity', type, namespace), id);
+    if (!subject) return res.status(404).json({ error: 'Not found' });
+    const commission = findSectionLinkRowById(getSectionLinkRows(db, 'commission', sourceType, sourceNamespace), commissionId);
+    if (!commission) return res.status(404).json({ error: 'Commission not found' });
+
+    // Only the subject's own commissions may be moved through its panel.
+    const identities = collectSubjectIdentities(db, type, namespace, subject);
+    const holder = identities.find((identity) => identity.type === sourceType
+      && identity.namespace === sourceNamespace
+      && Number(identity.row.id) === Number(commission.entity_id));
+    if (!holder) return res.status(400).json({ error: 'Commission does not belong to this subject' });
+
+    const targetEntity = resolveSubjectRoleRecord(
+      db, type, namespace, subject, targetType, resolvedTargetNamespace, targetEntityId, actorUserId
+    );
+    if (!targetEntity) return res.status(400).json({ error: 'Target subject not found' });
+    if (targetType === sourceType && resolvedTargetNamespace === sourceNamespace
+      && Number(targetEntity.id) === Number(holder.row.id)) {
+      return res.status(400).json({ error: 'The commission is already on that side' });
+    }
+
+    const created = createCommissionCounterpart(db, targetType, resolvedTargetNamespace, targetEntity.id, commission, actorUserId, {
+      status: commission.status || 'accepted',
+      state: commission.state ?? null,
+      assigned_to: commission.assigned_to ?? null,
+      assigned_user_ids: commission.assigned_user_ids ?? [],
+    });
+    const createdRow = findSectionLinkRowById(getSectionLinkRows(db, 'commission', targetType, resolvedTargetNamespace), created.id);
+    if (createdRow) {
+      // The deal survives the move — the job is the same, only the hat changed.
+      // Its cross-section mirroring does not: those mirrors belonged to the row
+      // that is about to be deleted.
+      createdRow.deal_id = commission.deal_id ?? null;
+      createdRow.link_id = null;
+    }
+
+    deleteCommissionCounterpart(db, sourceType, sourceNamespace, commission.id);
+
+    if (!writeDb(db)) return res.status(500).json({ error: 'Failed to persist' });
+    res.status(201).json({
+      moved: {
+        type: targetType,
+        namespace: resolvedTargetNamespace,
+        namespaceLabel: subjectNamespaceLabel(resolvedTargetNamespace),
+        commissionInternalId: createdRow ? createdRow.id : created.id,
+        commissionId: createdRow ? createdRow.commission_id : created.commission_id,
+        entityInternalId: targetEntity.id,
+        entityCode: targetEntity.entity_id,
+        status: createdRow ? createdRow.status : commission.status,
+      },
+      subject: buildSubjectStatus(db, namespace, type, subject, status || null),
+    });
+  } catch (error) {
+    console.error('Error moving commission between subject roles:', error);
+    res.status(500).json({ error: error.message || 'Failed to move commission' });
   }
 });
 
