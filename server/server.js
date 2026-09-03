@@ -28,6 +28,7 @@ import {
   REMOVED_FIELD_OPTION_LABEL,
 } from "./field-options.js";
 import {
+  companyStructureWithoutFields,
   removeSpecializationFromCompanyStructure,
   renameFieldInCompanyStructure,
 } from "./subject-structure.js";
@@ -50,6 +51,7 @@ import {
 } from "./deal-linking.js";
 import {
   MIN_SUBJECT_IDENTITIES,
+  pickSubjectSharedFields,
   SUBJECT_NAMESPACES,
   SUBJECT_ROLES,
   isSubjectRole,
@@ -3591,6 +3593,7 @@ app.put("/api/partner-entities/:id", authenticateToken, (req, res) => {
     const updated = entityCommissionJson.updatePartnerEntity(db, id, payload);
     if (!updated) return res.status(404).json({ error: "Not found" });
     propagateLinkedFieldSync(db, 'entity', 'partner', 'public', updated, payload);
+    propagateSubjectFieldSync(db, 'partner', 'public', updated, payload);
     if (!writeDb(db)) return res.status(500).json({ error: "Failed to persist" });
     res.json(updated);
   } catch (error) {
@@ -3897,6 +3900,7 @@ app.put("/api/client-entities/:id", authenticateToken, (req, res) => {
     const updated = entityCommissionJson.updateClientEntity(db, id, payload);
     if (!updated) return res.status(404).json({ error: "Not found" });
     propagateLinkedFieldSync(db, 'entity', 'client', 'public', updated, payload);
+    propagateSubjectFieldSync(db, 'client', 'public', updated, payload);
     if (!writeDb(db)) return res.status(500).json({ error: "Failed to persist" });
     res.json(updated);
   } catch (error) {
@@ -4201,6 +4205,7 @@ app.put("/api/tiper-entities/:id", authenticateToken, (req, res) => {
     const updated = entityCommissionJson.updateTiperEntity(db, id, payload);
     if (!updated) return res.status(404).json({ error: "Not found" });
     propagateLinkedFieldSync(db, 'entity', 'tiper', 'public', updated, payload);
+    propagateSubjectFieldSync(db, 'tiper', 'public', updated, payload);
     if (!writeDb(db)) return res.status(500).json({ error: "Failed to persist" });
     res.json(updated);
   } catch (error) {
@@ -4808,6 +4813,7 @@ const createNamespaceRoutes = (routeConfig, countersStoreKey, ensureFn, apiPrefi
         if (apiPrefix === 'growth') {
           propagateLinkedFieldSync(store, 'entity', type, 'growth', updated, payload);
         }
+        propagateSubjectFieldSync(store, type, apiPrefix, updated, payload);
         if (!writeDb(store)) return res.status(500).json({ error: 'Failed to persist' });
         res.json(updated);
       } catch (error) {
@@ -5550,6 +5556,28 @@ const collectSubjectLinkTwins = (db, type, namespace, row) => {
   return twins;
 };
 
+/**
+ * Push a subject's shared contact/location fields (SUBJECT_SHARED_FIELDS)
+ * from a just-updated role record onto every OTHER record of the same
+ * subject — every other role, and each role's own cross-section mirrors.
+ * The cross-ROLE twin of propagateLinkedFieldSync, which only syncs within
+ * one role across sections; Obor/Zaměření are excluded here so each role
+ * keeps its own.
+ */
+const propagateSubjectFieldSync = (db, type, namespace, updatedRow, incomingPayload) => {
+  try {
+    const sharedUpdates = pickSubjectSharedFields(incomingPayload || {});
+    if (Object.keys(sharedUpdates).length === 0) return;
+    const selfKey = subjectIdentityKey(type, namespace, updatedRow.id);
+    for (const identity of collectSubjectIdentities(db, type, namespace, updatedRow)) {
+      if (subjectIdentityKey(identity.type, identity.namespace, identity.row.id) === selfKey) continue;
+      Object.assign(identity.row, sharedUpdates, { updated_at: new Date().toISOString() });
+    }
+  } catch (error) {
+    console.error('Error propagating subject field sync:', error);
+  }
+};
+
 const buildSubjectIdentityView = (identity, selfKey) => ({
   key: subjectIdentityKey(identity.type, identity.namespace, identity.row.id),
   type: identity.type,
@@ -5612,11 +5640,21 @@ const buildSubjectStatus = (db, namespace, type, sourceRow, status) => {
 
 /**
  * Create the subject's record in another role and stamp both with one
- * `subject_id`. The copy carries the descriptive profile over; it is created in
- * the requested section, which need not be the source's.
+ * `subject_id`. The copy carries the descriptive profile over — except Obor
+ * and Zaměření, which are dropped, because a cross-role copy is the same
+ * subject in a different role, and the obor it works in as a partner is
+ * rarely the obor it is a client or a tipař for (same rule the client's
+ * crossTypeCreate.ts applies to the create-modal's checkboxes). It is created
+ * in the requested section, which need not be the source's.
  */
 const createSubjectRoleRecord = (db, type, namespace, sourceRow, targetType, targetNamespace, actorUserId) => {
-  const created = createEntityCounterpart(db, targetType, targetNamespace, sourceRow, actorUserId);
+  const copySource = {
+    ...sourceRow,
+    field: null,
+    field_specialization: null,
+    company_structure: companyStructureWithoutFields(sourceRow.company_structure),
+  };
+  const created = createEntityCounterpart(db, targetType, targetNamespace, copySource, actorUserId);
   const createdRow = findSectionLinkRowById(getSectionLinkRows(db, 'entity', targetType, targetNamespace), created.id);
   if (!createdRow) return null;
 
@@ -5732,6 +5770,31 @@ app.post('/api/subject-link/create', authenticateToken, (req, res) => {
   } catch (error) {
     console.error('Error creating subject role record:', error);
     res.status(500).json({ error: error.message || 'Failed to create subject record' });
+  }
+});
+
+// Push this record's shared contact/location fields (SUBJECT_SHARED_FIELDS)
+// onto every other role/section record of the same subject — the manual
+// "push now" companion to the automatic sync every edit already triggers.
+// Obor/Zaměření never move through here, same as the automatic sync.
+app.post('/api/subject-link/sync', authenticateToken, (req, res) => {
+  try {
+    const { namespace, type, id, status } = req.body || {};
+    if (!isValidSubjectRequest({ namespace, type, id })) {
+      return res.status(400).json({ error: 'Invalid subject-link request' });
+    }
+    const db = readDb();
+    ensureMigrated(db);
+
+    const source = findSectionLinkRowById(getSectionLinkRows(db, 'entity', type, namespace), id);
+    if (!source) return res.status(404).json({ error: 'Not found' });
+
+    propagateSubjectFieldSync(db, type, namespace, source, source);
+    if (!writeDb(db)) return res.status(500).json({ error: 'Failed to persist' });
+    res.json(buildSubjectStatus(db, namespace, type, source, status || null));
+  } catch (error) {
+    console.error('Error syncing subject fields:', error);
+    res.status(500).json({ error: error.message || 'Failed to sync subject fields' });
   }
 });
 

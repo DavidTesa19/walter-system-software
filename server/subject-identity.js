@@ -79,6 +79,36 @@ export const SUBJECT_ID_TABLES = SUBJECT_ROLES.flatMap((role) =>
 export const subjectIdentityKey = (type, namespace, id) => `${type}:${namespace}:${id}`;
 
 /**
+ * The subject fields kept in sync across a subject's roles once they are
+ * linked as the same real-world subject — contacts and location. Obor and
+ * Zaměření (`field`, `field_specialization`, `company_structure`) are
+ * deliberately left out: the obor a subject works in as a partner is rarely
+ * the obor it is a client or a tipař for, so each role keeps its own (same
+ * rule `companyStructureWithoutFields` in subject-structure.js applies when a
+ * role is first created from another).
+ */
+export const SUBJECT_SHARED_FIELDS = [
+  "first_name",
+  "last_name",
+  "email",
+  "phone",
+  "website",
+  "region",
+  "location",
+  "region_structure",
+  "location_geo",
+];
+
+/** Narrow a payload down to the subject's shared fields, present keys only. */
+export const pickSubjectSharedFields = (source = {}) => {
+  const picked = {};
+  for (const field of SUBJECT_SHARED_FIELDS) {
+    if (source[field] !== undefined) picked[field] = source[field];
+  }
+  return picked;
+};
+
+/**
  * Below this many entity rows a `subject_id` no longer groups anything, so it
  * is cleared from whatever is left. Mirrors MIN_DEAL_MEMBERS.
  */

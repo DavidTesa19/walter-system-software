@@ -212,6 +212,25 @@ export const createSubjectIdentity = async (
     fallbackFor(request)
   );
 
+/**
+ * Push this record's shared contact/location fields (name, e-mail, phone,
+ * website, kraj, lokalita) onto every other role/section record of the same
+ * subject. Edits already do this automatically (see server's
+ * propagateSubjectFieldSync); this is the manual "push now" companion, e.g.
+ * after attaching an existing record whose own contact info should be
+ * overwritten with this one's. Obor and Zaměření never travel through here.
+ */
+export const syncSubjectSharedFields = async (request: SubjectRequest): Promise<SubjectStatus> =>
+  normalizeSubjectStatus(
+    await apiPost<unknown>("/api/subject-link/sync", {
+      namespace: request.namespace,
+      type: request.type,
+      id: request.entityId,
+      status: request.status ?? undefined,
+    }),
+    fallbackFor(request)
+  );
+
 /** Drop one role record from the subject. The record itself is left alone. */
 export const detachSubjectIdentity = async (
   request: SubjectRequest,

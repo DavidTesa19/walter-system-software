@@ -67,3 +67,28 @@ export function removeSpecializationFromCompanyStructure(raw, fieldValue, specia
 
   return changed ? serializeStructure(next) : raw;
 }
+
+/**
+ * The company tree for a cross-role subject copy: same companies, no obors.
+ * A copy created in another role (Partner from Klient, etc.) is the same
+ * subject, but the obor it works in as a partner is rarely the obor it is a
+ * client or a tipař for — so Obor and Zaměření are dropped, same as the
+ * client's `crossTypeCreate.ts` does for the create-modal's "Vytvořit i
+ * jako ..." checkboxes. This is what the profile panel's per-role "Vytvořit"
+ * button goes through, so both paths behave the same.
+ */
+export function companyStructureWithoutFields(raw) {
+  const nodes = parseStructure(raw);
+  if (!nodes) return null;
+
+  const companies = [];
+  const seen = new Set();
+  for (const node of nodes) {
+    const company = typeof node?.company === 'string' ? node.company.trim() : '';
+    if (!company || seen.has(company)) continue;
+    seen.add(company);
+    companies.push({ company, fields: [] });
+  }
+
+  return serializeStructure(companies);
+}

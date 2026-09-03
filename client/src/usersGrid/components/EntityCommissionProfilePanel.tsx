@@ -240,6 +240,11 @@ export interface SubjectRoleTableView {
 export interface SubjectRolesConfig {
   tables: SubjectRoleTableView[];
   loading: boolean;
+  /** Whether the subject actually has another linked role/section record to push to. */
+  canSyncSharedFields?: boolean;
+  syncingSharedFields?: boolean;
+  /** Push this record's contacts/location onto every other linked record. Obor/Zaměření never move. */
+  onSyncSharedFields?: () => void;
 }
 
 interface EntityCommissionProfilePanelProps {
@@ -1640,6 +1645,17 @@ const EntityCommissionProfilePanel: React.FC<EntityCommissionProfilePanelProps> 
                             </p>
                           </div>
                           <div className="ec-linked-commissions-actions">
+                            {subjectRoles!.canSyncSharedFields && subjectRoles!.onSyncSharedFields ? (
+                              <button
+                                type="button"
+                                className="ec-header-action secondary"
+                                disabled={subjectRoles!.syncingSharedFields}
+                                title="Přepsat kontakty a lokalitu (Kraj, Lokalita) u propojených záznamů tohoto subjektu hodnotami z tohoto záznamu. Obor a Zaměření zůstávají u každé role vlastní."
+                                onClick={subjectRoles!.onSyncSharedFields}
+                              >
+                                {subjectRoles!.syncingSharedFields ? "Sdílí se…" : "Sdílet kontakty a lokalitu"}
+                              </button>
+                            ) : null}
                             {onRemoveCommission && commission ? (
                               <button type="button" className="ec-header-action danger" onClick={onRemoveCommission}>
                                 Odebrat zakázku

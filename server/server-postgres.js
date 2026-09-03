@@ -30,6 +30,7 @@ import {
   pickCoreFields,
   isValidSectionLinkRequest,
 } from "./section-linking.js";
+import { companyStructureWithoutFields } from "./subject-structure.js";
 import {
   DEAL_TYPES,
   DEAL_NAMESPACES,
@@ -42,6 +43,7 @@ import {
 } from "./deal-linking.js";
 import {
   MIN_SUBJECT_IDENTITIES,
+  pickSubjectSharedFields,
   SUBJECT_NAMESPACES,
   SUBJECT_ROLES,
   isSubjectRole,
@@ -4337,6 +4339,7 @@ const createEntityCommissionRoutes = (entityTypes) => {
         const updated = await updateEntity(id, payload, getRequestActorUserId(req));
         if (!updated) return res.status(404).json({ error: "Not found" });
         await propagateLinkedFieldSync('entity', type, 'public', updated, payload);
+        await propagateSubjectFieldSync(type, 'public', updated, payload);
         res.json(updated);
       } catch (error) {
         console.error(`Error updating ${type} entity:`, error);
@@ -4814,6 +4817,7 @@ const createNamespaceEntityCommissionRoutes = (routeConfig, apiPrefix, entityTyp
         if (apiPrefix === 'growth') {
           await propagateLinkedFieldSync('entity', type, 'growth', updated, payload);
         }
+        await propagateSubjectFieldSync(type, apiPrefix, updated, payload);
         res.json(updated);
       } catch (error) {
         console.error(`Error updating ${apiPrefix} ${type} entity:`, error);
@@ -5527,6 +5531,30 @@ const collectSubjectIdentities = async (type, namespace, startRow) => {
 };
 
 /**
+ * Push a subject's shared contact/location fields (SUBJECT_SHARED_FIELDS)
+ * from a just-updated role record onto every OTHER record of the same
+ * subject — every other role, and each role's own cross-section mirrors.
+ * The cross-ROLE twin of propagateLinkedFieldSync, which only syncs within
+ * one role across sections; Obor/Zaměření are excluded here so each role
+ * keeps its own.
+ */
+const propagateSubjectFieldSync = async (type, namespace, updatedRow, incomingPayload) => {
+  try {
+    const sharedUpdates = pickSubjectSharedFields(incomingPayload || {});
+    if (Object.keys(sharedUpdates).length === 0) return;
+    const selfKey = subjectIdentityKey(type, namespace, updatedRow.id);
+    for (const identity of await collectSubjectIdentities(type, namespace, updatedRow)) {
+      if (subjectIdentityKey(identity.type, identity.namespace, identity.row.id) === selfKey) continue;
+      const table = resolveTable('entity', identity.type, identity.namespace);
+      if (!table) continue;
+      await db.update(table, identity.row.id, sharedUpdates);
+    }
+  } catch (error) {
+    console.error('Error propagating subject field sync:', error);
+  }
+};
+
+/**
  * The row together with its cross-section mirrors. Those are the same record,
  * not separate identities, so they join and leave a subject group as one.
  */
@@ -5605,11 +5633,21 @@ const buildSubjectStatus = async (namespace, type, sourceRow, status) => {
 
 /**
  * Create the subject's record in another role and stamp both with one
- * `subject_id`. The copy carries the descriptive profile over; it is created in
- * the requested section, which need not be the source's.
+ * `subject_id`. The copy carries the descriptive profile over — except Obor
+ * and Zaměření, which are dropped, because a cross-role copy is the same
+ * subject in a different role, and the obor it works in as a partner is
+ * rarely the obor it is a client or a tipař for (same rule the client's
+ * crossTypeCreate.ts applies to the create-modal's checkboxes). It is created
+ * in the requested section, which need not be the source's.
  */
 const createSubjectRoleRecord = async (type, namespace, sourceRow, targetType, targetNamespace, actorUserId) => {
-  const created = await createEntityCounterpart(targetType, targetNamespace, sourceRow, actorUserId);
+  const copySource = {
+    ...sourceRow,
+    field: null,
+    field_specialization: null,
+    company_structure: companyStructureWithoutFields(sourceRow.company_structure),
+  };
+  const created = await createEntityCounterpart(targetType, targetNamespace, copySource, actorUserId);
   if (!created) return null;
 
   const subjectId = sourceRow.subject_id || crypto.randomUUID();
@@ -5715,6 +5753,28 @@ app.post('/api/subject-link/create', authenticateToken, async (req, res) => {
   } catch (error) {
     console.error('Error creating subject role record:', error);
     res.status(500).json({ error: error.message || 'Failed to create subject record' });
+  }
+});
+
+// Push this record's shared contact/location fields (SUBJECT_SHARED_FIELDS)
+// onto every other role/section record of the same subject — the manual
+// "push now" companion to the automatic sync every edit already triggers.
+// Obor/Zaměření never move through here, same as the automatic sync.
+app.post('/api/subject-link/sync', authenticateToken, async (req, res) => {
+  try {
+    const { namespace, type, id, status } = req.body || {};
+    if (!isValidSubjectRequest({ namespace, type, id })) {
+      return res.status(400).json({ error: 'Invalid subject-link request' });
+    }
+
+    const source = await db.getById(resolveTable('entity', type, namespace), Number(id));
+    if (!source) return res.status(404).json({ error: 'Not found' });
+
+    await propagateSubjectFieldSync(type, namespace, source, source);
+    res.json(await buildSubjectStatus(namespace, type, source, status || null));
+  } catch (error) {
+    console.error('Error syncing subject fields:', error);
+    res.status(500).json({ error: error.message || 'Failed to sync subject fields' });
   }
 });
 

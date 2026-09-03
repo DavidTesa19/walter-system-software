@@ -10,6 +10,7 @@ import {
   emptySubjectStatus,
   getSubjectStatus,
   moveCommissionToRole,
+  syncSubjectSharedFields,
   type SubjectCommission,
   type SubjectRole,
   type SubjectStatus,
@@ -88,6 +89,7 @@ export const useSubjectRoles = ({
   const [subject, setSubject] = useState<SubjectStatus | null>(null);
   const [loading, setLoading] = useState(false);
   const [busyRole, setBusyRole] = useState<SubjectRole | null>(null);
+  const [syncing, setSyncing] = useState(false);
   const [options, setOptions] = useState<Partial<Record<SubjectRole, DealSubjectOption[]>>>({});
   const [optionsLoading, setOptionsLoading] = useState<SubjectRole | null>(null);
 
@@ -202,6 +204,29 @@ export const useSubjectRoles = ({
     },
     [runRoleAction]
   );
+
+  // Manual "push now": re-send this record's own contacts/location onto every
+  // other role/section record of the subject. Edits already do this on their
+  // own (see server's propagateSubjectFieldSync); this is for catching up a
+  // record that was just attached, or one edited before the auto-sync shipped.
+  const handleSync = useCallback(() => {
+    const current = requestRef.current;
+    if (!current) return;
+    if (!window.confirm(
+      "Přepsat kontakty a lokalitu (Kraj, Lokalita) u všech propojených záznamů tohoto subjektu hodnotami z tohoto záznamu? Obor a Zaměření se nepřenáší."
+    )) return;
+    setSyncing(true);
+    syncSubjectSharedFields(current)
+      .then(async (result) => {
+        setSubject(result);
+        if (onChanged) await onChanged();
+      })
+      .catch((error) => {
+        console.error("Error syncing subject fields:", error);
+        alert("Sdílené údaje se nepodařilo rozeslat.");
+      })
+      .finally(() => setSyncing(false));
+  }, [onChanged]);
 
   const handleUnlink = useCallback(
     (role: SubjectRole, targetNamespace: LinkableNamespace, targetEntityId: number, label: string) => {
@@ -364,7 +389,16 @@ export const useSubjectRoles = ({
       };
     });
 
-    return { tables, loading };
+    return {
+      tables,
+      loading,
+      // The push-now button only means something once another role/section
+      // record actually exists to receive it — the subject's own record is
+      // always in `identityKeys`, so more than one means it is really linked.
+      canSyncSharedFields: !readOnly && identityKeys.size > 1,
+      syncingSharedFields: syncing,
+      onSyncSharedFields: readOnly ? undefined : handleSync,
+    };
   }, [
     request,
     subject,
@@ -376,6 +410,8 @@ export const useSubjectRoles = ({
     formatAssigned,
     readOnly,
     busyRole,
+    syncing,
+    handleSync,
     options,
     optionsLoading,
     loadOptions,
