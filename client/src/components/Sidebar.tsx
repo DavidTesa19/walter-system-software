@@ -1,7 +1,9 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { canAccessGrowthSystem, canAccessProjectsSystem, canAccessStandardSystem, isViewAllowedForRole, useAuth } from '../auth/AuthContext';
 import ActivityIndicator from '../activity/ActivityIndicator';
+import ActivityConfirmAllButton from '../activity/ActivityConfirmAllButton';
 import { useActivity } from '../activity/ActivityContext';
+import { buildCollectionKeysForSystem } from '../activity/activityKeys';
 import { trackEvent } from '../utils/analytics';
 import type { AppView } from '../types/appView';
 import type { GlobalSearchResult } from '../types/globalSearch';
@@ -21,6 +23,40 @@ type SidebarGroupItem = {
   icon: React.ReactNode;
   activeViews?: AppView[];
   countViews?: AppView[];
+  // Collection keys to mark seen when this item's "confirm all" control is
+  // clicked — every table, every grid view (active/pending/archived) it
+  // represents, so the bubble clears regardless of which one is on screen.
+  confirmKeys?: string[];
+};
+
+// Small checkmark button shown next to a bubble count, so a whole table,
+// group, or the entire app can be confirmed ("mark as seen") in one click
+// without having to open every view that has something unseen in it.
+const SidebarConfirmButton: React.FC<{ count: number; label: string; onConfirm: () => void }> = ({
+  count,
+  label,
+  onConfirm,
+}) => {
+  if (count <= 0) {
+    return null;
+  }
+
+  return (
+    <button
+      type="button"
+      className="sidebar-confirm-btn"
+      onClick={(event) => {
+        event.stopPropagation();
+        onConfirm();
+      }}
+      title={`Potvrdit vše: ${label}`}
+      aria-label={`Potvrdit vše: ${label}`}
+    >
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+        <polyline points="20 6 9 17 4 12"></polyline>
+      </svg>
+    </button>
+  );
 };
 
 type SidebarSection = {
@@ -156,7 +192,7 @@ const Sidebar: React.FC<SidebarProps> = ({
   onSearchNavigate
 }) => {
   const { user, logout } = useAuth();
-  const { getViewCount } = useActivity();
+  const { getViewCount, markCollectionsSeen } = useActivity();
   const accessScope = user?.accessScope;
   const userRole = user?.role;
   const canAccessStandard = canAccessStandardSystem(accessScope);
@@ -319,7 +355,8 @@ const Sidebar: React.FC<SidebarProps> = ({
               label: 'Subjekty',
               icon: <Icons.Tables />,
               activeViews: ['growth_subjects_active', 'growth_subjects_pending', 'growth_subjects_archived'],
-              countViews: ['growth_subjects_active', 'growth_subjects_pending', 'growth_subjects_archived']
+              countViews: ['growth_subjects_active', 'growth_subjects_pending', 'growth_subjects_archived'],
+              confirmKeys: buildCollectionKeysForSystem('growth', 'subjects')
             }
           ]
         },
@@ -333,7 +370,8 @@ const Sidebar: React.FC<SidebarProps> = ({
               label: 'Zakázky',
               icon: <Icons.Tables />,
               activeViews: ['growth_active', 'growth_pending', 'growth_archived'],
-              countViews: ['growth_active', 'growth_pending', 'growth_archived']
+              countViews: ['growth_active', 'growth_pending', 'growth_archived'],
+              confirmKeys: buildCollectionKeysForSystem('growth', 'commissions')
             }
           ]
         }
@@ -354,7 +392,8 @@ const Sidebar: React.FC<SidebarProps> = ({
               label: 'Subjekty',
               icon: <Icons.Tables />,
               activeViews: ['entities_active', 'entities_pending', 'entities_archived'],
-              countViews: ['entities_active', 'entities_pending', 'entities_archived']
+              countViews: ['entities_active', 'entities_pending', 'entities_archived'],
+              confirmKeys: buildCollectionKeysForSystem('standard', 'subjects')
             }
           ]
         },
@@ -368,7 +407,8 @@ const Sidebar: React.FC<SidebarProps> = ({
               label: 'Zakázky',
               icon: <Icons.Tables />,
               activeViews: ['active', 'pending', 'archived'],
-              countViews: ['active', 'pending', 'archived']
+              countViews: ['active', 'pending', 'archived'],
+              confirmKeys: buildCollectionKeysForSystem('standard', 'commissions')
             }
           ]
         }
@@ -389,7 +429,8 @@ const Sidebar: React.FC<SidebarProps> = ({
               label: 'Subjekty',
               icon: <Icons.Tables />,
               activeViews: ['projects_subjects_active', 'projects_subjects_pending', 'projects_subjects_archived'],
-              countViews: ['projects_subjects_active', 'projects_subjects_pending', 'projects_subjects_archived']
+              countViews: ['projects_subjects_active', 'projects_subjects_pending', 'projects_subjects_archived'],
+              confirmKeys: buildCollectionKeysForSystem('projects', 'subjects')
             }
           ]
         },
@@ -403,7 +444,8 @@ const Sidebar: React.FC<SidebarProps> = ({
               label: 'Zakázky',
               icon: <Icons.Tables />,
               activeViews: ['projects_active', 'projects_pending', 'projects_archived'],
-              countViews: ['projects_active', 'projects_pending', 'projects_archived']
+              countViews: ['projects_active', 'projects_pending', 'projects_archived'],
+              confirmKeys: buildCollectionKeysForSystem('projects', 'commissions')
             }
           ]
         }
@@ -477,6 +519,15 @@ const Sidebar: React.FC<SidebarProps> = ({
   const getSectionCount = (section: SidebarSection) => section.items.reduce((sum, item) => sum + getItemCount(item), 0);
   const getGroupCount = (group: SidebarGroup) => group.sections.reduce((sum, section) => sum + getSectionCount(section), 0);
   const getSingleGroupCount = (group: SidebarSingleItem) => group.items.reduce((sum, item) => sum + getItemCount(item), 0);
+
+  // Collection keys backing each level's "confirm all" control — a table (all
+  // three grid views), a whole section/group (every table it contains), or,
+  // flattened across every visible group, the entire app.
+  const getItemConfirmKeys = (item: SidebarGroupItem) => item.confirmKeys ?? [];
+  const getSectionConfirmKeys = (section: SidebarSection) => section.items.flatMap(getItemConfirmKeys);
+  const getGroupConfirmKeys = (group: SidebarGroup) => group.sections.flatMap(getSectionConfirmKeys);
+  const globalUnseenCount = visibleSidebarGroups.reduce((sum, group) => sum + getGroupCount(group), 0);
+  const globalConfirmKeys = visibleSidebarGroups.flatMap(getGroupConfirmKeys);
 
   return (
     <div className="sidebar">
@@ -630,21 +681,37 @@ ${meta}`;
           )}
         </div>
 
+        {globalUnseenCount > 0 && (
+          <div className="sidebar-confirm-everything">
+            <ActivityConfirmAllButton
+              count={globalUnseenCount}
+              onConfirm={() => markCollectionsSeen(globalConfirmKeys)}
+            />
+          </div>
+        )}
+
         {visibleSidebarGroups.map(group => (
           <div key={group.id} className="sidebar-group sidebar-group--major">
-            <button
-              className={`sidebar-group-header ${expandedGroups[group.id] ? 'expanded' : ''}`}
-              onClick={() => toggleGroup(group.id)}
-            >
-              <div className="group-header-content">
-                {group.icon}
-                <span className="group-label">{group.label}</span>
-                <ActivityIndicator count={getGroupCount(group)} muted={expandedGroups[group.id]} title="Nepřečtené změny" />
-              </div>
-              <span className="group-chevron">
-                {expandedGroups[group.id] ? <Icons.ChevronDown /> : <Icons.ChevronRight />}
-              </span>
-            </button>
+            <div className="sidebar-row">
+              <button
+                className={`sidebar-group-header ${expandedGroups[group.id] ? 'expanded' : ''}`}
+                onClick={() => toggleGroup(group.id)}
+              >
+                <div className="group-header-content">
+                  {group.icon}
+                  <span className="group-label">{group.label}</span>
+                  <ActivityIndicator count={getGroupCount(group)} muted={expandedGroups[group.id]} title="Nepřečtené změny" />
+                </div>
+                <span className="group-chevron">
+                  {expandedGroups[group.id] ? <Icons.ChevronDown /> : <Icons.ChevronRight />}
+                </span>
+              </button>
+              <SidebarConfirmButton
+                count={getGroupCount(group)}
+                label={group.label}
+                onConfirm={() => markCollectionsSeen(getGroupConfirmKeys(group))}
+              />
+            </div>
 
             {expandedGroups[group.id] && (
               <div className="sidebar-group-content sidebar-group-content--sections">
@@ -655,46 +722,65 @@ ${meta}`;
                   if (isSingleSectionItem) {
                     const item = section.items[0];
                     return (
-                      <button
-                        key={section.id}
-                        className={`sidebar-button sidebar-button--leaf ${isItemActive(item) ? 'active' : ''}`}
-                        onClick={() => onViewChange(item.id)}
-                      >
-                        {section.icon}
-                        <span>{section.label}</span>
-                        <ActivityIndicator count={getItemCount(item)} muted={isItemActive(item)} title="Nepřečtené změny" />
-                      </button>
+                      <div key={section.id} className="sidebar-row">
+                        <button
+                          className={`sidebar-button sidebar-button--leaf ${isItemActive(item) ? 'active' : ''}`}
+                          onClick={() => onViewChange(item.id)}
+                        >
+                          {section.icon}
+                          <span>{section.label}</span>
+                          <ActivityIndicator count={getItemCount(item)} muted={isItemActive(item)} title="Nepřečtené změny" />
+                        </button>
+                        <SidebarConfirmButton
+                          count={getItemCount(item)}
+                          label={section.label}
+                          onConfirm={() => markCollectionsSeen(getItemConfirmKeys(item))}
+                        />
+                      </div>
                     );
                   }
 
                   return (
                     <div key={section.id} className="sidebar-section">
-                      <button
-                        className={`sidebar-section-header ${expandedGroups[section.id] ? 'expanded' : ''}`}
-                        onClick={() => toggleGroup(section.id)}
-                      >
-                        <div className="group-header-content">
-                          {section.icon}
-                          <span className="group-label">{section.label}</span>
-                          <ActivityIndicator count={getSectionCount(section)} muted={expandedGroups[section.id]} title="Nepřečtené změny" />
-                        </div>
-                        <span className="group-chevron">
-                          {expandedGroups[section.id] ? <Icons.ChevronDown /> : <Icons.ChevronRight />}
-                        </span>
-                      </button>
+                      <div className="sidebar-row">
+                        <button
+                          className={`sidebar-section-header ${expandedGroups[section.id] ? 'expanded' : ''}`}
+                          onClick={() => toggleGroup(section.id)}
+                        >
+                          <div className="group-header-content">
+                            {section.icon}
+                            <span className="group-label">{section.label}</span>
+                            <ActivityIndicator count={getSectionCount(section)} muted={expandedGroups[section.id]} title="Nepřečtené změny" />
+                          </div>
+                          <span className="group-chevron">
+                            {expandedGroups[section.id] ? <Icons.ChevronDown /> : <Icons.ChevronRight />}
+                          </span>
+                        </button>
+                        <SidebarConfirmButton
+                          count={getSectionCount(section)}
+                          label={section.label}
+                          onConfirm={() => markCollectionsSeen(getSectionConfirmKeys(section))}
+                        />
+                      </div>
 
                       {expandedGroups[section.id] && (
                         <div className="sidebar-section-content">
                           {section.items.map(item => (
-                            <button
-                              key={item.id}
-                              className={`sidebar-button sidebar-button--leaf ${isItemActive(item) ? 'active' : ''}`}
-                              onClick={() => onViewChange(item.id)}
-                            >
-                              {item.icon}
-                              <span>{item.label}</span>
-                              <ActivityIndicator count={getItemCount(item)} muted={isItemActive(item)} title="Nepřečtené změny" />
-                            </button>
+                            <div key={item.id} className="sidebar-row">
+                              <button
+                                className={`sidebar-button sidebar-button--leaf ${isItemActive(item) ? 'active' : ''}`}
+                                onClick={() => onViewChange(item.id)}
+                              >
+                                {item.icon}
+                                <span>{item.label}</span>
+                                <ActivityIndicator count={getItemCount(item)} muted={isItemActive(item)} title="Nepřečtené změny" />
+                              </button>
+                              <SidebarConfirmButton
+                                count={getItemCount(item)}
+                                label={item.label}
+                                onConfirm={() => markCollectionsSeen(getItemConfirmKeys(item))}
+                              />
+                            </div>
                           ))}
                         </div>
                       )}

@@ -10,6 +10,9 @@ import {
 import UsersGrid from "../usersGrid/UsersGrid";
 import { APPROVAL_STATUS_META } from "../usersGrid/utils/approvalStatus";
 import { useUndoRedo } from "../utils/undoRedo";
+import ActivityIndicator from "../activity/ActivityIndicator";
+import { useActivity } from "../activity/ActivityContext";
+import { ACTIVITY_TABLES, buildCommissionsCollectionKey, buildSubjectsCollectionKey } from "../activity/activityKeys";
 import "./ProjectsSectionView.css";
 
 type ProjectsSectionKind = "subjects" | "commissions";
@@ -108,6 +111,7 @@ const ProjectsSectionView: React.FC<ProjectsSectionViewProps> = ({
 }) => {
   const isCommissionsSection = kind === "commissions";
   const { signal } = useUndoRedo();
+  const { getCollectionCount } = useActivity();
   const currentGridView = useMemo(() => getGridViewFromRoute(kind, activeView), [activeView, kind]);
   const [lastActiveStatusView, setLastActiveStatusView] = useState<ProjectActiveStatusView>(() =>
     getStoredLastActiveStatus(kind)
@@ -244,6 +248,31 @@ const ProjectsSectionView: React.FC<ProjectsSectionViewProps> = ({
     [isCommissionsSection, summaryCounts]
   );
 
+  // Unseen count for a whole mode tab, summed across Klienti/Partneři/Tipaři
+  // (and, for "Aktivní", across the active + pending grid views it covers) —
+  // otherwise a change sitting in "Archiv" is invisible until clicked into.
+  const getModeCount = useCallback(
+    (views: GridView[]) =>
+      views.reduce(
+        (total, view) =>
+          total +
+          ACTIVITY_TABLES.reduce(
+            (sum, table) =>
+              sum +
+              getCollectionCount(
+                kind === "subjects"
+                  ? buildSubjectsCollectionKey("projects", view, table)
+                  : buildCommissionsCollectionKey("projects", view, table)
+              ),
+            0
+          ),
+        0
+      ),
+    [getCollectionCount, kind]
+  );
+  const activeModeCount = getModeCount(isCommissionsSection ? ["active", "pending"] : ["active"]);
+  const archivedModeCount = getModeCount(["archived"]);
+
   const title = kind === "subjects" ? "Projekty - Subjekty" : "Projekty - Zakázky";
 
   return (
@@ -255,14 +284,20 @@ const ProjectsSectionView: React.FC<ProjectsSectionViewProps> = ({
             className={`nav-tab${currentGridView !== "archived" ? " active" : ""}`}
             onClick={handleShowActive}
           >
-            📋 Aktivní
+            <span className="nav-tab__content">
+              <span>📋 Aktivní</span>
+              <ActivityIndicator count={activeModeCount} muted={currentGridView !== "archived"} title="Nepřečtené změny" />
+            </span>
           </button>
           <button
             type="button"
             className={`nav-tab${currentGridView === "archived" ? " active" : ""}`}
             onClick={handleShowArchive}
           >
-            📦 Archiv
+            <span className="nav-tab__content">
+              <span>📦 Archiv</span>
+              <ActivityIndicator count={archivedModeCount} muted={currentGridView === "archived"} title="Nepřečtené změny" />
+            </span>
           </button>
         </div>
       </div>

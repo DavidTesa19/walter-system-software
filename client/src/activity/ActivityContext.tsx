@@ -66,6 +66,7 @@ interface ActivityContextValue {
   getFieldActivity: (scope: string, itemId: string | number, entry: FieldActivityEntry | null | undefined) => FieldActivityState;
   markViewSeen: (view: AppView) => void;
   markCollectionSeen: (collectionKey: string) => void;
+  markCollectionsSeen: (collectionKeys: string[]) => void;
   markItemSeen: (scope: string, itemId: string | number, seenAt?: string | null) => void;
   markItemsSeen: (entries: MarkItemSeenEntry[]) => void;
   refresh: () => Promise<void>;
@@ -282,6 +283,33 @@ export const ActivityProvider: React.FC<ActivityProviderProps> = ({ userId, user
     });
   }, []);
 
+  // Bulk-confirm every row belonging to any of the given collections (a whole
+  // table across all three grid views, a whole system, or several systems at
+  // once), using the rows the provider already has on hand from its last
+  // refresh — no need for the caller (e.g. the sidebar) to know which specific
+  // records are unseen.
+  const markCollectionsSeen = useCallback((collectionKeys: string[]) => {
+    if (!collectionKeys.length) {
+      return;
+    }
+    const keySet = new Set(collectionKeys);
+    const entries: MarkItemSeenEntry[] = [];
+    for (const entry of rawEntries) {
+      if (!entry.collectionKey || !keySet.has(entry.collectionKey)) {
+        continue;
+      }
+      for (const row of entry.rows) {
+        const id = row.id;
+        if (typeof id !== "number" && typeof id !== "string") {
+          continue;
+        }
+        const { latestAt } = getActivityTimestampsFromRecord(row);
+        entries.push({ scope: entry.scope, itemId: id, seenAt: latestAt });
+      }
+    }
+    markItemsSeen(entries);
+  }, [rawEntries, markItemsSeen]);
+
   useEffect(() => {
     if (!userId) {
       return;
@@ -327,7 +355,13 @@ export const ActivityProvider: React.FC<ActivityProviderProps> = ({ userId, user
         [namespacePrefix ? `${namespacePrefix}_archived` : "archived", "archived"],
       ] as const).forEach(([view, gridView]) => {
         STANDARD_TABLES.forEach((table) => {
-          const endpointBase = namespacePrefix ? `${prefix}/${table.slice(0, -1)}-commissions` : `/${table}`;
+          // Always the modern `-commissions` endpoint — never the legacy
+          // `/clients|partners|tipers` table. That one carries no
+          // created_at/updated_at, so every row it returns reads as
+          // permanently "seen" and the standard system's commission bubbles
+          // (nav-tab counts, sidebar counts, "Potvrdit vše") stayed stuck at
+          // zero everywhere, not just on the pending/archived tabs.
+          const endpointBase = `${prefix}/${table.slice(0, -1)}-commissions`;
           queueTableCollections(
             tasks,
             entries,
@@ -451,10 +485,11 @@ export const ActivityProvider: React.FC<ActivityProviderProps> = ({ userId, user
     },
     markViewSeen,
     markCollectionSeen,
+    markCollectionsSeen,
     markItemSeen,
     markItemsSeen,
     refresh,
-  }), [activityState.baselineAt, activityState.items, markCollectionSeen, markItemSeen, markItemsSeen, markViewSeen, refresh, snapshot.collectionCounts, snapshot.viewCounts, userId]);
+  }), [activityState.baselineAt, activityState.items, markCollectionSeen, markCollectionsSeen, markItemSeen, markItemsSeen, markViewSeen, refresh, snapshot.collectionCounts, snapshot.viewCounts, userId]);
 
   return <ActivityContext.Provider value={value}>{children}</ActivityContext.Provider>;
 };

@@ -237,6 +237,60 @@
   width: 100%;
 }
 
+/* A nav row that also carries a "confirm all" control alongside it: the nav
+   button/header gives up its own 100% width to share the row instead. */
+.sidebar-row {
+  display: flex;
+  align-items: stretch;
+  gap: 0.2rem;
+}
+
+.sidebar-row > .sidebar-button,
+.sidebar-row > .sidebar-group-header,
+.sidebar-row > .sidebar-section-header {
+  width: auto;
+  flex: 1;
+  min-width: 0;
+}
+
+/* Checkmark button that marks every unseen change behind one bubble as seen —
+   a whole table (all grid views), a whole group, or, at the top of the
+   sidebar, everything at once. Only rendered while there is something to
+   confirm. */
+.sidebar-confirm-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  align-self: center;
+  flex-shrink: 0;
+  width: 1.6rem;
+  height: 1.6rem;
+  padding: 0;
+  border: 1px solid transparent;
+  border-radius: 0.4rem;
+  background: transparent;
+  color: var(--color-text-muted);
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.sidebar-confirm-btn:hover {
+  background: color-mix(in srgb, var(--color-primary) 14%, transparent);
+  border-color: color-mix(in srgb, var(--color-primary) 35%, transparent);
+  color: var(--color-primary);
+}
+
+/* Wraps the app-wide "Potvrdit vše" button (all systems, all tables, all grid
+   views) above the group list. */
+.sidebar-confirm-everything {
+  margin-bottom: 0.5rem;
+}
+
+.sidebar-confirm-everything .activity-confirm-all-btn {
+  width: 100%;
+  justify-content: center;
+}
+
 .sidebar-button:hover, .sidebar-group-header:hover {
   background: var(--color-surface-hover);
   color: var(--color-text);

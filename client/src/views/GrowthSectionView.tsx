@@ -9,6 +9,9 @@ import {
 } from "../utils/tableViewState";
 import { getGeneralViewFor } from "./sectionToggle";
 import { useAuth, canAccessStandardSystem, canAccessGrowthSystem } from "../auth/AuthContext";
+import ActivityIndicator from "../activity/ActivityIndicator";
+import { useActivity } from "../activity/ActivityContext";
+import { ACTIVITY_TABLES, buildCommissionsCollectionKey, buildSubjectsCollectionKey } from "../activity/activityKeys";
 import "./GrowthSectionView.css";
 
 type GrowthSectionKind = "subjects" | "commissions";
@@ -58,8 +61,27 @@ const GrowthSectionView: React.FC<GrowthSectionViewProps> = ({
   searchTarget,
 }) => {
   const { user } = useAuth();
+  const { getCollectionCount } = useActivity();
   const currentGridView = getGridViewFromRoute(kind, activeView);
   const canToggleSection = canAccessStandardSystem(user?.accessScope) && canAccessGrowthSystem(user?.accessScope);
+
+  // Unseen count for a whole mode tab (Aktivní / Ke schválení / Archiv), summed
+  // across Klienti/Partneři/Tipaři — otherwise a change sitting in "Ke
+  // schválení" or "Archiv" is invisible until the user happens to click over.
+  const getModeCount = useCallback(
+    (view: GridView) =>
+      ACTIVITY_TABLES.reduce(
+        (sum, table) =>
+          sum +
+          getCollectionCount(
+            kind === "subjects"
+              ? buildSubjectsCollectionKey("growth", view, table)
+              : buildCommissionsCollectionKey("growth", view, table)
+          ),
+        0
+      ),
+    [getCollectionCount, kind]
+  );
 
   const handleSelect = useCallback(
     (view: GridView) => {
@@ -95,7 +117,10 @@ const GrowthSectionView: React.FC<GrowthSectionViewProps> = ({
               className={`nav-tab${currentGridView === key ? " active" : ""}`}
               onClick={() => handleSelect(key)}
             >
-              {icon} {label}
+              <span className="nav-tab__content">
+                <span>{icon} {label}</span>
+                <ActivityIndicator count={getModeCount(key)} muted={currentGridView === key} title="Nepřečtené změny" />
+              </span>
             </button>
           ))}
         </div>
