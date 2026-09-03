@@ -223,11 +223,23 @@ export const useSubjectRoles = ({
     (commission: { namespace: LinkableNamespace; type: SubjectRole; id: number; commissionId: string }, targetRole: SubjectRole) => {
       const current = requestRef.current;
       if (!current) return;
+
+      // Name the record the zakázka will land under. Without it the move reads
+      // as "it vanished" — especially when the target record sits in another
+      // section than the one being looked at.
+      const identities = subject?.roles?.[targetRole]?.identities ?? [];
+      const target = identities.find((identity) => identity.namespace === commission.namespace) ?? identities[0];
+      const destination = target
+        ? `pod záznam ${target.entityCode ?? ''}${target.name ? ` — ${target.name}` : ''} (sekce ${target.namespaceLabel})`
+        : `pod nový záznam ${SUBJECT_ROLE_AS_LABELS[targetRole]}, který se subjektu automaticky vytvoří a propojí`;
+
       if (!window.confirm(
-        `Přesunout zakázku ${commission.commissionId} na stranu ${SUBJECT_ROLE_LABELS[targetRole]}?\n\n`
-        + `Zakázka zmizí ze sekce ${SUBJECT_ROLE_LABELS[commission.type]} a objeví se pod záznamem `
-        + `${SUBJECT_ROLE_AS_LABELS[targetRole]} tohoto subjektu — dostane nové číslo a pole, která cílová `
-        + `strana nemá (např. Název projektu), se nepřenesou. Propojení zakázky i stav schválení zůstávají.`
+        `Přesunout zakázku ${commission.commissionId} na stranu ${SUBJECT_ROLE_LABELS[targetRole]}?
+
+`
+        + `Zakázka zmizí ze strany ${SUBJECT_ROLE_LABELS[commission.type]} a přejde ${destination}. `
+        + `Dostane nové číslo a pole, která cílová strana nemá (např. Název projektu), se nepřenesou. `
+        + `Propojení zakázky i stav schválení zůstávají.`
       )) return;
 
       setBusyRole(commission.type);
@@ -243,7 +255,7 @@ export const useSubjectRoles = ({
         })
         .finally(() => setBusyRole(null));
     },
-    [onChanged, reload]
+    [onChanged, reload, subject]
   );
 
   return useMemo<SubjectRolesConfig | null>(() => {

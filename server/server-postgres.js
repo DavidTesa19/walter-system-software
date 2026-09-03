@@ -5793,16 +5793,20 @@ app.post('/api/subject-link/move-commission', authenticateToken, async (req, res
       && Number(identity.row.id) === Number(commission.entity_id));
     if (!holder) return res.status(400).json({ error: 'Commission does not belong to this subject' });
 
-    const targetEntity = await resolveSubjectRoleRecord(
+    const target = await resolveSubjectRoleRecord(
       type, namespace, subject, targetType, resolvedTargetNamespace, targetEntityId, actorUserId
     );
-    if (!targetEntity) return res.status(400).json({ error: 'Target subject not found' });
-    if (targetType === sourceType && resolvedTargetNamespace === sourceNamespace
+    if (!target) return res.status(400).json({ error: 'Target subject not found' });
+    // The commission follows its new owner into whichever section that record
+    // lives in, which need not be the one the request asked for.
+    const targetEntity = target.row;
+    const targetEntityNamespace = target.namespace;
+    if (targetType === sourceType && targetEntityNamespace === sourceNamespace
       && Number(targetEntity.id) === Number(holder.row.id)) {
       return res.status(400).json({ error: 'The commission is already on that side' });
     }
 
-    const created = await createCommissionCounterpart(targetType, resolvedTargetNamespace, targetEntity.id, commission, actorUserId, {
+    const created = await createCommissionCounterpart(targetType, targetEntityNamespace, targetEntity.id, commission, actorUserId, {
       status: commission.status || 'accepted',
       state: commission.state ?? null,
       assigned_to: commission.assigned_to ?? null,
@@ -5812,7 +5816,7 @@ app.post('/api/subject-link/move-commission', authenticateToken, async (req, res
     // The deal survives the move — the job is the same, only the hat changed.
     // Its cross-section mirroring does not: those mirrors belonged to the row
     // that is about to be deleted.
-    const createdTable = resolveTable('commission', targetType, resolvedTargetNamespace);
+    const createdTable = resolveTable('commission', targetType, targetEntityNamespace);
     await db.setDealId(createdTable, created.id, commission.deal_id ?? null);
     await db.setLinkId(createdTable, created.id, null);
 
@@ -5822,8 +5826,8 @@ app.post('/api/subject-link/move-commission', authenticateToken, async (req, res
     res.status(201).json({
       moved: {
         type: targetType,
-        namespace: resolvedTargetNamespace,
-        namespaceLabel: subjectNamespaceLabel(resolvedTargetNamespace),
+        namespace: targetEntityNamespace,
+        namespaceLabel: subjectNamespaceLabel(targetEntityNamespace),
         commissionInternalId: created.id,
         commissionId: created.commission_id,
         entityInternalId: targetEntity.id,

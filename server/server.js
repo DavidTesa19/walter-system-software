@@ -5637,7 +5637,8 @@ const createSubjectRoleRecord = (db, type, namespace, sourceRow, targetType, tar
  */
 const resolveSubjectRoleRecord = (db, type, namespace, sourceRow, targetType, targetNamespace, targetEntityId, actorUserId) => {
   if (targetEntityId !== undefined && targetEntityId !== null && targetEntityId !== '') {
-    return findSectionLinkRowById(getSectionLinkRows(db, 'entity', targetType, targetNamespace), targetEntityId);
+    const row = findSectionLinkRowById(getSectionLinkRows(db, 'entity', targetType, targetNamespace), targetEntityId);
+    return row ? { row, namespace: targetNamespace } : null;
   }
 
   const candidates = collectSubjectIdentities(db, type, namespace, sourceRow)
@@ -5645,9 +5646,15 @@ const resolveSubjectRoleRecord = (db, type, namespace, sourceRow, targetType, ta
   const preferred = candidates.find((identity) => identity.namespace === targetNamespace)
     ?? candidates.find((identity) => identity.namespace === namespace)
     ?? candidates[0];
-  if (preferred) return preferred.row;
+  // The section comes back with the record. An identity may live in a section
+  // the caller never asked about — a Growth Club partner bound to a Veřejné
+  // client — and filing its commission in the requested section instead would
+  // hang the row off an internal id belonging to a different table, i.e. some
+  // unrelated subject that happens to share the number.
+  if (preferred) return { row: preferred.row, namespace: preferred.namespace };
 
-  return createSubjectRoleRecord(db, type, namespace, sourceRow, targetType, targetNamespace, actorUserId);
+  const created = createSubjectRoleRecord(db, type, namespace, sourceRow, targetType, targetNamespace, actorUserId);
+  return created ? { row: created, namespace: targetNamespace } : null;
 };
 
 app.get('/api/subject-link/status', authenticateToken, (req, res) => {
@@ -5806,22 +5813,26 @@ app.post('/api/subject-link/move-commission', authenticateToken, (req, res) => {
       && Number(identity.row.id) === Number(commission.entity_id));
     if (!holder) return res.status(400).json({ error: 'Commission does not belong to this subject' });
 
-    const targetEntity = resolveSubjectRoleRecord(
+    const target = resolveSubjectRoleRecord(
       db, type, namespace, subject, targetType, resolvedTargetNamespace, targetEntityId, actorUserId
     );
-    if (!targetEntity) return res.status(400).json({ error: 'Target subject not found' });
-    if (targetType === sourceType && resolvedTargetNamespace === sourceNamespace
+    if (!target) return res.status(400).json({ error: 'Target subject not found' });
+    // The commission follows its new owner into whichever section that record
+    // lives in, which need not be the one the request asked for.
+    const targetEntity = target.row;
+    const targetEntityNamespace = target.namespace;
+    if (targetType === sourceType && targetEntityNamespace === sourceNamespace
       && Number(targetEntity.id) === Number(holder.row.id)) {
       return res.status(400).json({ error: 'The commission is already on that side' });
     }
 
-    const created = createCommissionCounterpart(db, targetType, resolvedTargetNamespace, targetEntity.id, commission, actorUserId, {
+    const created = createCommissionCounterpart(db, targetType, targetEntityNamespace, targetEntity.id, commission, actorUserId, {
       status: commission.status || 'accepted',
       state: commission.state ?? null,
       assigned_to: commission.assigned_to ?? null,
       assigned_user_ids: commission.assigned_user_ids ?? [],
     });
-    const createdRow = findSectionLinkRowById(getSectionLinkRows(db, 'commission', targetType, resolvedTargetNamespace), created.id);
+    const createdRow = findSectionLinkRowById(getSectionLinkRows(db, 'commission', targetType, targetEntityNamespace), created.id);
     if (createdRow) {
       // The deal survives the move — the job is the same, only the hat changed.
       // Its cross-section mirroring does not: those mirrors belonged to the row
@@ -5836,8 +5847,8 @@ app.post('/api/subject-link/move-commission', authenticateToken, (req, res) => {
     res.status(201).json({
       moved: {
         type: targetType,
-        namespace: resolvedTargetNamespace,
-        namespaceLabel: subjectNamespaceLabel(resolvedTargetNamespace),
+        namespace: targetEntityNamespace,
+        namespaceLabel: subjectNamespaceLabel(targetEntityNamespace),
         commissionInternalId: createdRow ? createdRow.id : created.id,
         commissionId: createdRow ? createdRow.commission_id : created.commission_id,
         entityInternalId: targetEntity.id,

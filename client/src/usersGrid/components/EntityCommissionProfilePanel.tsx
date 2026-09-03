@@ -1223,9 +1223,10 @@ const SubjectRoleTableSection: React.FC<{ table: SubjectRoleTableView }> = ({ ta
               type="button"
               className={`ec-subject-role-link ${pickerAnchor ? 'is-open' : ''}`}
               disabled={table.busy}
+              title={`Označit už existující záznam za tentýž subjekt — jeho zakázky se pak zobrazí zde. Nejde o připojení protistrany k zakázce.`}
               onClick={() => (pickerAnchor ? setPickerAnchor(null) : openPicker())}
             >
-              + Propojit {table.addLabel}
+              + Propojit existujícího {table.addLabel}
             </button>
           ) : null}
           {table.onCreate ? (
@@ -1233,9 +1234,10 @@ const SubjectRoleTableSection: React.FC<{ table: SubjectRoleTableView }> = ({ ta
               type="button"
               className="ec-subject-role-create"
               disabled={table.busy}
+              title="Založit tomuto subjektu nový záznam v této roli a rovnou ho propojit."
               onClick={table.onCreate}
             >
-              + Vytvořit {table.addLabel}
+              + Vytvořit nového {table.addLabel}
             </button>
           ) : null}
           {pickerAnchor && table.onLink ? (
@@ -1258,7 +1260,8 @@ const SubjectRoleTableSection: React.FC<{ table: SubjectRoleTableView }> = ({ ta
 
       {table.identities.length === 0 ? (
         <p className="ec-subject-role-empty">
-          Subjekt zatím nemá záznam v roli {table.label}.
+          Subjekt zatím není veden jako {table.label.toLowerCase()}. Propojte jeho existující záznam,
+          nebo mu nový vytvořte — zakázku sem lze přesunout i tak, záznam se pak založí sám.
         </p>
       ) : table.items.length === 0 ? (
         <p className="ec-subject-role-empty">Žádné {table.itemsLabel}.</p>
@@ -1631,7 +1634,9 @@ const EntityCommissionProfilePanel: React.FC<EntityCommissionProfilePanelProps> 
                           <div>
                             <h4 className="ec-linked-commissions-title">Zakázky subjektu</h4>
                             <p className="ec-linked-commissions-subtitle">
-                              Vše, na čem subjekt figuruje — jako klient, jako partner i jako tipař.
+                              Tentýž subjekt je v systému veden zvlášť pro každou roli — jako klient,
+                              jako partner a jako tipař, každý s vlastním záznamem. Níže jsou zakázky
+                              ze všech jeho rolí dohromady.
                             </p>
                           </div>
                           <div className="ec-linked-commissions-actions">
