@@ -325,6 +325,24 @@ const FUTURE_FUNCTION_DEFAULTS = {
   completedAt: null
 };
 
+// The only writable columns on future_functions. Rows handed to the client carry
+// display-only extras — the activity_* fields the grid attaches for the change
+// dots — and both the grid and the detail panel round-trip the whole row back on
+// save. Without this filter those extras become `SET "activity_scope" = $1` on a
+// table that has no such column, and the whole write fails with a 500.
+const FUTURE_FUNCTION_FIELDS = Object.keys(FUTURE_FUNCTION_DEFAULTS);
+
+const pickFutureFunctionFields = (body) => {
+  const source = body !== null && typeof body === "object" && !Array.isArray(body) ? body : {};
+  const picked = {};
+  for (const field of FUTURE_FUNCTION_FIELDS) {
+    if (source[field] !== undefined) {
+      picked[field] = source[field];
+    }
+  }
+  return picked;
+};
+
 // Valid record statuses for partners, clients, tipers
 const VALID_RECORD_STATUSES = ["accepted", "pending", "archived"];
 
@@ -4144,7 +4162,7 @@ function createFutureFunctionsRoutes() {
 
   app.post('/future-functions', authenticateToken, requireRole('admin', 'manager'), async (req, res) => {
     try {
-      const payload = { ...FUTURE_FUNCTION_DEFAULTS, ...(req.body ?? {}) };
+      const payload = { ...FUTURE_FUNCTION_DEFAULTS, ...pickFutureFunctionFields(req.body) };
 
       if (db.isPostgres()) {
         const created = await db.create(tableName, payload, getRequestActorUserId(req));
@@ -4175,7 +4193,7 @@ function createFutureFunctionsRoutes() {
   app.put('/future-functions/:id', authenticateToken, requireRole('admin', 'manager'), async (req, res) => {
     try {
       const id = Number(req.params.id);
-      const payload = { ...FUTURE_FUNCTION_DEFAULTS, ...(req.body ?? {}) };
+      const payload = { ...FUTURE_FUNCTION_DEFAULTS, ...pickFutureFunctionFields(req.body) };
 
       if (db.isPostgres()) {
         const updated = await db.update(tableName, id, payload, getRequestActorUserId(req));
@@ -4204,7 +4222,17 @@ function createFutureFunctionsRoutes() {
   app.patch('/future-functions/:id', authenticateToken, requireRole('admin', 'manager'), async (req, res) => {
     try {
       const id = Number(req.params.id);
-      const patch = req.body ?? {};
+      const patch = pickFutureFunctionFields(req.body);
+
+      if (Object.keys(patch).length === 0) {
+        const current = db.isPostgres()
+          ? await db.getById(tableName, id)
+          : (readDb().futureFunctions ?? []).find((record) => record.id === id);
+        if (!current) {
+          return res.status(404).json({ error: 'Not found' });
+        }
+        return res.json(current);
+      }
 
       if (db.isPostgres()) {
         const updated = await db.update(tableName, id, patch, getRequestActorUserId(req));

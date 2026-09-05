@@ -14,6 +14,7 @@ import FutureFunctionDetail from "./FutureFunctionDetail";
 import FutureFunctionCreateModal from "./FutureFunctionCreateModal";
 import { uploadDocuments } from "../utils/uploadDocuments";
 import type { FutureFunction, FutureFunctionDraft } from "./futureFunction.interface";
+import { stripActivityFields } from "./futureFunctionPayload";
 import type { ICellRendererParams } from "ag-grid-community";
 import { formatProfileDate } from "../usersGrid/utils/profileUtils";
 import { getStoredFutureFunctionsView, setStoredFutureFunctionsView } from "../utils/navigationState";
@@ -25,27 +26,6 @@ import ActivityConfirmAllButton from "../activity/ActivityConfirmAllButton";
 ModuleRegistry.registerModules([AllCommunityModule]);
 
 const cloneRecord = (r: any) => JSON.parse(JSON.stringify(r));
-
-// Rows carry these display-only fields for the activity dots (see withActivity below).
-// They must never round-trip into a create/update payload — the table has no matching
-// columns, and sending them breaks the write.
-const ACTIVITY_DISPLAY_KEYS = [
-  "activity_scope",
-  "activity_item_id",
-  "activity_latest_at",
-  "activity_created_at",
-  "activity_updated_by_user_id",
-  "activity_created_by_user_id",
-  "activity_field_activity",
-] as const;
-
-const stripActivityFields = (row: FutureFunction): FutureFunction => {
-  const clean: any = { ...row };
-  for (const key of ACTIVITY_DISPLAY_KEYS) {
-    delete clean[key];
-  }
-  return clean;
-};
 
 const PRIORITY_OPTIONS = ["Nízká", "Střední", "Vysoká"] as const;
 const COMPLEXITY_OPTIONS = ["Jednoduchá", "Středně složitá", "Složitá"] as const;

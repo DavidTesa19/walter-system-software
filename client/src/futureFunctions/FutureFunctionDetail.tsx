@@ -5,6 +5,7 @@ import DocumentViewerModal from "../components/DocumentViewerModal";
 import ThemeToggleButton from "../components/ThemeToggleButton";
 import FutureFunctionProfileFields from "./FutureFunctionProfileFields";
 import type { FutureFunction, FutureFunctionDraft } from "./futureFunction.interface";
+import { stripActivityFields } from "./futureFunctionPayload";
 import { formatProfileDate } from "../usersGrid/utils/profileUtils";
 import "./FutureFunctionDetail.css";
 import "./FutureFunctionCreateModal.css";
@@ -177,11 +178,11 @@ const CreationModeInfo: React.FC<CreationModeInfoProps> = ({
         <div className="ff-create-profile-grid">
           <FutureFunctionProfileFields
             values={{
-              name: draft.name,
+              name: draft.name ?? "",
               priority: draft.priority,
               complexity: draft.complexity,
               phase: draft.phase,
-              info: draft.info,
+              info: draft.info ?? "",
               status: draft.status,
               archived: draft.archived,
               created_at: draft.created_at ?? null,
@@ -399,10 +400,14 @@ const FutureFunctionDetail: React.FC<FutureFunctionDetailProps> = ({
   }, [getNextOptionValue, moveToAdjacentDetailField]);
 
   const normalizeDraftForSave = useCallback((value: FutureFunction): FutureFunction => {
+    // The row arrives from the grid with the display-only activity_* fields
+    // attached; they have no columns behind them, so they have to come off
+    // before the record goes back to the API.
     const normalized = {
-      ...value,
-      name: value.name.trim(),
-      info: value.info.trim()
+      ...stripActivityFields(value),
+      // Both columns are nullable in Postgres, so a row can arrive with null here.
+      name: (value.name ?? "").trim(),
+      info: (value.info ?? "").trim()
     };
 
     if ((AUTO_ARCHIVE_STATUSES as readonly string[]).includes(normalized.status)) {
@@ -980,7 +985,7 @@ const FutureFunctionDetail: React.FC<FutureFunctionDetailProps> = ({
                     <input
                       type="text"
                       className="ff-info-input ff-detail-nav-field"
-                      value={draft.name}
+                      value={draft.name ?? ""}
                       onChange={(event) => updateDraftField("name", event.target.value)}
                       onKeyDown={(event) => handleDetailFieldKeyDown(event, "input")}
                       disabled={isSavingDetails}
@@ -1141,7 +1146,7 @@ const FutureFunctionDetail: React.FC<FutureFunctionDetailProps> = ({
                   ) : (
                     <textarea
                       className="ff-info-input ff-info-textarea ff-detail-nav-field"
-                      value={draft.info}
+                      value={draft.info ?? ""}
                       onChange={(event) => updateDraftField("info", event.target.value)}
                       onKeyDown={(event) => handleDetailFieldKeyDown(event, "textarea")}
                       disabled={isSavingDetails}

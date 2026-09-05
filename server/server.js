@@ -1228,6 +1228,24 @@ const FUTURE_FUNCTION_DEFAULTS = {
   completedAt: null
 };
 
+// The only writable fields on a future function. Rows handed to the client carry
+// display-only extras — the activity_* fields the grid attaches for the change
+// dots — and both the grid and the detail panel round-trip the whole row back on
+// save. Postgres rejects those extras outright (no such column), so filter them
+// here too rather than letting the two backends accept different payloads.
+const FUTURE_FUNCTION_FIELDS = Object.keys(FUTURE_FUNCTION_DEFAULTS);
+
+const pickFutureFunctionFields = (body) => {
+  const source = isPlainObject(body) ? body : {};
+  const picked = {};
+  for (const field of FUTURE_FUNCTION_FIELDS) {
+    if (source[field] !== undefined) {
+      picked[field] = source[field];
+    }
+  }
+  return picked;
+};
+
 // Ensure data directory exists
 try {
   fs.mkdirSync(DATA_DIR, { recursive: true });
@@ -6002,7 +6020,7 @@ app.get("/future-functions", authenticateToken, requireRole('admin', 'manager'),
 app.post("/future-functions", authenticateToken, requireRole('admin', 'manager'), (req, res) => {
   const db = readDb();
   const body = isPlainObject(req.body) ? req.body : {};
-  const payload = { ...FUTURE_FUNCTION_DEFAULTS, ...body };
+  const payload = { ...FUTURE_FUNCTION_DEFAULTS, ...pickFutureFunctionFields(body) };
   const futureFunctions = Array.isArray(db.futureFunctions) ? db.futureFunctions : [];
   const now = new Date().toISOString();
   const maxId = futureFunctions.reduce((max, item) => Math.max(max, Number(item.id) || 0), 0);
@@ -6022,13 +6040,12 @@ app.put("/future-functions/:id", authenticateToken, requireRole('admin', 'manage
   const db = readDb();
   const idx = db.futureFunctions.findIndex((record) => record.id === id);
   if (idx === -1) return res.status(404).json({ error: "Not found" });
-  const body = isPlainObject(req.body) ? req.body : {};
   const updated = updateAuditedJsonRecord(
     db.futureFunctions[idx],
     {
       ...FUTURE_FUNCTION_DEFAULTS,
       ...db.futureFunctions[idx],
-      ...body,
+      ...pickFutureFunctionFields(req.body),
       id,
     },
     getRequestActorUserId(req)
@@ -6043,8 +6060,7 @@ app.patch("/future-functions/:id", authenticateToken, requireRole('admin', 'mana
   const db = readDb();
   const idx = db.futureFunctions.findIndex((record) => record.id === id);
   if (idx === -1) return res.status(404).json({ error: "Not found" });
-  const body = isPlainObject(req.body) ? req.body : {};
-  db.futureFunctions[idx] = updateAuditedJsonRecord(db.futureFunctions[idx], { ...body, id }, getRequestActorUserId(req));
+  db.futureFunctions[idx] = updateAuditedJsonRecord(db.futureFunctions[idx], { ...pickFutureFunctionFields(req.body), id }, getRequestActorUserId(req));
   if (!writeDb(db)) return res.status(500).json({ error: "Failed to persist" });
   res.json(db.futureFunctions[idx]);
 });
