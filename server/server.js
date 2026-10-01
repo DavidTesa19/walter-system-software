@@ -13,6 +13,7 @@ import crypto from "crypto";
 import AdmZip from "adm-zip";
 import * as entityCommissionJson from "./entity-commission-json.js";
 import { cascadesArchiveToSubject } from "./archive-cascade.js";
+import { registerSafetyRoutes } from "./safety/routes.js";
 import {
   normalizeNotificationEmail,
 } from "./submission-notifications.js";
@@ -1620,6 +1621,10 @@ const requireRole = (...allowedRoles) => {
     next();
   };
 };
+
+// The change log and backups live in Postgres; this JSON backend only tells the
+// admin screen they are not available here.
+registerSafetyRoutes(app, { authenticateToken, requireRole, pool: null });
 
 const requireAccessScope = (...allowedScopes) => {
   return (req, res, next) => {

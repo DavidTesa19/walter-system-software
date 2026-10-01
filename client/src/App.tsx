@@ -22,6 +22,7 @@ import TeamChatView from './views/TeamChatView';
 import FullCalendarView from './views/FullCalendarView';
 import AnalyticsView from './views/AnalyticsView';
 import AdminUsersView from './views/AdminUsersView';
+import SafetyView from './views/SafetyView';
 import ProjectsSectionView from './views/ProjectsSectionView';
 import GrowthSectionView from './views/GrowthSectionView';
 import { trackEvent, trackSectionStart } from './utils/analytics';
@@ -87,6 +88,7 @@ const VIEW_LABELS: Record<AppView, string> = {
   teamchat: 'Týmový chat',
   analytics: 'Analytika',
   admin_users: 'Správa uživatelů',
+  safety: 'Bezpečnost a zálohy',
   entities_active: 'Aktuální subjekty',
   entities_pending: 'Subjekty ke schválení',
   entities_archived: 'Archiv subjektů',
@@ -612,6 +614,8 @@ const AppContent: React.FC = () => {
                   return <AnalyticsView />;
               case 'admin_users':
                 return <AdminUsersView />;
+              case 'safety':
+                return <SafetyView />;
               case 'entities_active':
               case 'entities_pending':
               case 'entities_archived':

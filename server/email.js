@@ -258,3 +258,18 @@ export const notifyPublicSubmission = async ({ type, entity, commissions = [], u
 
   await Promise.allSettled(tasks);
 };
+
+// Operational alerts — a failed nightly backup, say — to every admin who has a
+// notification e-mail set. Returns whether anything was sent.
+export const notifyAdmins = async ({ subject, text, users = [] }) => {
+  if (!isEmailConfigured()) return false;
+  const recipients = [...new Set(collectUserNotificationEmails(users.filter((user) => user?.role === 'admin')))];
+  if (recipients.length === 0) return false;
+  await sendBrevoEmail({
+    to: recipients,
+    subject,
+    htmlContent: `<p style="font-family:Arial,sans-serif;font-size:14px;">${escapeHtml(text).replace(/\n/g, '<br>')}</p>`,
+    textContent: text,
+  });
+  return true;
+};

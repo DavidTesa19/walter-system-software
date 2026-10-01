@@ -15,7 +15,7 @@ import db, { initDatabase } from "./db.js";
 import {
   normalizeNotificationEmail,
 } from "./submission-notifications.js";
-import { notifyPublicSubmission } from "./email.js";
+import { notifyAdmins, notifyPublicSubmission } from "./email.js";
 import {
   getFieldOptionCatalogScope,
   hasDuplicateFieldOptionValue,
@@ -53,6 +53,8 @@ import {
   subjectNamespaceLabel,
 } from "./subject-identity.js";
 import { cascadesArchiveToSubject } from "./archive-cascade.js";
+import { reenterRequestContext, requestContextMiddleware } from "./safety/context.js";
+import { registerSafetyRoutes } from "./safety/routes.js";
 
 dotenv.config();
 
@@ -1310,6 +1312,21 @@ app.use(
   })
 );
 app.use(express.json());
+
+// Remembers who is making each request, so the database change log can record
+// who made every change (see safety/context.js).
+app.use(requestContextMiddleware);
+
+// Change log, trash, backups and the AI agent switches — admin only.
+registerSafetyRoutes(app, {
+  authenticateToken,
+  requireRole,
+  pool: db.isPostgres() ? db.getPool() : null,
+  notifyAdmins: async ({ subject, text }) => {
+    const { rows } = await db.query("SELECT role, notification_email FROM users WHERE role = 'admin'");
+    return notifyAdmins({ subject, text, users: rows });
+  },
+});
 
 // File-based database functions (development mode)
 function readDb() {
@@ -2571,7 +2588,7 @@ app.get("/:entity/:id/documents", authenticateToken, async (req, res) => {
   }
 });
 
-app.post("/:entity/:id/documents", authenticateToken, upload.single("file"), async (req, res) => {
+app.post("/:entity/:id/documents", authenticateToken, upload.single("file"), reenterRequestContext, async (req, res) => {
   const entity = req.params.entity;
   const entityId = Number(req.params.id);
 

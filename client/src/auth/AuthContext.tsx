@@ -83,7 +83,7 @@ export const getDefaultViewForScope = (scope: UserAccessScope | null | undefined
 };
 
 // Views that are restricted by role (regardless of scope)
-const MANAGER_BLOCKED_VIEWS: AppView[] = ['future', 'analytics', 'admin_users'];
+const MANAGER_BLOCKED_VIEWS: AppView[] = ['future', 'analytics', 'admin_users', 'safety'];
 const SALESMAN_VIEWER_ALLOWED_VIEWS: AppView[] = [
   'active', 'pending', 'archived',
   'entities_active', 'entities_pending', 'entities_archived',

@@ -14,6 +14,8 @@ import {
   removeSpecializationFromCompanyStructure,
   renameFieldInCompanyStructure,
 } from './subject-structure.js';
+import { installDbContextHook } from './safety/context.js';
+import { installSafetyLayer } from './safety/pg-install.js';
 
 dotenv.config();
 const { Pool } = pkg;
@@ -145,6 +147,10 @@ if (USE_POSTGRES) {
   pool.on('error', (err) => {
     console.error('Unexpected database error:', err);
   });
+
+  // Tags every checked-out connection with the request's actor, so the change
+  // log triggers know who made each change (see safety/context.js).
+  installDbContextHook(pool);
 
   console.log('✓ Using PostgreSQL database');
 } else {
@@ -593,17 +599,29 @@ export async function initDatabase() {
       "ALTER TABLE project_tiper_commissions ALTER COLUMN assigned_to TYPE TEXT"
     ];
 
-    for (const sql of columnMigrations) {
+    // On an empty database — a fresh one being restored into after a disaster —
+    // the entity/commission tables do not exist yet at this point. They are
+    // created further down with these columns already in place, so skip them.
+    const runIfTableExists = async (sql) => {
+      const table = /^(?:ALTER TABLE|UPDATE)\s+(\w+)/i.exec(sql)?.[1];
+      if (table) {
+        const { rows } = await client.query('SELECT to_regclass($1) IS NOT NULL AS present', [`public.${table}`]);
+        if (!rows[0].present) return;
+      }
       await client.query(sql);
+    };
+
+    for (const sql of columnMigrations) {
+      await runIfTableExists(sql);
     }
 
     // Set existing records without status to 'accepted' (legacy data)
     await client.query("UPDATE partners SET status = 'accepted' WHERE status IS NULL");
     await client.query("UPDATE clients SET status = 'accepted' WHERE status IS NULL");
     await client.query("UPDATE tipers SET status = 'accepted' WHERE status IS NULL");
-    await client.query("UPDATE partner_entities SET status = 'accepted' WHERE status IS NULL");
-    await client.query("UPDATE client_entities SET status = 'accepted' WHERE status IS NULL");
-    await client.query("UPDATE tiper_entities SET status = 'accepted' WHERE status IS NULL");
+    await runIfTableExists("UPDATE partner_entities SET status = 'accepted' WHERE status IS NULL");
+    await runIfTableExists("UPDATE client_entities SET status = 'accepted' WHERE status IS NULL");
+    await runIfTableExists("UPDATE tiper_entities SET status = 'accepted' WHERE status IS NULL");
     await client.query("UPDATE partners SET stage = 'Not Started' WHERE stage IS NULL");
     await client.query("UPDATE clients SET stage = 'Not Started' WHERE stage IS NULL");
     await client.query("UPDATE tipers SET stage = 'Not Started' WHERE stage IS NULL");
@@ -1280,6 +1298,10 @@ export async function initDatabase() {
 
     await ensureDefaultPalettes(client);
     await ensureLegacyEntityCommissionMigration();
+
+    // Change log, delete/truncate/drop guards and AI agent brakes. Runs last so
+    // every table above gets its triggers. Never throws.
+    await installSafetyLayer(client);
 
     console.log('✓ Database tables initialized');
   } catch (error) {

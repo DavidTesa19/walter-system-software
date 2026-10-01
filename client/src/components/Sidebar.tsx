@@ -173,6 +173,12 @@ const Icons = {
       <path d="M16 3.13a4 4 0 0 1 0 7.75"></path>
     </svg>
   ),
+  Safety: () => (
+    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"></path>
+      <polyline points="9 12 11 14 15 10"></polyline>
+    </svg>
+  ),
   ChevronDown: () => (
     <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
       <polyline points="6 9 12 15 18 9"></polyline>
@@ -258,7 +264,7 @@ const Sidebar: React.FC<SidebarProps> = ({
       },
       { id: 'calendar', views: ['calendar'] },
       { id: 'teamchat', views: ['teamchat'] },
-      { id: 'other', views: ['future', 'chatbot', 'palettes', 'analytics', 'admin_users'] }
+      { id: 'other', views: ['future', 'chatbot', 'palettes', 'analytics', 'admin_users', 'safety'] }
     ];
 
     const activeGroup = groups.find(g => g.views.includes(activeView as string));
@@ -475,7 +481,8 @@ const Sidebar: React.FC<SidebarProps> = ({
         { id: 'chatbot', label: 'AI Asistent', icon: <Icons.Chatbot /> },
         { id: 'palettes', label: 'Motivy', icon: <Icons.Palettes /> },
         { id: 'analytics', label: 'Analytika', icon: <Icons.Analytics /> },
-        { id: 'admin_users', label: 'Správa uživatelů', icon: <Icons.Users /> }
+        { id: 'admin_users', label: 'Správa uživatelů', icon: <Icons.Users /> },
+        { id: 'safety', label: 'Bezpečnost a zálohy', icon: <Icons.Safety /> }
       ]
     }
   ];

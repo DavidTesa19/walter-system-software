@@ -91,3 +91,45 @@ Grid changes are verifiable end to end; do it rather than guessing.
    `getColumnState()` instead.
 5. `server.js` has no hot reload — restart it after server edits, or new columns
    are silently dropped by stale field whitelists.
+
+## Change log, backups and safety guards (`server/safety/`)
+
+Overview and operator docs: `SAFETY_AND_BACKUPS.md`. The rules that are easy to
+break from code:
+
+- **`server/.env`'s `DATABASE_URL` is the production database.** Never run
+  `server-postgres.js`, a migration or a script that writes with it locally.
+  Test Postgres changes against a throwaway local Postgres instead (see below).
+- Every write is logged by the `walter_audit` trigger, which reads the actor
+  from the `walter.ctx` session setting. `installDbContextHook` (db.js) sets it
+  on every pool checkout from the request's AsyncLocalStorage context. Do not
+  bypass the pool with a separate `pg.Client` in request code, or the change is
+  logged as `system`.
+- Middleware that resumes the chain from a stream event (multer) loses the
+  async context: follow `upload.single(...)` with `reenterRequestContext`, or
+  uploads are logged without their user.
+- New tables are logged and guarded automatically on the next boot. Only add a
+  table to `AUDIT_EXCLUDED_TABLES` (tables.js) for telemetry or per-user UI
+  state, and say why.
+- The database refuses `TRUNCATE`, `DROP TABLE`/`DROP COLUMN` in `public`, and
+  one statement deleting more than 20 rows of business data (cascades are
+  fine). A migration that really needs one of these sets the escape hatch for
+  its own transaction only: `SET LOCAL walter.allow_drop = on`
+  (`allow_truncate`, `allow_mass_delete`). Never use `walter.suppress_audit`
+  in app code.
+- Restores and reverts match rows by primary key and write through
+  `jsonb_populate_record(set)`, so column types round-trip. A new table with no
+  primary key cannot be restored; give it one.
+- The JSON dev backend (`server.js`) has no change log or backups; its
+  `/api/safety/*` routes answer "unavailable" on purpose.
+
+### Verifying safety changes locally
+
+Postgres binaries come from the `embedded-postgres` npm package. On Windows
+its `initdb` fails on the 260-character path limit when installed deep in a
+temp folder; copy `node_modules/@embedded-postgres/windows-x64/native` to a
+short path and run `bin/initdb.exe` / `bin/pg_ctl.exe` directly. To run the
+real `server-postgres.js` against it, start it from a wrapper that sets
+`DATABASE_URL` to the local database and `process.chdir`s away from `server/`
+first, so `server/.env` is never loaded. A throwaway S3 is easy to mock with a
+small HTTP server (path-style PUT/GET/HEAD/DELETE and `list-type=2`).
