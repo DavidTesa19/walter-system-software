@@ -29,6 +29,9 @@ export const AUDIT_EXCLUDED_TABLES = new Set([
   'entity_counters',
   'color_palettes',
   'user_palettes',
+  // Jarvis chat history: private per user, and every turn rewrites a large
+  // JSON document. It is in the backups.
+  'jarvis_conversations',
 ]);
 
 // Never inside a backup archive: the log and the backups themselves.

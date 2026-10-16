@@ -61,6 +61,54 @@
   margin-bottom: 0.75rem;
 }
 
+/* Opens Jarvis (JarvisPanel); always visible, whatever the screen. */
+.sidebar-jarvis {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  margin-bottom: 0.6rem;
+  padding: 0.55rem 0.75rem;
+  border: 1px solid color-mix(in srgb, var(--color-accent, #0ea5e9) 35%, transparent);
+  border-radius: 12px;
+  background: color-mix(in srgb, var(--color-accent, #0ea5e9) 9%, var(--color-surface, #ffffff));
+  color: var(--color-text);
+  font: inherit;
+  font-size: 0.88rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background 0.15s ease, border-color 0.15s ease;
+}
+
+.sidebar-jarvis:hover {
+  background: color-mix(in srgb, var(--color-accent, #0ea5e9) 16%, var(--color-surface, #ffffff));
+  border-color: color-mix(in srgb, var(--color-accent, #0ea5e9) 55%, transparent);
+}
+
+.sidebar-jarvis-orb {
+  width: 16px;
+  height: 16px;
+  flex-shrink: 0;
+  border-radius: 50%;
+  background: radial-gradient(circle at 35% 30%, color-mix(in srgb, var(--color-accent, #0ea5e9) 50%, white) 0%, var(--color-accent, #0ea5e9) 60%);
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--color-accent, #0ea5e9) 20%, transparent);
+}
+
+.sidebar-jarvis-label {
+  flex: 1;
+  text-align: left;
+}
+
+.sidebar-jarvis kbd {
+  font: inherit;
+  font-size: 0.68rem;
+  font-weight: 600;
+  color: var(--color-text-muted, #64748b);
+  padding: 1px 5px;
+  border-radius: 5px;
+  border: 1px solid var(--color-border);
+}
+
 .sidebar-search-input-wrap {
   display: flex;
   align-items: center;

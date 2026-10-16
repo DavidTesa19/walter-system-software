@@ -23,6 +23,8 @@ import FullCalendarView from './views/FullCalendarView';
 import AnalyticsView from './views/AnalyticsView';
 import AdminUsersView from './views/AdminUsersView';
 import SafetyView from './views/SafetyView';
+import JarvisPanel from './jarvis/JarvisPanel';
+import type { JarvisOpenAction } from './jarvis/jarvisApi';
 import ProjectsSectionView from './views/ProjectsSectionView';
 import GrowthSectionView from './views/GrowthSectionView';
 import { trackEvent, trackSectionStart } from './utils/analytics';
@@ -251,6 +253,21 @@ const AppContent: React.FC = () => {
   const { isAuthenticated, user } = useAuth();
   const [viewMode, setViewMode] = useState<AppView>(() => getStoredAppView('active'));
   const [gridSearchTarget, setGridSearchTarget] = useState<GridSearchNavigationTarget | null>(null);
+  const [jarvisOpen, setJarvisOpen] = useState(false);
+  const closeJarvis = useCallback(() => setJarvisOpen(false), []);
+
+  // Alt+J opens and closes Jarvis from anywhere in the app.
+  useEffect(() => {
+    if (!isAuthenticated) return undefined;
+    const onKey = (event: KeyboardEvent) => {
+      if (event.altKey && !event.ctrlKey && !event.metaKey && event.code === 'KeyJ') {
+        event.preventDefault();
+        setJarvisOpen((value) => !value);
+      }
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [isAuthenticated]);
   const searchIndexCacheRef = useRef<{ records: SearchableRecord[]; futureFunctions: SearchableFutureFunction[]; fetchedAt: number } | null>(null);
   const accessScope = user?.accessScope;
   const isAdmin = user?.role === 'admin';
@@ -551,6 +568,33 @@ const AppContent: React.FC = () => {
     });
   }, [isViewAllowed]);
 
+  // Jarvis's "Otevřít" buttons: the same jump the global search makes, to a
+  // subject's or commission's row, with its profile panel opened.
+  const handleJarvisOpenRecord = useCallback((action: JarvisOpenAction) => {
+    const status: SearchStatus = action.status === 'pending' || action.status === 'archived' ? action.status : 'accepted';
+    const isSubject = action.kind === 'subject';
+    const viewBySection = action.section === 'growth'
+      ? (isSubject ? STATUS_TO_GROWTH_SUBJECTS_VIEW : STATUS_TO_GROWTH_VIEW)
+      : action.section === 'projects'
+        ? (isSubject ? STATUS_TO_PROJECTS_SUBJECTS_VIEW : STATUS_TO_PROJECTS_VIEW)
+        : (isSubject ? STATUS_TO_ENTITIES_VIEW : STATUS_TO_STANDARD_VIEW);
+    const view = viewBySection[status];
+    if (!isViewAllowed(view)) {
+      alert('Na tuto sekci nemáte přístup.');
+      return;
+    }
+    const table: SearchTable = isSubject ? `${action.role}_entities` : `${action.role}s`;
+    setViewMode(view);
+    setGridSearchTarget({
+      table,
+      recordId: action.id,
+      requestKey: `${Date.now()}-jarvis-${action.section}-${action.kind}-${action.id}`,
+      viewMode: getGridViewFromAppView(view),
+      openProfile: true,
+      openCommissionId: isSubject ? null : action.id,
+    });
+  }, [isViewAllowed]);
+
   if (!isAuthenticated) {
     return <Login />;
   }
@@ -592,6 +636,7 @@ const AppContent: React.FC = () => {
           onViewChange={handleViewChange}
           onGlobalSearch={runGlobalSearch}
           onSearchNavigate={handleSearchNavigate}
+          onOpenJarvis={() => setJarvisOpen(true)}
         />
         <div className={mainContentClassName}>
           {(() => {
@@ -642,6 +687,12 @@ const AppContent: React.FC = () => {
           })()}
         </div>
         {!isFullscreenView && <Footer />}
+        <JarvisPanel
+          open={jarvisOpen}
+          onClose={closeJarvis}
+          viewLabel={VIEW_LABELS[viewMode]}
+          onOpenRecord={handleJarvisOpenRecord}
+        />
       </div>
       </SubjectNavigationProvider>
     </ActivityProvider>

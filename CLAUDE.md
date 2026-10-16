@@ -133,3 +133,33 @@ real `server-postgres.js` against it, start it from a wrapper that sets
 `DATABASE_URL` to the local database and `process.chdir`s away from `server/`
 first, so `server/.env` is never loaded. A throwaway S3 is easy to mock with a
 small HTTP server (path-style PUT/GET/HEAD/DELETE and `list-type=2`).
+
+## Jarvis, the AI agent (`server/jarvis/`, `client/src/jarvis/`)
+
+Claude (model `JARVIS_MODEL`, default `claude-opus-5-5`; effort `JARVIS_EFFORT`,
+default `medium`) behind a manual streaming tool loop (`agent.js`), relayed to
+the browser as Server-Sent Events from `POST /api/jarvis/chat`. The panel opens
+from the sidebar or Alt+J. Needs `ANTHROPIC_API_KEY`; `JARVIS_HOURLY_LIMIT`
+caps turns per user (default 60).
+
+- **Tools never touch the database.** They call this server's own HTTP API
+  (`api.js`) with a 15-minute token carrying the user's claims plus
+  `actorType: 'ai_agent'`. Section access, role checks, business logic (deal
+  sync, section links, archive cascades) and the change log's AI-agent
+  tagging all come from the existing routes. Keep it that way when adding
+  write tools: a direct SQL write would bypass all of it.
+- **The system prompt (`prompt.js`) and the tool list stay byte-identical
+  between requests.** They are the cached prefix, and Claude's earlier thinking
+  blocks are only valid while that prefix matches. Anything that varies (date,
+  user, current screen) goes into the `<kontext>` block of the user message
+  (`buildContextBlock` in routes.js). Changing the prompt or tools between
+  deploys is fine — `block_binding: drop_block` drops stale thinking instead of
+  failing old conversations.
+- **`jarvis_conversations.messages` is append-only**: an assistant message is
+  stored together with its tool results, never edited afterwards. The panel
+  renders the separate `transcript`.
+- Tool inputs are validated with zod (`zod/v4`) before running; a tool failure
+  goes back to the model as an `is_error` result, never as an exception.
+- To try it locally, the JSON dev server works too (conversations go to
+  `server/data/jarvis-conversations.json`). Live calls spend real Anthropic
+  credits.

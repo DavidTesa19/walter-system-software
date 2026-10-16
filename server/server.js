@@ -14,6 +14,7 @@ import AdmZip from "adm-zip";
 import * as entityCommissionJson from "./entity-commission-json.js";
 import { cascadesArchiveToSubject } from "./archive-cascade.js";
 import { registerSafetyRoutes } from "./safety/routes.js";
+import { registerJarvisRoutes } from "./jarvis/routes.js";
 import {
   normalizeNotificationEmail,
 } from "./submission-notifications.js";
@@ -1625,6 +1626,15 @@ const requireRole = (...allowedRoles) => {
 // The change log and backups live in Postgres; this JSON backend only tells the
 // admin screen they are not available here.
 registerSafetyRoutes(app, { authenticateToken, requireRole, pool: null });
+
+// Jarvis, the AI agent — calls this server's own API as the signed-in user.
+registerJarvisRoutes(app, {
+  authenticateToken,
+  pool: null,
+  dataDir: DATA_DIR,
+  port: PORT,
+  signAgentToken: (user) => jwt.sign({ ...toAuthUser(user), actorType: 'ai_agent' }, JWT_SECRET, { expiresIn: '15m' }),
+});
 
 const requireAccessScope = (...allowedScopes) => {
   return (req, res, next) => {

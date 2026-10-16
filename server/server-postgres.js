@@ -55,6 +55,7 @@ import {
 import { cascadesArchiveToSubject } from "./archive-cascade.js";
 import { reenterRequestContext, requestContextMiddleware } from "./safety/context.js";
 import { registerSafetyRoutes } from "./safety/routes.js";
+import { registerJarvisRoutes } from "./jarvis/routes.js";
 
 dotenv.config();
 
@@ -1326,6 +1327,17 @@ registerSafetyRoutes(app, {
     const { rows } = await db.query("SELECT role, notification_email FROM users WHERE role = 'admin'");
     return notifyAdmins({ subject, text, users: rows });
   },
+});
+
+// Jarvis, the AI agent. It reads (and later writes) through this server's own
+// API as the signed-in user, with a short-lived token marked as the AI agent so
+// the change log and the agent brakes recognise its requests.
+registerJarvisRoutes(app, {
+  authenticateToken,
+  pool: db.isPostgres() ? db.getPool() : null,
+  dataDir: DATA_DIR,
+  port: PORT,
+  signAgentToken: (user) => jwt.sign({ ...toAuthUser(user), actorType: 'ai_agent' }, EFFECTIVE_JWT_SECRET, { expiresIn: '15m' }),
 });
 
 // File-based database functions (development mode)

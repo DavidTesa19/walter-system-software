@@ -32,6 +32,16 @@ const cleanNote = (value) => {
   return trimmed ? trimmed.slice(0, MAX_NOTE_LENGTH) : null;
 };
 
+// Header values are ASCII-only, so callers send Czech text URI-encoded.
+const decodeHeader = (value) => {
+  if (typeof value !== 'string') return value;
+  try {
+    return decodeURIComponent(value);
+  } catch {
+    return value;
+  }
+};
+
 export function requestContextMiddleware(req, _res, next) {
   const store = { req, requestId: crypto.randomUUID(), overrides: {} };
   req.walterContext = store;
@@ -100,7 +110,7 @@ export function describeActor(store = storage.getStore()) {
       ?? (typeof headerChangeset === 'string' && CHANGESET_PATTERN.test(headerChangeset) ? headerChangeset : null)
       ?? store.requestId,
     route: overrides.route ?? (req ? `${req.method} ${String(req.originalUrl || req.url || '').split('?')[0]}` : null),
-    note: overrides.note ?? cleanNote(req?.get?.(NOTE_HEADER)),
+    note: overrides.note ?? cleanNote(decodeHeader(req?.get?.(NOTE_HEADER))),
     reverts: overrides.reverts ?? null,
   };
 }

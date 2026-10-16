@@ -14,7 +14,7 @@
     "sync": "node sync-from-production.js"
   },
   "dependencies": {
-    "@anthropic-ai/sdk": "^0.68.0",
+    "@anthropic-ai/sdk": "^0.134.0",
     "@aws-sdk/client-s3": "^3.1144.0",
     "@google/generative-ai": "^0.24.1",
     "adm-zip": "^0.5.17",
@@ -29,7 +29,8 @@
     "multer": "^1.4.5-lts.1",
     "nodemailer": "^6.10.1",
     "openai": "^6.8.1",
-    "pg": "^8.16.3"
+    "pg": "^8.16.3",
+    "zod": "^3.25.76"
   },
   "devDependencies": {
     "@types/react-syntax-highlighter": "^15.5.13"
