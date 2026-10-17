@@ -1,13 +1,155 @@
 /* Jarvis: a panel that slides in over the right edge of the app. It overlays
    the content instead of pushing it aside, so the grids underneath never
-   resize (and never re-run their column layout) when it opens. */
+   resize (and never re-run their column layout) when it opens. It is opened
+   from a floating launcher in the bottom-right corner, or with Alt+J.
+
+   Jarvis names its own sans-serif font: the app's font variables come from the
+   user's palette, and nothing above these elements sets a body font, so an
+   inherited font can end up as the browser's serif default. */
+
+.jarvis-panel,
+.jarvis-launcher {
+  --jarvis-font: "Inter", "Segoe UI Variable Text", "Segoe UI", system-ui, -apple-system, BlinkMacSystemFont, "Helvetica Neue", Arial, sans-serif;
+  --jarvis-accent: var(--color-accent, #0ea5e9);
+  --jarvis-gradient: var(--gradient-primary, linear-gradient(135deg, var(--color-primary, #2563eb) 0%, var(--color-accent, #0ea5e9) 100%));
+}
+
+/* ---------- floating launcher ---------- */
+
+.jarvis-launcher {
+  position: fixed;
+  right: 20px;
+  bottom: 20px;
+  z-index: 1400;
+  width: 56px;
+  height: 56px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  border: 0;
+  border-radius: 18px;
+  color: #ffffff;
+  background: var(--jarvis-gradient);
+  box-shadow:
+    0 14px 30px -10px color-mix(in srgb, var(--jarvis-accent) 75%, transparent),
+    0 3px 8px rgba(15, 23, 42, 0.16),
+    inset 0 1px 0 rgba(255, 255, 255, 0.35);
+  font-family: var(--jarvis-font);
+  cursor: pointer;
+  transition: transform 0.18s ease, box-shadow 0.18s ease, opacity 0.18s ease;
+}
+
+/* Clear of the fixed footer on the screens that have one. The app keeps
+   --app-footer-height at the footer's measured height. */
+.jarvis-launcher--footer {
+  bottom: calc(var(--app-footer-height, 88px) + 14px);
+}
+
+/* Týmový chat and AI Asistent have their message box (send button in the
+   corner) along the bottom; AI Asistent's, with its options row, is ~150px. */
+.jarvis-launcher--composer {
+  bottom: 216px;
+}
+
+.jarvis-launcher:hover {
+  transform: translateY(-2px);
+  box-shadow:
+    0 18px 36px -10px color-mix(in srgb, var(--jarvis-accent) 85%, transparent),
+    0 4px 10px rgba(15, 23, 42, 0.18),
+    inset 0 1px 0 rgba(255, 255, 255, 0.4);
+}
+
+.jarvis-launcher:active {
+  transform: translateY(0) scale(0.97);
+}
+
+.jarvis-launcher:focus-visible {
+  outline: 3px solid color-mix(in srgb, var(--jarvis-accent) 50%, transparent);
+  outline-offset: 3px;
+}
+
+.jarvis-launcher--hidden {
+  opacity: 0;
+  transform: scale(0.85);
+  pointer-events: none;
+}
+
+/* Still working after the panel was closed. */
+.jarvis-launcher--busy {
+  animation: jarvis-launcher-pulse 1.6s ease-in-out infinite;
+}
+
+.jarvis-launcher--busy svg {
+  animation: jarvis-twinkle 1.4s ease-in-out infinite;
+}
+
+@keyframes jarvis-launcher-pulse {
+  0%, 100% { box-shadow: 0 0 0 0 color-mix(in srgb, var(--jarvis-accent) 45%, transparent), 0 3px 8px rgba(15, 23, 42, 0.16); }
+  50% { box-shadow: 0 0 0 10px color-mix(in srgb, var(--jarvis-accent) 0%, transparent), 0 3px 8px rgba(15, 23, 42, 0.16); }
+}
+
+@keyframes jarvis-twinkle {
+  0%, 100% { transform: scale(1) rotate(0deg); }
+  50% { transform: scale(0.84) rotate(18deg); }
+}
+
+/* An answer arrived while the panel was closed. */
+.jarvis-launcher-badge {
+  position: absolute;
+  top: -4px;
+  right: -4px;
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  background: #ef4444;
+  border: 2px solid var(--color-surface, #ffffff);
+}
+
+.jarvis-launcher-tip {
+  position: absolute;
+  right: calc(100% + 12px);
+  top: 50%;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 7px 10px 7px 12px;
+  border-radius: 10px;
+  background: var(--color-text, #0f172a);
+  color: var(--color-background, #ffffff);
+  font-size: 0.82rem;
+  font-weight: 600;
+  white-space: nowrap;
+  box-shadow: 0 8px 20px rgba(15, 23, 42, 0.18);
+  opacity: 0;
+  transform: translate(6px, -50%);
+  pointer-events: none;
+  transition: opacity 0.15s ease, transform 0.15s ease;
+}
+
+.jarvis-launcher:hover .jarvis-launcher-tip,
+.jarvis-launcher:focus-visible .jarvis-launcher-tip {
+  opacity: 1;
+  transform: translate(0, -50%);
+}
+
+.jarvis-launcher-tip kbd {
+  font: inherit;
+  font-size: 0.7rem;
+  font-weight: 600;
+  padding: 1px 6px;
+  border-radius: 6px;
+  border: 1px solid color-mix(in srgb, currentColor 35%, transparent);
+  opacity: 0.8;
+}
+
+/* ---------- panel ---------- */
 
 .jarvis-panel {
   --jarvis-surface: var(--color-surface, #ffffff);
   --jarvis-soft: color-mix(in srgb, var(--color-surface, #ffffff) 92%, var(--color-accent, #0ea5e9) 8%);
   --jarvis-border: color-mix(in srgb, var(--color-border, rgba(15, 23, 42, 0.14)) 90%, transparent);
   --jarvis-muted: var(--color-text-muted, var(--color-muted, #5f6b76));
-  --jarvis-accent: var(--color-accent, #0ea5e9);
   position: fixed;
   top: 0;
   right: 0;
@@ -20,7 +162,7 @@
   color: var(--color-text, #0f172a);
   border-left: 1px solid var(--jarvis-border);
   box-shadow: -18px 0 50px rgba(15, 23, 42, 0.16);
-  font-family: var(--font-body, "Inter", "Segoe UI", sans-serif);
+  font-family: var(--jarvis-font);
   transform: translateX(105%);
   visibility: hidden;
   transition: transform 0.22s ease, visibility 0s linear 0.22s;
@@ -51,8 +193,8 @@
 }
 
 .jarvis-title strong {
-  font-family: var(--font-subheading, "Sora", "Inter", sans-serif);
-  font-size: 1.1rem;
+  font-size: 1.05rem;
+  font-weight: 700;
   letter-spacing: -0.01em;
 }
 
@@ -91,32 +233,28 @@
   cursor: not-allowed;
 }
 
-/* The orb: Jarvis's mark. Pulses while it works. */
-.jarvis-orb {
-  position: relative;
-  width: 30px;
-  height: 30px;
+/* Jarvis's mark: the sparkle on the theme gradient, as on the launcher. */
+.jarvis-mark {
+  width: 34px;
+  height: 34px;
   flex-shrink: 0;
-  border-radius: 50%;
-  background: radial-gradient(circle at 35% 30%, color-mix(in srgb, var(--jarvis-accent) 55%, white) 0%, var(--jarvis-accent) 55%, color-mix(in srgb, var(--jarvis-accent) 60%, black) 100%);
-  box-shadow: 0 0 0 3px color-mix(in srgb, var(--jarvis-accent) 18%, transparent);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 11px;
+  color: #ffffff;
+  background: var(--jarvis-gradient);
+  box-shadow: 0 6px 16px -6px color-mix(in srgb, var(--jarvis-accent) 75%, transparent), inset 0 1px 0 rgba(255, 255, 255, 0.3);
 }
 
-.jarvis-orb-core {
-  position: absolute;
-  inset: 9px;
-  border-radius: 50%;
-  background: color-mix(in srgb, white 85%, var(--jarvis-accent));
-  opacity: 0.85;
+.jarvis-mark--large {
+  width: 56px;
+  height: 56px;
+  border-radius: 18px;
 }
 
-.jarvis-orb--busy {
-  animation: jarvis-pulse 1.4s ease-in-out infinite;
-}
-
-@keyframes jarvis-pulse {
-  0%, 100% { box-shadow: 0 0 0 3px color-mix(in srgb, var(--jarvis-accent) 18%, transparent); }
-  50% { box-shadow: 0 0 0 9px color-mix(in srgb, var(--jarvis-accent) 6%, transparent); }
+.jarvis-mark--busy svg {
+  animation: jarvis-twinkle 1.4s ease-in-out infinite;
 }
 
 /* ---------- history ---------- */
@@ -194,9 +332,11 @@
   padding: 12px;
 }
 
-.jarvis-welcome h3 {
-  margin: 6px 0 0;
+.jarvis-welcome-title {
+  margin-top: 8px;
   font-size: 1.15rem;
+  font-weight: 700;
+  letter-spacing: -0.01em;
 }
 
 .jarvis-welcome p {
@@ -505,15 +645,23 @@
   cursor: not-allowed;
 }
 
+.jarvis-send {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
 .jarvis-send--stop {
   background: #dc2626;
   color: #ffffff;
-  font-size: 0.85rem;
 }
 
 @media (prefers-reduced-motion: reduce) {
   .jarvis-panel,
-  .jarvis-orb--busy,
+  .jarvis-launcher,
+  .jarvis-launcher--busy,
+  .jarvis-launcher--busy svg,
+  .jarvis-mark--busy svg,
   .jarvis-dots i,
   .jarvis-spinner {
     transition: none;

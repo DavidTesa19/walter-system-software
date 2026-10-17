@@ -15,7 +15,6 @@ interface SidebarProps {
   onViewChange: (view: AppView) => void;
   onGlobalSearch: (query: string) => Promise<GlobalSearchResult[]>;
   onSearchNavigate: (result: GlobalSearchResult, options?: { openProfile?: boolean }) => void;
-  onOpenJarvis?: () => void;
 }
 
 type SidebarGroupItem = {
@@ -196,8 +195,7 @@ const Sidebar: React.FC<SidebarProps> = ({
   activeView,
   onViewChange,
   onGlobalSearch,
-  onSearchNavigate,
-  onOpenJarvis
+  onSearchNavigate
 }) => {
   const { user, logout } = useAuth();
   const { getViewCount, markCollectionsSeen } = useActivity();
@@ -544,13 +542,6 @@ const Sidebar: React.FC<SidebarProps> = ({
         <WssLogo className="sidebar-brand-logo" />
       </div>
       <nav className="sidebar-nav">
-        {onOpenJarvis && (
-          <button type="button" className="sidebar-jarvis" onClick={onOpenJarvis} title="Zeptat se Jarvise (Alt+J)">
-            <span className="sidebar-jarvis-orb" aria-hidden="true" />
-            <span className="sidebar-jarvis-label">Zeptat se Jarvise</span>
-            <kbd>Alt+J</kbd>
-          </button>
-        )}
         <div className="sidebar-search" ref={searchContainerRef}>
           <div className="sidebar-search-input-wrap">
             <svg

@@ -74,13 +74,66 @@ interface LiveTurn {
   notices: string[];
 }
 
-function JarvisOrb({ busy = false }: { busy?: boolean }) {
+// Jarvis's mark: a sparkle on the theme's gradient, the same on the floating
+// launcher and in the panel header.
+function SparkIcon({ size = 22 }: { size?: number }) {
   return (
-    <span className={`jarvis-orb${busy ? ' jarvis-orb--busy' : ''}`} aria-hidden="true">
-      <span className="jarvis-orb-core" />
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" aria-hidden="true">
+      <path
+        d="M12 2.8c.5 3.9 1.6 6.1 3.2 7.6 1.6 1.4 3.6 2.1 6 2.4-2.4.4-4.4 1-6 2.4-1.6 1.5-2.7 3.7-3.2 7.6-.5-3.9-1.6-6.1-3.2-7.6-1.6-1.4-3.6-2-6-2.4 2.4-.3 4.4-1 6-2.4 1.6-1.5 2.7-3.7 3.2-7.6Z"
+        fill="currentColor"
+      />
+      <path
+        d="M19 2.5c.2 1.3.6 2 1.1 2.4.5.4 1.1.6 1.9.7-.8.1-1.4.3-1.9.7-.5.4-.9 1.1-1.1 2.4-.2-1.3-.6-2-1.1-2.4-.5-.4-1.1-.6-1.9-.7.8-.1 1.4-.3 1.9-.7.5-.4.9-1.1 1.1-2.4Z"
+        fill="currentColor"
+        opacity="0.75"
+      />
+    </svg>
+  );
+}
+
+function JarvisMark({ busy = false, large = false }: { busy?: boolean; large?: boolean }) {
+  return (
+    <span className={`jarvis-mark${large ? ' jarvis-mark--large' : ''}${busy ? ' jarvis-mark--busy' : ''}`} aria-hidden="true">
+      <SparkIcon size={large ? 26 : 18} />
     </span>
   );
 }
+
+const Icon = {
+  history: (
+    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+      <path d="M3 12a9 9 0 1 0 3-6.7L3 8" />
+      <path d="M3 3v5h5" />
+      <path d="M12 7v5l3 2" />
+    </svg>
+  ),
+  plus: (
+    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" aria-hidden="true">
+      <path d="M12 5v14M5 12h14" />
+    </svg>
+  ),
+  close: (
+    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" aria-hidden="true">
+      <path d="M6 6l12 12M18 6L6 18" />
+    </svg>
+  ),
+  trash: (
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+      <path d="M3 6h18M8 6V4h8v2M19 6l-1 14H6L5 6" />
+    </svg>
+  ),
+  send: (
+    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+      <path d="M12 19V5M5 12l7-7 7 7" />
+    </svg>
+  ),
+  stop: (
+    <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+      <rect x="5" y="5" width="14" height="14" rx="3" />
+    </svg>
+  ),
+};
 
 function Steps({ steps, open }: { steps: Turn['steps']; open: boolean }) {
   const [expanded, setExpanded] = useState(open);
@@ -112,12 +165,16 @@ function Steps({ steps, open }: { steps: Turn['steps']; open: boolean }) {
 
 interface JarvisPanelProps {
   open: boolean;
+  onOpen: () => void;
   onClose: () => void;
   viewLabel: string;
+  // Where the floating launcher sits: above the app's fixed footer, above a chat
+  // screen's message box (whose send button is in the corner), or in the corner.
+  launcherPlacement: 'footer' | 'composer' | 'corner';
   onOpenRecord: (action: JarvisOpenAction) => void;
 }
 
-export default function JarvisPanel({ open, onClose, viewLabel, onOpenRecord }: JarvisPanelProps) {
+export default function JarvisPanel({ open, onOpen, onClose, viewLabel, launcherPlacement, onOpenRecord }: JarvisPanelProps) {
   const [status, setStatus] = useState<{ available: boolean; model: string } | null>(null);
   const [conversationId, setConversationId] = useState<string | null>(() => readStored(CONVERSATION_KEY));
   const [transcript, setTranscript] = useState<TranscriptItem[]>([]);
@@ -127,10 +184,19 @@ export default function JarvisPanel({ open, onClose, viewLabel, onOpenRecord }: 
   const [live, setLive] = useState<LiveTurn | null>(null);
   const [error, setError] = useState<string | null>(null);
   const abortRef = useRef<AbortController | null>(null);
+  // An answer that finished while the panel was closed lights a dot on the
+  // launcher until the panel is opened again.
+  const [unseen, setUnseen] = useState(false);
+  const openRef = useRef(open);
   const scrollRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
 
   const busy = live !== null;
+
+  useEffect(() => {
+    openRef.current = open;
+    if (open) setUnseen(false);
+  }, [open]);
 
   useEffect(() => {
     if (!open || status) return;
@@ -269,7 +335,8 @@ export default function JarvisPanel({ open, onClose, viewLabel, onOpenRecord }: 
         }
       }
       setLive(null);
-      inputRef.current?.focus();
+      if (openRef.current) inputRef.current?.focus();
+      else setUnseen(true);
     }
   };
 
@@ -286,16 +353,36 @@ export default function JarvisPanel({ open, onClose, viewLabel, onOpenRecord }: 
   const unavailable = status && !status.available;
 
   return (
+    <>
+    <button
+      type="button"
+      className={[
+        'jarvis-launcher',
+        `jarvis-launcher--${launcherPlacement}`,
+        open ? 'jarvis-launcher--hidden' : '',
+        busy ? 'jarvis-launcher--busy' : '',
+      ].filter(Boolean).join(' ')}
+      onClick={onOpen}
+      aria-label="Otevřít Jarvise (Alt+J)"
+      tabIndex={open ? -1 : 0}
+    >
+      <SparkIcon size={26} />
+      {unseen && !busy && <span className="jarvis-launcher-badge" />}
+      <span className="jarvis-launcher-tip" aria-hidden="true">
+        Jarvis <kbd>Alt+J</kbd>
+      </span>
+    </button>
+
     <aside className={`jarvis-panel${open ? ' jarvis-panel--open' : ''}`} aria-hidden={!open} aria-label="Jarvis">
       <header className="jarvis-header">
-        <JarvisOrb busy={busy} />
+        <JarvisMark busy={busy} />
         <div className="jarvis-title">
           <strong>Jarvis</strong>
-          <span>AI asistent · zatím jen čte data</span>
+          <span>{busy ? 'Pracuji…' : 'AI asistent · zatím jen čte data'}</span>
         </div>
         <div className="jarvis-header-actions">
-          <button type="button" className="jarvis-icon-button" onClick={openHistory} title="Historie konverzací" aria-expanded={showHistory}>
-            ☰
+          <button type="button" className="jarvis-icon-button" onClick={openHistory} title="Historie konverzací" aria-label="Historie konverzací" aria-expanded={showHistory}>
+            {Icon.history}
           </button>
           <button
             type="button"
@@ -303,11 +390,12 @@ export default function JarvisPanel({ open, onClose, viewLabel, onOpenRecord }: 
             onClick={() => void loadConversation(null)}
             disabled={busy}
             title="Nová konverzace"
+            aria-label="Nová konverzace"
           >
-            ＋
+            {Icon.plus}
           </button>
-          <button type="button" className="jarvis-icon-button" onClick={onClose} title="Zavřít (Esc)">
-            ×
+          <button type="button" className="jarvis-icon-button" onClick={onClose} title="Zavřít (Esc)" aria-label="Zavřít">
+            {Icon.close}
           </button>
         </div>
       </header>
@@ -329,8 +417,8 @@ export default function JarvisPanel({ open, onClose, viewLabel, onOpenRecord }: 
                 <span>{item.title || 'Bez názvu'}</span>
                 <small>{relativeTime(item.updatedAt)}</small>
               </button>
-              <button type="button" className="jarvis-icon-button" onClick={() => deleteConversation(item.id)} title="Smazat" disabled={busy}>
-                🗑
+              <button type="button" className="jarvis-icon-button" onClick={() => deleteConversation(item.id)} title="Smazat konverzaci" aria-label="Smazat konverzaci" disabled={busy}>
+                {Icon.trash}
               </button>
             </div>
           ))}
@@ -344,8 +432,8 @@ export default function JarvisPanel({ open, onClose, viewLabel, onOpenRecord }: 
 
         {turns.length === 0 && !live && !unavailable && (
           <div className="jarvis-welcome">
-            <JarvisOrb />
-            <h3>Na co se chcete zeptat?</h3>
+            <JarvisMark large />
+            <div className="jarvis-welcome-title">Na co se chcete zeptat?</div>
             <p>Hledám v klientech, partnerech, tipařích a zakázkách, ve kterých máte přístup. Data zatím jen čtu.</p>
             <div className="jarvis-suggestions">
               {SUGGESTIONS.map((suggestion) => (
@@ -459,16 +547,17 @@ export default function JarvisPanel({ open, onClose, viewLabel, onOpenRecord }: 
             disabled={Boolean(unavailable)}
           />
           {busy ? (
-            <button type="button" className="jarvis-send jarvis-send--stop" onClick={stop} title="Zastavit (Esc)">
-              ■
+            <button type="button" className="jarvis-send jarvis-send--stop" onClick={stop} title="Zastavit (Esc)" aria-label="Zastavit">
+              {Icon.stop}
             </button>
           ) : (
-            <button type="submit" className="jarvis-send" disabled={!input.trim() || Boolean(unavailable)} title="Odeslat (Enter)">
-              ↑
+            <button type="submit" className="jarvis-send" disabled={!input.trim() || Boolean(unavailable)} title="Odeslat (Enter)" aria-label="Odeslat">
+              {Icon.send}
             </button>
           )}
         </div>
       </form>
     </aside>
+    </>
   );
 }

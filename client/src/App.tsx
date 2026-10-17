@@ -254,6 +254,7 @@ const AppContent: React.FC = () => {
   const [viewMode, setViewMode] = useState<AppView>(() => getStoredAppView('active'));
   const [gridSearchTarget, setGridSearchTarget] = useState<GridSearchNavigationTarget | null>(null);
   const [jarvisOpen, setJarvisOpen] = useState(false);
+  const openJarvis = useCallback(() => setJarvisOpen(true), []);
   const closeJarvis = useCallback(() => setJarvisOpen(false), []);
 
   // Alt+J opens and closes Jarvis from anywhere in the app.
@@ -636,7 +637,6 @@ const AppContent: React.FC = () => {
           onViewChange={handleViewChange}
           onGlobalSearch={runGlobalSearch}
           onSearchNavigate={handleSearchNavigate}
-          onOpenJarvis={() => setJarvisOpen(true)}
         />
         <div className={mainContentClassName}>
           {(() => {
@@ -689,8 +689,12 @@ const AppContent: React.FC = () => {
         {!isFullscreenView && <Footer />}
         <JarvisPanel
           open={jarvisOpen}
+          onOpen={openJarvis}
           onClose={closeJarvis}
           viewLabel={VIEW_LABELS[viewMode]}
+          launcherPlacement={
+            viewMode === 'teamchat' || viewMode === 'chatbot' ? 'composer' : isFullscreenView ? 'corner' : 'footer'
+          }
           onOpenRecord={handleJarvisOpenRecord}
         />
       </div>

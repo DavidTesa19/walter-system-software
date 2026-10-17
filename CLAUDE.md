@@ -139,8 +139,12 @@ small HTTP server (path-style PUT/GET/HEAD/DELETE and `list-type=2`).
 Claude (model `JARVIS_MODEL`, default `claude-opus-5-5`; effort `JARVIS_EFFORT`,
 default `medium`) behind a manual streaming tool loop (`agent.js`), relayed to
 the browser as Server-Sent Events from `POST /api/jarvis/chat`. The panel opens
-from the sidebar or Alt+J. Needs `ANTHROPIC_API_KEY`; `JARVIS_HOURLY_LIMIT`
-caps turns per user (default 60).
+from a floating launcher in the bottom-right corner or Alt+J; the launcher sits
+above the footer, or above the message box on Týmový chat / AI Asistent, whose
+send buttons are in that corner (`launcherPlacement` in App.tsx). Jarvis's CSS
+names its own sans-serif font — nothing above it sets a body font, so an
+inherited one falls back to the browser's serif. Needs `ANTHROPIC_API_KEY`;
+`JARVIS_HOURLY_LIMIT` caps turns per user (default 60).
 
 - **Tools never touch the database.** They call this server's own HTTP API
   (`api.js`) with a 15-minute token carrying the user's claims plus
