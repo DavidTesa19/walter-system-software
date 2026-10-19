@@ -29,6 +29,7 @@ import {
   truncate,
   unpackValue,
 } from './catalog.js';
+import { matchRecord, recordWords } from './fuzzy.js';
 
 export class ToolError extends Error {}
 
@@ -260,6 +261,9 @@ export const TOOLS = [
       'Fulltextové hledání v subjektech (klienti, partneři, tipaři) a jejich zakázkách napříč sekcemi. ' +
       'Použij vždy, když uživatel zmíní konkrétní firmu, osobu, telefon, e-mail nebo kód, nebo když nevíš, kde záznam je. ' +
       'Hledá bez ohledu na diakritiku a velikost písmen; všechna slova dotazu musí v záznamu být. ' +
+      'Toleruje překlepy, chyby přepisu řeči, české koncovky (Dvořákovi) i kódy bez nul (K12): když přesných výsledků je málo, ' +
+      'přidá priblizne_shody. Ty nejsou jisté – podej je jako „nejspíš myslíte…“ a u jedné jasné shody s ní rovnou pracuj, ' +
+      'u více kandidátů se zeptej. Hledej jméno tak, jak ho uživatel napsal/řekl; nehádej pravopis sám. ' +
       'Vrací ref, který pak předáš do get_subject / get_commission / open_record.',
     input: searchInput,
     label: (input) => `Hledám „${truncate(input.query, 40)}“`,
@@ -271,21 +275,70 @@ export const TOOLS = [
         kinds: input.kinds?.length ? input.kinds : KINDS,
         statuses: input.statuses?.length ? input.statuses : ['accepted', 'pending'],
       });
-      const tokens = normalizeText(input.query).split(/\s+/).filter(Boolean);
+      const tokens = normalizeText(input.query).split(/[\s,;]+/).filter(Boolean);
+      // What a record is called: a hit here ranks above one in, say, a note.
+      const titleOf = (item) =>
+        normalizeText(
+          item.kind === 'subject'
+            ? `${subjectName(item.row)} ${personName(item.row)} ${item.row.entity_id}`
+            : `${commissionName(item.row)} ${item.row.commission_id} ${subjectName(item.row)}`
+        );
+      const byScore = (a, b) =>
+        b.score - a.score || String(b.item.row.updated_at ?? '').localeCompare(String(a.item.row.updated_at ?? ''));
+
       const hits = [];
+      const misses = [];
       for (const item of items) {
         const text = searchableText(item.row, teamById);
-        if (!tokens.every((token) => text.includes(token))) continue;
-        const title = normalizeText(item.kind === 'subject' ? `${subjectName(item.row)} ${item.row.entity_id}` : `${commissionName(item.row)} ${item.row.commission_id} ${subjectName(item.row)}`);
+        if (!tokens.every((token) => text.includes(token))) {
+          misses.push({ item, text });
+          continue;
+        }
+        const title = titleOf(item);
         const score = tokens.filter((token) => title.includes(token)).length * 10 + (item.kind === 'subject' ? 1 : 0);
         hits.push({ item, score });
       }
-      hits.sort((a, b) => b.score - a.score || String(b.item.row.updated_at ?? '').localeCompare(String(a.item.row.updated_at ?? '')));
+      hits.sort(byScore);
+
+      // Too few exact hits: look for near misses (typos, a misheard name).
+      let approximate = [];
+      if (hits.length < 3) {
+        for (const { item, text } of misses) {
+          const result = matchRecord(tokens, text, recordWords(text));
+          if (!result) continue;
+          const title = titleOf(item);
+          const inTitle = matchRecord(tokens, title, recordWords(title));
+          approximate.push({
+            item,
+            // How close the match is counts most; where it is, less.
+            score: result.score + (inTitle ? inTitle.score * 0.3 : 0) + (item.kind === 'subject' ? 0.1 : 0),
+            matched: result.matched,
+          });
+        }
+        approximate.sort(byScore);
+        // Only the near misses about as close as the best one: "nowak" means
+        // Novák, not every "Nová společnost" one letter further away.
+        const cutoff = (approximate[0]?.score ?? 0) - 0.2 * tokens.length;
+        approximate = approximate.filter((entry) => entry.score >= cutoff);
+      }
+
       const limit = input.limit ?? 15;
       return {
         nalezeno: hits.length,
         zobrazeno: Math.min(limit, hits.length),
         vysledky: hits.slice(0, limit).map(({ item }) => compactRecord(item, teamById)),
+        ...(approximate.length
+          ? {
+              priblizne_shody: {
+                pocet: approximate.length,
+                poznamka: 'Přibližné shody, ne přesné: ověř je s uživatelem („nejspíš myslíte…“).',
+                vysledky: approximate.slice(0, Math.min(limit, 8)).map(({ item, matched }) => ({
+                  ...compactRecord(item, teamById),
+                  podobnost: matched.length ? matched.join(', ') : undefined,
+                })),
+              },
+            }
+          : {}),
       };
     },
   },

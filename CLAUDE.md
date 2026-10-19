@@ -167,6 +167,13 @@ inherited one falls back to the browser's serif. Needs `ANTHROPIC_API_KEY`;
 - To try it locally, the JSON dev server works too (conversations go to
   `server/data/jarvis-conversations.json`). Live calls spend real Anthropic
   credits.
+- **Search tolerates typos** (`server/jarvis/fuzzy.js`): when `search` finds
+  fewer than 3 exact hits it adds `priblizne_shody` — sound-alike spellings
+  (w/v, y/i, doubled letters), small typos, real Czech case endings and codes
+  without zeros (K12 → K012). Numbers and phone numbers only match exactly.
+  Near misses much weaker than the best one are dropped, or "nowak" would also
+  return every "Nová společnost". Test changes against `server/data/db.json`
+  by calling `runTool('search', …)` with a mocked `api.get` — no server needed.
 - **The open record** ("tenhle klient"): each section grid reports its open
   profile panel with `useReportJarvisFocus(buildJarvisFocus(...), isActive)`
   (`client/src/jarvis/jarvisFocus.ts`); the panel sends it as
