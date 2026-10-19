@@ -3,6 +3,8 @@ import MarkdownMessage from '../components/MarkdownMessage';
 import { jarvisApi } from './jarvisApi';
 import type { ConversationSummary, JarvisEvent, JarvisOpenAction, JarvisStatus, TranscriptItem } from './jarvisApi';
 import { useJarvisVoice } from './useJarvisVoice';
+import { useJarvisFocus } from './jarvisFocus';
+import type { JarvisFocus } from './jarvisFocus';
 import { unlockAudio } from './voice';
 import './JarvisPanel.css';
 
@@ -16,6 +18,12 @@ const SUGGESTIONS = [
   'Kolik máme aktivních partnerů podle oboru?',
   'Které zakázky mají termín tento měsíc?',
 ];
+
+// With a profile open, the openers are about that record.
+const focusSuggestions = (focus: JarvisFocus) =>
+  focus.commission
+    ? ['Shrň mi tuto zakázku', 'S kým je tato zakázka propojená?', 'Co víme o subjektu této zakázky?']
+    : ['Shrň mi, co víme o tomto subjektu', 'Jaké má zakázky a v jakém jsou stavu?', 'Které jeho zakázky mají nejbližší termín?'];
 
 const readStored = (key: string) => {
   try {
@@ -144,6 +152,12 @@ const Icon = {
       <path d="M5 11a7 7 0 0 0 14 0M12 18v3" />
     </svg>
   ),
+  record: (
+    <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+      <path d="M14 3H6a1 1 0 0 0-1 1v16a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1V8l-5-5Z" />
+      <path d="M14 3v5h5M9 13h6M9 17h4" />
+    </svg>
+  ),
   micSmall: (
     <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
       <rect x="9" y="3" width="6" height="11" rx="3" />
@@ -269,6 +283,8 @@ export default function JarvisPanel({ open, onOpen, onClose, viewLabel, launcher
   const scrollRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
   const [readAloud, setReadAloud] = useState(() => readStored(READ_ALOUD_KEY) === '1');
+  // The profile the user has open in a grid, if any.
+  const focus = useJarvisFocus();
   const readAloudRef = useRef(readAloud);
 
   const busy = live !== null;
@@ -432,7 +448,15 @@ export default function JarvisPanel({ open, onOpen, onClose, viewLabel, launcher
 
     try {
       await jarvisApi.chat(
-        { message, conversationId, context: { view: viewLabel, ...(spoken ? { voice: true } : {}) } },
+        {
+          message,
+          conversationId,
+          context: {
+            view: viewLabel,
+            ...(spoken ? { voice: true } : {}),
+            ...(focus ? { record: focus.subject, ...(focus.commission ? { commission: focus.commission } : {}) } : {}),
+          },
+        },
         onEvent,
         controller.signal
       );
@@ -583,7 +607,7 @@ export default function JarvisPanel({ open, onOpen, onClose, viewLabel, launcher
               </p>
             )}
             <div className="jarvis-suggestions">
-              {SUGGESTIONS.map((suggestion) => (
+              {(focus ? focusSuggestions(focus) : SUGGESTIONS).map((suggestion) => (
                 <button
                   key={suggestion}
                   type="button"
@@ -688,8 +712,16 @@ export default function JarvisPanel({ open, onOpen, onClose, viewLabel, launcher
         }}
       >
         <div className="jarvis-composer-meta">
-          <div className="jarvis-context" title="Jarvis ví, kde v aplikaci jste">
-            {viewLabel}
+          <div className="jarvis-context-group">
+            <div className="jarvis-context" title="Jarvis ví, kde v aplikaci jste">
+              {viewLabel}
+            </div>
+            {focus && (
+              <div className="jarvis-context jarvis-context--record" title="Jarvis ví, že máte otevřený tento záznam – „tenhle“ myslí jeho">
+                {Icon.record}
+                <span>{focus.commission?.label ?? focus.subject.label}</span>
+              </div>
+            )}
           </div>
           {speaking && (
             <button type="button" className="jarvis-chip-button" onClick={stopSpeaking} title="Zastavit čtení (Esc)">

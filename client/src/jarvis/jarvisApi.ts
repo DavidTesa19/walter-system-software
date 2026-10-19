@@ -30,8 +30,20 @@ export interface ConversationSummary {
   updatedAt: string;
 }
 
+// An open record, as the server's <kontext> block names it.
+export interface JarvisContextRecord {
+  section: JarvisSection;
+  role: JarvisRole;
+  kind: JarvisKind;
+  id: number;
+  label: string;
+}
+
 export interface JarvisContext {
   view?: string;
+  // The subject whose profile is open, and the zakázka selected in it.
+  record?: JarvisContextRecord;
+  commission?: JarvisContextRecord;
   // The question was spoken: Jarvis keeps the answer short and speakable.
   voice?: boolean;
 }

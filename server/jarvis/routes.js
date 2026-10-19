@@ -49,20 +49,24 @@ export function buildContextBlock(user, context) {
   ];
   if (context?.view) lines.push(`Obrazovka: ${cleanContextText(context.view)}`);
   if (context?.voice === true) lines.push('Režim: hlasový (uživatel otázku řekl nahlas a odpověď mu bude přečtena)');
-  const record = context?.record;
-  if (
-    record
-    && SECTIONS.includes(record.section)
-    && ROLES.includes(record.role)
-    && KINDS.includes(record.kind)
-    && Number.isInteger(Number(record.id))
-  ) {
+  // The profile open in a grid, and the zakázka selected in it.
+  const describeOpen = (record, title) => {
+    if (
+      !record
+      || !SECTIONS.includes(record.section)
+      || !ROLES.includes(record.role)
+      || !KINDS.includes(record.kind)
+      || !Number.isInteger(Number(record.id))
+      || Number(record.id) <= 0
+    ) return;
     const ref = recordRef({ section: record.section, role: record.role, kind: record.kind, id: Number(record.id) });
     const what = record.kind === 'subject' ? 'subjekt' : 'zakázka';
     lines.push(
-      `Otevřený záznam: ${what} · ${ROLE_LABELS[record.role]} · ${SECTION_LABELS[record.section]} · ${cleanContextText(record.label, 120)} (ref ${ref})`
+      `${title}: ${what} · ${ROLE_LABELS[record.role]} · ${SECTION_LABELS[record.section]} · ${cleanContextText(record.label, 120)} (ref ${ref})`
     );
-  }
+  };
+  describeOpen(context?.record, 'Otevřený záznam');
+  describeOpen(context?.commission, 'Vybraná zakázka v jeho profilu');
   return `<kontext>\n${lines.join('\n')}\n</kontext>`;
 }
 

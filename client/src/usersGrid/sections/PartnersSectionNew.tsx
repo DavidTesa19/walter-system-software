@@ -82,6 +82,7 @@ import {
 } from "../crossTypeCreate";
 import { attachSubjectIdentity } from "../subjectLink";
 import useSubjectRoles from "../useSubjectRoles";
+import { buildJarvisFocus, useReportJarvisFocus } from "../../jarvis/jarvisFocus";
 
 // The other subject types a new partner can also be created as.
 const PARTNER_OTHER_TYPES: SubjectType[] = ["client", "tiper"];
@@ -877,6 +878,9 @@ const PartnersSectionNew: React.FC<SectionProps> = ({ viewMode, isActive, system
 
   const selectedEntity = useMemo(() => selectedEntityId === null ? null : entities.find((entity) => entity.id === selectedEntityId) || null, [entities, selectedEntityId]);
   const selectedCommission = useMemo(() => selectedCommissionId === null ? null : commissions.find((commission) => commission.id === selectedCommissionId) || null, [commissions, selectedCommissionId]);
+
+  // Lets Jarvis know which record "tenhle" means.
+  useReportJarvisFocus(buildJarvisFocus(systemNamespace, 'partner', selectedEntity, selectedCommission), isActive);
   const linkedCommissions = useMemo(() => selectedEntityId === null ? [] : buildLinkedCommissionItems(commissions.filter((commission) => commission.partner_entity_id === selectedEntityId), assignableUsers), [assignableUsers, commissions, selectedEntityId]);
   const entityData = useMemo(() => buildEntityData(selectedEntity, assignmentOptions), [assignmentOptions, selectedEntity]);
 

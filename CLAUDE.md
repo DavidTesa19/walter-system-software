@@ -167,6 +167,11 @@ inherited one falls back to the browser's serif. Needs `ANTHROPIC_API_KEY`;
 - To try it locally, the JSON dev server works too (conversations go to
   `server/data/jarvis-conversations.json`). Live calls spend real Anthropic
   credits.
+- **The open record** ("tenhle klient"): each section grid reports its open
+  profile panel with `useReportJarvisFocus(buildJarvisFocus(...), isActive)`
+  (`client/src/jarvis/jarvisFocus.ts`); the panel sends it as
+  `context.record` / `context.commission` and shows it as a chip. A new grid
+  with a profile panel must report it too, or Jarvis will not know what is open.
 - **Voice** (`server/jarvis/voice.js`, `client/src/jarvis/voice.ts`,
   `useJarvisVoice.ts`): speech-to-text (`POST /api/jarvis/transcribe`, raw
   audio body) and read-aloud (`POST /api/jarvis/speech`) go through OpenAI with

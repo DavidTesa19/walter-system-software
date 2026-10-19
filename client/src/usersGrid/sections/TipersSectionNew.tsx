@@ -82,6 +82,7 @@ import {
 } from "../crossTypeCreate";
 import { attachSubjectIdentity } from "../subjectLink";
 import useSubjectRoles from "../useSubjectRoles";
+import { buildJarvisFocus, useReportJarvisFocus } from "../../jarvis/jarvisFocus";
 
 // The other subject types a new tiper can also be created as.
 const TIPER_OTHER_TYPES: SubjectType[] = ["partner", "client"];
@@ -919,6 +920,9 @@ const TipersSectionNew: React.FC<SectionProps> = ({
     if (selectedCommissionId === null) return null;
     return commissions.find(c => c.id === selectedCommissionId) || null;
   }, [commissions, selectedCommissionId]);
+
+  // Lets Jarvis know which record "tenhle" means.
+  useReportJarvisFocus(buildJarvisFocus(systemNamespace, 'tiper', selectedEntity, selectedCommission), isActive);
 
   const linkedCommissions = useMemo(() => {
     if (selectedEntityId === null) return [];

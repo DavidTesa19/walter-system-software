@@ -600,6 +600,38 @@
   text-overflow: ellipsis;
 }
 
+.jarvis-context-group {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+}
+
+.jarvis-context-group .jarvis-context:first-child {
+  flex-shrink: 0;
+}
+
+/* The open profile Jarvis will take "tenhle" to mean. */
+.jarvis-context--record {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  min-width: 0;
+  color: color-mix(in srgb, var(--jarvis-accent) 75%, var(--color-text, #0f172a));
+  background: color-mix(in srgb, var(--jarvis-accent) 12%, var(--jarvis-surface));
+  font-weight: 600;
+}
+
+.jarvis-context--record svg {
+  flex-shrink: 0;
+}
+
+.jarvis-context--record span {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
 .jarvis-input-row {
   display: flex;
   align-items: flex-end;
