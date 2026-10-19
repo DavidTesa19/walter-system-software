@@ -16,7 +16,7 @@ export interface JarvisOpenAction {
 }
 
 export type TranscriptItem =
-  | { type: 'question'; text: string; at?: string }
+  | { type: 'question'; text: string; at?: string; voice?: boolean }
   | { type: 'answer'; text: string; model?: string }
   | { type: 'note'; text: string }
   | { type: 'tool'; name: string; label: string; ok: boolean }
@@ -32,6 +32,16 @@ export interface ConversationSummary {
 
 export interface JarvisContext {
   view?: string;
+  // The question was spoken: Jarvis keeps the answer short and speakable.
+  voice?: boolean;
+}
+
+export interface JarvisStatus {
+  available: boolean;
+  model: string;
+  // The server can transcribe and speak (OpenAI); otherwise the browser's own
+  // speech engines are used.
+  voice?: boolean;
 }
 
 export type JarvisEvent =
@@ -56,8 +66,44 @@ const getToken = (): string | null => {
   }
 };
 
+const authHeaders = (): Record<string, string> => {
+  const token = getToken();
+  return token ? { Authorization: `Bearer ${token}` } : {};
+};
+
+const failure = async (response: Response, fallback: string) => {
+  const data = await response.json().catch(() => ({}));
+  return new Error(data?.error || `${fallback} (${response.status}).`);
+};
+
 export const jarvisApi = {
-  status: () => apiGet<{ available: boolean; model: string }>('/api/jarvis/status'),
+  status: () => apiGet<JarvisStatus>('/api/jarvis/status'),
+
+  // A recorded question in, its text out.
+  async transcribe(audio: Blob, signal?: AbortSignal): Promise<string> {
+    const response = await fetch(`${API_BASE}/api/jarvis/transcribe`, {
+      method: 'POST',
+      headers: { 'Content-Type': audio.type || 'audio/webm', ...authHeaders() },
+      body: audio,
+      signal,
+    });
+    if (!response.ok) throw await failure(response, 'Nahrávku se nepodařilo přepsat');
+    const data = (await response.json()) as { text?: string };
+    return (data.text ?? '').trim();
+  },
+
+  // Text in, spoken MP3 out.
+  async speech(text: string, signal?: AbortSignal): Promise<Blob> {
+    const response = await fetch(`${API_BASE}/api/jarvis/speech`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', ...authHeaders() },
+      body: JSON.stringify({ text }),
+      signal,
+    });
+    if (!response.ok) throw await failure(response, 'Odpověď se nepodařilo přečíst');
+    return response.blob();
+  },
+
   conversations: () => apiGet<ConversationSummary[]>('/api/jarvis/conversations'),
   conversation: (id: string) =>
     apiGet<{ id: string; title: string | null; transcript: TranscriptItem[] }>(`/api/jarvis/conversations/${id}`),
@@ -71,20 +117,13 @@ export const jarvisApi = {
     onEvent: (event: JarvisEvent) => void,
     signal: AbortSignal
   ): Promise<void> {
-    const token = getToken();
     const response = await fetch(`${API_BASE}/api/jarvis/chat`, {
       method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        ...(token ? { Authorization: `Bearer ${token}` } : {}),
-      },
+      headers: { 'Content-Type': 'application/json', ...authHeaders() },
       body: JSON.stringify(body),
       signal,
     });
-    if (!response.ok || !response.body) {
-      const data = await response.json().catch(() => ({}));
-      throw new Error(data?.error || `Jarvis neodpověděl (${response.status}).`);
-    }
+    if (!response.ok || !response.body) throw await failure(response, 'Jarvis neodpověděl');
 
     const reader = response.body.getReader();
     const decoder = new TextDecoder();

@@ -1,10 +1,14 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import MarkdownMessage from '../components/MarkdownMessage';
 import { jarvisApi } from './jarvisApi';
-import type { ConversationSummary, JarvisEvent, JarvisOpenAction, TranscriptItem } from './jarvisApi';
+import type { ConversationSummary, JarvisEvent, JarvisOpenAction, JarvisStatus, TranscriptItem } from './jarvisApi';
+import { useJarvisVoice } from './useJarvisVoice';
+import { unlockAudio } from './voice';
 import './JarvisPanel.css';
 
 const CONVERSATION_KEY = 'walterJarvisConversation';
+// Read answers to typed questions aloud too (spoken ones always are).
+const READ_ALOUD_KEY = 'walterJarvisReadAloud';
 
 const SUGGESTIONS = [
   'Co víme o klientovi …?',
@@ -67,6 +71,7 @@ function groupTurns(items: TranscriptItem[]): Turn[] {
 
 interface LiveTurn {
   question: string;
+  voice: boolean;
   steps: Array<{ id: string; label: string; done: boolean; ok: boolean }>;
   text: string;
   thinking: string;
@@ -133,7 +138,80 @@ const Icon = {
       <rect x="5" y="5" width="14" height="14" rx="3" />
     </svg>
   ),
+  mic: (
+    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+      <rect x="9" y="3" width="6" height="11" rx="3" />
+      <path d="M5 11a7 7 0 0 0 14 0M12 18v3" />
+    </svg>
+  ),
+  micSmall: (
+    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+      <rect x="9" y="3" width="6" height="11" rx="3" />
+      <path d="M5 11a7 7 0 0 0 14 0M12 18v3" />
+    </svg>
+  ),
+  speaker: (
+    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+      <path d="M11 5 6 9H3v6h3l5 4V5Z" />
+      <path d="M15.5 8.5a5 5 0 0 1 0 7M18.5 5.5a9 9 0 0 1 0 13" />
+    </svg>
+  ),
+  speakerOff: (
+    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+      <path d="M11 5 6 9H3v6h3l5 4V5Z" />
+      <path d="m16 9 5 6M21 9l-5 6" />
+    </svg>
+  ),
+  speakerSmall: (
+    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+      <path d="M11 5 6 9H3v6h3l5 4V5Z" />
+      <path d="M15.5 8.5a5 5 0 0 1 0 7" />
+    </svg>
+  ),
 };
+
+// Five bars that follow the microphone's loudness. They read the level from a
+// ref on their own animation frame, so the panel itself does not re-render.
+function LevelMeter({ levelRef }: { levelRef: { current: number } }) {
+  const barsRef = useRef<HTMLSpanElement>(null);
+  useEffect(() => {
+    const shape = [0.55, 0.8, 1, 0.8, 0.55];
+    let frame = 0;
+    const draw = () => {
+      const bars = barsRef.current?.children;
+      if (bars) {
+        for (let index = 0; index < bars.length; index += 1) {
+          const scale = Math.max(0.18, Math.min(1, levelRef.current * shape[index] * 1.4));
+          (bars[index] as HTMLElement).style.transform = `scaleY(${scale})`;
+        }
+      }
+      frame = window.requestAnimationFrame(draw);
+    };
+    frame = window.requestAnimationFrame(draw);
+    return () => window.cancelAnimationFrame(frame);
+  }, [levelRef]);
+  return (
+    <span className="jarvis-meter" ref={barsRef} aria-hidden="true">
+      <i /><i /><i /><i /><i />
+    </span>
+  );
+}
+
+function ReadAloudButton({ reading, onRead, onStop }: { reading: boolean; onRead: () => void; onStop: () => void }) {
+  return (
+    <button
+      type="button"
+      className={`jarvis-read${reading ? ' jarvis-read--active' : ''}`}
+      onClick={reading ? onStop : onRead}
+      title={reading ? 'Zastavit čtení' : 'Přečíst nahlas'}
+    >
+      {reading ? Icon.stop : Icon.speakerSmall}
+      <span>{reading ? 'Zastavit' : 'Přečíst'}</span>
+    </button>
+  );
+}
+
+const formatElapsed = (seconds: number) => `${Math.floor(seconds / 60)}:${String(seconds % 60).padStart(2, '0')}`;
 
 function Steps({ steps, open }: { steps: Turn['steps']; open: boolean }) {
   const [expanded, setExpanded] = useState(open);
@@ -175,7 +253,7 @@ interface JarvisPanelProps {
 }
 
 export default function JarvisPanel({ open, onOpen, onClose, viewLabel, launcherPlacement, onOpenRecord }: JarvisPanelProps) {
-  const [status, setStatus] = useState<{ available: boolean; model: string } | null>(null);
+  const [status, setStatus] = useState<JarvisStatus | null>(null);
   const [conversationId, setConversationId] = useState<string | null>(() => readStored(CONVERSATION_KEY));
   const [transcript, setTranscript] = useState<TranscriptItem[]>([]);
   const [conversations, setConversations] = useState<ConversationSummary[]>([]);
@@ -190,8 +268,34 @@ export default function JarvisPanel({ open, onOpen, onClose, viewLabel, launcher
   const openRef = useRef(open);
   const scrollRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
+  const [readAloud, setReadAloud] = useState(() => readStored(READ_ALOUD_KEY) === '1');
+  const readAloudRef = useRef(readAloud);
 
   const busy = live !== null;
+
+  // A spoken question goes off as soon as it has been transcribed.
+  const voice = useJarvisVoice(status?.voice, (text) => void send(text, true));
+  const { cancelListening, stopSpeaking } = voice;
+  const listening = voice.listen !== 'idle';
+  const speaking = voice.speakingKey !== null;
+
+  const toggleReadAloud = () => {
+    const next = !readAloud;
+    readAloudRef.current = next;
+    setReadAloud(next);
+    writeStored(READ_ALOUD_KEY, next ? '1' : null);
+    if (!next) stopSpeaking();
+  };
+
+  // The microphone never stays on behind a closed panel.
+  useEffect(() => {
+    if (!open) cancelListening();
+  }, [open, cancelListening]);
+
+  const closePanel = useCallback(() => {
+    stopSpeaking();
+    onClose();
+  }, [onClose, stopSpeaking]);
 
   useEffect(() => {
     openRef.current = open;
@@ -200,7 +304,7 @@ export default function JarvisPanel({ open, onOpen, onClose, viewLabel, launcher
 
   useEffect(() => {
     if (!open || status) return;
-    jarvisApi.status().then(setStatus).catch(() => setStatus({ available: false, model: '' }));
+    jarvisApi.status().then(setStatus).catch(() => setStatus({ available: false, model: '', voice: false }));
   }, [open, status]);
 
   const loadConversation = useCallback(async (id: string | null) => {
@@ -234,17 +338,20 @@ export default function JarvisPanel({ open, onOpen, onClose, viewLabel, launcher
     scrollRef.current?.scrollTo({ top: scrollRef.current.scrollHeight });
   }, [transcript, live]);
 
-  // Escape closes the panel (but first stops a running answer).
+  // Escape closes the panel, but first drops a recording, stops reading
+  // aloud, or stops a running answer.
   useEffect(() => {
     if (!open) return undefined;
     const onKey = (event: KeyboardEvent) => {
       if (event.key !== 'Escape' || document.querySelector('.safety-modal')) return;
-      if (abortRef.current) abortRef.current.abort();
-      else onClose();
+      if (listening) cancelListening();
+      else if (speaking) stopSpeaking();
+      else if (abortRef.current) abortRef.current.abort();
+      else closePanel();
     };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
-  }, [open, onClose]);
+  }, [open, closePanel, listening, speaking, cancelListening, stopSpeaking]);
 
   const openHistory = async () => {
     setShowHistory((value) => !value);
@@ -267,16 +374,20 @@ export default function JarvisPanel({ open, onOpen, onClose, viewLabel, launcher
     }
   };
 
-  const send = async (raw: string) => {
+  async function send(raw: string, spoken = false) {
     const message = raw.trim();
     if (!message || busy) return;
     setInput('');
     setError(null);
+    voice.clearError();
+    stopSpeaking();
+    // Typed questions start here from a key press: let their answer play later.
+    unlockAudio();
     setShowHistory(false);
     const controller = new AbortController();
     abortRef.current = controller;
     let activeId = conversationId;
-    setLive({ question: message, steps: [], text: '', thinking: '', actions: [], notices: [] });
+    setLive({ question: message, voice: spoken, steps: [], text: '', thinking: '', actions: [], notices: [] });
 
     const onEvent = (event: JarvisEvent) => {
       switch (event.event) {
@@ -320,16 +431,24 @@ export default function JarvisPanel({ open, onOpen, onClose, viewLabel, launcher
     };
 
     try {
-      await jarvisApi.chat({ message, conversationId, context: { view: viewLabel } }, onEvent, controller.signal);
+      await jarvisApi.chat(
+        { message, conversationId, context: { view: viewLabel, ...(spoken ? { voice: true } : {}) } },
+        onEvent,
+        controller.signal
+      );
     } catch (err) {
       if (!controller.signal.aborted) setError(err instanceof Error ? err.message : 'Jarvis neodpověděl.');
     } finally {
       abortRef.current = null;
       // The server's transcript is the record of what happened; show that.
+      let answer: { text: string; key: string } | null = null;
       if (activeId) {
         try {
           const data = await jarvisApi.conversation(activeId);
           setTranscript(data.transcript);
+          const all = groupTurns(data.transcript);
+          const last = all[all.length - 1];
+          if (last?.answer) answer = { text: last.answer, key: `answer-${all.length - 1}` };
         } catch {
           // Keep what is on screen.
         }
@@ -337,8 +456,10 @@ export default function JarvisPanel({ open, onOpen, onClose, viewLabel, launcher
       setLive(null);
       if (openRef.current) inputRef.current?.focus();
       else setUnseen(true);
+      // Answer aloud what was asked aloud (or everything, when chosen).
+      if (answer && !controller.signal.aborted && (spoken || readAloudRef.current)) void voice.speak(answer.text, answer.key);
     }
-  };
+  }
 
   const stop = () => abortRef.current?.abort();
 
@@ -351,6 +472,15 @@ export default function JarvisPanel({ open, onOpen, onClose, viewLabel, launcher
 
   const turns = useMemo(() => groupTurns(transcript), [transcript]);
   const unavailable = status && !status.available;
+  const subtitle = busy
+    ? 'Pracuji…'
+    : voice.listen === 'listening'
+      ? 'Poslouchám…'
+      : voice.listen === 'transcribing'
+        ? 'Přepisuji…'
+        : speaking
+          ? 'Mluvím…'
+          : 'AI asistent · zatím jen čte data';
 
   return (
     <>
@@ -375,12 +505,24 @@ export default function JarvisPanel({ open, onOpen, onClose, viewLabel, launcher
 
     <aside className={`jarvis-panel${open ? ' jarvis-panel--open' : ''}`} aria-hidden={!open} aria-label="Jarvis">
       <header className="jarvis-header">
-        <JarvisMark busy={busy} />
+        <JarvisMark busy={busy || speaking || listening} />
         <div className="jarvis-title">
           <strong>Jarvis</strong>
-          <span>{busy ? 'Pracuji…' : 'AI asistent · zatím jen čte data'}</span>
+          <span>{subtitle}</span>
         </div>
         <div className="jarvis-header-actions">
+          {voice.canSpeak && (
+            <button
+              type="button"
+              className={`jarvis-icon-button${readAloud ? ' jarvis-icon-button--on' : ''}`}
+              onClick={toggleReadAloud}
+              title={readAloud ? 'Čtu nahlas všechny odpovědi (kliknutím vypnete)' : 'Číst nahlas i odpovědi na psané dotazy'}
+              aria-label="Číst odpovědi nahlas"
+              aria-pressed={readAloud}
+            >
+              {readAloud ? Icon.speaker : Icon.speakerOff}
+            </button>
+          )}
           <button type="button" className="jarvis-icon-button" onClick={openHistory} title="Historie konverzací" aria-label="Historie konverzací" aria-expanded={showHistory}>
             {Icon.history}
           </button>
@@ -394,7 +536,7 @@ export default function JarvisPanel({ open, onOpen, onClose, viewLabel, launcher
           >
             {Icon.plus}
           </button>
-          <button type="button" className="jarvis-icon-button" onClick={onClose} title="Zavřít (Esc)" aria-label="Zavřít">
+          <button type="button" className="jarvis-icon-button" onClick={closePanel} title="Zavřít (Esc)" aria-label="Zavřít">
             {Icon.close}
           </button>
         </div>
@@ -435,6 +577,11 @@ export default function JarvisPanel({ open, onOpen, onClose, viewLabel, launcher
             <JarvisMark large />
             <div className="jarvis-welcome-title">Na co se chcete zeptat?</div>
             <p>Hledám v klientech, partnerech, tipařích a zakázkách, ve kterých máte přístup. Data zatím jen čtu.</p>
+            {voice.canListen && (
+              <p className="jarvis-welcome-voice">
+                {Icon.micSmall} Ptát se můžete i hlasem: klikněte na mikrofon a mluvte, odpovím nahlas.
+              </p>
+            )}
             <div className="jarvis-suggestions">
               {SUGGESTIONS.map((suggestion) => (
                 <button
@@ -458,12 +605,22 @@ export default function JarvisPanel({ open, onOpen, onClose, viewLabel, launcher
 
         {turns.map((turn, index) => (
           <div key={index} className="jarvis-turn">
-            <div className="jarvis-question">{turn.question.text}</div>
+            <div className="jarvis-question">
+              {turn.question.voice && <span className="jarvis-question-voice" title="Řečeno hlasem">{Icon.micSmall}</span>}
+              {turn.question.text}
+            </div>
             <Steps steps={turn.steps} open={false} />
             {turn.answer && (
               <div className="jarvis-answer">
                 <MarkdownMessage content={turn.answer} />
               </div>
+            )}
+            {turn.answer && voice.canSpeak && (
+              <ReadAloudButton
+                reading={voice.speakingKey === `answer-${index}`}
+                onRead={() => void voice.speak(turn.answer ?? '', `answer-${index}`)}
+                onStop={stopSpeaking}
+              />
             )}
             {turn.notices.map((notice, noticeIndex) => (
               <div key={noticeIndex} className="jarvis-notice">{notice}</div>
@@ -482,7 +639,10 @@ export default function JarvisPanel({ open, onOpen, onClose, viewLabel, launcher
 
         {live && (
           <div className="jarvis-turn">
-            <div className="jarvis-question">{live.question}</div>
+            <div className="jarvis-question">
+              {live.voice && <span className="jarvis-question-voice" title="Řečeno hlasem">{Icon.micSmall}</span>}
+              {live.question}
+            </div>
             {live.steps.length > 0 && (
               <ul className="jarvis-step-list jarvis-step-list--live">
                 {live.steps.map((step) => (
@@ -527,26 +687,89 @@ export default function JarvisPanel({ open, onOpen, onClose, viewLabel, launcher
           void send(input);
         }}
       >
-        <div className="jarvis-context" title="Jarvis ví, kde v aplikaci jste">
-          {viewLabel}
+        <div className="jarvis-composer-meta">
+          <div className="jarvis-context" title="Jarvis ví, kde v aplikaci jste">
+            {viewLabel}
+          </div>
+          {speaking && (
+            <button type="button" className="jarvis-chip-button" onClick={stopSpeaking} title="Zastavit čtení (Esc)">
+              {Icon.stop} Zastavit čtení
+            </button>
+          )}
         </div>
+        {voice.error && (
+          <div className="jarvis-voice-error" role="alert">
+            <span>{voice.error}</span>
+            <button type="button" className="jarvis-icon-button" onClick={voice.clearError} aria-label="Zavřít upozornění">
+              {Icon.close}
+            </button>
+          </div>
+        )}
         <div className="jarvis-input-row">
-          <textarea
-            ref={inputRef}
-            value={input}
-            onChange={(event) => setInput(event.target.value)}
-            onKeyDown={(event) => {
-              if (event.key === 'Enter' && !event.shiftKey) {
-                event.preventDefault();
-                void send(input);
-              }
-            }}
-            placeholder={unavailable ? 'Jarvis není dostupný' : 'Zeptejte se Jarvise…'}
-            rows={2}
-            maxLength={8000}
-            disabled={Boolean(unavailable)}
-          />
-          {busy ? (
+          {listening ? (
+            <div className="jarvis-listening" aria-live="polite">
+              {voice.listen === 'listening' && status?.voice ? (
+                <LevelMeter levelRef={voice.levelRef} />
+              ) : voice.listen === 'listening' ? (
+                <span className="jarvis-listening-dot" aria-hidden="true" />
+              ) : (
+                <span className="jarvis-spinner" aria-hidden="true" />
+              )}
+              <div className="jarvis-listening-text">
+                {voice.listen === 'starting' && <strong>Zapínám mikrofon…</strong>}
+                {voice.listen === 'transcribing' && <strong>Přepisuji…</strong>}
+                {voice.listen === 'listening' && (
+                  <>
+                    <strong>{voice.interim || `Poslouchám… ${formatElapsed(voice.elapsed)}`}</strong>
+                    <span>Po krátké pauze dotaz odešlu sám</span>
+                  </>
+                )}
+              </div>
+              <button type="button" className="jarvis-icon-button" onClick={cancelListening} title="Zahodit (Esc)" aria-label="Zahodit nahrávku">
+                {Icon.close}
+              </button>
+            </div>
+          ) : (
+            <textarea
+              ref={inputRef}
+              value={input}
+              onChange={(event) => setInput(event.target.value)}
+              onKeyDown={(event) => {
+                if (event.key === 'Enter' && !event.shiftKey) {
+                  event.preventDefault();
+                  void send(input);
+                }
+              }}
+              placeholder={unavailable ? 'Jarvis není dostupný' : 'Zeptejte se Jarvise…'}
+              rows={2}
+              maxLength={8000}
+              disabled={Boolean(unavailable)}
+            />
+          )}
+          {voice.canListen && !listening && (
+            <button
+              type="button"
+              className="jarvis-mic"
+              onClick={() => void voice.startListening()}
+              disabled={busy || Boolean(unavailable)}
+              title="Zeptat se hlasem"
+              aria-label="Zeptat se hlasem"
+            >
+              {Icon.mic}
+            </button>
+          )}
+          {listening ? (
+            <button
+              type="button"
+              className="jarvis-send"
+              onClick={voice.stopListening}
+              disabled={voice.listen !== 'listening'}
+              title="Odeslat hned"
+              aria-label="Odeslat hned"
+            >
+              {Icon.send}
+            </button>
+          ) : busy ? (
             <button type="button" className="jarvis-send jarvis-send--stop" onClick={stop} title="Zastavit (Esc)" aria-label="Zastavit">
               {Icon.stop}
             </button>

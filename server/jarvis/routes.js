@@ -2,6 +2,7 @@
 // decided per request by the user's own access (see api.js).
 
 import crypto from 'node:crypto';
+import express from 'express';
 import { createApiClient } from './api.js';
 import { JARVIS_MODEL, isJarvisConfigured, runJarvisTurn } from './agent.js';
 import {
@@ -15,9 +16,12 @@ import {
   truncate,
 } from './catalog.js';
 import { createFileConversationStore, createPgConversationStore } from './store.js';
+import { MAX_AUDIO_BYTES, MAX_SPEECH_CHARS, isVoiceConfigured, synthesize, transcribe } from './voice.js';
 
 const MAX_MESSAGE_LENGTH = 8000;
 const HOURLY_LIMIT = Number(process.env.JARVIS_HOURLY_LIMIT) > 0 ? Number(process.env.JARVIS_HOURLY_LIMIT) : 60;
+// Transcriptions plus read-aloud requests; a long answer is read in a few pieces.
+const VOICE_HOURLY_LIMIT = Number(process.env.JARVIS_VOICE_HOURLY_LIMIT) > 0 ? Number(process.env.JARVIS_VOICE_HOURLY_LIMIT) : 300;
 const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 const zeroUsage = () => ({ input: 0, output: 0, cacheRead: 0, cacheWrite: 0 });
@@ -44,6 +48,7 @@ export function buildContextBlock(user, context) {
     `Uživatel: ${cleanContextText(user.username, 60)} (id ${user.id}, role ${cleanContextText(user.role, 20)}; přístup: ${sections})`,
   ];
   if (context?.view) lines.push(`Obrazovka: ${cleanContextText(context.view)}`);
+  if (context?.voice === true) lines.push('Režim: hlasový (uživatel otázku řekl nahlas a odpověď mu bude přečtena)');
   const record = context?.record;
   if (
     record
@@ -65,22 +70,80 @@ export function registerJarvisRoutes(app, { authenticateToken, pool, dataDir, po
   const store = pool ? createPgConversationStore(pool) : createFileConversationStore(dataDir);
   const baseUrl = `http://127.0.0.1:${port}`;
   const running = new Set();
-  const recentTurns = new Map();
 
-  const withinHourlyLimit = (userId) => {
-    const cutoff = Date.now() - 3600 * 1000;
-    const turns = (recentTurns.get(userId) ?? []).filter((at) => at > cutoff);
-    if (turns.length >= HOURLY_LIMIT) {
-      recentTurns.set(userId, turns);
-      return false;
-    }
-    turns.push(Date.now());
-    recentTurns.set(userId, turns);
-    return true;
+  const createHourlyLimiter = (limit) => {
+    const recent = new Map();
+    return (userId) => {
+      const cutoff = Date.now() - 3600 * 1000;
+      const times = (recent.get(userId) ?? []).filter((at) => at > cutoff);
+      if (times.length >= limit) {
+        recent.set(userId, times);
+        return false;
+      }
+      times.push(Date.now());
+      recent.set(userId, times);
+      return true;
+    };
   };
+  const withinHourlyLimit = createHourlyLimiter(HOURLY_LIMIT);
+  const withinVoiceLimit = createHourlyLimiter(VOICE_HOURLY_LIMIT);
 
+  // `voice` says whether the server can listen and speak; without it the
+  // browser uses its own (lower quality) speech engines.
   app.get('/api/jarvis/status', authenticateToken, (_req, res) => {
-    res.json({ available: isJarvisConfigured(), model: JARVIS_MODEL });
+    res.json({ available: isJarvisConfigured(), model: JARVIS_MODEL, voice: isVoiceConfigured() });
+  });
+
+  const rawAudio = express.raw({ type: ['audio/*', 'application/octet-stream'], limit: MAX_AUDIO_BYTES });
+  const readAudio = (req, res, next) =>
+    rawAudio(req, res, (error) => {
+      if (!error) return next();
+      if (error.type === 'entity.too.large') return res.status(413).json({ error: 'Nahrávka je příliš dlouhá.' });
+      return res.status(400).json({ error: 'Nahrávku se nepodařilo přečíst.' });
+    });
+
+  // A recorded question in (the raw audio as the request body), its text out.
+  app.post('/api/jarvis/transcribe', authenticateToken, readAudio, async (req, res) => {
+    if (!isVoiceConfigured()) return res.status(503).json({ error: 'Hlas není na serveru nastavený (chybí OPENAI_API_KEY).' });
+    if (!Buffer.isBuffer(req.body) || req.body.length < 1000) return res.status(400).json({ error: 'Nahrávka je prázdná.' });
+    if (!withinVoiceLimit(Number(req.user.id))) return res.status(429).json({ error: 'Hodinový limit hlasových požadavků je vyčerpaný.' });
+
+    const abort = new AbortController();
+    res.on('close', () => {
+      if (!res.writableFinished) abort.abort();
+    });
+    try {
+      res.json({ text: await transcribe(req.body, req.headers['content-type'], abort.signal) });
+    } catch (error) {
+      if (abort.signal.aborted) return;
+      console.error('Jarvis: transcription failed:', error?.message ?? error);
+      res.status(502).json({ error: 'Nahrávku se nepodařilo přepsat.' });
+    }
+  });
+
+  // Text in, spoken MP3 out. The browser asks sentence by sentence, so the
+  // first words play while the rest is still being made.
+  app.post('/api/jarvis/speech', authenticateToken, async (req, res) => {
+    if (!isVoiceConfigured()) return res.status(503).json({ error: 'Hlas není na serveru nastavený (chybí OPENAI_API_KEY).' });
+    const text = typeof req.body?.text === 'string' ? req.body.text.trim() : '';
+    if (!text) return res.status(400).json({ error: 'Chybí text k přečtení.' });
+    if (text.length > MAX_SPEECH_CHARS) return res.status(400).json({ error: 'Text k přečtení je příliš dlouhý.' });
+    if (!withinVoiceLimit(Number(req.user.id))) return res.status(429).json({ error: 'Hodinový limit hlasových požadavků je vyčerpaný.' });
+
+    const abort = new AbortController();
+    res.on('close', () => {
+      if (!res.writableFinished) abort.abort();
+    });
+    try {
+      const audio = Buffer.from(await (await synthesize(text, abort.signal)).arrayBuffer());
+      res.setHeader('Content-Type', 'audio/mpeg');
+      res.setHeader('Cache-Control', 'no-store');
+      res.end(audio);
+    } catch (error) {
+      if (abort.signal.aborted) return;
+      console.error('Jarvis: speech synthesis failed:', error?.message ?? error);
+      res.status(502).json({ error: 'Odpověď se nepodařilo přečíst.' });
+    }
   });
 
   app.get('/api/jarvis/conversations', authenticateToken, async (req, res) => {
@@ -179,7 +242,9 @@ export function registerJarvisRoutes(app, { authenticateToken, pool, dataDir, po
       };
       await store.append(conversationId, userId, {
         messages: [userMessage],
-        transcript: [{ type: 'question', text, at: new Date().toISOString() }],
+        transcript: [
+          { type: 'question', text, at: new Date().toISOString(), ...(req.body?.context?.voice === true ? { voice: true } : {}) },
+        ],
         usage: zeroUsage(),
       });
 

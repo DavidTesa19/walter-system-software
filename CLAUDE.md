@@ -167,3 +167,19 @@ inherited one falls back to the browser's serif. Needs `ANTHROPIC_API_KEY`;
 - To try it locally, the JSON dev server works too (conversations go to
   `server/data/jarvis-conversations.json`). Live calls spend real Anthropic
   credits.
+- **Voice** (`server/jarvis/voice.js`, `client/src/jarvis/voice.ts`,
+  `useJarvisVoice.ts`): speech-to-text (`POST /api/jarvis/transcribe`, raw
+  audio body) and read-aloud (`POST /api/jarvis/speech`) go through OpenAI with
+  `OPENAI_API_KEY` — Claude has no audio. Env: `JARVIS_STT_MODEL`
+  (gpt-4o-transcribe), `JARVIS_TTS_MODEL` (gpt-4o-mini-tts), `JARVIS_TTS_VOICE`
+  (onyx), `JARVIS_STT_LANGUAGE` (cs; empty = auto), `JARVIS_VOICE_HOURLY_LIMIT`
+  (300). Without the key the browser's own engines stand in (Chrome on Windows
+  only has the robotic "Microsoft Jakub" for Czech). A spoken question sends
+  `context.voice`, which adds "Režim: hlasový" to the `<kontext>` block — the
+  `<hlas>` rules in the system prompt stay static. The mic level lives in a ref
+  that `LevelMeter` reads on its own animation frame; putting it in React state
+  re-renders the whole panel 20× a second.
+- To test voice without a microphone, override
+  `navigator.mediaDevices.getUserMedia` in the page to return a
+  `MediaStreamDestination` stream playing a `/api/jarvis/speech` MP3: the pause
+  detection, transcription, answer and read-aloud then all run for real.
