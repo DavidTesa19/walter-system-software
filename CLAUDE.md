@@ -167,6 +167,18 @@ inherited one falls back to the browser's serif. Needs `ANTHROPIC_API_KEY`;
 - To try it locally, the JSON dev server works too (conversations go to
   `server/data/jarvis-conversations.json`). Live calls spend real Anthropic
   credits.
+- **Calendar** (`calendar` tool): the user's own events plus zakázka deadlines
+  in a range. Day boundaries and output are Prague time whatever the server's
+  zone (UTC on Railway). The event form saves zone-less "2026-10-20T10:00",
+  which means Prague time — parse it with `parseEventTime`, never `new Date()`
+  alone, or every meeting shifts by the UTC offset. An all-day event's stored
+  end is the day after its last day.
+- **Documents** (`read_document`, `server/jarvis/documents.js`): only text
+  goes into the conversation (it is re-sent every turn). PDFs via `unpdf`,
+  .docx/.xlsx/.pptx by unzipping with adm-zip, scans and photos transcribed
+  once by Claude (`JARVIS_OCR_MODEL`, default the Jarvis model). The tool only
+  reads a document listed under a subject the user can open: the
+  `/documents/:id/download` route itself does not check sections.
 - **Search tolerates typos** (`server/jarvis/fuzzy.js`): when `search` finds
   fewer than 3 exact hits it adds `priblizne_shody` — sound-alike spellings
   (w/v, y/i, doubled letters), small typos, real Czech case endings and codes

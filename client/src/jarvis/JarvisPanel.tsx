@@ -13,17 +13,17 @@ const CONVERSATION_KEY = 'walterJarvisConversation';
 const READ_ALOUD_KEY = 'walterJarvisReadAloud';
 
 const SUGGESTIONS = [
+  'Co mám tento týden?',
   'Co víme o klientovi …?',
   'Které zakázky nemají odpovědnou osobu?',
   'Kolik máme aktivních partnerů podle oboru?',
-  'Které zakázky mají termín tento měsíc?',
 ];
 
 // With a profile open, the openers are about that record.
 const focusSuggestions = (focus: JarvisFocus) =>
   focus.commission
     ? ['Shrň mi tuto zakázku', 'S kým je tato zakázka propojená?', 'Co víme o subjektu této zakázky?']
-    : ['Shrň mi, co víme o tomto subjektu', 'Jaké má zakázky a v jakém jsou stavu?', 'Které jeho zakázky mají nejbližší termín?'];
+    : ['Shrň mi, co víme o tomto subjektu', 'Jaké má zakázky a v jakém jsou stavu?', 'Co je v jeho dokumentech?'];
 
 const readStored = (key: string) => {
   try {
@@ -600,7 +600,7 @@ export default function JarvisPanel({ open, onOpen, onClose, viewLabel, launcher
           <div className="jarvis-welcome">
             <JarvisMark large />
             <div className="jarvis-welcome-title">Na co se chcete zeptat?</div>
-            <p>Hledám v klientech, partnerech, tipařích a zakázkách, ve kterých máte přístup. Data zatím jen čtu.</p>
+            <p>Hledám v klientech, partnerech, tipařích a zakázkách, kam máte přístup, ve vašem kalendáři a v nahraných dokumentech. Data zatím jen čtu.</p>
             {voice.canListen && (
               <p className="jarvis-welcome-voice">
                 {Icon.micSmall} Ptát se můžete i hlasem: klikněte na mikrofon a mluvte, odpovím nahlas.

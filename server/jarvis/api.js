@@ -46,7 +46,26 @@ export function createApiClient({ baseUrl, token, changesetId, note }) {
     return data;
   }
 
+  // A file as it was uploaded (a document's download route).
+  async function getFile(path, maxBytes) {
+    const response = await fetch(`${baseUrl}${path}`, {
+      headers: { Authorization: `Bearer ${token}` },
+      signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS * 3),
+    });
+    if (!response.ok) {
+      const data = await response.json().catch(() => null);
+      throw new ApiError(response.status, data?.error || `HTTP ${response.status}`);
+    }
+    const length = Number(response.headers.get('content-length'));
+    if (maxBytes && length > maxBytes) throw new ApiError(413, 'Soubor je příliš velký.');
+    return {
+      buffer: Buffer.from(await response.arrayBuffer()),
+      contentType: response.headers.get('content-type') ?? '',
+    };
+  }
+
   return {
+    getFile,
     get(path) {
       if (!cache.has(path)) {
         cache.set(path, request('GET', path).catch((error) => {

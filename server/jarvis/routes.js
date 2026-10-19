@@ -263,6 +263,8 @@ export function registerJarvisRoutes(app, { authenticateToken, pool, dataDir, po
         api,
         user,
         sections: sectionsForScope(user.accessScope ?? user.access_scope),
+        // Stopping the answer also stops a long document transcription.
+        signal: abort.signal,
         emitAction: (action) => {
           pendingActions.push({ type: 'action', action });
           emit('action', action);
