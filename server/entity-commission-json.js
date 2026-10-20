@@ -126,6 +126,7 @@ export function createPartnerEntity(db, data) {
     email: data.email || null,
     phone: data.phone || null,
     website: data.website || null,
+    ico: data.ico || null,
     assigned_to: data.assigned_to || null,
     assigned_user_ids: Array.isArray(data.assigned_user_ids) ? data.assigned_user_ids : [],
     created_at: new Date().toISOString(),
@@ -196,7 +197,8 @@ export function getPartnerCommissions(db, filters = {}) {
       entity_last_name: entity?.last_name || null,
       entity_email: entity?.email || null,
       entity_phone: entity?.phone || null,
-      entity_website: entity?.website || null
+      entity_website: entity?.website || null,
+      entity_ico: entity?.ico || null
     };
   }).sort((a, b) => a.commission_id.localeCompare(b.commission_id));
 }
@@ -224,7 +226,8 @@ export function getPartnerCommissionById(db, id) {
     entity_last_name: entity?.last_name || null,
     entity_email: entity?.email || null,
     entity_phone: entity?.phone || null,
-    entity_website: entity?.website || null
+    entity_website: entity?.website || null,
+    entity_ico: entity?.ico || null
   };
 }
 
@@ -355,6 +358,7 @@ export function createClientEntity(db, data) {
     email: data.email || null,
     phone: data.phone || null,
     website: data.website || null,
+    ico: data.ico || null,
     assigned_to: data.assigned_to || null,
     assigned_user_ids: Array.isArray(data.assigned_user_ids) ? data.assigned_user_ids : [],
     created_at: new Date().toISOString(),
@@ -428,7 +432,8 @@ export function getClientCommissions(db, filters = {}) {
       entity_last_name: entity?.last_name || null,
       entity_email: entity?.email || null,
       entity_phone: entity?.phone || null,
-      entity_website: entity?.website || null
+      entity_website: entity?.website || null,
+      entity_ico: entity?.ico || null
     };
   }).sort((a, b) => a.commission_id.localeCompare(b.commission_id));
 }
@@ -460,7 +465,8 @@ export function getClientCommissionById(db, id) {
     entity_last_name: entity?.last_name || null,
     entity_email: entity?.email || null,
     entity_phone: entity?.phone || null,
-    entity_website: entity?.website || null
+    entity_website: entity?.website || null,
+    entity_ico: entity?.ico || null
   };
 }
 
@@ -589,6 +595,7 @@ export function createTiperEntity(db, data) {
     email: data.email || null,
     phone: data.phone || null,
     website: data.website || null,
+    ico: data.ico || null,
     assigned_to: data.assigned_to || null,
     assigned_user_ids: Array.isArray(data.assigned_user_ids) ? data.assigned_user_ids : [],
     created_at: new Date().toISOString(),
@@ -658,7 +665,8 @@ export function getTiperCommissions(db, filters = {}) {
       entity_category: entity?.category || null,
       entity_email: entity?.email || null,
       entity_phone: entity?.phone || null,
-      entity_website: entity?.website || null
+      entity_website: entity?.website || null,
+      entity_ico: entity?.ico || null
     };
   }).sort((a, b) => a.commission_id.localeCompare(b.commission_id));
 }
@@ -686,7 +694,8 @@ export function getTiperCommissionById(db, id) {
     entity_category: entity?.category || null,
     entity_email: entity?.email || null,
     entity_phone: entity?.phone || null,
-    entity_website: entity?.website || null
+    entity_website: entity?.website || null,
+    entity_ico: entity?.ico || null
   };
 }
 

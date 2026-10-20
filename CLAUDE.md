@@ -134,6 +134,23 @@ real `server-postgres.js` against it, start it from a wrapper that sets
 first, so `server/.env` is never loaded. A throwaway S3 is easy to mock with a
 small HTTP server (path-style PUT/GET/HEAD/DELETE and `list-type=2`).
 
+## IČO (company registration number)
+
+Every subject (client / partner / tipař, all three sections) has an `ico`
+column: 8 digits, the last a mod-11 check digit. `client/src/usersGrid/ico.ts`
+validates and normalises it (spaces dropped, short numbers padded with
+leading zeros); only a valid IČO is saved — from the profile panel and create
+form (`IcoField.tsx`, field type `"ico"`), the grid column, and on create.
+The server does not validate it. Under the number, the profile shows what
+ARES says about it, through `GET /api/ares/ico/:ico` (`server/ares.js`, the
+same module Jarvis's `company_registry` uses). IČO is shared across a
+subject's sections and roles (`section-linking.js`, `SUBJECT_SHARED_FIELDS`).
+A new subject field like this one needs: the ALTER in `db.js` (all nine
+entity tables), the public-table INSERTs and the commission joins
+(`e.x as e_x` / `entity_x`), the six `entityFields` lists in each server, the
+JSON helpers in `entity-commission-json.js`, and on the client the section's
+API types, normalisers, `mapXEntityUpdates`, row mirrors and `entitySync.ts`.
+
 ## Jarvis, the AI agent (`server/jarvis/`, `client/src/jarvis/`)
 
 Claude (model `JARVIS_MODEL`, default `claude-opus-5-5`; effort `JARVIS_EFFORT`,

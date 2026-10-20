@@ -1,0 +1,101 @@
+/* IČO field: the number, and under it what the ARES register says about it. */
+
+.ico-field {
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+  min-width: 0;
+}
+
+.ico-field--invalid .editable-input {
+  border-color: #dc2626;
+  box-shadow: 0 0 0 3px color-mix(in srgb, #dc2626 16%, transparent);
+}
+
+.ico-field-error {
+  font-size: 0.78rem;
+  line-height: 1.35;
+  color: #b91c1c;
+}
+
+.ico-ares {
+  display: flex;
+  flex-direction: column;
+  gap: 0.15rem;
+  padding: 0.45rem 0.6rem;
+  border-radius: 8px;
+  border: 1px solid var(--color-border, rgba(100, 116, 139, 0.18));
+  background: color-mix(in srgb, var(--color-surface, #ffffff) 92%, var(--color-primary, #6366f1) 8%);
+  font-size: 0.78rem;
+  line-height: 1.4;
+  color: var(--color-text, #1e293b);
+  min-width: 0;
+}
+
+.ico-ares--muted {
+  color: var(--color-text-muted, #64748b);
+  font-style: italic;
+}
+
+.ico-ares--warning {
+  border-color: color-mix(in srgb, #d97706 40%, transparent);
+  background: color-mix(in srgb, #d97706 8%, var(--color-surface, #ffffff));
+}
+
+.ico-ares-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 0.5rem;
+  min-width: 0;
+}
+
+.ico-ares-name {
+  font-weight: 600;
+  overflow-wrap: anywhere;
+}
+
+.ico-ares-line {
+  overflow-wrap: anywhere;
+}
+
+.ico-ares-meta {
+  color: var(--color-text-muted, #64748b);
+}
+
+.ico-ares-status {
+  flex-shrink: 0;
+  padding: 0.05rem 0.45rem;
+  border-radius: 999px;
+  font-size: 0.7rem;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.ico-ares-status--active {
+  color: #15803d;
+  background: color-mix(in srgb, #16a34a 14%, transparent);
+}
+
+.ico-ares-status--warning {
+  color: #b45309;
+  background: color-mix(in srgb, #d97706 16%, transparent);
+}
+
+.ico-ares-status--gone {
+  color: #b91c1c;
+  background: color-mix(in srgb, #dc2626 14%, transparent);
+}
+
+.ico-ares-link,
+.ico-ares a {
+  align-self: flex-start;
+  color: var(--color-primary, #4f46e5);
+  font-size: 0.74rem;
+  text-decoration: none;
+}
+
+.ico-ares-link:hover,
+.ico-ares a:hover {
+  text-decoration: underline;
+}

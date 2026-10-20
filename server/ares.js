@@ -1,7 +1,7 @@
 // ARES, the Czech public register of businesses (ares.gov.cz): looking a
 // company or sole trader up by IČO or name. Public data, no key needed.
-// Read-only and outside the app's own data, so it is called directly rather
-// than through the app's API.
+// Used by Jarvis (company_registry) and by the app's IČO field, which checks a
+// number against ARES through GET /api/ares/ico/:ico.
 
 const BASE = 'https://ares.gov.cz/ekonomicke-subjekty-v-be/rest';
 const TIMEOUT_MS = 10_000;
@@ -197,4 +197,22 @@ export async function searchByName(name, { city, limit = 10, signal } = {}) {
     total: data?.pocetCelkem ?? subjects.length,
     companies: await Promise.all(subjects.map((subject) => describe(subject, signal))),
   };
+}
+
+// The app's IČO field: what ARES says about one number. The register's own
+// data only — no people (that is for Jarvis, on request).
+export function registerAresRoutes(app, { authenticateToken }) {
+  app.get('/api/ares/ico/:ico', authenticateToken, async (req, res) => {
+    const ico = normalizeIco(req.params.ico);
+    if (!ico || !isValidIco(ico)) return res.status(400).json({ error: 'Neplatné IČO.' });
+    try {
+      const company = await lookupByIco(ico, { people: false });
+      if (!company) return res.status(404).json({ error: 'IČO v ARES není.' });
+      res.json(company);
+    } catch (error) {
+      res.status(error instanceof AresError && error.status === 400 ? 400 : 502).json({
+        error: error instanceof AresError ? error.message : 'Rejstřík ARES teď neodpovídá.',
+      });
+    }
+  });
 }

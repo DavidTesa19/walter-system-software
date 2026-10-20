@@ -51,6 +51,8 @@ export interface PartnerEntity extends BaseEntity {
   region_structure?: string | null;
   // Úroveň — Bronze / Silver / Gold / VIP, or null when the subject has none.
   tier: string | null;
+  // IČO — company registration number, 8 digits (see ico.ts).
+  ico: string | null;
   // Coordinates for the Lokalita addresses picked from Google Maps, as a JSON
   // object string keyed by address (see locationGeo.ts).
   location_geo?: string | null;
@@ -79,6 +81,8 @@ export interface ClientEntity extends BaseEntity {
   region_structure?: string | null;
   // Úroveň — Bronze / Silver / Gold / VIP, or null when the subject has none.
   tier: string | null;
+  // IČO — company registration number, 8 digits (see ico.ts).
+  ico: string | null;
   // Coordinates for the Lokalita addresses picked from Google Maps, as a JSON
   // object string keyed by address (see locationGeo.ts).
   location_geo?: string | null;
@@ -109,6 +113,8 @@ export interface TiperEntity extends BaseEntity {
   region_structure?: string | null;
   // Úroveň — Bronze / Silver / Gold / VIP, or null when the subject has none.
   tier: string | null;
+  // IČO — company registration number, 8 digits (see ico.ts).
+  ico: string | null;
   // Coordinates for the Lokalita addresses picked from Google Maps, as a JSON
   // object string keyed by address (see locationGeo.ts).
   location_geo?: string | null;
@@ -218,6 +224,7 @@ export interface PartnerGridRow extends PartnerCommission {
   field: string;
   field_specialization?: string;
   tier: string;
+  ico: string;
   region: string;
   location: string;
   mobile: string;
@@ -254,6 +261,7 @@ export interface ClientGridRow extends ClientCommission {
   field: string;
   field_specialization?: string;
   tier: string;
+  ico: string;
   region: string;
   location: string;
   mobile: string;
@@ -290,6 +298,7 @@ export interface TiperGridRow extends TiperCommission {
   field: string;
   field_specialization?: string;
   tier: string;
+  ico: string;
   region: string;
   location: string;
   mobile: string;

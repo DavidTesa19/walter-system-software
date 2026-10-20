@@ -4,6 +4,7 @@ import type { EditableField, FieldGroup, PlacePickerConfig, SpecializationPicker
 import { MultiValueEditor } from "./EntityCommissionProfilePanel";
 import HierarchyEditor from "./HierarchyEditor";
 import FieldSelectInput, { type FieldPickerConfig } from "./FieldSelectInput";
+import { DraftIcoInput } from "./IcoField";
 import "./EntityCommissionProfilePanel.css";
 
 type FieldValues = Record<string, string | string[]>;
@@ -191,6 +192,10 @@ const DraftField: React.FC<DraftFieldProps> = ({ field, value, onChange, disable
         </div>
       </div>
     );
+  }
+
+  if (field.type === "ico") {
+    return <DraftIcoInput value={Array.isArray(value) ? "" : value} disabled={disabled} onChange={(next) => onChange(field.key, next)} />;
   }
 
   if (field.type === "date") {

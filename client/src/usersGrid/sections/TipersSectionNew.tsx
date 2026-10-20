@@ -82,6 +82,7 @@ import {
 } from "../crossTypeCreate";
 import { attachSubjectIdentity } from "../subjectLink";
 import useSubjectRoles from "../useSubjectRoles";
+import { checkIco, icoOrNull } from "../ico";
 import { buildJarvisFocus, useReportJarvisFocus } from "../../jarvis/jarvisFocus";
 
 // The other subject types a new tiper can also be created as.
@@ -98,6 +99,7 @@ type TiperEntityApi = {
   field_specialization?: string | null;
   company_structure?: string | null;
   tier?: string | null;
+  ico?: string | null;
   location_geo?: string | null;
   region_structure?: string | null;
   region?: string | null;
@@ -142,6 +144,7 @@ type TiperCommissionApi = {
   entity_field_specialization?: string | null;
   entity_company_structure?: string | null;
   entity_tier?: string | null;
+  entity_ico?: string | null;
   entity_location_geo?: string | null;
   entity_region_structure?: string | null;
   entity_region?: string | null;
@@ -183,6 +186,7 @@ type TiperCreateDraft = {
     company_structure: string;
     region_structure: string;
     tier: string;
+    ico: string;
     location_geo: string;
     mobile: string;
     email: string;
@@ -223,6 +227,7 @@ const createDefaultTiperDraft = (): TiperCreateDraft => ({
     company_structure: "",
     region_structure: "",
     tier: "",
+    ico: "",
     location_geo: "",
     mobile: "",
     email: "",
@@ -257,6 +262,7 @@ const normalizeTiperEntity = (entity: TiperEntityApi): TiperEntity => ({
   field_specialization: entity.field_specialization ?? null,
   company_structure: entity.company_structure ?? null,
   tier: entity.tier ?? null,
+  ico: entity.ico ?? null,
   location_geo: entity.location_geo ?? null,
   region_structure: entity.region_structure ?? null,
   region: entity.region ?? null,
@@ -313,7 +319,7 @@ const mapTiperEntityUpdates = (updates: Record<string, unknown>) => {
     else if (key === "mobile") mapped.phone = value;
     else if (key === "assigned_user_ids") mapped.assigned_user_ids = value;
     else if (key === "status") mapped.status = value;
-    else if (["field", "field_specialization", "company_structure", "region_structure", "tier", "location_geo", "region", "location", "email", "website", "info"].includes(key)) mapped[key] = value;
+    else if (["field", "field_specialization", "company_structure", "region_structure", "tier", "ico", "location_geo", "region", "location", "email", "website", "info"].includes(key)) mapped[key] = value;
   }
   return mapped;
 };
@@ -332,6 +338,7 @@ const deriveTiperEntityFromCommission = (commission: TiperCommissionApi): TiperE
     field_specialization: commission.entity_field_specialization ?? null,
     company_structure: commission.entity_company_structure ?? null,
     tier: commission.entity_tier ?? null,
+    ico: commission.entity_ico ?? null,
     location_geo: commission.entity_location_geo ?? null,
     region_structure: commission.entity_region_structure ?? null,
     region: commission.entity_region ?? null,
@@ -398,6 +405,7 @@ const buildEntityData = (entity: TiperEntity | null, assignmentOptions: Array<st
           placeholder: "Název společnosti",
         },
         { key: "tier", label: "Úroveň", value: entity.tier, type: "select", options: [...TIER_VALUES] },
+        { key: "ico", label: "IČO", value: entity.ico ?? null, type: "ico", placeholder: "8 číslic" },
         { key: "assigned_user_ids", label: "Přiřazení uživatelé", value: toAssignmentDraftValue(entity.assigned_user_ids), type: "multi-select", options: assignmentOptions }
       ]
     },
@@ -510,6 +518,7 @@ const buildTiperDraftEntityData = (draft: TiperCreateDraft, assignmentOptions: A
     company_structure: draft.entity.company_structure,
     region_structure: draft.entity.region_structure,
     tier: draft.entity.tier,
+    ico: draft.entity.ico,
     location_geo: draft.entity.location_geo,
     region: draft.entity.region,
     location: draft.entity.location,
@@ -754,6 +763,7 @@ const TipersSectionNew: React.FC<SectionProps> = ({
             service_position: primaryCommission?.service_position ?? null,
             field: entity.field || primaryCommission?.field || '',
             tier: entity.tier || '',
+            ico: entity.ico || '',
             region: entity.region || '',
             location: entity.location || primaryCommission?.location || '',
             category: primaryCommission?.category ?? null,
@@ -801,6 +811,7 @@ const TipersSectionNew: React.FC<SectionProps> = ({
           company: entity?.company || rawCommission?.entity_company_name || '',
           field: entity?.field || rawCommission?.entity_field || commission.field || '',
           tier: entity?.tier || rawCommission?.entity_tier || '',
+          ico: entity?.ico || rawCommission?.entity_ico || '',
           region: entity?.region || rawCommission?.entity_region || '',
           location: entity?.location || rawCommission?.entity_location || commission.location || '',
           mobile: entity?.mobile || rawCommission?.entity_phone || commission.phone || '',
@@ -841,6 +852,7 @@ const TipersSectionNew: React.FC<SectionProps> = ({
               service_position: null,
               field: entity.field || '',
               tier: entity.tier || '',
+              ico: entity.ico || '',
               region: entity.region || '',
               location: entity.location || '',
               category: null,
@@ -1601,6 +1613,7 @@ const TipersSectionNew: React.FC<SectionProps> = ({
         email: emptyToNull(createDraft.entity.email),
         website: emptyToNull(createDraft.entity.website),
         tier: emptyToNull(createDraft.entity.tier),
+        ico: icoOrNull(createDraft.entity.ico),
         location_geo: emptyToNull(createDraft.entity.location_geo),
         region: emptyToNull(createDraft.entity.region),
         location: emptyToNull(createDraft.entity.location),
@@ -1688,6 +1701,7 @@ const TipersSectionNew: React.FC<SectionProps> = ({
         email: emptyToNull(createDraft.entity.email),
         website: emptyToNull(createDraft.entity.website),
         tier: emptyToNull(createDraft.entity.tier),
+        ico: icoOrNull(createDraft.entity.ico),
         location_geo: emptyToNull(createDraft.entity.location_geo),
         region: emptyToNull(createDraft.entity.region),
         location: emptyToNull(createDraft.entity.location),
@@ -1743,12 +1757,18 @@ const TipersSectionNew: React.FC<SectionProps> = ({
   }, [createAlsoTypes, createDraft, linkCreatedSubjects, entityApiBase, fetchData, linkTargetNamespaces, linkableNamespace, status, systemNamespace, uploadCreateDocuments]);
 
   const handleCreate = useCallback(async () => {
+    // An IČO that cannot exist is not saved; say why instead.
+    const icoCheck = checkIco(createDraft.entity.ico);
+    if (!icoCheck.ok) {
+      alert(icoCheck.error);
+      return;
+    }
     if (includeCommission) {
       await handleCreateWithCommission();
       return;
     }
     await handleCreateEntityOnly();
-  }, [handleCreateEntityOnly, handleCreateWithCommission, includeCommission]);
+  }, [createDraft.entity.ico, handleCreateEntityOnly, handleCreateWithCommission, includeCommission]);
 
   const handleDuplicateEntityCommission = useCallback(() => {
     if (!selectedEntity || !selectedCommission) return;
@@ -1765,6 +1785,7 @@ const TipersSectionNew: React.FC<SectionProps> = ({
         email: selectedEntity.email ?? "",
         website: selectedEntity.website ?? "",
         tier: selectedEntity.tier ?? "",
+        ico: selectedEntity.ico ?? "",
         location_geo: selectedEntity.location_geo ?? "",
         region: selectedEntity.region ?? "",
         location: selectedEntity.location ?? "",
@@ -1957,6 +1978,18 @@ const TipersSectionNew: React.FC<SectionProps> = ({
         return;
       }
 
+      // IČO: only a valid number is saved (spaces dropped, leading zeros added).
+      if (field === "ico") {
+        const icoCheck = checkIco(typeof newValue === "string" ? newValue : "");
+        if (!icoCheck.ok) {
+          alert(icoCheck.error);
+          fetchData();
+          return;
+        }
+        if (row.entity) await handleUpdateEntity(row.entity.id, { ico: icoCheck.value });
+        return;
+      }
+
       const entityFields = ['name', 'company', 'field', 'field_specialization', 'tier', 'location', 'mobile', 'email'];
 
       if (entityFields.includes(field) && row.entity) {
@@ -2095,6 +2128,16 @@ const TipersSectionNew: React.FC<SectionProps> = ({
       tooltipValueGetter: (params) => formatAssignedUsernames(params.data?.assigned_user_ids, assignableUsers, params.data?.assigned_to) ?? ""
     };
     // Úroveň — a subject-level grade, so it always writes to the entity.
+    // IČO — the subject's company number; checked before it is saved.
+    const icoColumn: ColDef<TiperGridRow> = {
+      field: "ico",
+      headerName: "IČO",
+      filter: true,
+      editable: true,
+      flex: 0.7,
+      minWidth: 100,
+      valueGetter: makeEntityValueGetter("ico"),
+    };
     const tierColumn: ColDef<TiperGridRow> = {
       field: "tier",
       headerName: "Úroveň",
@@ -2242,6 +2285,7 @@ const TipersSectionNew: React.FC<SectionProps> = ({
         flex: 1.5,
         minWidth: 140
       },
+      icoColumn,
       tierColumn,
       workflowStateColumn,
       {

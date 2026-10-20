@@ -15,6 +15,7 @@ import * as entityCommissionJson from "./entity-commission-json.js";
 import { cascadesArchiveToSubject } from "./archive-cascade.js";
 import { registerSafetyRoutes } from "./safety/routes.js";
 import { registerJarvisRoutes } from "./jarvis/routes.js";
+import { registerAresRoutes } from "./ares.js";
 import {
   normalizeNotificationEmail,
 } from "./submission-notifications.js";
@@ -1628,6 +1629,9 @@ const requireRole = (...allowedRoles) => {
 registerSafetyRoutes(app, { authenticateToken, requireRole, pool: null });
 
 // Jarvis, the AI agent — calls this server's own API as the signed-in user.
+// The IČO field checks numbers against the ARES business register.
+registerAresRoutes(app, { authenticateToken });
+
 registerJarvisRoutes(app, {
   authenticateToken,
   pool: null,
@@ -4513,7 +4517,7 @@ const PROJECT_JSON_CONFIG = {
     counterKey: 'project_partner',
     entityPrefix: 'PP',
     entityDefaults: { company_name: 'Nová společnost' },
-    entityFields: ['status', 'company_name', 'field', 'location', 'region', 'info', 'category', 'first_name', 'last_name', 'email', 'phone', 'website', 'assigned_to', 'assigned_user_ids', 'field_specialization', 'company_structure', 'region_structure', 'tier', 'location_geo'],
+    entityFields: ['status', 'company_name', 'field', 'location', 'region', 'info', 'category', 'first_name', 'last_name', 'email', 'phone', 'website', 'assigned_to', 'assigned_user_ids', 'field_specialization', 'company_structure', 'region_structure', 'tier', 'location_geo', 'ico'],
     commissionFields: ['status', 'position', 'budget', 'state', 'assigned_to', 'assigned_user_ids', 'field', 'service_position', 'location', 'info', 'category', 'deadline', 'priority', 'phone', 'commission_value', 'is_tipped', 'notes']
   },
   client: {
@@ -4522,7 +4526,7 @@ const PROJECT_JSON_CONFIG = {
     counterKey: 'project_client',
     entityPrefix: 'PK',
     entityDefaults: { company_name: 'Nová společnost' },
-    entityFields: ['status', 'company_name', 'field', 'service', 'location', 'region', 'info', 'category', 'budget', 'first_name', 'last_name', 'email', 'phone', 'website', 'assigned_to', 'assigned_user_ids', 'field_specialization', 'company_structure', 'region_structure', 'tier', 'location_geo'],
+    entityFields: ['status', 'company_name', 'field', 'service', 'location', 'region', 'info', 'category', 'budget', 'first_name', 'last_name', 'email', 'phone', 'website', 'assigned_to', 'assigned_user_ids', 'field_specialization', 'company_structure', 'region_structure', 'tier', 'location_geo', 'ico'],
     commissionFields: ['status', 'project_name', 'position', 'budget', 'state', 'assigned_to', 'assigned_user_ids', 'field', 'service_position', 'location', 'info', 'category', 'deadline', 'priority', 'phone', 'commission_value', 'is_tipped', 'notes']
   },
   tiper: {
@@ -4531,7 +4535,7 @@ const PROJECT_JSON_CONFIG = {
     counterKey: 'project_tiper',
     entityPrefix: 'PT',
     entityDefaults: {},
-    entityFields: ['status', 'company_name', 'field', 'location', 'region', 'info', 'category', 'first_name', 'last_name', 'email', 'phone', 'website', 'assigned_to', 'assigned_user_ids', 'field_specialization', 'company_structure', 'region_structure', 'tier', 'location_geo'],
+    entityFields: ['status', 'company_name', 'field', 'location', 'region', 'info', 'category', 'first_name', 'last_name', 'email', 'phone', 'website', 'assigned_to', 'assigned_user_ids', 'field_specialization', 'company_structure', 'region_structure', 'tier', 'location_geo', 'ico'],
     commissionFields: ['status', 'position', 'budget', 'state', 'assigned_to', 'assigned_user_ids', 'field', 'service_position', 'location', 'info', 'category', 'deadline', 'priority', 'phone', 'linked_entity_type', 'linked_commission_id', 'commission_value', 'is_tipped', 'notes']
   }
 };
@@ -4543,7 +4547,7 @@ const GROWTH_JSON_CONFIG = {
     counterKey: 'growth_partner',
     entityPrefix: 'GP',
     entityDefaults: { company_name: 'Nová společnost' },
-    entityFields: ['status', 'company_name', 'field', 'location', 'region', 'info', 'category', 'first_name', 'last_name', 'email', 'phone', 'website', 'assigned_to', 'assigned_user_ids', 'field_specialization', 'company_structure', 'region_structure', 'tier', 'location_geo'],
+    entityFields: ['status', 'company_name', 'field', 'location', 'region', 'info', 'category', 'first_name', 'last_name', 'email', 'phone', 'website', 'assigned_to', 'assigned_user_ids', 'field_specialization', 'company_structure', 'region_structure', 'tier', 'location_geo', 'ico'],
     commissionFields: ['status', 'position', 'budget', 'state', 'assigned_to', 'assigned_user_ids', 'field', 'service_position', 'location', 'info', 'category', 'deadline', 'priority', 'phone', 'commission_value', 'is_tipped', 'notes']
   },
   client: {
@@ -4552,7 +4556,7 @@ const GROWTH_JSON_CONFIG = {
     counterKey: 'growth_client',
     entityPrefix: 'GK',
     entityDefaults: { company_name: 'Nová společnost' },
-    entityFields: ['status', 'company_name', 'field', 'service', 'location', 'region', 'info', 'category', 'budget', 'first_name', 'last_name', 'email', 'phone', 'website', 'assigned_to', 'assigned_user_ids', 'field_specialization', 'company_structure', 'region_structure', 'tier', 'location_geo'],
+    entityFields: ['status', 'company_name', 'field', 'service', 'location', 'region', 'info', 'category', 'budget', 'first_name', 'last_name', 'email', 'phone', 'website', 'assigned_to', 'assigned_user_ids', 'field_specialization', 'company_structure', 'region_structure', 'tier', 'location_geo', 'ico'],
     commissionFields: ['status', 'project_name', 'position', 'budget', 'state', 'assigned_to', 'assigned_user_ids', 'field', 'service_position', 'location', 'info', 'category', 'deadline', 'priority', 'phone', 'commission_value', 'is_tipped', 'notes']
   },
   tiper: {
@@ -4561,7 +4565,7 @@ const GROWTH_JSON_CONFIG = {
     counterKey: 'growth_tiper',
     entityPrefix: 'GT',
     entityDefaults: {},
-    entityFields: ['status', 'company_name', 'field', 'location', 'region', 'info', 'category', 'first_name', 'last_name', 'email', 'phone', 'website', 'assigned_to', 'assigned_user_ids', 'field_specialization', 'company_structure', 'region_structure', 'tier', 'location_geo'],
+    entityFields: ['status', 'company_name', 'field', 'location', 'region', 'info', 'category', 'first_name', 'last_name', 'email', 'phone', 'website', 'assigned_to', 'assigned_user_ids', 'field_specialization', 'company_structure', 'region_structure', 'tier', 'location_geo', 'ico'],
     commissionFields: ['status', 'position', 'budget', 'state', 'assigned_to', 'assigned_user_ids', 'field', 'service_position', 'location', 'info', 'category', 'deadline', 'priority', 'phone', 'linked_entity_type', 'linked_commission_id', 'commission_value', 'is_tipped', 'notes']
   }
 };
@@ -4636,7 +4640,8 @@ const buildProjectCommissionResponse = (type, commission, entity) => {
     entity_last_name: entity?.last_name ?? null,
     entity_email: entity?.email ?? null,
     entity_phone: entity?.phone ?? null,
-    entity_website: entity?.website ?? null
+    entity_website: entity?.website ?? null,
+    entity_ico: entity?.ico ?? null
   };
 
   if (type === 'client') {

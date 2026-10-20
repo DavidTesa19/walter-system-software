@@ -32,7 +32,7 @@ import {
 } from './catalog.js';
 import { matchRecord, recordWords } from './fuzzy.js';
 import { DocumentTextError, MAX_DOCUMENT_BYTES, documentText } from './documents.js';
-import { AresError, isValidIco, lookupByIco, normalizeIco, searchByName } from './ares.js';
+import { AresError, isValidIco, lookupByIco, normalizeIco, searchByName } from '../ares.js';
 
 export class ToolError extends Error {}
 
@@ -834,9 +834,9 @@ export const TOOLS = [
       'Vrací IČO, DIČ, sídlo, právní formu, vznik/zánik, stav (aktivní / v likvidaci / zaniklý), plátcovství DPH; ' +
       'u hledání podle IČO i statutární orgán (jednatelé, představenstvo), způsob jednání, společníky a základní kapitál. ' +
       'Použij pro „dohledej IČO / adresu firmy“, „je firma ještě aktivní?“, „kdo je jednatel?“. ' +
-      'U subjektu z aplikace nejdřív zjisti jeho přesný název a město (get_subject) a hledej podle nich. ' +
+      'U subjektu z aplikace nejdřív načti jeho profil (get_subject): má-li vyplněné IČO, hledej podle něj, jinak podle přesného názvu a města. ' +
       'Když ARES vrátí víc kandidátů, nevybírej sám – ukaž je a zeptej se. ' +
-      'Data jsou z veřejného rejstříku, ne z aplikace; do záznamů je zatím nezapisuješ.',
+      'Data jsou z veřejného rejstříku, ne z aplikace; do záznamů je zatím nezapisuješ (IČO si uživatel může doplnit v profilu subjektu sám).',
     input: registryInput,
     label: (input) => (input.ico ? `Hledám IČO ${input.ico.replace(/\s+/g, '')} v ARES` : `Hledám „${truncate(input.name ?? '', 40)}“ v ARES`),
     async run(input, ctx) {

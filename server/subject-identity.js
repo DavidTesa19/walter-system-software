@@ -93,6 +93,7 @@ export const SUBJECT_SHARED_FIELDS = [
   "email",
   "phone",
   "website",
+  "ico",
   "region",
   "location",
   "region_structure",

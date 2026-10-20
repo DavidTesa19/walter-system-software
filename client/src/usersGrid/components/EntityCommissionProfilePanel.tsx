@@ -27,6 +27,7 @@ import {
 import type { DealSubjectOption } from "../dealLink";
 import type { LinkableNamespace } from "../sectionLink";
 import DealSubjectPicker, { type DealPickerAnchor } from "./DealSubjectPicker";
+import IcoField from "./IcoField";
 import "./EntityCommissionProfilePanel.css";
 
 // Config for the specialization dropdown nested under each Obor value. Options
@@ -57,7 +58,7 @@ export interface EditableField {
   key: string;
   label: string;
   value: string | boolean | string[] | null;
-  type: 'text' | 'textarea' | 'select' | 'field-select' | 'multi-select' | 'multi-value' | 'hierarchy' | 'boolean' | 'date';
+  type: 'text' | 'textarea' | 'select' | 'field-select' | 'multi-select' | 'multi-value' | 'hierarchy' | 'boolean' | 'date' | 'ico';
   options?: Array<string | { value: string; label: string; description?: string }>;
   isMultiline?: boolean;
   placeholder?: string;
@@ -821,6 +822,17 @@ const EditableFieldCell: React.FC<EditableFieldCellProps> = ({ field, onSave, fi
         specializationPicker={specializationPicker}
         regionOptions={field.hierarchyParentOptions}
         parentPlaceholder={field.placeholder}
+      />
+    );
+  }
+
+  // IČO saves only a valid number and shows what ARES says about it.
+  if (field.type === 'ico') {
+    return (
+      <IcoField
+        value={typeof field.value === 'string' && field.value ? field.value : null}
+        placeholder={field.placeholder}
+        onSave={(nextValue) => onSave(field.key, nextValue)}
       />
     );
   }

@@ -57,6 +57,7 @@ export const FIELD_LABELS = {
   email: 'E-mail',
   phone: 'Telefon',
   website: 'Web',
+  ico: 'IČO',
   field: 'Obor',
   field_specialization: 'Zaměření',
   region: 'Kraj',
