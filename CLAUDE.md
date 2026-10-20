@@ -179,6 +179,22 @@ inherited one falls back to the browser's serif. Needs `ANTHROPIC_API_KEY`;
   once by Claude (`JARVIS_OCR_MODEL`, default the Jarvis model). The tool only
   reads a document listed under a subject the user can open: the
   `/documents/:id/download` route itself does not check sections.
+- **ARES** (`company_registry`, `server/jarvis/ares.js`): the public Czech
+  business register, called directly (no key, read-only, not app data). An
+  IČO is checked against its mod-11 check digit before ARES is asked; a city
+  goes to ARES as `sidlo.textovaAdresa` (ARES refuses searches over 1 000
+  hits). People are returned with name and role only — the register's home
+  addresses and birth dates are left out on purpose. The app has no IČO
+  field yet, so Jarvis can show but not store it.
+- **Answers written before a tool call vanish on Opus 5.5**: text between tool
+  calls comes back as a thinking-block progress note, so "answer, then
+  open_record" ends the turn with nothing to show. The prompt asks for the
+  answer after the last tool; if a turn still ends empty, `agent.js` appends
+  one mid-conversation system message asking for it (stored with the
+  history). Never store an assistant message with empty content — the API
+  rejects the whole history afterwards; `routes.js` skips old ones on load.
+  `display: "updates"` would surface the notes, but the safety fallback can
+  send the same request to an older model that rejects it.
 - **Search tolerates typos** (`server/jarvis/fuzzy.js`): when `search` finds
   fewer than 3 exact hits it adds `priblizne_shody` — sound-alike spellings
   (w/v, y/i, doubled letters), small typos, real Czech case endings and codes

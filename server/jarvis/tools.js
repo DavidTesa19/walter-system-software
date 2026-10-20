@@ -32,6 +32,7 @@ import {
 } from './catalog.js';
 import { matchRecord, recordWords } from './fuzzy.js';
 import { DocumentTextError, MAX_DOCUMENT_BYTES, documentText } from './documents.js';
+import { AresError, isValidIco, lookupByIco, normalizeIco, searchByName } from './ares.js';
 
 export class ToolError extends Error {}
 
@@ -263,6 +264,12 @@ const documentInput = z.object({
   id: z.number().int().positive().describe('Interní id subjektu, ke kterému dokument patří (z ref).'),
   document_id: z.number().int().positive().describe('id dokumentu ze seznamu dokumenty v get_subject.'),
   from_char: z.number().int().min(0).optional().describe('Od kterého znaku číst (pro pokračování dlouhého dokumentu). Výchozí 0.'),
+}).strict();
+
+const registryInput = z.object({
+  ico: z.string().regex(/^[\d\s]{1,12}$/).optional().describe('IČO (8 číslic; kratší se doplní nulami zleva). Nejpřesnější způsob hledání.'),
+  name: z.string().min(2).max(120).optional().describe('Obchodní jméno nebo jeho část, když IČO neznáš.'),
+  city: z.string().min(2).max(60).optional().describe('Město sídla – zúží hledání podle názvu.'),
 }).strict();
 
 const openInput = z.object({
@@ -818,6 +825,44 @@ export const TOOLS = [
         poznamka: result.note,
         text: text.slice(from, to),
       };
+    },
+  },
+  {
+    name: 'company_registry',
+    description:
+      'Veřejný obchodní rejstřík ARES (Česká republika): firma nebo živnostník podle IČO nebo názvu. ' +
+      'Vrací IČO, DIČ, sídlo, právní formu, vznik/zánik, stav (aktivní / v likvidaci / zaniklý), plátcovství DPH; ' +
+      'u hledání podle IČO i statutární orgán (jednatelé, představenstvo), způsob jednání, společníky a základní kapitál. ' +
+      'Použij pro „dohledej IČO / adresu firmy“, „je firma ještě aktivní?“, „kdo je jednatel?“. ' +
+      'U subjektu z aplikace nejdřív zjisti jeho přesný název a město (get_subject) a hledej podle nich. ' +
+      'Když ARES vrátí víc kandidátů, nevybírej sám – ukaž je a zeptej se. ' +
+      'Data jsou z veřejného rejstříku, ne z aplikace; do záznamů je zatím nezapisuješ.',
+    input: registryInput,
+    label: (input) => (input.ico ? `Hledám IČO ${input.ico.replace(/\s+/g, '')} v ARES` : `Hledám „${truncate(input.name ?? '', 40)}“ v ARES`),
+    async run(input, ctx) {
+      try {
+        if (input.ico) {
+          const ico = normalizeIco(input.ico);
+          if (!ico) throw new ToolError('IČO má mít nejvýš 8 číslic.');
+          if (!isValidIco(ico)) {
+            throw new ToolError(`IČO ${ico} není platné (nesedí kontrolní číslice) – nejspíš je v něm překlep. Ověř ho s uživatelem.`);
+          }
+          const company = await lookupByIco(ico, { people: true, signal: ctx.signal });
+          if (!company) throw new ToolError(`Subjekt s IČO ${ico} v ARES není.`);
+          return company;
+        }
+        if (!input.name) throw new ToolError('Zadej IČO nebo název firmy.');
+        const { total, companies } = await searchByName(input.name, { city: input.city, limit: 10, signal: ctx.signal });
+        return {
+          nalezeno_celkem: total,
+          zobrazeno: companies.length,
+          firmy: companies,
+          ...(total > companies.length ? { poznamka: 'Výsledků je víc, než se vrátilo – upřesni název nebo přidej město.' } : {}),
+        };
+      } catch (error) {
+        if (error instanceof AresError) throw new ToolError(error.message);
+        throw error;
+      }
     },
   },
   {

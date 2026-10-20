@@ -600,7 +600,7 @@ export default function JarvisPanel({ open, onOpen, onClose, viewLabel, launcher
           <div className="jarvis-welcome">
             <JarvisMark large />
             <div className="jarvis-welcome-title">Na co se chcete zeptat?</div>
-            <p>Hledám v klientech, partnerech, tipařích a zakázkách, kam máte přístup, ve vašem kalendáři a v nahraných dokumentech. Data zatím jen čtu.</p>
+            <p>Hledám v klientech, partnerech, tipařích a zakázkách, kam máte přístup, ve vašem kalendáři, v nahraných dokumentech i v rejstříku firem ARES. Data zatím jen čtu.</p>
             {voice.canListen && (
               <p className="jarvis-welcome-voice">
                 {Icon.micSmall} Ptát se můžete i hlasem: klikněte na mikrofon a mluvte, odpovím nahlas.
