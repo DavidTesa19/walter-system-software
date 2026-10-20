@@ -279,13 +279,20 @@ const AppContent: React.FC = () => {
     return isViewAllowedForScope(accessScope, view);
   }, [accessScope, user?.role]);
 
+  // The view that is actually rendered. `viewMode` can name a section this
+  // user may not open — it is left over from the previous user, or restored
+  // from storage — and the effect below only corrects it after a render. Had
+  // that render used `viewMode`, the section would mount and fire requests the
+  // server answers with 403, so a disallowed view is swapped out right here.
+  const effectiveView = isViewAllowed(viewMode) ? viewMode : getDefaultViewForScope(accessScope);
+
   useEffect(() => {
     if (!isAuthenticated) {
       return;
     }
 
-    setStoredAppView(viewMode);
-  }, [isAuthenticated, viewMode]);
+    setStoredAppView(effectiveView);
+  }, [isAuthenticated, effectiveView]);
 
   useEffect(() => {
     if (!isAuthenticated) {
@@ -307,10 +314,10 @@ const AppContent: React.FC = () => {
   // Track section visits and time spent
   useEffect(() => {
     if (isAuthenticated) {
-      trackEvent('section_visit', { section: viewMode });
-      trackSectionStart(viewMode);
+      trackEvent('section_visit', { section: effectiveView });
+      trackSectionStart(effectiveView);
     }
-  }, [viewMode, isAuthenticated]);
+  }, [effectiveView, isAuthenticated]);
 
   const handleViewChange = useCallback((view: AppView) => {
     // A search target is a one-shot "jump to this row" instruction. Navigating
@@ -600,7 +607,7 @@ const AppContent: React.FC = () => {
     return <Login />;
   }
 
-  const isFullscreenView = viewMode === 'chatbot' || viewMode === 'teamchat' || viewMode === 'calendar';
+  const isFullscreenView = effectiveView === 'chatbot' || effectiveView === 'teamchat' || effectiveView === 'calendar';
   const isTableScrollView = [
     'active',
     'pending',
@@ -621,7 +628,7 @@ const AppContent: React.FC = () => {
     'growth_subjects_active',
     'growth_subjects_pending',
     'growth_subjects_archived'
-  ].includes(viewMode);
+  ].includes(effectiveView);
   const mainContentClassName = [
     'main-content',
     isFullscreenView ? 'main-content--fullscreen' : '',
@@ -629,22 +636,22 @@ const AppContent: React.FC = () => {
   ].filter(Boolean).join(' ');
 
   return (
-    <ActivityProvider userId={user?.id} username={user?.username} accessScope={accessScope} isAdmin={isAdmin} activeView={viewMode}>
+    <ActivityProvider userId={user?.id} username={user?.username} accessScope={accessScope} isAdmin={isAdmin} activeView={effectiveView}>
       <SubjectNavigationProvider value={handleSubjectNavigate}>
       <div style={{ display: 'flex' }}>
         <Sidebar
-          activeView={viewMode}
+          activeView={effectiveView}
           onViewChange={handleViewChange}
           onGlobalSearch={runGlobalSearch}
           onSearchNavigate={handleSearchNavigate}
         />
         <div className={mainContentClassName}>
           {(() => {
-            switch (viewMode) {
+            switch (effectiveView) {
               case 'active':
               case 'pending':
               case 'archived':
-                return <GeneralSectionView kind="commissions" activeView={viewMode} onViewChange={handleViewChange} searchTarget={gridSearchTarget} />;
+                return <GeneralSectionView kind="commissions" activeView={effectiveView} onViewChange={handleViewChange} searchTarget={gridSearchTarget} />;
               case 'future':
                 return <FutureFunctionsView />;
               case 'palettes':
@@ -664,23 +671,23 @@ const AppContent: React.FC = () => {
               case 'entities_active':
               case 'entities_pending':
               case 'entities_archived':
-                return <GeneralSectionView kind="subjects" activeView={viewMode} onViewChange={handleViewChange} searchTarget={gridSearchTarget} />;
+                return <GeneralSectionView kind="subjects" activeView={effectiveView} onViewChange={handleViewChange} searchTarget={gridSearchTarget} />;
               case 'projects_active':
               case 'projects_pending':
               case 'projects_archived':
-                return <ProjectsSectionView kind="commissions" activeView={viewMode} onViewChange={handleViewChange} searchTarget={gridSearchTarget} />;
+                return <ProjectsSectionView kind="commissions" activeView={effectiveView} onViewChange={handleViewChange} searchTarget={gridSearchTarget} />;
               case 'projects_subjects_active':
               case 'projects_subjects_pending':
               case 'projects_subjects_archived':
-                return <ProjectsSectionView kind="subjects" activeView={viewMode} onViewChange={handleViewChange} searchTarget={gridSearchTarget} />;
+                return <ProjectsSectionView kind="subjects" activeView={effectiveView} onViewChange={handleViewChange} searchTarget={gridSearchTarget} />;
               case 'growth_active':
               case 'growth_pending':
               case 'growth_archived':
-                return <GrowthSectionView kind="commissions" activeView={viewMode} onViewChange={handleViewChange} searchTarget={gridSearchTarget} />;
+                return <GrowthSectionView kind="commissions" activeView={effectiveView} onViewChange={handleViewChange} searchTarget={gridSearchTarget} />;
               case 'growth_subjects_active':
               case 'growth_subjects_pending':
               case 'growth_subjects_archived':
-                return <GrowthSectionView kind="subjects" activeView={viewMode} onViewChange={handleViewChange} searchTarget={gridSearchTarget} />;
+                return <GrowthSectionView kind="subjects" activeView={effectiveView} onViewChange={handleViewChange} searchTarget={gridSearchTarget} />;
               default:
                 return null;
             }
@@ -691,9 +698,9 @@ const AppContent: React.FC = () => {
           open={jarvisOpen}
           onOpen={openJarvis}
           onClose={closeJarvis}
-          viewLabel={VIEW_LABELS[viewMode]}
+          viewLabel={VIEW_LABELS[effectiveView]}
           launcherPlacement={
-            viewMode === 'teamchat' || viewMode === 'chatbot' ? 'composer' : isFullscreenView ? 'corner' : 'footer'
+            effectiveView === 'teamchat' || effectiveView === 'chatbot' ? 'composer' : isFullscreenView ? 'corner' : 'footer'
           }
           onOpenRecord={handleJarvisOpenRecord}
         />
