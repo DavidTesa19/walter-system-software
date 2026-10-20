@@ -16,6 +16,16 @@ const MAX_TOKENS = 64000;
 const MAX_TOOL_ROUNDS = 12;
 const MAX_JSON_RETRIES = 2;
 
+// On Claude Opus 5.5, text written before a tool call comes back as a
+// progress note inside a thinking block, not as answer text. A model that
+// writes its answer and then, say, offers an open_record button ends the turn
+// with nothing for the user to read. This asks it once for the answer itself.
+// A mid-conversation system message: it follows the tool results (a user
+// message) and is answered by the assistant, as the API requires.
+const ANSWER_NUDGE =
+  'Uživatel tvou odpověď neviděl: text napsaný před voláním nástroje se mu zobrazí jen jako průběžná poznámka. ' +
+  'Napiš mu teď celou odpověď znovu, bez dalších nástrojů.';
+
 // server-side-fallback: if the model's safety classifiers decline a request
 // (a false positive, in a CRM), Anthropic re-runs it on its recommended
 // fallback model instead of returning a refusal.
@@ -69,6 +79,7 @@ export async function runJarvisTurn({ history, toolContext, emit, onStep, signal
   const usage = zeroUsage();
   let messages = [...history];
   let jsonRetries = 0;
+  let askedForAnswer = false;
 
   for (let round = 0; round < MAX_TOOL_ROUNDS; round += 1) {
     if (signal.aborted) return { usage, stopReason: 'aborted' };
@@ -137,9 +148,22 @@ export async function runJarvisTurn({ history, toolContext, emit, onStep, signal
     if (toolUses.length === 0 || message.stop_reason === 'max_tokens') {
       // A final answer (or one cut off by max_tokens — never run the tool
       // calls of a truncated turn).
-      const assistant = { role: 'assistant', content: content.filter((block) => block.type !== 'tool_use') };
-      messages = [...messages, assistant];
-      await onStep([assistant], answer ? [{ type: 'answer', text: answer, model: message.model }] : []);
+      const kept = content.filter((block) => block.type !== 'tool_use');
+      if (!answer && message.stop_reason === 'end_turn' && !askedForAnswer) {
+        // Nothing to read: drop this reply (it is the last message, never sent
+        // back) and ask for the answer. The nudge is stored with the history so
+        // the conversation replays exactly as it ran.
+        askedForAnswer = true;
+        const nudge = { role: 'system', content: ANSWER_NUDGE };
+        messages = [...messages, nudge];
+        await onStep([nudge], []);
+        continue;
+      }
+      // Never store an empty assistant message: the API rejects a history
+      // containing one, which would break every later question.
+      const assistant = kept.length ? { role: 'assistant', content: kept } : null;
+      if (assistant) messages = [...messages, assistant];
+      await onStep(assistant ? [assistant] : [], answer ? [{ type: 'answer', text: answer, model: message.model }] : []);
       if (message.stop_reason === 'max_tokens') emit('notice', { text: 'Odpověď byla příliš dlouhá a je zkrácená.' });
       return { usage, stopReason: message.stop_reason };
     }

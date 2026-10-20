@@ -26,6 +26,8 @@ const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{
 
 const zeroUsage = () => ({ input: 0, output: 0, cacheRead: 0, cacheWrite: 0 });
 
+const isReplayable = (message) => !(message.role === 'assistant' && Array.isArray(message.content) && message.content.length === 0);
+
 // Text from the browser that goes into the <kontext> block: kept short and
 // unable to close the block early.
 const cleanContextText = (value, max = 160) => String(value ?? '').replace(/[<>]/g, '').trim().slice(0, max);
@@ -272,7 +274,9 @@ export function registerJarvisRoutes(app, { authenticateToken, pool, dataDir, po
       };
 
       const result = await runJarvisTurn({
-        history: [...(conversation?.messages ?? []), userMessage],
+        // An empty assistant message (stored by older versions when a reply
+        // had no text) makes the API reject the whole history; skip it.
+        history: [...(conversation?.messages ?? []).filter(isReplayable), userMessage],
         toolContext,
         emit,
         signal: abort.signal,
