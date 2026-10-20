@@ -62,6 +62,10 @@ const addUsage = (total, usage) => {
 
 function friendlyError(error) {
   if (error instanceof Anthropic.AuthenticationError) return 'Jarvis nemá platný klíč k Claude API (ANTHROPIC_API_KEY).';
+  // Attachments live 90 days; an older conversation that had one cannot go on.
+  if ((error instanceof Anthropic.NotFoundError || error instanceof Anthropic.BadRequestError) && /file/i.test(error.message ?? '')) {
+    return 'Některá příloha v této konverzaci už vypršela nebo byla smazána. Začněte prosím novou konverzaci.';
+  }
   if (error instanceof Anthropic.RateLimitError) return 'Jarvis je teď vytížený. Zkuste to prosím za chvíli.';
   if (error instanceof Anthropic.APIConnectionError) return 'Nepodařilo se spojit s Claude API. Zkuste to znovu.';
   if (error instanceof Anthropic.APIError && error.status >= 500) return 'Služba Claude má výpadek. Zkuste to prosím za chvíli.';

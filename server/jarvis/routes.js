@@ -3,6 +3,7 @@
 
 import crypto from 'node:crypto';
 import express from 'express';
+import multer from 'multer';
 import { createApiClient } from './api.js';
 import { JARVIS_MODEL, isJarvisConfigured, runJarvisTurn } from './agent.js';
 import {
@@ -17,11 +18,30 @@ import {
 } from './catalog.js';
 import { createFileConversationStore, createPgConversationStore } from './store.js';
 import { MAX_AUDIO_BYTES, MAX_SPEECH_CHARS, isVoiceConfigured, synthesize, transcribe } from './voice.js';
+import {
+  AttachmentError,
+  MAX_ATTACHMENTS,
+  MAX_ATTACHMENT_BYTES,
+  attachmentBlock,
+  conversationFileIds,
+  createPendingAttachments,
+  deleteFiles,
+  prepareAttachment,
+} from './attachments.js';
 
 const MAX_MESSAGE_LENGTH = 8000;
 const HOURLY_LIMIT = Number(process.env.JARVIS_HOURLY_LIMIT) > 0 ? Number(process.env.JARVIS_HOURLY_LIMIT) : 60;
 // Transcriptions plus read-aloud requests; a long answer is read in a few pieces.
 const VOICE_HOURLY_LIMIT = Number(process.env.JARVIS_VOICE_HOURLY_LIMIT) > 0 ? Number(process.env.JARVIS_VOICE_HOURLY_LIMIT) : 300;
+const ATTACHMENT_HOURLY_LIMIT = Number(process.env.JARVIS_ATTACHMENT_HOURLY_LIMIT) > 0 ? Number(process.env.JARVIS_ATTACHMENT_HOURLY_LIMIT) : 100;
+
+// Busboy hands multer the filename as latin1; browsers send UTF-8, so "Smlouva
+// č. 2.pdf" arrives garbled unless it is re-decoded.
+const uploadedFilename = (raw) => {
+  const name = String(raw ?? '').replace(/[\r\n]/g, '').trim() || 'soubor';
+  const decoded = Buffer.from(name, 'latin1').toString('utf8');
+  return (decoded.includes('\uFFFD') ? name : decoded).slice(-180);
+};
 const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 const zeroUsage = () => ({ input: 0, output: 0, cacheRead: 0, cacheWrite: 0 });
@@ -34,7 +54,7 @@ const cleanContextText = (value, max = 160) => String(value ?? '').replace(/[<>]
 
 // What the app tells Jarvis at the start of every user message. It changes
 // every turn, so it lives here rather than in the cached system prompt.
-export function buildContextBlock(user, context) {
+export function buildContextBlock(user, context, attachmentNames = []) {
   const now = new Date().toLocaleString('cs-CZ', {
     timeZone: 'Europe/Prague',
     weekday: 'long',
@@ -51,6 +71,7 @@ export function buildContextBlock(user, context) {
   ];
   if (context?.view) lines.push(`Obrazovka: ${cleanContextText(context.view)}`);
   if (context?.voice === true) lines.push('Režim: hlasový (uživatel otázku řekl nahlas a odpověď mu bude přečtena)');
+  if (attachmentNames.length) lines.push(`Přílohy této zprávy: ${attachmentNames.map((name) => cleanContextText(name, 120)).join(', ')}`);
   // The profile open in a grid, and the zakázka selected in it.
   const describeOpen = (record, title) => {
     if (
@@ -93,6 +114,51 @@ export function registerJarvisRoutes(app, { authenticateToken, pool, dataDir, po
   };
   const withinHourlyLimit = createHourlyLimiter(HOURLY_LIMIT);
   const withinVoiceLimit = createHourlyLimiter(VOICE_HOURLY_LIMIT);
+  const withinAttachmentLimit = createHourlyLimiter(ATTACHMENT_HOURLY_LIMIT);
+  const pendingAttachments = createPendingAttachments();
+
+  const attachmentUpload = multer({ storage: multer.memoryStorage(), limits: { fileSize: MAX_ATTACHMENT_BYTES, files: MAX_ATTACHMENTS } });
+  const readAttachments = (req, res, next) =>
+    attachmentUpload.array('files', MAX_ATTACHMENTS)(req, res, (error) => {
+      if (!error) return next();
+      if (error.code === 'LIMIT_FILE_SIZE') return res.status(413).json({ error: 'Soubor je větší než 25 MB.' });
+      if (error.code === 'LIMIT_FILE_COUNT' || error.code === 'LIMIT_UNEXPECTED_FILE') {
+        return res.status(400).json({ error: `Najednou lze přiložit nejvýš ${MAX_ATTACHMENTS} souborů.` });
+      }
+      return res.status(400).json({ error: 'Soubory se nepodařilo nahrát.' });
+    });
+
+  // Files attached to a message, uploaded while the user types. Each comes back
+  // with an id (or the reason it cannot be used); the message then names the
+  // ids. No database writes here, so multer's lost request context is harmless.
+  app.post('/api/jarvis/attachments', authenticateToken, readAttachments, async (req, res) => {
+    if (!isJarvisConfigured()) return res.status(503).json({ error: 'Jarvis není nastavený (chybí ANTHROPIC_API_KEY).' });
+    const files = Array.isArray(req.files) ? req.files : [];
+    if (files.length === 0) return res.status(400).json({ error: 'Žádný soubor.' });
+    const userId = Number(req.user.id);
+    const attachments = [];
+    for (const file of files) {
+      const name = uploadedFilename(file.originalname);
+      if (!withinAttachmentLimit(userId)) {
+        attachments.push({ name, error: 'Hodinový limit příloh je vyčerpaný.' });
+        continue;
+      }
+      try {
+        const prepared = await prepareAttachment(file.buffer, { name, mimeType: file.mimetype });
+        attachments.push({ id: pendingAttachments.add(userId, prepared), name, kind: prepared.kind, size: prepared.size });
+      } catch (error) {
+        if (!(error instanceof AttachmentError)) console.error('Jarvis: preparing an attachment failed:', error?.message ?? error);
+        attachments.push({ name, error: error instanceof AttachmentError ? error.message : 'Soubor se nepodařilo nahrát.' });
+      }
+    }
+    res.json({ attachments });
+  });
+
+  // An attachment removed before its message was sent.
+  app.delete('/api/jarvis/attachments/:id', authenticateToken, async (req, res) => {
+    const removed = await pendingAttachments.remove(Number(req.user.id), String(req.params.id));
+    res.status(removed ? 204 : 404).end();
+  });
 
   // `voice` says whether the server can listen and speak; without it the
   // browser uses its own (lower quality) speech engines.
@@ -177,8 +243,10 @@ export function registerJarvisRoutes(app, { authenticateToken, pool, dataDir, po
     try {
       if (!UUID_PATTERN.test(req.params.id)) return res.status(404).json({ error: 'Konverzace nenalezena.' });
       if (running.has(req.params.id)) return res.status(409).json({ error: 'Jarvis v této konverzaci právě pracuje.' });
+      const conversation = await store.get(req.params.id, Number(req.user.id));
       const removed = await store.remove(req.params.id, Number(req.user.id));
       res.status(removed ? 204 : 404).end();
+      if (removed && conversation) void deleteFiles(conversationFileIds(conversation.messages));
     } catch (error) {
       console.error('Jarvis: deleting a conversation failed:', error);
       res.status(500).json({ error: 'Nepodařilo se smazat konverzaci.' });
@@ -193,7 +261,10 @@ export function registerJarvisRoutes(app, { authenticateToken, pool, dataDir, po
     const user = req.user;
     const userId = Number(user.id);
     const text = typeof req.body?.message === 'string' ? req.body.message.trim() : '';
-    if (!text) return res.status(400).json({ error: 'Napište zprávu.' });
+    const attachmentIds = Array.isArray(req.body?.attachments)
+      ? req.body.attachments.filter((id) => typeof id === 'string').slice(0, MAX_ATTACHMENTS)
+      : [];
+    if (!text && attachmentIds.length === 0) return res.status(400).json({ error: 'Napište zprávu.' });
     if (text.length > MAX_MESSAGE_LENGTH) return res.status(400).json({ error: 'Zpráva je příliš dlouhá.' });
 
     let conversation = null;
@@ -214,6 +285,10 @@ export function registerJarvisRoutes(app, { authenticateToken, pool, dataDir, po
     if (!withinHourlyLimit(userId)) {
       return res.status(429).json({ error: `Limit ${HOURLY_LIMIT} zpráv za hodinu je vyčerpaný. Zkuste to později.` });
     }
+    const attachments = attachmentIds.length ? pendingAttachments.take(userId, attachmentIds) : [];
+    if (!attachments) return res.status(400).json({ error: 'Přílohu se nepodařilo najít – nahrajte ji prosím znovu.' });
+    // A message of attachments alone still needs a question.
+    const question = text || (attachments.length === 1 ? 'Prohlédni si přílohu a řekni mi, co obsahuje.' : 'Prohlédni si přílohy a řekni mi, co obsahují.');
 
     res.setHeader('Content-Type', 'text/event-stream; charset=utf-8');
     res.setHeader('Cache-Control', 'no-cache, no-transform');
@@ -234,7 +309,7 @@ export function registerJarvisRoutes(app, { authenticateToken, pool, dataDir, po
     try {
       if (!conversation) {
         conversationId = crypto.randomUUID();
-        await store.create({ id: conversationId, userId, title: truncate(text.replace(/\s+/g, ' '), 70), model: JARVIS_MODEL });
+        await store.create({ id: conversationId, userId, title: truncate((text || attachments[0]?.name || '').replace(/\s+/g, ' '), 70), model: JARVIS_MODEL });
       }
       running.add(conversationId);
       emit('conversation', { id: conversationId, isNew: !conversation });
@@ -242,14 +317,21 @@ export function registerJarvisRoutes(app, { authenticateToken, pool, dataDir, po
       const userMessage = {
         role: 'user',
         content: [
-          { type: 'text', text: buildContextBlock(user, req.body?.context) },
-          { type: 'text', text },
+          { type: 'text', text: buildContextBlock(user, req.body?.context, attachments.map((attachment) => attachment.name)) },
+          ...attachments.map(attachmentBlock),
+          { type: 'text', text: question },
         ],
       };
       await store.append(conversationId, userId, {
         messages: [userMessage],
         transcript: [
-          { type: 'question', text, at: new Date().toISOString(), ...(req.body?.context?.voice === true ? { voice: true } : {}) },
+          {
+            type: 'question',
+            text,
+            at: new Date().toISOString(),
+            ...(req.body?.context?.voice === true ? { voice: true } : {}),
+            ...(attachments.length ? { attachments: attachments.map((attachment) => ({ name: attachment.name, kind: attachment.kind })) } : {}),
+          },
         ],
         usage: zeroUsage(),
       });
@@ -259,7 +341,7 @@ export function registerJarvisRoutes(app, { authenticateToken, pool, dataDir, po
         baseUrl,
         token: signAgentToken(user),
         changesetId: `jarvis-${conversationId.slice(0, 8)}-${Date.now().toString(36)}`,
-        note: `Jarvis: ${truncate(text, 200)}`,
+        note: `Jarvis: ${truncate(question, 200)}`,
       });
       const toolContext = {
         api,

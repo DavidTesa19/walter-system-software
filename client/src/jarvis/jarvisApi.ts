@@ -1,4 +1,4 @@
-import { API_BASE, apiDelete, apiGet } from '../utils/api';
+import { API_BASE, apiDelete, apiGet, apiUpload } from '../utils/api';
 
 export type JarvisSection = 'public' | 'projects' | 'growth';
 export type JarvisRole = 'client' | 'partner' | 'tiper';
@@ -16,12 +16,25 @@ export interface JarvisOpenAction {
 }
 
 export type TranscriptItem =
-  | { type: 'question'; text: string; at?: string; voice?: boolean }
+  | { type: 'question'; text: string; at?: string; voice?: boolean; attachments?: AttachmentSummary[] }
   | { type: 'answer'; text: string; model?: string }
   | { type: 'note'; text: string }
   | { type: 'tool'; name: string; label: string; ok: boolean }
   | { type: 'notice'; text: string }
   | { type: 'action'; action: JarvisOpenAction };
+
+export type AttachmentKind = 'image' | 'pdf' | 'text';
+
+// A file attached to a question, as the transcript remembers it.
+export interface AttachmentSummary {
+  name: string;
+  kind: AttachmentKind;
+}
+
+// One uploaded file: its id to send with the message, or why it was refused.
+export type UploadedAttachment =
+  | { id: string; name: string; kind: AttachmentKind; size: number; error?: undefined }
+  | { id?: undefined; name: string; error: string };
 
 export interface ConversationSummary {
   id: string;
@@ -121,11 +134,21 @@ export const jarvisApi = {
     apiGet<{ id: string; title: string | null; transcript: TranscriptItem[] }>(`/api/jarvis/conversations/${id}`),
   deleteConversation: (id: string) => apiDelete(`/api/jarvis/conversations/${id}`),
 
+  // Upload a file to attach to the next message.
+  async uploadAttachment(file: File): Promise<UploadedAttachment> {
+    const form = new FormData();
+    form.append('files', file, file.name);
+    const data = await apiUpload<{ attachments: UploadedAttachment[] }>('/api/jarvis/attachments', form);
+    return data.attachments[0] ?? { name: file.name, error: 'Soubor se nepodařilo nahrát.' };
+  },
+  // Drop an attachment that will not be sent after all.
+  deleteAttachment: (id: string) => apiDelete(`/api/jarvis/attachments/${id}`),
+
   // Sends one message and calls onEvent for every Server-Sent Event of the
   // reply. Resolves when the reply ends; rejects with the server's message on
   // an HTTP error. Abort the signal to stop Jarvis.
   async chat(
-    body: { message: string; conversationId?: string | null; context?: JarvisContext },
+    body: { message: string; conversationId?: string | null; context?: JarvisContext; attachments?: string[] },
     onEvent: (event: JarvisEvent) => void,
     signal: AbortSignal
   ): Promise<void> {

@@ -1,7 +1,8 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import MarkdownMessage from '../components/MarkdownMessage';
 import { jarvisApi } from './jarvisApi';
-import type { ConversationSummary, JarvisEvent, JarvisOpenAction, JarvisStatus, TranscriptItem } from './jarvisApi';
+import type { AttachmentKind, AttachmentSummary, ConversationSummary, JarvisEvent, JarvisOpenAction, JarvisStatus, TranscriptItem } from './jarvisApi';
+import { ATTACHMENT_ACCEPT, MAX_ATTACHMENTS, MAX_ATTACHMENT_BYTES, formatSize, namePastedImage, shrinkImage } from './attachmentFiles';
 import { useJarvisVoice } from './useJarvisVoice';
 import { useJarvisFocus } from './jarvisFocus';
 import type { JarvisFocus } from './jarvisFocus';
@@ -80,11 +81,43 @@ function groupTurns(items: TranscriptItem[]): Turn[] {
 interface LiveTurn {
   question: string;
   voice: boolean;
+  attachments: AttachmentSummary[];
   steps: Array<{ id: string; label: string; done: boolean; ok: boolean }>;
   text: string;
   thinking: string;
   actions: JarvisOpenAction[];
   notices: string[];
+}
+
+// A file being attached to the next message: uploading, ready (with the id to
+// send), or refused.
+interface PendingAttachment {
+  key: string;
+  name: string;
+  size: number;
+  kind?: AttachmentKind;
+  status: 'uploading' | 'ready' | 'error';
+  id?: string;
+  error?: string;
+  preview?: string;
+}
+
+const kindOfFile = (file: File): AttachmentKind =>
+  file.type.startsWith('image/') ? 'image' : file.type === 'application/pdf' || /\.pdf$/i.test(file.name) ? 'pdf' : 'text';
+
+// The attachments of a sent question, under its text.
+function QuestionAttachments({ attachments }: { attachments?: AttachmentSummary[] }) {
+  if (!attachments?.length) return null;
+  return (
+    <span className="jarvis-question-files">
+      {attachments.map((attachment, index) => (
+        <span key={index} className="jarvis-question-file" title={attachment.name}>
+          {attachment.kind === 'image' ? Icon.image : Icon.file}
+          <span>{attachment.name}</span>
+        </span>
+      ))}
+    </span>
+  );
 }
 
 // Jarvis's mark: a sparkle on the theme's gradient, the same on the floating
@@ -150,6 +183,24 @@ const Icon = {
     <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
       <rect x="9" y="3" width="6" height="11" rx="3" />
       <path d="M5 11a7 7 0 0 0 14 0M12 18v3" />
+    </svg>
+  ),
+  clip: (
+    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+      <path d="m21 11-8.6 8.6a5.5 5.5 0 0 1-7.8-7.8l8.6-8.6a3.7 3.7 0 0 1 5.2 5.2l-8.6 8.6a1.8 1.8 0 0 1-2.6-2.6L15.9 6.3" />
+    </svg>
+  ),
+  file: (
+    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+      <path d="M14 3H6a1 1 0 0 0-1 1v16a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1V8l-5-5Z" />
+      <path d="M14 3v5h5" />
+    </svg>
+  ),
+  image: (
+    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+      <rect x="3" y="4" width="18" height="16" rx="2" />
+      <circle cx="9" cy="10" r="1.6" />
+      <path d="m21 16-5-5-9 9" />
     </svg>
   ),
   record: (
@@ -286,8 +337,60 @@ export default function JarvisPanel({ open, onOpen, onClose, viewLabel, launcher
   // The profile the user has open in a grid, if any.
   const focus = useJarvisFocus();
   const readAloudRef = useRef(readAloud);
+  const [attachments, setAttachments] = useState<PendingAttachment[]>([]);
+  const [dragging, setDragging] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const attachmentsRef = useRef<PendingAttachment[]>([]);
+  attachmentsRef.current = attachments;
 
   const busy = live !== null;
+  const uploading = attachments.some((attachment) => attachment.status === 'uploading');
+  const readyAttachments = attachments.filter((attachment) => attachment.status === 'ready' && attachment.id);
+
+  const updateAttachment = (key: string, patch: Partial<PendingAttachment>) =>
+    setAttachments((items) => items.map((item) => (item.key === key ? { ...item, ...patch } : item)));
+
+  // Each file is uploaded as soon as it is added, so sending is instant.
+  const addFiles = (files: File[]) => {
+    const room = MAX_ATTACHMENTS - attachmentsRef.current.length;
+    if (files.length > room) setError(`K jedné zprávě lze přiložit nejvýš ${MAX_ATTACHMENTS} souborů.`);
+    for (const original of files.slice(0, Math.max(0, room))) {
+      const key = `${Date.now()}-${Math.random().toString(36).slice(2)}`;
+      const kind = kindOfFile(original);
+      const entry: PendingAttachment = {
+        key,
+        name: original.name,
+        size: original.size,
+        kind,
+        status: 'uploading',
+        preview: kind === 'image' ? URL.createObjectURL(original) : undefined,
+      };
+      setAttachments((items) => [...items, entry]);
+      void (async () => {
+        try {
+          const file = kind === 'image' ? await shrinkImage(original) : original;
+          if (file.size > MAX_ATTACHMENT_BYTES) throw new Error('Soubor je větší než 25 MB.');
+          const uploaded = await jarvisApi.uploadAttachment(file);
+          if (!attachmentsRef.current.some((item) => item.key === key)) {
+            // Removed while it was uploading.
+            if (uploaded.id) void jarvisApi.deleteAttachment(uploaded.id).catch(() => undefined);
+            return;
+          }
+          if (uploaded.error !== undefined || !uploaded.id) updateAttachment(key, { status: 'error', error: uploaded.error ?? 'Soubor se nepodařilo nahrát.' });
+          else updateAttachment(key, { status: 'ready', id: uploaded.id, kind: uploaded.kind, size: file.size });
+        } catch (err) {
+          updateAttachment(key, { status: 'error', error: err instanceof Error ? err.message : 'Soubor se nepodařilo nahrát.' });
+        }
+      })();
+    }
+  };
+
+  const removeAttachment = (key: string) => {
+    const item = attachmentsRef.current.find((attachment) => attachment.key === key);
+    if (item?.preview) URL.revokeObjectURL(item.preview);
+    if (item?.id) void jarvisApi.deleteAttachment(item.id).catch(() => undefined);
+    setAttachments((items) => items.filter((attachment) => attachment.key !== key));
+  };
 
   // A spoken question goes off as soon as it has been transcribed.
   const voice = useJarvisVoice(status?.voice, (text) => void send(text, true));
@@ -392,7 +495,15 @@ export default function JarvisPanel({ open, onOpen, onClose, viewLabel, launcher
 
   async function send(raw: string, spoken = false) {
     const message = raw.trim();
-    if (!message || busy) return;
+    const sending = attachmentsRef.current.filter((attachment) => attachment.status === 'ready' && attachment.id);
+    if ((!message && sending.length === 0) || busy) return;
+    if (attachmentsRef.current.some((attachment) => attachment.status === 'uploading')) {
+      setError('Počkejte, až se přílohy nahrají.');
+      return;
+    }
+    // Sent attachments now belong to the conversation; refused ones are dropped.
+    for (const attachment of attachmentsRef.current) if (attachment.preview) URL.revokeObjectURL(attachment.preview);
+    setAttachments([]);
     setInput('');
     setError(null);
     voice.clearError();
@@ -403,7 +514,16 @@ export default function JarvisPanel({ open, onOpen, onClose, viewLabel, launcher
     const controller = new AbortController();
     abortRef.current = controller;
     let activeId = conversationId;
-    setLive({ question: message, voice: spoken, steps: [], text: '', thinking: '', actions: [], notices: [] });
+    setLive({
+      question: message,
+      voice: spoken,
+      attachments: sending.map((attachment) => ({ name: attachment.name, kind: attachment.kind ?? 'text' })),
+      steps: [],
+      text: '',
+      thinking: '',
+      actions: [],
+      notices: [],
+    });
 
     const onEvent = (event: JarvisEvent) => {
       switch (event.event) {
@@ -451,6 +571,7 @@ export default function JarvisPanel({ open, onOpen, onClose, viewLabel, launcher
         {
           message,
           conversationId,
+          ...(sending.length ? { attachments: sending.map((attachment) => attachment.id as string) } : {}),
           context: {
             view: viewLabel,
             ...(spoken ? { voice: true } : {}),
@@ -527,7 +648,32 @@ export default function JarvisPanel({ open, onOpen, onClose, viewLabel, launcher
       </span>
     </button>
 
-    <aside className={`jarvis-panel${open ? ' jarvis-panel--open' : ''}`} aria-hidden={!open} aria-label="Jarvis">
+    <aside
+      className={`jarvis-panel${open ? ' jarvis-panel--open' : ''}`}
+      aria-hidden={!open}
+      aria-label="Jarvis"
+      onDragOver={(event) => {
+        if (unavailable || !event.dataTransfer.types.includes('Files')) return;
+        event.preventDefault();
+        setDragging(true);
+      }}
+      onDragLeave={(event) => {
+        if (!event.currentTarget.contains(event.relatedTarget as Node | null)) setDragging(false);
+      }}
+      onDrop={(event) => {
+        if (!event.dataTransfer.files.length) return;
+        event.preventDefault();
+        setDragging(false);
+        addFiles([...event.dataTransfer.files]);
+      }}
+    >
+      {dragging && (
+        <div className="jarvis-dropzone" aria-hidden="true">
+          {Icon.clip}
+          <strong>Pusťte soubory sem</strong>
+          <span>Dokumenty a obrázky, nejvýš {MAX_ATTACHMENTS}, každý do 25 MB</span>
+        </div>
+      )}
       <header className="jarvis-header">
         <JarvisMark busy={busy || speaking || listening} />
         <div className="jarvis-title">
@@ -632,6 +778,7 @@ export default function JarvisPanel({ open, onOpen, onClose, viewLabel, launcher
             <div className="jarvis-question">
               {turn.question.voice && <span className="jarvis-question-voice" title="Řečeno hlasem">{Icon.micSmall}</span>}
               {turn.question.text}
+              <QuestionAttachments attachments={turn.question.attachments} />
             </div>
             <Steps steps={turn.steps} open={false} />
             {turn.answer && (
@@ -666,6 +813,7 @@ export default function JarvisPanel({ open, onOpen, onClose, viewLabel, launcher
             <div className="jarvis-question">
               {live.voice && <span className="jarvis-question-voice" title="Řečeno hlasem">{Icon.micSmall}</span>}
               {live.question}
+              <QuestionAttachments attachments={live.attachments} />
             </div>
             {live.steps.length > 0 && (
               <ul className="jarvis-step-list jarvis-step-list--live">
@@ -737,7 +885,65 @@ export default function JarvisPanel({ open, onOpen, onClose, viewLabel, launcher
             </button>
           </div>
         )}
+        {attachments.length > 0 && (
+          <div className="jarvis-attachments">
+            {attachments.map((attachment) => (
+              <div
+                key={attachment.key}
+                className={`jarvis-attachment jarvis-attachment--${attachment.status}`}
+                title={attachment.error ?? attachment.name}
+              >
+                {attachment.preview ? (
+                  <img src={attachment.preview} alt="" className="jarvis-attachment-thumb" />
+                ) : (
+                  <span className="jarvis-attachment-icon">{Icon.file}</span>
+                )}
+                <span className="jarvis-attachment-text">
+                  <span className="jarvis-attachment-name">{attachment.name}</span>
+                  <span className="jarvis-attachment-meta">
+                    {attachment.status === 'uploading' ? 'Nahrávám…' : attachment.status === 'error' ? attachment.error : formatSize(attachment.size)}
+                  </span>
+                </span>
+                {attachment.status === 'uploading' && <span className="jarvis-spinner" aria-hidden="true" />}
+                <button
+                  type="button"
+                  className="jarvis-attachment-remove"
+                  onClick={() => removeAttachment(attachment.key)}
+                  aria-label={`Odebrat ${attachment.name}`}
+                  title="Odebrat"
+                >
+                  {Icon.close}
+                </button>
+              </div>
+            ))}
+          </div>
+        )}
         <div className="jarvis-input-row">
+          {!listening && (
+            <>
+              <button
+                type="button"
+                className="jarvis-attach"
+                onClick={() => fileInputRef.current?.click()}
+                disabled={Boolean(unavailable) || attachments.length >= MAX_ATTACHMENTS}
+                title="Přiložit soubor nebo obrázek (můžete ho sem i přetáhnout nebo vložit Ctrl+V)"
+                aria-label="Přiložit soubor"
+              >
+                {Icon.clip}
+              </button>
+              <input
+                ref={fileInputRef}
+                type="file"
+                multiple
+                accept={ATTACHMENT_ACCEPT}
+                hidden
+                onChange={(event) => {
+                  addFiles([...(event.target.files ?? [])]);
+                  event.target.value = '';
+                }}
+              />
+            </>
+          )}
           {listening ? (
             <div className="jarvis-listening" aria-live="polite">
               {voice.listen === 'listening' && status?.voice ? (
@@ -766,13 +972,20 @@ export default function JarvisPanel({ open, onOpen, onClose, viewLabel, launcher
               ref={inputRef}
               value={input}
               onChange={(event) => setInput(event.target.value)}
+              onPaste={(event) => {
+                // A copied screenshot or file attaches; copied text pastes as usual.
+                const files = [...event.clipboardData.files];
+                if (files.length === 0 || event.clipboardData.getData('text/plain')) return;
+                event.preventDefault();
+                addFiles(files.map(namePastedImage));
+              }}
               onKeyDown={(event) => {
                 if (event.key === 'Enter' && !event.shiftKey) {
                   event.preventDefault();
                   void send(input);
                 }
               }}
-              placeholder={unavailable ? 'Jarvis není dostupný' : 'Zeptejte se Jarvise…'}
+              placeholder={unavailable ? 'Jarvis není dostupný' : attachments.length ? 'Co s přílohou udělat? (nebo rovnou odešlete)' : 'Zeptejte se Jarvise…'}
               rows={2}
               maxLength={8000}
               disabled={Boolean(unavailable)}
@@ -806,7 +1019,13 @@ export default function JarvisPanel({ open, onOpen, onClose, viewLabel, launcher
               {Icon.stop}
             </button>
           ) : (
-            <button type="submit" className="jarvis-send" disabled={!input.trim() || Boolean(unavailable)} title="Odeslat (Enter)" aria-label="Odeslat">
+            <button
+              type="submit"
+              className="jarvis-send"
+              disabled={(!input.trim() && readyAttachments.length === 0) || uploading || Boolean(unavailable)}
+              title={uploading ? 'Čekám na nahrání příloh' : 'Odeslat (Enter)'}
+              aria-label="Odeslat"
+            >
               {Icon.send}
             </button>
           )}

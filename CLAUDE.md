@@ -196,7 +196,17 @@ inherited one falls back to the browser's serif. Needs `ANTHROPIC_API_KEY`;
   once by Claude (`JARVIS_OCR_MODEL`, default the Jarvis model). The tool only
   reads a document listed under a subject the user can open: the
   `/documents/:id/download` route itself does not check sections.
-- **ARES** (`company_registry`, `server/jarvis/ares.js`): the public Czech
+- **Attachments** (`server/jarvis/attachments.js`, `POST /api/jarvis/attachments`):
+  files attached to a message go to the Anthropic **Files API** (90-day
+  expiry) and the stored message holds only a `file_id` block — never the
+  bytes, which would be re-sent every turn. Images and PDFs are passed as
+  they are (Claude sees the page); Office/text files go through
+  `documents.js` and are uploaded as plain text. Upload and send are two
+  steps: uploads wait in memory for an hour for their own user, the chat
+  request names them by id. Deleting a conversation deletes its files; an
+  expired file makes the API reject the history, which `agent.js` reports
+  as "start a new conversation". The browser shrinks photos to 2000 px.
+- **ARES** (`company_registry`, `server/ares.js`): the public Czech
   business register, called directly (no key, read-only, not app data). An
   IČO is checked against its mod-11 check digit before ARES is asked; a city
   goes to ARES as `sidlo.textovaAdresa` (ARES refuses searches over 1 000
