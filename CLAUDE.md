@@ -211,8 +211,9 @@ inherited one falls back to the browser's serif. Needs `ANTHROPIC_API_KEY`;
   IČO is checked against its mod-11 check digit before ARES is asked; a city
   goes to ARES as `sidlo.textovaAdresa` (ARES refuses searches over 1 000
   hits). People are returned with name and role only — the register's home
-  addresses and birth dates are left out on purpose. The app has no IČO
-  field yet, so Jarvis can show but not store it.
+  addresses and birth dates are left out on purpose. Jarvis has no write
+  tools yet, so it shows ARES data but never stores it; the user fills in the
+  subject's IČO field.
 - **Answers written before a tool call vanish on Opus 5.5**: text between tool
   calls comes back as a thinking-block progress note, so "answer, then
   open_record" ends the turn with nothing to show. The prompt asks for the
