@@ -231,6 +231,18 @@ inherited one falls back to the browser's serif. Needs `ANTHROPIC_API_KEY`;
   which means Prague time — parse it with `parseEventTime`, never `new Date()`
   alone, or every meeting shifts by the UTC offset. An all-day event's stored
   end is the day after its last day.
+- **Calendar changes** (`calendar_add_event`, `calendar_update_event`,
+  `calendar_delete_event`, `server/jarvis/calendarActions.js`): additions and
+  edits happen at once and leave a card with "Vrátit zpět"; a deletion only
+  happens on the card's "Smazat" and can be restored. Undo and delete refuse
+  when the event no longer matches the card's snapshot (`sameEvent`), so the
+  user's own later edit is never overwritten. At most 10 additions, 10 edits
+  and 5 deletions per answer (`CALENDAR_LIMITS`). Card clicks go to
+  `POST /api/jarvis/conversations/:id/calendar/:cardId` and reach the next
+  turn through `calendarOutcomes`. New events are stored like the calendar
+  form stores them (zone-less Prague time, all-day end = day after); the
+  date helpers live in `server/jarvis/time.js`. An open calendar screen
+  reloads on `walter:calendar-changed` (`client/src/jarvis/calendarEvents.ts`).
 - **Documents** (`read_document`, `server/jarvis/documents.js`): only text
   goes into the conversation (it is re-sent every turn). PDFs via `unpdf`,
   .docx/.xlsx/.pptx by unzipping with adm-zip, scans and photos transcribed

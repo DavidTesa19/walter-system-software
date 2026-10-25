@@ -12,6 +12,7 @@ import type { EventResizeDoneArg } from '@fullcalendar/interaction';
 import { apiGet, apiPost, apiPut, apiDelete } from '../utils/api';
 import './FullCalendarView.css';
 import ClockTimePicker from '../components/ClockTimePicker';
+import { CALENDAR_CHANGED_EVENT } from '../jarvis/calendarEvents';
 
 // ---------------------------------------------------------------------------
 // Types
@@ -447,6 +448,13 @@ const FullCalendarView: React.FC = () => {
 
   useEffect(() => {
     fetchEvents();
+  }, [fetchEvents]);
+
+  // Jarvis added, moved or deleted an event (or one was undone): reload.
+  useEffect(() => {
+    const reload = () => void fetchEvents();
+    window.addEventListener(CALENDAR_CHANGED_EVENT, reload);
+    return () => window.removeEventListener(CALENDAR_CHANGED_EVENT, reload);
   }, [fetchEvents]);
 
   // ------- Event handlers -------

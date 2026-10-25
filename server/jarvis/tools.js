@@ -34,6 +34,18 @@ import { matchRecord, recordWords } from './fuzzy.js';
 import { DocumentTextError, MAX_DOCUMENT_BYTES, documentText } from './documents.js';
 import { AresError, isValidIco, lookupByIco, normalizeIco, searchByName } from '../ares.js';
 import { PROPOSAL_LIMITS, ProposalError, buildNoteProposal, buildUpdateProposal } from './proposals.js';
+import { DATE_ONLY, DAY_MS, eventEndLabel, formatPrague, parseDay, parseEventTime, pragueMidnight, pragueParts } from './time.js';
+import {
+  CALENDAR_LIMITS,
+  CalendarError,
+  buildEventTimes,
+  calendarCard,
+  editedTimes,
+  findEvent,
+  listEvents,
+  overlapping,
+  snapshot,
+} from './calendarActions.js';
 
 export class ToolError extends Error {}
 
@@ -326,6 +338,52 @@ async function loadForProposal(ctx, { section: sectionId, role: roleId, kind: ki
 
 const PENDING_NOTE = 'Čeká na potvrzení: uživatel vidí kartu s tlačítky Potvrdit a Zamítnout. Zatím se nic nezměnilo – netvrď, že je změna provedena.';
 
+const dayInput = z.string().max(20);
+const timeInput = z.string().max(5);
+
+const calendarAddInput = z.object({
+  title: z.string().min(1).max(200).describe('Název události.'),
+  date: dayInput.describe('Den: 2026-10-30 nebo 30.10.2026 (podle data z kontextu).'),
+  start_time: timeInput.optional().describe('Začátek, např. 9:30. Bez času je událost celodenní.'),
+  end_time: timeInput.optional().describe('Konec, např. 10:30. Bez konce trvá duration_minutes, jinak hodinu.'),
+  duration_minutes: z.number().int().min(1).max(1440).optional(),
+  end_date: dayInput.optional().describe('Poslední den vícedenní celodenní události (nebo den konce, když událost přes půlnoc).'),
+  description: z.string().max(2000).optional(),
+  reason: z.string().max(300).optional(),
+}).strict();
+
+const calendarUpdateInput = z.object({
+  event_id: z.number().int().positive().describe('id události z nástroje calendar.'),
+  title: z.string().min(1).max(200).optional(),
+  date: dayInput.optional().describe('Nový den; čas a délka zůstanou, pokud je nezměníš.'),
+  start_time: timeInput.optional().describe('Nový začátek; délka zůstane, pokud nezadáš end_time.'),
+  end_time: timeInput.optional(),
+  all_day: z.boolean().optional(),
+  description: z.string().max(2000).nullable().optional(),
+  reason: z.string().max(300).optional(),
+}).strict();
+
+const calendarDeleteInput = z.object({
+  event_id: z.number().int().positive().describe('id události z nástroje calendar.'),
+  reason: z.string().max(300).optional(),
+}).strict();
+
+// Each answer can change only so much of the calendar.
+function countCalendarChange(ctx, kindOfChange) {
+  ctx.calendarChanges = ctx.calendarChanges ?? { add: 0, update: 0, delete: 0 };
+  ctx.calendarChanges[kindOfChange] += 1;
+  if (ctx.calendarChanges[kindOfChange] > CALENDAR_LIMITS[kindOfChange]) {
+    const what = { add: 'přidat', update: 'upravit', delete: 'smazat' }[kindOfChange];
+    throw new ToolError(`V jedné odpovědi lze ${what} nejvýš ${CALENDAR_LIMITS[kindOfChange]} událostí. Zbytek nech na další zprávu a řekni to uživateli.`);
+  }
+}
+
+const asToolError = (error) => {
+  if (error instanceof CalendarError) return new ToolError(error.message);
+  if (error?.status === 404) return new ToolError('Tuto událost v kalendáři uživatele nevidím – najdi ji znovu přes calendar.');
+  return error;
+};
+
 const openInput = z.object({
   section,
   role,
@@ -335,91 +393,6 @@ const openInput = z.object({
 }).strict();
 
 // ---------------------------------------------------------------------------
-// Dates in Prague time: the calendar's days start at Prague midnight whatever
-// the server's own time zone (UTC on Railway).
-// ---------------------------------------------------------------------------
-
-const PRAGUE = 'Europe/Prague';
-const DAY_MS = 24 * 3600 * 1000;
-
-function pragueParts(date) {
-  const parts = new Intl.DateTimeFormat('en-US', {
-    timeZone: PRAGUE,
-    hourCycle: 'h23',
-    year: 'numeric',
-    month: '2-digit',
-    day: '2-digit',
-    hour: '2-digit',
-    minute: '2-digit',
-    second: '2-digit',
-  }).formatToParts(date);
-  const get = (type) => Number(parts.find((part) => part.type === type)?.value);
-  return { year: get('year'), month: get('month'), day: get('day'), hour: get('hour'), minute: get('minute'), second: get('second') };
-}
-
-// The instant a Prague wall-clock time happens (midnight by default).
-function pragueTime({ year, month, day, hour = 0, minute = 0 }) {
-  const guess = Date.UTC(year, month - 1, day, hour, minute);
-  const local = pragueParts(new Date(guess));
-  const offset = Date.UTC(local.year, local.month - 1, local.day, local.hour, local.minute, local.second) - guess;
-  return new Date(guess - offset);
-}
-
-const pragueMidnight = (day) => pragueTime(day);
-
-function parseDay(text) {
-  const iso = /^(\d{4})-(\d{2})-(\d{2})$/.exec(text);
-  if (iso) return { year: Number(iso[1]), month: Number(iso[2]), day: Number(iso[3]) };
-  const czech = /^(\d{1,2})\.\s*(\d{1,2})\.\s*(\d{4})$/.exec(text);
-  return { year: Number(czech[3]), month: Number(czech[2]), day: Number(czech[1]) };
-}
-
-const DATE_ONLY = /^\d{4}-\d{2}-\d{2}$/;
-const FLOATING_TIME = /^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2})(?::\d{2}(?:\.\d+)?)?$/;
-
-// A calendar time as stored: a date (all-day), a time with an offset (dragged
-// in the calendar), or a bare "2026-10-20T10:00" from the event form, which
-// means Prague time — not the server's UTC.
-function parseEventTime(value) {
-  if (typeof value === 'string') {
-    if (DATE_ONLY.test(value)) return pragueMidnight(parseDay(value));
-    const floating = FLOATING_TIME.exec(value);
-    if (floating) {
-      const [, year, month, day, hour, minute] = floating.map(Number);
-      return pragueTime({ year, month, day, hour, minute });
-    }
-  }
-  return new Date(value);
-}
-
-function formatPrague(value, { dateOnly = false } = {}) {
-  if (typeof value === 'string' && DATE_ONLY.test(value)) {
-    const { year, month, day } = parseDay(value);
-    return new Date(Date.UTC(year, month - 1, day, 12)).toLocaleDateString('cs-CZ', { timeZone: 'UTC', weekday: 'short', day: 'numeric', month: 'numeric', year: 'numeric' });
-  }
-  const date = value instanceof Date ? value : new Date(value);
-  return date.toLocaleString('cs-CZ', {
-    timeZone: PRAGUE,
-    weekday: 'short',
-    day: 'numeric',
-    month: 'numeric',
-    year: 'numeric',
-    ...(dateOnly ? {} : { hour: '2-digit', minute: '2-digit' }),
-  });
-}
-
-// An all-day event's stored end is the day after its last day (as the
-// calendar keeps it); people mean the last day. A one-day event has no end.
-function eventEndLabel(event, allDay) {
-  if (!event.end) return undefined;
-  if (allDay && typeof event.end === 'string' && DATE_ONLY.test(event.end)) {
-    const { year, month, day } = parseDay(event.end);
-    const last = new Date(Date.UTC(year, month - 1, day) - DAY_MS).toISOString().slice(0, 10);
-    return last <= String(event.start).slice(0, 10) ? undefined : formatPrague(last);
-  }
-  return formatPrague(parseEventTime(event.end), { dateOnly: allDay });
-}
-
 // Extracted document text, kept for a while so paging through a long
 // document, or asking about it again, does not re-read (or re-transcribe) it.
 // Keyed by the document's id and version; access is checked before every use.
@@ -787,6 +760,7 @@ export const TOOLS = [
           if (!overlaps) return null;
           return {
             at: eventStart.getTime(),
+            id: event.id,
             nazev: event.title || 'Bez názvu',
             zacatek: typeof event.start === 'string' && DATE_ONLY.test(event.start) ? formatPrague(event.start) : formatPrague(eventStart, { dateOnly: allDay }),
             konec: eventEndLabel(event, allDay),
@@ -965,6 +939,113 @@ export const TOOLS = [
       }
       ctx.emitProposal(proposal);
       return { navrh: proposal.id, zaznam: label, poznamka: truncate(proposal.note, 200), stav: PENDING_NOTE };
+    },
+  },
+  {
+    name: 'calendar_add_event',
+    description:
+      'Přidá událost do kalendáře přihlášeného uživatele (jen do jeho vlastního). Provede se hned; uživatel ji může vrátit ' +
+      'tlačítkem Vrátit zpět na kartě. Použij, když o to uživatel žádá („dej mi do kalendáře…“, „naplánuj schůzku…“). ' +
+      'Datum počítej podle data z kontextu. Bez času je událost celodenní. Když se překrývá s jinou, řekni to.',
+    input: calendarAddInput,
+    label: (input) => `Přidávám do kalendáře „${truncate(input.title, 40)}“`,
+    async run(input, ctx) {
+      countCalendarChange(ctx, 'add');
+      try {
+        const times = buildEventTimes({
+          date: input.date,
+          startTime: input.start_time,
+          endTime: input.end_time,
+          durationMinutes: input.duration_minutes,
+          allDay: !input.start_time,
+          endDate: input.end_date,
+        });
+        const created = await ctx.api.request('POST', '/api/calendar-events', {
+          title: input.title.trim(),
+          ...times,
+          description: input.description?.trim() ?? '',
+        });
+        const after = snapshot(created);
+        const overlaps = overlapping(await listEvents(ctx.api), after, created.id);
+        const card = calendarCard('create', { event: created, after, reason: input.reason, overlaps });
+        ctx.emitCalendar(card);
+        return {
+          udalost_id: created.id,
+          nazev: card.title,
+          kdy: card.when,
+          prekryva_se_s: card.overlaps,
+          stav: 'Přidáno do kalendáře. Uživatel to může vrátit tlačítkem Vrátit zpět na kartě.',
+        };
+      } catch (error) {
+        throw asToolError(error);
+      }
+    },
+  },
+  {
+    name: 'calendar_update_event',
+    description:
+      'Upraví událost v kalendáři uživatele: název, den, čas, celodenní, popis. Provede se hned; karta ukáže staré a nové ' +
+      'hodnoty a uživatel může změnu vrátit tlačítkem Vrátit zpět. id události zjisti nástrojem calendar. ' +
+      'Přesunutá událost si nechá délku, pokud nezadáš konec.',
+    input: calendarUpdateInput,
+    label: () => 'Upravuji událost v kalendáři',
+    async run(input, ctx) {
+      countCalendarChange(ctx, 'update');
+      try {
+        const event = await findEvent(ctx.api, input.event_id);
+        if (!event) throw new ToolError('Tuto událost v kalendáři uživatele nevidím – najdi ji znovu přes calendar.');
+        const before = snapshot(event);
+        const timesChange = input.date || input.start_time || input.end_time || input.all_day !== undefined;
+        const times = timesChange
+          ? editedTimes(event, { date: input.date, startTime: input.start_time, endTime: input.end_time, allDay: input.all_day })
+          : { start: event.start, end: event.end, allDay: Boolean(event.allDay) };
+        const payload = {
+          title: input.title?.trim() ?? before.title,
+          ...times,
+          description: input.description === undefined ? before.description : (input.description ?? '').trim(),
+        };
+        const after = snapshot({ ...event, ...payload });
+        const card = calendarCard('update', { event, before, after, reason: input.reason });
+        if (card.changes.length === 0) throw new ToolError('Událost už takhle vypadá – není co měnit.');
+        await ctx.api.request('PUT', `/api/calendar-events/${event.id}`, payload);
+        const overlaps = timesChange ? overlapping(await listEvents(ctx.api), after, event.id) : [];
+        if (overlaps.length) card.overlaps = calendarCard('create', { event, after, overlaps }).overlaps;
+        ctx.emitCalendar(card);
+        return {
+          udalost_id: event.id,
+          zmeny: card.changes.map((change) => `${change.label}: ${change.fromText} → ${change.toText}`),
+          prekryva_se_s: card.overlaps,
+          stav: 'Upraveno. Uživatel může změnu vrátit tlačítkem Vrátit zpět na kartě.',
+        };
+      } catch (error) {
+        throw asToolError(error);
+      }
+    },
+  },
+  {
+    name: 'calendar_delete_event',
+    description:
+      'Navrhne smazat událost z kalendáře uživatele. NESMAŽE ji: uživatel smazání potvrdí tlačítkem Smazat na kartě ' +
+      '(a i pak ho může vrátit). Maž jen to, oč uživatel výslovně žádá; když není jasné, kterou událost myslí, zeptej se. ' +
+      'id události zjisti nástrojem calendar.',
+    input: calendarDeleteInput,
+    label: () => 'Připravuji smazání události',
+    async run(input, ctx) {
+      countCalendarChange(ctx, 'delete');
+      try {
+        const event = await findEvent(ctx.api, input.event_id);
+        if (!event) throw new ToolError('Tuto událost v kalendáři uživatele nevidím – najdi ji znovu přes calendar.');
+        const card = calendarCard('delete', { event, before: snapshot(event), reason: input.reason });
+        ctx.emitCalendar(card);
+        return {
+          udalost_id: event.id,
+          nazev: card.title,
+          kdy: card.when,
+          stav: 'Čeká na potvrzení: smaže se, až uživatel klikne na Smazat. Zatím se nic nesmazalo.',
+        };
+      } catch (error) {
+        throw asToolError(error);
+      }
     },
   },
   {

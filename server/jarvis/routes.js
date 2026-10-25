@@ -30,6 +30,7 @@ import {
 } from './attachments.js';
 import { recordAiUsage } from '../finance/usage.js';
 import { ProposalError, applyProposal, describeProposal } from './proposals.js';
+import { CalendarError, calendarOutcomes, cardState, decideCalendarCard } from './calendarActions.js';
 
 const MAX_MESSAGE_LENGTH = 8000;
 const HOURLY_LIMIT = Number(process.env.JARVIS_HOURLY_LIMIT) > 0 ? Number(process.env.JARVIS_HOURLY_LIMIT) : 60;
@@ -358,6 +359,56 @@ export function registerJarvisRoutes(app, { authenticateToken, pool, dataDir, po
     }
   });
 
+  // A click on a calendar card: undo an addition or an edit, confirm or keep a
+  // proposed deletion, or restore a deleted event. Through the calendar API
+  // as the AI agent acting for the user; the outcome joins the transcript.
+  app.post('/api/jarvis/conversations/:id/calendar/:cardId', authenticateToken, async (req, res) => {
+    const userId = Number(req.user.id);
+    const action = req.body?.action;
+    if (!['undo', 'confirm', 'keep'].includes(action)) return res.status(400).json({ error: 'Neznámá akce.' });
+    if (!UUID_PATTERN.test(req.params.id)) return res.status(404).json({ error: 'Konverzace nenalezena.' });
+    if (running.has(req.params.id)) return res.status(409).json({ error: 'Počkejte, až Jarvis dokončí odpověď.' });
+
+    let conversation;
+    try {
+      conversation = await store.get(req.params.id, userId);
+    } catch (error) {
+      console.error('Jarvis: loading a conversation failed:', error);
+      return res.status(500).json({ error: 'Nepodařilo se načíst konverzaci.' });
+    }
+    if (!conversation) return res.status(404).json({ error: 'Konverzace nenalezena.' });
+    const transcript = conversation.transcript ?? [];
+    const card = transcript.find((item) => item.type === 'calendar' && item.card?.id === req.params.cardId)?.card;
+    if (!card) return res.status(404).json({ error: 'Karta nenalezena.' });
+    const state = cardState(card, transcript.filter((item) => item.type === 'calendar_status'));
+
+    running.add(conversation.id);
+    try {
+      const api = createApiClient({
+        baseUrl,
+        token: signAgentToken(req.user),
+        changesetId: `jarvis-${conversation.id.slice(0, 8)}-${card.id.slice(0, 8)}-${action}`,
+        note: `Jarvis, kalendář (${action === 'undo' ? 'vráceno uživatelem' : action === 'confirm' ? 'smazání potvrzeno uživatelem' : 'ponecháno'}): ${truncate(card.title, 120)}`,
+      });
+      let outcome;
+      try {
+        outcome = await decideCalendarCard(card, state, action, api);
+      } catch (error) {
+        if (error instanceof CalendarError) return res.status(409).json({ error: error.message });
+        console.error('Jarvis: a calendar card action failed:', error?.message ?? error);
+        outcome = { status: 'failed', error: 'Kalendář se nepodařilo změnit.' };
+      }
+      const item = { type: 'calendar_status', id: card.id, ...outcome, at: new Date().toISOString() };
+      await store.append(conversation.id, userId, { messages: [], transcript: [item], usage: zeroUsage() });
+      res.json(item);
+    } catch (error) {
+      console.error('Jarvis: recording a calendar decision failed:', error);
+      res.status(500).json({ error: 'Rozhodnutí se nepodařilo uložit.' });
+    } finally {
+      running.delete(conversation.id);
+    }
+  });
+
   // One user message in, the answer streamed back as Server-Sent Events:
   // conversation, text_start/text, thinking, tool/tool_done, action, notice,
   // error, done.
@@ -428,7 +479,7 @@ export function registerJarvisRoutes(app, { authenticateToken, pool, dataDir, po
               user,
               req.body?.context,
               attachments.map((attachment) => attachment.name),
-              proposalOutcomes(conversation?.transcript)
+              [...proposalOutcomes(conversation?.transcript), ...calendarOutcomes(conversation?.transcript)]
             ),
           },
           ...attachments.map(attachmentBlock),
@@ -470,6 +521,11 @@ export function registerJarvisRoutes(app, { authenticateToken, pool, dataDir, po
         emitProposal: (proposal) => {
           pendingActions.push({ type: 'proposal', proposal });
           emit('proposal', proposal);
+        },
+        // A calendar change (made, or a deletion awaiting the user's click).
+        emitCalendar: (card) => {
+          pendingActions.push({ type: 'calendar', card });
+          emit('calendar', card);
         },
       };
 

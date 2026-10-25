@@ -1044,6 +1044,96 @@
   color: #b45309;
 }
 
+/* ---------- calendar changes ---------- */
+
+.jarvis-calendar-card {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 10px 12px;
+  border: 1px solid color-mix(in srgb, #16a34a 40%, var(--jarvis-border));
+  border-radius: 12px;
+  background: color-mix(in srgb, #16a34a 5%, var(--jarvis-surface));
+}
+
+/* A deletion waiting for the click: stands out, but is not alarming. */
+.jarvis-calendar-card--delete.jarvis-calendar-card--pending {
+  border-color: color-mix(in srgb, #dc2626 45%, var(--jarvis-border));
+  background: color-mix(in srgb, #dc2626 5%, var(--jarvis-surface));
+}
+
+.jarvis-calendar-card--undone,
+.jarvis-calendar-card--kept,
+.jarvis-calendar-card--deleted {
+  border-color: var(--jarvis-border);
+  background: var(--jarvis-surface);
+}
+
+.jarvis-calendar-card--changed,
+.jarvis-calendar-card--gone,
+.jarvis-calendar-card--failed {
+  border-color: color-mix(in srgb, #d97706 50%, var(--jarvis-border));
+  background: color-mix(in srgb, #d97706 6%, var(--jarvis-surface));
+}
+
+.jarvis-calendar-when {
+  font-size: 0.86rem;
+  font-weight: 600;
+}
+
+.jarvis-calendar-overlap {
+  font-size: 0.78rem;
+  color: #b45309;
+}
+
+.jarvis-calendar-delete,
+.jarvis-calendar-undo {
+  padding: 6px 14px;
+  border-radius: 9px;
+  font: inherit;
+  font-size: 0.82rem;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.jarvis-calendar-delete {
+  border: 1px solid #dc2626;
+  background: #dc2626;
+  color: #ffffff;
+}
+
+.jarvis-calendar-undo {
+  border: 1px solid var(--jarvis-border);
+  background: var(--jarvis-surface);
+  color: inherit;
+}
+
+.jarvis-calendar-undo:hover:not(:disabled) {
+  border-color: color-mix(in srgb, var(--jarvis-accent) 55%, transparent);
+}
+
+.jarvis-calendar-delete:disabled,
+.jarvis-calendar-undo:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+.jarvis-calendar-status--undone,
+.jarvis-calendar-status--kept,
+.jarvis-calendar-status--deleted {
+  color: var(--jarvis-muted);
+}
+
+.jarvis-calendar-status--restored {
+  color: #15803d;
+}
+
+.jarvis-calendar-status--changed,
+.jarvis-calendar-status--gone,
+.jarvis-calendar-status--failed {
+  color: #b45309;
+}
+
 /* ---------- voice settings ---------- */
 
 .jarvis-voice-settings {

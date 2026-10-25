@@ -4,6 +4,8 @@ import { jarvisApi } from './jarvisApi';
 import type {
   AttachmentKind,
   AttachmentSummary,
+  CalendarDecision,
+  JarvisCalendarCard,
   ConversationSummary,
   JarvisEvent,
   JarvisOpenAction,
@@ -15,6 +17,7 @@ import type {
 } from './jarvisApi';
 import { ATTACHMENT_ACCEPT, MAX_ATTACHMENTS, MAX_ATTACHMENT_BYTES, formatSize, namePastedImage, shrinkImage } from './attachmentFiles';
 import { useJarvisVoice } from './useJarvisVoice';
+import { announceCalendarChange } from './calendarEvents';
 import { PAUSE_OPTIONS, SPEED_OPTIONS, formatSpeed, loadVoiceSettings, saveVoiceSettings } from './voiceSettings';
 import type { VoiceSettings } from './voiceSettings';
 import { useJarvisFocus } from './jarvisFocus';
@@ -72,6 +75,7 @@ interface Turn {
   notices: string[];
   actions: JarvisOpenAction[];
   proposals: JarvisProposal[];
+  calendar: JarvisCalendarCard[];
 }
 
 // The flat transcript, grouped into one block per question.
@@ -79,7 +83,7 @@ function groupTurns(items: TranscriptItem[]): Turn[] {
   const turns: Turn[] = [];
   for (const item of items) {
     if (item.type === 'question') {
-      turns.push({ question: item, steps: [], answer: null, notices: [], actions: [], proposals: [] });
+      turns.push({ question: item, steps: [], answer: null, notices: [], actions: [], proposals: [], calendar: [] });
       continue;
     }
     const turn = turns[turns.length - 1];
@@ -89,6 +93,7 @@ function groupTurns(items: TranscriptItem[]): Turn[] {
     else if (item.type === 'notice') turn.notices.push(item.text);
     else if (item.type === 'action') turn.actions.push(item.action);
     else if (item.type === 'proposal') turn.proposals.push(item.proposal);
+    else if (item.type === 'calendar') turn.calendar.push(item.card);
   }
   return turns;
 }
@@ -98,6 +103,7 @@ interface LiveTurn {
   voice: boolean;
   attachments: AttachmentSummary[];
   proposals: JarvisProposal[];
+  calendar: JarvisCalendarCard[];
   steps: Array<{ id: string; label: string; done: boolean; ok: boolean }>;
   text: string;
   thinking: string;
@@ -183,6 +189,94 @@ function ProposalCard({
           {disabled && !deciding && <small>Potvrdit půjde, až Jarvis dopíše odpověď.</small>}
         </div>
       )}
+    </div>
+  );
+}
+
+const CALENDAR_BADGE: Record<JarvisCalendarCard['action'], string> = {
+  create: 'Přidáno do kalendáře',
+  update: 'Upraveno v kalendáři',
+  delete: 'Smazat z kalendáře?',
+};
+
+const CALENDAR_STATUS_TEXT: Record<CalendarDecision['status'], string> = {
+  undone: 'Vráceno zpět',
+  deleted: 'Smazáno',
+  kept: 'Ponecháno',
+  restored: 'Obnoveno',
+  changed: 'Nezměněno',
+  gone: 'Událost už v kalendáři není',
+  failed: 'Nepodařilo se',
+};
+
+// A calendar change: added or edited (with undo), or a deletion waiting for
+// the user's click (and undoable after it).
+function CalendarCard({
+  card,
+  decision,
+  busy,
+  disabled,
+  onAction,
+}: {
+  card: JarvisCalendarCard;
+  decision?: CalendarDecision;
+  busy: boolean;
+  disabled: boolean;
+  onAction: (action: 'undo' | 'confirm' | 'keep') => void;
+}) {
+  const state = decision?.status ?? (card.action === 'delete' ? 'pending' : 'done');
+  const canUndo = state === 'done' || state === 'deleted';
+  return (
+    <div className={`jarvis-calendar-card jarvis-calendar-card--${card.action} jarvis-calendar-card--${state}`}>
+      <div className="jarvis-proposal-head">
+        <span className="jarvis-proposal-badge">{CALENDAR_BADGE[card.action]}</span>
+        <strong>{card.title}</strong>
+      </div>
+      {card.changes && card.changes.length > 0 ? (
+        <dl className="jarvis-proposal-changes">
+          {card.changes.map((change) => (
+            <div key={change.label} className="jarvis-proposal-change">
+              <dt>{change.label}</dt>
+              <dd>
+                <span className="jarvis-proposal-from">{change.fromText}</span>
+                <span className="jarvis-proposal-arrow" aria-label="změněno na">→</span>
+                <span className="jarvis-proposal-to">{change.toText}</span>
+              </dd>
+            </div>
+          ))}
+        </dl>
+      ) : (
+        <div className="jarvis-calendar-when">{card.when}</div>
+      )}
+      {card.overlaps && card.overlaps.length > 0 && (
+        <div className="jarvis-calendar-overlap">Překrývá se s: {card.overlaps.join(', ')}</div>
+      )}
+      {card.reason && <p className="jarvis-proposal-reason">{card.reason}</p>}
+      <div className="jarvis-proposal-buttons">
+        {decision && decision.status !== 'deleted' && (
+          <span className={`jarvis-proposal-status jarvis-calendar-status--${decision.status}`}>
+            {CALENDAR_STATUS_TEXT[decision.status]}
+            {decision.error ? ` – ${decision.error}` : ''}
+          </span>
+        )}
+        {state === 'deleted' && <span className="jarvis-proposal-status jarvis-calendar-status--deleted">Smazáno</span>}
+        {state === 'pending' && (
+          <>
+            <button type="button" className="jarvis-calendar-delete" onClick={() => onAction('confirm')} disabled={disabled || busy}>
+              {busy ? 'Mažu…' : 'Smazat'}
+            </button>
+            <button type="button" className="jarvis-proposal-reject" onClick={() => onAction('keep')} disabled={disabled || busy}>
+              Ponechat
+            </button>
+          </>
+        )}
+        {canUndo && (
+          <button type="button" className="jarvis-calendar-undo" onClick={() => onAction('undo')} disabled={disabled || busy}>
+            {busy ? 'Vracím…' : state === 'deleted' ? 'Vrátit zpět (obnovit)' : 'Vrátit zpět'}
+          </button>
+        )}
+        {disabled && !busy && state === 'pending' && <small>Smazat půjde, až Jarvis dopíše odpověď.</small>}
+      </div>
     </div>
   );
 }
@@ -734,6 +828,7 @@ export default function JarvisPanel({ open, onOpen, onClose, viewLabel, launcher
       voice: spoken,
       attachments: sending.map((attachment) => ({ name: attachment.name, kind: attachment.kind ?? 'text' })),
       proposals: [],
+      calendar: [],
       steps: [],
       text: '',
       thinking: '',
@@ -773,6 +868,11 @@ export default function JarvisPanel({ open, onOpen, onClose, viewLabel, launcher
           break;
         case 'proposal':
           setLive((turn) => (turn ? { ...turn, proposals: [...turn.proposals, event.data] } : turn));
+          break;
+        case 'calendar':
+          setLive((turn) => (turn ? { ...turn, calendar: [...turn.calendar, event.data] } : turn));
+          // Additions and edits are already in the calendar.
+          if (event.data.action !== 'delete') announceCalendarChange();
           break;
         case 'notice':
           setLive((turn) => (turn ? { ...turn, notices: [...turn.notices, event.data.text] } : turn));
@@ -857,6 +957,46 @@ export default function JarvisPanel({ open, onOpen, onClose, viewLabel, launcher
       });
     }
   };
+
+  const calendarDecisions = useMemo(() => {
+    const map = new Map<string, CalendarDecision>();
+    for (const item of transcript) if (item.type === 'calendar_status') map.set(item.id, item);
+    return map;
+  }, [transcript]);
+
+  const decideCalendar = async (cardId: string, action: 'undo' | 'confirm' | 'keep') => {
+    if (!conversationId) return;
+    setDeciding((current) => new Set(current).add(cardId));
+    try {
+      const result = await jarvisApi.decideCalendar(conversationId, cardId, action);
+      setTranscript((items) => [...items, result]);
+      announceCalendarChange();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Kalendář se nepodařilo změnit.');
+    } finally {
+      setDeciding((current) => {
+        const next = new Set(current);
+        next.delete(cardId);
+        return next;
+      });
+    }
+  };
+
+  const renderCalendar = (cards: JarvisCalendarCard[], live: boolean) =>
+    cards.length === 0 ? null : (
+      <div className="jarvis-proposals">
+        {cards.map((card) => (
+          <CalendarCard
+            key={card.id}
+            card={card}
+            decision={calendarDecisions.get(card.id)}
+            busy={deciding.has(card.id)}
+            disabled={live || busy}
+            onAction={(action) => void decideCalendar(card.id, action)}
+          />
+        ))}
+      </div>
+    );
 
   // Several pending proposals of one answer, confirmed one after another.
   const applyAll = async (proposals: JarvisProposal[]) => {
@@ -1044,7 +1184,7 @@ export default function JarvisPanel({ open, onOpen, onClose, viewLabel, launcher
           <div className="jarvis-welcome">
             <JarvisMark large />
             <div className="jarvis-welcome-title">Na co se chcete zeptat?</div>
-            <p>Hledám v klientech, partnerech, tipařích a zakázkách, kam máte přístup, ve vašem kalendáři, v nahraných dokumentech i v rejstříku firem ARES. Změny jen navrhuji – provedou se, až je potvrdíte.</p>
+            <p>Hledám v klientech, partnerech, tipařích a zakázkách, kam máte přístup, ve vašem kalendáři, v nahraných dokumentech i v rejstříku firem ARES. Změny dat jen navrhuji – provedou se, až je potvrdíte; události v kalendáři umím přidat i přesunout (a vrátit zpět).</p>
             {voice.canListen && (
               <p className="jarvis-welcome-voice">
                 {Icon.micSmall} Ptát se můžete i hlasem: klikněte na mikrofon a mluvte, odpovím nahlas.
@@ -1092,6 +1232,7 @@ export default function JarvisPanel({ open, onOpen, onClose, viewLabel, launcher
               />
             )}
             {renderProposals(turn.proposals, false)}
+            {renderCalendar(turn.calendar, false)}
             {turn.notices.map((notice, noticeIndex) => (
               <div key={noticeIndex} className="jarvis-notice">{notice}</div>
             ))}
@@ -1134,6 +1275,7 @@ export default function JarvisPanel({ open, onOpen, onClose, viewLabel, launcher
               </div>
             )}
             {renderProposals(live.proposals, true)}
+            {renderCalendar(live.calendar, true)}
             {live.notices.map((notice, noticeIndex) => (
               <div key={noticeIndex} className="jarvis-notice">{notice}</div>
             ))}

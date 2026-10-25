@@ -47,6 +47,28 @@ export interface ProposalDecision {
   at: string;
 }
 
+// A change Jarvis made to (or proposes for) the user's calendar.
+export interface JarvisCalendarCard {
+  id: string;
+  action: 'create' | 'update' | 'delete';
+  eventId: number;
+  title: string;
+  when: string;
+  changes?: Array<{ label: string; fromText: string; toText: string }>;
+  overlaps?: string[];
+  reason?: string;
+}
+
+export type CalendarCardStatus = 'undone' | 'deleted' | 'kept' | 'restored' | 'changed' | 'gone' | 'failed';
+
+export interface CalendarDecision {
+  type: 'calendar_status';
+  id: string;
+  status: CalendarCardStatus;
+  error?: string;
+  at: string;
+}
+
 export type TranscriptItem =
   | { type: 'question'; text: string; at?: string; voice?: boolean; attachments?: AttachmentSummary[] }
   | { type: 'answer'; text: string; model?: string }
@@ -55,7 +77,9 @@ export type TranscriptItem =
   | { type: 'notice'; text: string }
   | { type: 'action'; action: JarvisOpenAction }
   | { type: 'proposal'; proposal: JarvisProposal }
-  | ProposalDecision;
+  | ProposalDecision
+  | { type: 'calendar'; card: JarvisCalendarCard }
+  | CalendarDecision;
 
 export type AttachmentKind = 'image' | 'pdf' | 'text';
 
@@ -123,6 +147,7 @@ export type JarvisEvent =
   | { event: 'tool_done'; data: { id: string; ok: boolean } }
   | { event: 'action'; data: JarvisOpenAction }
   | { event: 'proposal'; data: JarvisProposal }
+  | { event: 'calendar'; data: JarvisCalendarCard }
   | { event: 'notice'; data: { text: string } }
   | { event: 'error'; data: { message: string } }
   | { event: 'done'; data: { stopReason: string } };
@@ -178,6 +203,9 @@ export const jarvisApi = {
   conversation: (id: string) =>
     apiGet<{ id: string; title: string | null; transcript: TranscriptItem[] }>(`/api/jarvis/conversations/${id}`),
   deleteConversation: (id: string) => apiDelete(`/api/jarvis/conversations/${id}`),
+  // Undo a calendar change, or confirm / keep a proposed deletion.
+  decideCalendar: (conversationId: string, cardId: string, action: 'undo' | 'confirm' | 'keep') =>
+    apiPost<CalendarDecision>(`/api/jarvis/conversations/${conversationId}/calendar/${cardId}`, { action }),
   // Confirm (apply) or turn down a change Jarvis proposed.
   decideProposal: (conversationId: string, proposalId: string, decision: 'apply' | 'reject') =>
     apiPost<ProposalDecision>(`/api/jarvis/conversations/${conversationId}/proposals/${proposalId}`, { decision }),
