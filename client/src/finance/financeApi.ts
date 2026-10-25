@@ -3,8 +3,10 @@ import { apiDelete, apiGet, apiPost, apiPut } from '../utils/api';
 export type BillingCycle = 'monthly' | 'yearly' | 'one_time' | 'usage';
 export type ExpenseStatus = 'active' | 'planned' | 'paused' | 'cancelled';
 export type Currency = 'CZK' | 'USD' | 'EUR';
-export type CostSource = 'anthropic' | 'openai';
-export type Provider = CostSource | 'brave';
+/** A provider whose real bills the server reads (server/finance/providers.js). */
+export type CostSource = 'anthropic' | 'openai' | 'railway' | 'cloudflare' | 'google';
+/** A provider in the app's own AI usage log. */
+export type Provider = 'anthropic' | 'openai' | 'brave';
 export type UsageFeature = 'jarvis' | 'jarvis_ocr' | 'chat' | 'voice_stt' | 'voice_tts' | 'web_search';
 
 export interface Expense {
@@ -51,14 +53,59 @@ export interface ProviderCostRow {
   provider: CostSource;
   month: string;
   lineItem: string;
-  amountUsd: number;
+  /** In `currency`, the currency the provider bills in. */
+  amount: number;
+  currency: string;
+}
+
+export interface RailwayPeriod {
+  workspace: string;
+  plan: string | null;
+  periodStart: string | null;
+  periodEnd: string | null;
+  /** Usage so far this period, in USD, before VAT and before the plan's credit. */
+  currentUsage: number;
+  nextInvoiceDate: string | null;
+  /** The next invoice as it stands now, VAT included. */
+  nextInvoiceTotal: number | null;
+  currency: string;
 }
 
 export interface ProviderStatus {
   label: string;
+  envKeys: string[];
   configured: boolean;
+  /** Last successful read of the bills. */
   fetchedAt: string | null;
+  checkedAt: string | null;
   error: string | null;
+  details: { workspaces?: RailwayPeriod[] } | null;
+}
+
+export interface BraveQuota {
+  limit: number;
+  remaining: number;
+  used: number;
+  resetsAt: string | null;
+  at: string;
+}
+
+export interface BrevoPlan {
+  type: string | null;
+  credits: number | null;
+  creditsType: string | null;
+  startDate: string | null;
+  endDate: string | null;
+}
+
+export interface DomainCheck {
+  catalogKey: string;
+  domain: string;
+  checkedAt: string | null;
+  error: string | null;
+  registrar?: string | null;
+  registeredAt?: string | null;
+  expiresAt?: string | null;
 }
 
 export interface KeyStatus {
@@ -80,6 +127,11 @@ export interface FinanceOverview {
   usage: { firstLoggedAt: string | null; rows: UsageRow[] };
   providers: Record<CostSource, ProviderStatus>;
   providerCosts: ProviderCostRow[];
+  checks: {
+    brave: { configured: boolean; quota: BraveQuota | null };
+    brevo: { configured: boolean; checkedAt: string | null; error: string | null; plans: BrevoPlan[] | null };
+    domains: DomainCheck[];
+  };
 }
 
 export const financeApi = {

@@ -154,26 +154,43 @@ API types, normalisers, `mapXEntityUpdates`, row mirrors and `entitySync.ts`.
 ## Finance overview (`server/finance/`, Analýza › Finance)
 
 Admin-only screen (`FinanceView.tsx`, `client/src/finance/`) listing everything
-the app costs. Three kinds of data (`server/finance/store.js`, Postgres or
-`server/data/finance.json` in the JSON dev backend):
+the app costs, each line marked **Napojeno** (number from the provider),
+**Pevná cena** (confirmed from an invoice) or **Nepotvrzeno** (estimate).
+Data (`server/finance/store.js`, Postgres or `server/data/finance.json`):
 
 - **`finance_expenses`** — the cost list admins edit. `catalog.js` lists every
-  service found in the code (hosting, domain, AI, mail, maps, R2, …) with an
-  estimated price; the screen offers to import the ones not yet in the list.
-  A new paid service or API key belongs in `CATALOG`, with its env var names
-  (names only — the API reports set/unset, never values).
+  service found in the code with an estimated price; the screen offers to
+  import the missing ones. A new paid service or API key belongs in `CATALOG`,
+  with its env var names (names only — the API reports set/unset, never values)
+  and `costSource` if a connector can read its bills.
+- **`finance_provider_costs`** — real bills per day and line item, **in the
+  provider's own currency** (`amount` + `currency`; Google may bill in CZK).
+  Connectors in `providers.js`, each with its own read-only credential:
+  Anthropic `cost_report` (`ANTHROPIC_ADMIN_KEY`, organisations only, not an
+  "Individual Org"), OpenAI `organization/costs` (`OPENAI_ADMIN_KEY`), Railway
+  GraphQL invoices + open period (`RAILWAY_API_TOKEN`, an account token;
+  invoice `total` is in cents with VAT), Cloudflare `billable-usage`
+  (`CLOUDFLARE_API_TOKEN` with Billing Read + `CLOUDFLARE_ACCOUNT_ID`), Google
+  Cloud via the BigQuery billing export (`google-billing.js`,
+  `GOOGLE_BILLING_SERVICE_ACCOUNT` + `GOOGLE_BILLING_EXPORT_TABLE`; signs its
+  own JWT, no Google library). Re-read when the screen opens if older than
+  3 h; the first successful read takes 12 months. One provider's bill is
+  counted once even when several cost lines point to it (Railway plan + usage).
+- **`finance_state`** — cached documents: each connector's last sync and open
+  period, the Brave quota (read from the `X-RateLimit-*` headers of every
+  search, `recordBraveQuota`), the Brevo plan (`/v3/account`) and domain
+  expiry from public RDAP (`checks.js`; `rdap.nic.cz` for .cz). The screen
+  warns when a domain is within 30 days of expiry or already expired.
 - **`finance_ai_usage`** — one row per AI call, priced by `pricing.js`. **Every
   new call to Anthropic, OpenAI or Brave must call `recordAiUsage`**
-  (`finance/usage.js`; fire-and-forget, never throws), or its cost is missing
-  from the screen. Update `pricing.js` when a model or price changes; an
-  unknown model is logged without a price and flagged on the screen.
-- **`finance_provider_costs`** — the real bills, read from Anthropic's
-  `cost_report` and OpenAI's `organization/costs` with `ANTHROPIC_ADMIN_KEY` /
-  `OPENAI_ADMIN_KEY` (admin keys, not the call keys). Re-read when the screen
-  opens if older than 3 h; the first read takes 12 months.
+  (`finance/usage.js`; fire-and-forget, never throws). It breaks costs down per
+  feature; once a provider is connected its bill replaces the estimate.
 
-The two telemetry tables are in `AUDIT_EXCLUDED_TABLES`; `finance_expenses` is
-logged. CZK conversion uses ČNB's daily fixing (`rates.js`, fixed fallback).
+The telemetry tables (`finance_ai_usage`, `finance_provider_costs`,
+`finance_state`) are in `AUDIT_EXCLUDED_TABLES`; `finance_expenses` is logged.
+CZK conversion uses ČNB's daily fixing (`rates.js`, fixed fallback). To test
+a connector locally, pass its token as an env var to a wrapper around
+`server.js` — never write tokens into tracked files.
 
 ## Jarvis, the AI agent (`server/jarvis/`, `client/src/jarvis/`)
 

@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import type { Provider } from './financeApi';
 import { CHART_PROVIDERS, PROVIDER_LABELS, formatCzk, monthLabel } from './financeMath';
-import type { ProviderMonth } from './financeMath';
+import type { Measured } from './financeMath';
 
 // ---------- monthly cost by category ----------
 
@@ -40,7 +40,7 @@ export function CategoryBars({ bars }: { bars: CategoryBar[] }) {
 
 export interface AiMonth {
   month: string;
-  values: Partial<Record<Provider, ProviderMonth & { czk: number }>>;
+  values: Partial<Record<Provider, Measured>>;
 }
 
 const WIDTH = 720;

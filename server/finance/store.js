@@ -2,8 +2,12 @@
 //   finance_expenses        the cost list the admin keeps (one row per service)
 //   finance_ai_usage        one row per AI call the app made, with its tokens
 //                           and an estimated price (usage.js writes it)
-//   finance_provider_costs  what Anthropic / OpenAI billed per day and line
-//                           item, copied from their cost APIs (providers.js)
+//   finance_provider_costs  what each provider billed per day and line item,
+//                           in the provider's currency, copied from its
+//                           billing API (providers.js)
+//   finance_state           small cached documents: each connector's last
+//                           sync, Railway's open billing period, the Brave
+//                           quota, the Brevo plan, domain expiry dates
 //
 // Postgres in production; a JSON file next to the dev store otherwise.
 
@@ -58,9 +62,29 @@ export async function installFinanceSchema(client) {
       day DATE NOT NULL,
       line_item TEXT NOT NULL,
       model TEXT,
-      amount_usd NUMERIC(16, 6) NOT NULL DEFAULT 0,
+      amount NUMERIC(16, 6) NOT NULL DEFAULT 0,
+      currency TEXT NOT NULL DEFAULT 'USD',
       fetched_at TIMESTAMPTZ NOT NULL DEFAULT now(),
       PRIMARY KEY (provider, day, line_item)
+    )
+  `);
+  // The first version stored dollars only (amount_usd). Google can bill in
+  // CZK or EUR, so the amount now carries its own currency.
+  await client.query(`
+    DO $$
+    BEGIN
+      IF EXISTS (SELECT 1 FROM information_schema.columns
+                  WHERE table_schema = 'public' AND table_name = 'finance_provider_costs' AND column_name = 'amount_usd') THEN
+        ALTER TABLE finance_provider_costs RENAME COLUMN amount_usd TO amount;
+      END IF;
+    END $$
+  `);
+  await client.query(`ALTER TABLE finance_provider_costs ADD COLUMN IF NOT EXISTS currency TEXT NOT NULL DEFAULT 'USD'`);
+  await client.query(`
+    CREATE TABLE IF NOT EXISTS finance_state (
+      key TEXT PRIMARY KEY,
+      value JSONB NOT NULL,
+      updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
     )
   `);
 }
@@ -104,14 +128,14 @@ const toExpense = (row) => {
 };
 
 // Sums duplicate (day, line item) rows: a provider can split one line item
-// across projects or workspaces.
+// across projects or workspaces. A provider bills in one currency.
 const mergeCostRows = (rows) => {
   const merged = new Map();
   for (const row of rows) {
     const key = `${row.day}|${row.lineItem}`;
     const current = merged.get(key);
-    if (current) current.amountUsd += row.amountUsd;
-    else merged.set(key, { ...row });
+    if (current) current.amount += row.amount;
+    else merged.set(key, { ...row, currency: row.currency ?? 'USD' });
   }
   return [...merged.values()];
 };
@@ -219,20 +243,20 @@ export function createPgFinanceStore(pool) {
       try {
         await client.query('BEGIN');
         await client.query(
-          `UPDATE finance_provider_costs SET amount_usd = 0, fetched_at = now()
+          `UPDATE finance_provider_costs SET amount = 0, fetched_at = now()
             WHERE provider = $1 AND day >= $2::date AND day <= $3::date`,
           [provider, fromDay, toDay]
         );
         const merged = mergeCostRows(rows).map((row) => ({
-          day: row.day, line_item: row.lineItem, model: row.model, amount: row.amountUsd,
+          day: row.day, line_item: row.lineItem, model: row.model ?? null, amount: row.amount, currency: row.currency,
         }));
         if (merged.length) {
           await client.query(
-            `INSERT INTO finance_provider_costs (provider, day, line_item, model, amount_usd, fetched_at)
-             SELECT $1, d.day, d.line_item, d.model, d.amount, now()
-               FROM jsonb_to_recordset($2::jsonb) AS d(day date, line_item text, model text, amount numeric)
+            `INSERT INTO finance_provider_costs (provider, day, line_item, model, amount, currency, fetched_at)
+             SELECT $1, d.day, d.line_item, d.model, d.amount, d.currency, now()
+               FROM jsonb_to_recordset($2::jsonb) AS d(day date, line_item text, model text, amount numeric, currency text)
              ON CONFLICT (provider, day, line_item)
-             DO UPDATE SET amount_usd = EXCLUDED.amount_usd, model = EXCLUDED.model, fetched_at = now()`,
+             DO UPDATE SET amount = EXCLUDED.amount, currency = EXCLUDED.currency, model = EXCLUDED.model, fetched_at = now()`,
             [provider, JSON.stringify(merged)]
           );
         }
@@ -248,21 +272,36 @@ export function createPgFinanceStore(pool) {
     async providerCostSummary(sinceDay) {
       const [{ rows }, synced] = await Promise.all([
         pool.query(
-          `SELECT provider, to_char(day, 'YYYY-MM') AS month, line_item,
-                  SUM(amount_usd)::float8 AS amount_usd
+          `SELECT provider, to_char(day, 'YYYY-MM') AS month, line_item, currency,
+                  SUM(amount)::float8 AS amount
              FROM finance_provider_costs
             WHERE day >= $1::date
-            GROUP BY 1, 2, 3
-           HAVING SUM(amount_usd) <> 0
+            GROUP BY 1, 2, 3, 4
+           HAVING SUM(amount) <> 0
             ORDER BY 2, 1`,
           [sinceDay]
         ),
         pool.query(`SELECT provider, MAX(fetched_at) AS fetched_at FROM finance_provider_costs GROUP BY provider`),
       ]);
       return {
-        rows: rows.map((row) => ({ provider: row.provider, month: row.month, lineItem: row.line_item, amountUsd: row.amount_usd })),
+        rows: rows.map((row) => ({
+          provider: row.provider, month: row.month, lineItem: row.line_item, amount: row.amount, currency: row.currency,
+        })),
         fetchedAt: Object.fromEntries(synced.rows.map((row) => [row.provider, row.fetched_at])),
       };
+    },
+
+    async getStates(keys) {
+      const { rows } = await pool.query(`SELECT key, value FROM finance_state WHERE key = ANY($1::text[])`, [keys]);
+      return Object.fromEntries(rows.map((row) => [row.key, row.value]));
+    },
+
+    async setState(key, value) {
+      await pool.query(
+        `INSERT INTO finance_state (key, value, updated_at) VALUES ($1, $2::jsonb, now())
+         ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value, updated_at = now()`,
+        [key, JSON.stringify(value)]
+      );
     },
   };
 }
@@ -391,15 +430,28 @@ export function createFileFinanceStore(dataDir) {
       for (const row of data.providerCosts) {
         if (row.day < sinceDay) continue;
         const month = row.day.slice(0, 7);
-        const key = [row.provider, month, row.lineItem].join('|');
-        const group = groups.get(key) ?? { provider: row.provider, month, lineItem: row.lineItem, amountUsd: 0 };
-        group.amountUsd += row.amountUsd;
+        // Rows saved before costs carried a currency were in dollars.
+        const currency = row.currency ?? 'USD';
+        const key = [row.provider, month, row.lineItem, currency].join('|');
+        const group = groups.get(key) ?? { provider: row.provider, month, lineItem: row.lineItem, amount: 0, currency };
+        group.amount += row.amount ?? row.amountUsd ?? 0;
         groups.set(key, group);
       }
       return {
-        rows: [...groups.values()].filter((row) => row.amountUsd !== 0).sort((a, b) => a.month.localeCompare(b.month)),
+        rows: [...groups.values()].filter((row) => row.amount !== 0).sort((a, b) => a.month.localeCompare(b.month)),
         fetchedAt: data.syncedAt ?? {},
       };
+    },
+
+    async getStates(keys) {
+      const state = read().state ?? {};
+      return Object.fromEntries(keys.filter((key) => key in state).map((key) => [key, state[key]]));
+    },
+
+    async setState(key, value) {
+      const data = read();
+      data.state = { ...(data.state ?? {}), [key]: value };
+      write(data);
     },
   };
 }

@@ -9,10 +9,41 @@
 import { estimateCostUsd } from './pricing.js';
 
 let sink = null;
+let stateSink = null;
 
 /** Called once by registerFinanceRoutes with the store's recordUsage. */
 export function setUsageSink(fn) {
   sink = fn;
+}
+
+/** Called once by registerFinanceRoutes with the store's setState. */
+export function setStateSink(fn) {
+  stateSink = fn;
+}
+
+// Brave sends the plan's quota with every search: "1, 2000" is one request a
+// second and 2 000 a month; remaining and reset (seconds) follow the same
+// order. The monthly figure is Brave's own count, so it is kept as is.
+export function recordBraveQuota(headers) {
+  if (!stateSink || !headers) return;
+  const read = (name) => (typeof headers.get === 'function' ? headers.get(name) : headers[name]);
+  const values = (name) => String(read(name) ?? '').split(',').map((part) => Number(part.trim()));
+  const limit = values('x-ratelimit-limit');
+  const remaining = values('x-ratelimit-remaining');
+  const reset = values('x-ratelimit-reset');
+  const monthlyLimit = limit.at(-1);
+  const monthlyRemaining = remaining.at(-1);
+  if (limit.length < 2 || !Number.isFinite(monthlyLimit) || !Number.isFinite(monthlyRemaining)) return;
+  const snapshot = {
+    limit: monthlyLimit,
+    remaining: monthlyRemaining,
+    used: Math.max(monthlyLimit - monthlyRemaining, 0),
+    resetsAt: Number.isFinite(reset.at(-1)) ? new Date(Date.now() + reset.at(-1) * 1000).toISOString() : null,
+    at: new Date().toISOString(),
+  };
+  Promise.resolve()
+    .then(() => stateSink('brave_quota', snapshot))
+    .catch((error) => console.error('Brave quota not recorded:', error.message));
 }
 
 const count = (value) => (Number.isFinite(Number(value)) && Number(value) > 0 ? Math.round(Number(value)) : 0);

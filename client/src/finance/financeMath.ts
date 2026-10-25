@@ -1,11 +1,12 @@
 // Turns the finance overview into the numbers the screen shows: every amount
-// in CZK, the monthly run-rate of each cost, and the AI cost per month.
+// in CZK, what each cost adds to a month, and how sure that number is.
 //
-// Usage-based costs (AI, Railway usage…) count with a measured figure when
-// there is one — the provider's bill, otherwise the app's own usage log — and
-// with the typed-in estimate otherwise.
+// A cost is "connected" when its number comes from the provider itself (the
+// bill, Brave's own counter, Brevo's plan), "fixed" when an admin confirmed
+// the price from an invoice, and "unconfirmed" otherwise — a price-list
+// estimate or the app's own usage log.
 
-import type { BillingCycle, Expense, ExpenseStatus, FinanceOverview, Provider } from './financeApi';
+import type { BillingCycle, CostSource, Expense, ExpenseStatus, FinanceOverview, Provider } from './financeApi';
 
 export const BILLING_LABELS: Record<BillingCycle, string> = {
   monthly: 'Měsíčně',
@@ -19,6 +20,18 @@ export const STATUS_LABELS: Record<ExpenseStatus, string> = {
   planned: 'Plánované',
   paused: 'Pozastavené',
   cancelled: 'Zrušené',
+};
+
+/** Where a measured cost comes from: a provider's bills, or Brave's counter. */
+export type Source = CostSource | 'brave';
+
+export const SOURCE_LABELS: Record<Source, string> = {
+  anthropic: 'Anthropic',
+  openai: 'OpenAI',
+  railway: 'Railway',
+  cloudflare: 'Cloudflare',
+  google: 'Google Cloud',
+  brave: 'Brave Search',
 };
 
 export const PROVIDER_LABELS: Record<Provider, string> = {
@@ -39,8 +52,25 @@ export const FEATURE_LABELS: Record<string, string> = {
   web_search: 'Vyhledávání na webu',
 };
 
-// Brave gives $5 of searches free every month.
-const BRAVE_MONTHLY_CREDIT_USD = 5;
+export type CostStatus = 'connected' | 'fixed' | 'unconfirmed' | 'error';
+
+export const COST_STATUS_INFO: Record<CostStatus, { label: string; tone: string }> = {
+  connected: { label: 'Napojeno', tone: 'active' },
+  fixed: { label: 'Pevná cena', tone: 'planned' },
+  unconfirmed: { label: 'Nepotvrzeno', tone: 'estimate' },
+  error: { label: 'Chyba napojení', tone: 'cancelled' },
+};
+
+// Rows imported before an entry had a cost source still find their provider.
+const CATALOG_SOURCES: Record<string, Source> = {
+  'anthropic-api': 'anthropic',
+  'openai-api': 'openai',
+  'railway-plan': 'railway',
+  'railway-usage': 'railway',
+  'google-maps': 'google',
+  'cloudflare-r2': 'cloudflare',
+  'brave-search': 'brave',
+};
 
 type Rates = FinanceOverview['rates']['rates'];
 
@@ -60,108 +90,181 @@ export const formatUsd = (value: number) =>
 export const formatCount = (value: number) =>
   new Intl.NumberFormat('cs-CZ', { notation: value >= 100_000 ? 'compact' : 'standard', maximumFractionDigits: 1 }).format(value);
 
-export const formatDate = (iso: string | null) => (iso ? new Date(`${iso.slice(0, 10)}T12:00:00`).toLocaleDateString('cs-CZ') : '—');
+export const formatDate = (iso: string | null | undefined) =>
+  iso ? new Date(iso.length === 10 ? `${iso}T12:00:00` : iso).toLocaleDateString('cs-CZ', { timeZone: 'Europe/Prague' }) : '—';
 
 export const monthLabel = (month: string, style: 'short' | 'long' = 'short') =>
   new Date(`${month}-15T12:00:00`).toLocaleDateString('cs-CZ', { month: style, year: 'numeric' });
 
-const pragueToday = () => new Intl.DateTimeFormat('sv-SE', { timeZone: 'Europe/Prague' }).format(new Date());
+const pragueDay = (date: Date | string = new Date()) => new Intl.DateTimeFormat('sv-SE', { timeZone: 'Europe/Prague' }).format(new Date(date));
 
-export const currentMonth = () => pragueToday().slice(0, 7);
+export const currentMonth = () => pragueDay().slice(0, 7);
 
-const shiftMonth = (month: string, by: number) => {
+export const shiftMonth = (month: string, by: number) => {
   const [year, number] = month.split('-').map(Number);
-  const date = new Date(Date.UTC(year, number - 1 + by, 1));
-  return date.toISOString().slice(0, 7);
+  return new Date(Date.UTC(year, number - 1 + by, 1)).toISOString().slice(0, 7);
 };
 
 /** The twelve months the overview covers, oldest first. */
 export const overviewMonths = (since: string) => Array.from({ length: 12 }, (_, index) => shiftMonth(since.slice(0, 7), index));
 
-export interface ProviderMonth {
-  usd: number;
+export const daysUntil = (iso: string) =>
+  Math.round((new Date(`${pragueDay(iso)}T12:00:00`).getTime() - new Date(`${pragueDay()}T12:00:00`).getTime()) / 86_400_000);
+
+export const isCounted = (expense: Expense) => expense.status === 'active';
+
+export interface Measured {
+  czk: number;
+  /** From the provider's bill rather than the app's usage log. */
   billed: boolean;
 }
 
+export type MeasuredMonths = Map<string, Partial<Record<Source, Measured>>>;
+
+/** A provider whose bills have been read at least once, even if they were all zero. */
+const isBillingConnected = (overview: FinanceOverview, source: CostSource) => {
+  const provider = overview.providers[source];
+  return Boolean(provider?.configured && provider.fetchedAt);
+};
+
 /**
- * AI cost per month and provider: the provider's bill where its admin key is
- * set and it has figures, the usage log's estimate otherwise.
+ * Cost per month and source, in CZK: the provider's bill when it is
+ * connected, the app's usage log (AI providers only) otherwise.
  */
-export function aiCostByMonth(overview: FinanceOverview): Map<string, Partial<Record<Provider, ProviderMonth>>> {
-  const months = new Map<string, Partial<Record<Provider, ProviderMonth>>>();
-  const billedProviders = new Set(overview.providerCosts.map((row) => row.provider));
-  const add = (month: string, provider: Provider, usd: number, billed: boolean) => {
+export function measuredByMonth(overview: FinanceOverview): MeasuredMonths {
+  const rates = overview.rates.rates;
+  const months: MeasuredMonths = new Map();
+  const add = (month: string, source: Source, czk: number, billed: boolean) => {
     const entry = months.get(month) ?? {};
-    const current = entry[provider] ?? { usd: 0, billed };
-    entry[provider] = { usd: current.usd + usd, billed };
+    entry[source] = { czk: (entry[source]?.czk ?? 0) + czk, billed };
     months.set(month, entry);
   };
-  for (const row of overview.providerCosts) add(row.month, row.provider, row.amountUsd, true);
+  for (const row of overview.providerCosts) add(row.month, row.provider, toCzk(row.amount, row.currency, rates), true);
   for (const row of overview.usage.rows) {
-    if (row.provider !== 'brave' && billedProviders.has(row.provider)) continue;
-    add(row.month, row.provider, row.costUsd, false);
+    if (row.provider !== 'brave' && isBillingConnected(overview, row.provider)) continue;
+    add(row.month, row.provider, toCzk(row.costUsd, 'USD', rates), false);
   }
   return months;
 }
 
-/** Which usage-log provider measures an expense, if any. */
-export const measuredProvider = (expense: Expense): Provider | null =>
-  expense.costSource ?? (expense.catalogKey === 'brave-search' ? 'brave' : null);
+export const measuredSource = (expense: Expense): Source | null =>
+  expense.costSource ?? (expense.catalogKey ? CATALOG_SOURCES[expense.catalogKey] ?? null : null);
 
 export interface MonthlyFigure {
   czk: number;
   /** How the figure was arrived at, for the table. */
   basis: string;
-  estimate: boolean;
+  status: CostStatus;
+  /** The number is the provider's bill, so the typed amount plays no part. */
+  fromBill?: boolean;
 }
 
-const daysInMonth = (month: string) => {
-  const [year, number] = month.split('-').map(Number);
-  return new Date(Date.UTC(year, number, 0)).getUTCDate();
+const typedFigure = (expense: Expense, rates: Rates, basisFixed: string): MonthlyFigure => {
+  const own = toCzk(expense.amount, expense.currency, rates);
+  const czk = expense.billingCycle === 'yearly' ? own / 12 : expense.billingCycle === 'one_time' ? 0 : own;
+  const basis =
+    expense.billingCycle === 'one_time'
+      ? 'jednorázově'
+      : expense.amount === 0 && !expense.isEstimate
+        ? 'zdarma'
+        : expense.isEstimate
+        ? 'odhad podle ceníku — opravte podle faktury'
+        : expense.billingCycle === 'yearly'
+          ? 'roční částka z faktury / 12'
+          : basisFixed;
+  return { czk, basis, status: expense.isEstimate ? 'unconfirmed' : 'fixed' };
 };
 
 /**
- * What one cost adds to a typical month, in CZK. One-off costs add nothing;
- * yearly ones a twelfth; usage-based ones last month's measured cost, this
- * month's so far projected to a full month, or the typed-in estimate.
+ * What one cost adds to a month, in CZK, and where the number comes from.
+ * A provider's bill is counted once even when several rows point to it (the
+ * Railway plan and usage are one invoice): the first row takes it, the
+ * others show where it is.
  */
-export function monthlyFigure(expense: Expense, overview: FinanceOverview, aiMonths: ReturnType<typeof aiCostByMonth>): MonthlyFigure {
+export function monthlyFigure(
+  expense: Expense,
+  overview: FinanceOverview,
+  measured: MeasuredMonths,
+  claimed: Map<Source, string>
+): MonthlyFigure {
   const rates = overview.rates.rates;
-  const own = toCzk(expense.amount, expense.currency, rates);
-  if (expense.billingCycle === 'one_time') return { czk: 0, basis: 'jednorázově', estimate: expense.isEstimate };
-  if (expense.billingCycle === 'yearly') return { czk: own / 12, basis: 'roční částka / 12', estimate: expense.isEstimate };
-  if (expense.billingCycle === 'monthly') return { czk: own, basis: 'měsíční částka', estimate: expense.isEstimate };
+  const source = measuredSource(expense);
+  const previousMonth = shiftMonth(currentMonth(), -1);
 
-  const provider = measuredProvider(expense);
-  if (provider) {
-    const month = currentMonth();
-    const previous = aiMonths.get(shiftMonth(month, -1))?.[provider];
-    const current = aiMonths.get(month)?.[provider];
-    const credit = provider === 'brave' ? BRAVE_MONTHLY_CREDIT_USD : 0;
-    if (previous && previous.usd > 0) {
+  if (source && source !== 'brave') {
+    const provider = overview.providers[source];
+    if (isBillingConnected(overview, source)) {
+      const owner = claimed.get(source);
+      if (owner) return { czk: 0, basis: `v ceně řádku „${owner}“`, status: 'connected', fromBill: true };
+      claimed.set(source, expense.name);
       return {
-        czk: toCzk(Math.max(previous.usd - credit, 0), 'USD', rates),
-        basis: previous.billed ? `vyúčtování za ${monthLabel(shiftMonth(month, -1), 'long')}` : `odhad z provozu za ${monthLabel(shiftMonth(month, -1), 'long')}`,
-        estimate: !previous.billed,
+        czk: measured.get(previousMonth)?.[source]?.czk ?? 0,
+        basis: `vyúčtování za ${monthLabel(previousMonth, 'long')}`,
+        status: provider.error ? 'error' : 'connected',
+        fromBill: true,
       };
     }
-    if (current && current.usd > 0) {
-      const day = Number(pragueToday().slice(8, 10));
-      const projected = (current.usd / day) * daysInMonth(month);
-      return {
-        czk: toCzk(Math.max(projected - credit, 0), 'USD', rates),
-        basis: current.billed ? 'tento měsíc dosud, přepočteno na celý měsíc' : 'odhad z provozu, přepočteno na celý měsíc',
-        estimate: true,
-      };
+    if (provider?.configured && provider.error) {
+      return { ...typedFigure(expense, rates, 'zadaná částka'), basis: `napojení selhalo: ${provider.error}`, status: 'error' };
     }
+    // Not connected: the AI providers still have the app's own usage log.
+    const logged = measured.get(previousMonth)?.[source];
+    if (logged && logged.czk > 0 && !claimed.has(source)) {
+      claimed.set(source, expense.name);
+      return { czk: logged.czk, basis: `odhad z provozu aplikace za ${monthLabel(previousMonth, 'long')}`, status: 'unconfirmed' };
+    }
+    return typedFigure(expense, rates, 'zadaná částka z faktury');
   }
-  return { czk: own, basis: expense.isEstimate ? 'odhad podle ceníku' : 'zadaná měsíční částka', estimate: expense.isEstimate };
+
+  if (source === 'brave' && overview.checks.brave.quota) {
+    const { used, limit } = overview.checks.brave.quota;
+    const figure = typedFigure(expense, rates, 'zadaná částka');
+    return {
+      ...figure,
+      basis: `${formatCount(used)} z ${formatCount(limit)} dotazů tento měsíc (počítá Brave)`,
+      status: expense.isEstimate ? 'unconfirmed' : 'connected',
+    };
+  }
+
+  if (expense.catalogKey === 'brevo' && overview.checks.brevo.plans?.length) {
+    const plans = overview.checks.brevo.plans;
+    if (plans.every((plan) => plan.type === 'free')) {
+      return { czk: 0, basis: 'tarif Free, ověřeno u Brevo', status: 'connected' };
+    }
+    const figure = typedFigure(expense, rates, 'zadaná částka z faktury');
+    return { ...figure, basis: `tarif ${plans.map((plan) => plan.type).join(', ')} (ověřeno u Brevo) · ${figure.basis}` };
+  }
+
+  return typedFigure(expense, rates, 'měsíční částka z faktury');
 }
 
-/** The next payment date of a cost on or after today, rolling a past date forward. */
-export function nextPayment(expense: Expense): string | null {
+export interface CostRow {
+  expense: Expense;
+  monthly: MonthlyFigure;
+}
+
+/** Every cost with its monthly figure, in list order. */
+export function costRows(overview: FinanceOverview, measured: MeasuredMonths): CostRow[] {
+  const claimed = new Map<Source, string>();
+  // Active rows claim a shared bill before inactive ones.
+  const ordered = [...overview.expenses].sort((a, b) => Number(isCounted(b)) - Number(isCounted(a)));
+  const figures = new Map(ordered.map((expense) => [expense.id, monthlyFigure(expense, overview, measured, claimed)]));
+  return overview.expenses.map((expense) => ({ expense, monthly: figures.get(expense.id)! }));
+}
+
+/** Registry facts about the domain an expense pays for, if it is one. */
+export const domainCheckFor = (expense: Expense, overview: FinanceOverview) =>
+  overview.checks.domains.find((check) => check.catalogKey === expense.catalogKey) ?? null;
+
+/**
+ * The next payment date of a cost. A domain's comes from the registry and may
+ * lie in the past (expired); otherwise the typed date rolls forward to today.
+ */
+export function nextPayment(expense: Expense, overview: FinanceOverview): string | null {
+  const domain = domainCheckFor(expense, overview);
+  if (domain?.expiresAt) return pragueDay(domain.expiresAt);
   if (!expense.renewsOn || (expense.billingCycle !== 'monthly' && expense.billingCycle !== 'yearly')) return null;
-  const today = pragueToday();
+  const today = pragueDay();
   const [year, month, day] = expense.renewsOn.split('-').map(Number);
   const step = expense.billingCycle === 'yearly' ? 12 : 1;
   for (let i = 0; i < 1200; i += step) {
@@ -173,8 +276,3 @@ export function nextPayment(expense: Expense): string | null {
   }
   return null;
 }
-
-export const daysUntil = (iso: string) =>
-  Math.round((new Date(`${iso}T12:00:00`).getTime() - new Date(`${pragueToday()}T12:00:00`).getTime()) / 86_400_000);
-
-export const isCounted = (expense: Expense) => expense.status === 'active';

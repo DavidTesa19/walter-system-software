@@ -178,13 +178,16 @@ export default function ExpenseModal({ expense, categories, onClose, onSave, onD
                 <input type="date" value={form.renewsOn ?? ''} onChange={(event) => set('renewsOn', event.target.value || null)} />
               </label>
             )}
-            {form.billingCycle === 'usage' && (
+            {form.billingCycle !== 'one_time' && (
               <label className="finance-field">
                 Skutečné náklady načítat z
                 <select value={form.costSource ?? ''} onChange={(event) => set('costSource', (event.target.value || null) as CostSource | null)}>
-                  <option value="">— nenačítat —</option>
-                  <option value="anthropic">Anthropic (vyúčtování / provoz)</option>
-                  <option value="openai">OpenAI (vyúčtování / provoz)</option>
+                  <option value="">— nenačítat, platí zadaná částka —</option>
+                  <option value="railway">Railway (faktury)</option>
+                  <option value="anthropic">Anthropic (vyúčtování)</option>
+                  <option value="openai">OpenAI (vyúčtování)</option>
+                  <option value="google">Google Cloud (export vyúčtování)</option>
+                  <option value="cloudflare">Cloudflare (vyúčtování)</option>
                 </select>
               </label>
             )}

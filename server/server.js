@@ -17,7 +17,7 @@ import { registerSafetyRoutes } from "./safety/routes.js";
 import { registerJarvisRoutes } from "./jarvis/routes.js";
 import { registerAresRoutes } from "./ares.js";
 import { registerFinanceRoutes } from "./finance/routes.js";
-import { openAiUsageTokens, recordAiUsage } from "./finance/usage.js";
+import { openAiUsageTokens, recordAiUsage, recordBraveQuota } from "./finance/usage.js";
 import {
   normalizeNotificationEmail,
 } from "./submission-notifications.js";
@@ -1169,6 +1169,7 @@ async function searchWeb(query, maxResults = 3, fetchContent = true) {
     });
 
     recordAiUsage({ provider: "brave", feature: "web_search", units: 1 });
+    recordBraveQuota(response.headers);
 
     const results = response.data.web?.results || [];
     

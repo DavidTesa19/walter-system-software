@@ -1,44 +1,53 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { financeApi } from '../finance/financeApi';
-import type { CostSource, Expense, ExpenseInput, FinanceOverview, Provider } from '../finance/financeApi';
+import type { Expense, ExpenseInput, FinanceOverview } from '../finance/financeApi';
+import ConnectionsTab from '../finance/ConnectionsTab';
 import ExpenseModal from '../finance/ExpenseModal';
 import { AiCostChart, CategoryBars } from '../finance/FinanceCharts';
 import type { AiMonth } from '../finance/FinanceCharts';
 import {
   BILLING_LABELS,
   CHART_PROVIDERS,
+  COST_STATUS_INFO,
   FEATURE_LABELS,
   PROVIDER_LABELS,
+  SOURCE_LABELS,
   STATUS_LABELS,
-  aiCostByMonth,
+  costRows,
   currentMonth,
   daysUntil,
+  domainCheckFor,
   formatCount,
   formatCzk,
   formatDate,
   formatMoney,
   formatUsd,
   isCounted,
+  measuredByMonth,
   monthLabel,
-  monthlyFigure,
   nextPayment,
   overviewMonths,
   toCzk,
 } from '../finance/financeMath';
-import { formatRelative } from '../safety/format';
+import type { MeasuredMonths } from '../finance/financeMath';
 import './FinanceView.css';
 
-type FinanceTab = 'overview' | 'costs' | 'ai' | 'keys';
+type FinanceTab = 'overview' | 'costs' | 'connections' | 'ai' | 'keys';
 
 const TABS: Array<{ id: FinanceTab; label: string }> = [
   { id: 'overview', label: 'Přehled' },
   { id: 'costs', label: 'Náklady' },
+  { id: 'connections', label: 'Napojení' },
   { id: 'ai', label: 'AI spotřeba' },
   { id: 'keys', label: 'Klíče a služby' },
 ];
 
 const TAB_STORAGE_KEY = 'walterFinanceTab';
 const UPCOMING_DAYS = 60;
+// A .cz domain keeps working for about 30 days after it expires and is
+// cancelled after about 60.
+const DOMAIN_GRACE_DAYS = 30;
+const DOMAIN_DELETE_DAYS = 61;
 
 const readStoredTab = (): FinanceTab => {
   try {
@@ -49,17 +58,13 @@ const readStoredTab = (): FinanceTab => {
   }
 };
 
-const ADMIN_KEY_HELP: Record<CostSource, { variable: string; steps: string }> = {
-  anthropic: {
-    variable: 'ANTHROPIC_ADMIN_KEY',
-    steps:
-      'Claude Console › Settings › Admin keys › Create admin key. Admin klíče mají jen organizace — u individuálního účtu ji nejdřív založte v Settings › Organization.',
-  },
-  openai: {
-    variable: 'OPENAI_ADMIN_KEY',
-    steps: 'platform.openai.com › Settings › Organization › Admin keys › Create new admin key (stačí právo číst Usage).',
-  },
+const addDays = (iso: string, days: number) => {
+  const date = new Date(iso);
+  date.setUTCDate(date.getUTCDate() + days);
+  return date.toISOString();
 };
+
+const pluralCosts = (count: number) => (count === 1 ? 'náklad je' : count < 5 ? 'náklady jsou' : 'nákladů je');
 
 export default function FinanceView() {
   const [tab, setTab] = useState<FinanceTab>(readStoredTab);
@@ -138,12 +143,10 @@ export default function FinanceView() {
   if (loading && !overview) {
     return (
       <div className="finance-view">
-        <div className="finance-empty">Načítám finanční přehled…</div>
+        <div className="finance-empty">Načítám finanční přehled a vyúčtování ze služeb…</div>
       </div>
     );
   }
-
-  const anyProviderConfigured = overview ? Object.values(overview.providers).some((provider) => provider.configured) : false;
 
   return (
     <div className="finance-view">
@@ -152,19 +155,13 @@ export default function FinanceView() {
           <span className="finance-eyebrow">Analýza</span>
           <h1>Finance</h1>
           <p>
-            Všechno, co aplikace stojí, na jednom místě: hosting, doména, AI, e-maily, mapy, zálohy a další služby. Částky v USD
-            a EUR se přepočítávají denním kurzem ČNB.
+            Všechno, co aplikace stojí, na jednom místě. U každého nákladu je vidět, odkud částka je: napojená služba posílá
+            vlastní vyúčtování, pevnou cenu potvrzuje faktura. Částky v USD a EUR se přepočítávají denním kurzem ČNB.
           </p>
         </div>
         <div className="finance-header-actions">
-          <button
-            type="button"
-            className="finance-button finance-button--ghost"
-            onClick={() => void sync()}
-            disabled={syncing || !anyProviderConfigured}
-            title={anyProviderConfigured ? 'Načte vyúčtování od Anthropicu a OpenAI' : 'Nejdřív nastavte admin klíče (záložka AI spotřeba)'}
-          >
-            {syncing ? 'Načítám…' : 'Načíst skutečné náklady'}
+          <button type="button" className="finance-button finance-button--ghost" onClick={() => void sync()} disabled={syncing}>
+            {syncing ? 'Načítám…' : 'Načíst znovu ze služeb'}
           </button>
           <button type="button" className="finance-button finance-button--primary" onClick={() => setEditing('new')}>
             Přidat náklad
@@ -176,22 +173,45 @@ export default function FinanceView() {
 
       {overview && model && (
         <>
+          {model.domainAlerts.map((alert) => (
+            <div key={alert.domain} className={`finance-callout ${alert.days < 0 ? 'finance-callout--error' : 'finance-callout--warning'}`}>
+              {alert.days < 0 ? (
+                <>
+                  <strong>
+                    Doména {alert.domain} vypršela {formatDate(alert.expiresAt)}.
+                  </strong>{' '}
+                  Obnovte ji u registrátora {alert.registrar ?? ''} co nejdřív — přibližně od{' '}
+                  {formatDate(addDays(alert.expiresAt, DOMAIN_GRACE_DAYS))} přestane fungovat aplikace, API i formulář a kolem{' '}
+                  {formatDate(addDays(alert.expiresAt, DOMAIN_DELETE_DAYS))} ji registr zruší.
+                </>
+              ) : (
+                <>
+                  <strong>
+                    Doména {alert.domain} vyprší {formatDate(alert.expiresAt)} (za {alert.days} d).
+                  </strong>{' '}
+                  Obnovte ji u registrátora {alert.registrar ?? ''}.
+                </>
+              )}
+            </div>
+          ))}
           {overview.catalogMissing.length > 0 && (
             <div className="finance-callout finance-callout--info">
               <strong>
-                Aplikace používá {overview.catalogMissing.length} {overview.catalogMissing.length === 1 ? 'službu' : overview.catalogMissing.length < 5 ? 'služby' : 'služeb'}, které v přehledu zatím nejsou:
+                Aplikace používá {overview.catalogMissing.length}{' '}
+                {overview.catalogMissing.length === 1 ? 'službu' : overview.catalogMissing.length < 5 ? 'služby' : 'služeb'}, které v
+                přehledu zatím nejsou:
               </strong>{' '}
               {overview.catalogMissing.map((entry) => entry.name).join(', ')}.
-              <p>Přidají se s popisem, klíči, odkazy a odhadem ceny podle aktuálních ceníků; odhady pak potvrďte nebo opravte.</p>
+              <p>Přidají se s popisem, klíči a odkazy; napojené služby si částky načtou samy, ostatní doplňte z faktur.</p>
               <button type="button" className="finance-button finance-button--primary finance-button--small" onClick={() => void importCatalog()} disabled={importing}>
                 {importing ? 'Přidávám…' : 'Přidat do přehledu'}
               </button>
             </div>
           )}
-          {model.estimateCount > 0 && (
+          {model.unconfirmedCount > 0 && (
             <div className="finance-callout finance-callout--warning">
-              {model.estimateCount} {model.estimateCount === 1 ? 'částka je' : model.estimateCount < 5 ? 'částky jsou' : 'částek je'} jen odhad podle ceníku.
-              Otevřete je v záložce Náklady, opravte podle skutečné faktury a odškrtněte „Částka je jen odhad“.
+              {model.unconfirmedCount} {pluralCosts(model.unconfirmedCount)} nepotvrzených ({formatCzk(model.unconfirmedTotal)} měsíčně).
+              Napojte je v záložce Napojení, nebo u nich doplňte cenu z faktury a odškrtněte „Částka je jen odhad“.
             </div>
           )}
           {overview.rates.source === 'fallback' && (
@@ -205,20 +225,26 @@ export default function FinanceView() {
               <span className="finance-metric-label">Měsíčně</span>
               <span className="finance-metric-value">{formatCzk(model.monthlyTotal)}</span>
               <span className="finance-metric-note">
-                {model.monthlyEstimate > 0 ? `z toho odhad ${formatCzk(model.monthlyEstimate)}` : 'všechny částky potvrzené'}
+                {!model.rows.length
+                  ? 'zatím žádné náklady'
+                  : model.unconfirmedTotal > 0
+                    ? `potvrzeno ${formatCzk(model.monthlyTotal - model.unconfirmedTotal)} · nepotvrzeno ${formatCzk(model.unconfirmedTotal)}`
+                    : 'vše potvrzené'}
               </span>
             </div>
             <div className="finance-metric">
               <span className="finance-metric-label">Ročně</span>
               <span className="finance-metric-value">{formatCzk(model.monthlyTotal * 12)}</span>
               <span className="finance-metric-note">
-                {model.oneTimeThisYear > 0 ? `+ jednorázově letos ${formatCzk(model.oneTimeThisYear)}` : 'při současné spotřebě'}
+                {model.oneTimeThisYear > 0 ? `+ jednorázově letos ${formatCzk(model.oneTimeThisYear)}` : 'při současných nákladech'}
               </span>
             </div>
             <div className="finance-metric">
-              <span className="finance-metric-label">AI tento měsíc</span>
-              <span className="finance-metric-value">{formatCzk(model.aiThisMonth)}</span>
-              <span className="finance-metric-note">{model.aiThisMonthBasis}</span>
+              <span className="finance-metric-label">Napojené služby</span>
+              <span className="finance-metric-value">
+                {model.connectedSources} z {model.knownSources}
+              </span>
+              <span className="finance-metric-note">{model.connectedNames || 'zatím žádná — záložka Napojení'}</span>
             </div>
             <div className={`finance-metric${model.upcoming[0] && daysUntil(model.upcoming[0].date) <= 14 ? ' finance-metric--warning' : ''}`}>
               <span className="finance-metric-label">Nejbližší platba</span>
@@ -227,6 +253,7 @@ export default function FinanceView() {
                   <span className="finance-metric-value">{formatDate(model.upcoming[0].date)}</span>
                   <span className="finance-metric-note">
                     {model.upcoming[0].expense.name} · {formatMoney(model.upcoming[0].expense.amount, model.upcoming[0].expense.currency)}
+                    {daysUntil(model.upcoming[0].date) < 0 && ` · prošlo před ${-daysUntil(model.upcoming[0].date)} d`}
                   </span>
                 </>
               ) : (
@@ -256,14 +283,9 @@ export default function FinanceView() {
           <div className="finance-card" role="tabpanel">
             {tab === 'overview' && <OverviewTab overview={overview} model={model} onOpen={setEditing} />}
             {tab === 'costs' && (
-              <CostsTab
-                overview={overview}
-                model={model}
-                showInactive={showInactive}
-                onToggleInactive={setShowInactive}
-                onOpen={setEditing}
-              />
+              <CostsTab overview={overview} model={model} showInactive={showInactive} onToggleInactive={setShowInactive} onOpen={setEditing} />
             )}
+            {tab === 'connections' && <ConnectionsTab overview={overview} measured={model.measured} />}
             {tab === 'ai' && <AiTab overview={overview} model={model} />}
             {tab === 'keys' && <KeysTab overview={overview} />}
           </div>
@@ -294,11 +316,11 @@ type Model = ReturnType<typeof buildModel>;
 
 function buildModel(overview: FinanceOverview) {
   const rates = overview.rates.rates;
-  const aiMonths = aiCostByMonth(overview);
-  const rows = overview.expenses.map((expense) => ({ expense, monthly: monthlyFigure(expense, overview, aiMonths) }));
+  const measured: MeasuredMonths = measuredByMonth(overview);
+  const rows = costRows(overview, measured);
   const counted = rows.filter((row) => isCounted(row.expense));
   const monthlyTotal = counted.reduce((sum, row) => sum + row.monthly.czk, 0);
-  const monthlyEstimate = counted.filter((row) => row.monthly.estimate).reduce((sum, row) => sum + row.monthly.czk, 0);
+  const unconfirmed = counted.filter((row) => row.monthly.status === 'unconfirmed' || row.monthly.status === 'error');
   const year = currentMonth().slice(0, 4);
   const oneTimeThisYear = overview.expenses
     .filter((expense) => expense.billingCycle === 'one_time' && expense.status !== 'cancelled' && expense.startedOn?.startsWith(year))
@@ -313,43 +335,44 @@ function buildModel(overview: FinanceOverview) {
 
   const chartMonths: AiMonth[] = overviewMonths(overview.since).map((month) => {
     const values: AiMonth['values'] = {};
-    const entry = aiMonths.get(month) ?? {};
-    for (const provider of CHART_PROVIDERS) {
-      const value = entry[provider];
-      if (value) values[provider] = { ...value, czk: toCzk(value.usd, 'USD', rates) };
-    }
+    const entry = measured.get(month) ?? {};
+    for (const provider of CHART_PROVIDERS) if (entry[provider]) values[provider] = entry[provider];
     return { month, values };
   });
 
-  const thisMonth = aiMonths.get(currentMonth()) ?? {};
-  const thisMonthProviders = Object.entries(thisMonth) as Array<[Provider, { usd: number; billed: boolean }]>;
-  const aiThisMonth = thisMonthProviders.reduce((sum, [, value]) => sum + toCzk(value.usd, 'USD', rates), 0);
-  const billedCount = thisMonthProviders.filter(([provider, value]) => provider !== 'brave' && value.billed).length;
-  const aiThisMonthBasis = !thisMonthProviders.length
-    ? 'zatím žádné AI volání'
-    : billedCount === 0
-      ? 'odhad z provozu aplikace'
-      : billedCount === thisMonthProviders.filter(([provider]) => provider !== 'brave').length
-        ? 'podle vyúčtování poskytovatelů'
-        : 'vyúčtování + odhad z provozu';
+  const sources = Object.values(overview.providers);
+  const connected = sources.filter((provider) => provider.configured && provider.fetchedAt && !provider.error);
+  const extraChecks = [
+    overview.checks.brave.quota ? 'Brave' : null,
+    overview.checks.brevo.plans ? 'Brevo' : null,
+    overview.checks.domains.some((domain) => domain.expiresAt) ? 'doména' : null,
+  ].filter(Boolean) as string[];
 
+  // Payments due soon, and a domain that already expired (still recoverable).
   const upcoming = overview.expenses
     .filter((expense) => expense.status === 'active')
-    .map((expense) => ({ expense, date: nextPayment(expense) }))
-    .filter((item): item is { expense: Expense; date: string } => Boolean(item.date))
+    .map((expense) => ({ expense, date: nextPayment(expense, overview) }))
+    .filter((item): item is { expense: Expense; date: string } => Boolean(item.date) && daysUntil(item.date!) >= -DOMAIN_DELETE_DAYS)
     .sort((a, b) => a.date.localeCompare(b.date));
 
+  const domainAlerts = overview.checks.domains
+    .filter((domain) => domain.expiresAt && daysUntil(domain.expiresAt) <= 30 && daysUntil(domain.expiresAt) >= -DOMAIN_DELETE_DAYS)
+    .map((domain) => ({ domain: domain.domain, registrar: domain.registrar, expiresAt: domain.expiresAt!, days: daysUntil(domain.expiresAt!) }));
+
   return {
+    measured,
     rows,
     monthlyTotal,
-    monthlyEstimate,
+    unconfirmedTotal: unconfirmed.reduce((sum, row) => sum + row.monthly.czk, 0),
+    unconfirmedCount: unconfirmed.length,
     oneTimeThisYear,
     categoryBars,
     chartMonths,
-    aiThisMonth,
-    aiThisMonthBasis,
+    connectedSources: connected.length + extraChecks.length,
+    knownSources: sources.length + 3,
+    connectedNames: [...connected.map((provider) => provider.label), ...extraChecks].join(', '),
     upcoming,
-    estimateCount: overview.expenses.filter((expense) => expense.isEstimate && expense.status !== 'cancelled').length,
+    domainAlerts,
   };
 }
 
@@ -357,6 +380,7 @@ function buildModel(overview: FinanceOverview) {
 
 function OverviewTab({ overview, model, onOpen }: { overview: FinanceOverview; model: Model; onOpen: (expense: Expense) => void }) {
   const soon = model.upcoming.filter((item) => daysUntil(item.date) <= UPCOMING_DAYS);
+  const aiConnected = overview.providers.anthropic.fetchedAt && overview.providers.openai.fetchedAt;
   return (
     <div className="finance-panel">
       <div className="finance-split">
@@ -368,37 +392,38 @@ function OverviewTab({ overview, model, onOpen }: { overview: FinanceOverview; m
           <h2 className="finance-section-title">Blížící se platby</h2>
           {soon.length ? (
             <ul className="finance-list">
-              {soon.map(({ expense, date }) => (
-                <li key={expense.id}>
-                  <button type="button" className="finance-list-button" onClick={() => onOpen(expense)}>
-                    <span>
-                      <strong>{expense.name}</strong>
-                      <span className="finance-muted"> · {BILLING_LABELS[expense.billingCycle].toLowerCase()}</span>
-                    </span>
-                    <span className="finance-list-meta">
-                      {formatMoney(expense.amount, expense.currency)}
-                      <span className="finance-muted">
-                        {formatDate(date)} · {daysUntil(date) === 0 ? 'dnes' : `za ${daysUntil(date)} d`}
+              {soon.map(({ expense, date }) => {
+                const days = daysUntil(date);
+                return (
+                  <li key={expense.id}>
+                    <button type="button" className="finance-list-button" onClick={() => onOpen(expense)}>
+                      <span>
+                        <strong>{expense.name}</strong>
+                        <span className="finance-muted"> · {BILLING_LABELS[expense.billingCycle].toLowerCase()}</span>
                       </span>
-                    </span>
-                  </button>
-                </li>
-              ))}
+                      <span className="finance-list-meta">
+                        {formatMoney(expense.amount, expense.currency)}
+                        <span className={days < 0 ? 'finance-error-text' : 'finance-muted'}>
+                          {formatDate(date)} · {days < 0 ? `prošlo před ${-days} d` : days === 0 ? 'dnes' : `za ${days} d`}
+                        </span>
+                      </span>
+                    </button>
+                  </li>
+                );
+              })}
             </ul>
           ) : (
-            <div className="finance-empty">
-              Žádná platba v příštích {UPCOMING_DAYS} dnech. U ročních poplatků (doména) doplňte datum obnovy, ať tu včas naskočí.
-            </div>
+            <div className="finance-empty">Žádná platba v příštích {UPCOMING_DAYS} dnech.</div>
           )}
         </section>
       </div>
       <section>
         <h2 className="finance-section-title">AI náklady po měsících</h2>
         <AiCostChart months={model.chartMonths} />
-        {!Object.values(overview.providers).some((provider) => provider.configured) && (
+        {!aiConnected && (
           <p className="finance-muted">
-            Ukazuje odhad podle tokenů, které aplikace spotřebovala. Přesné částky z vyúčtování se doplní po nastavení admin klíčů
-            (záložka AI spotřeba).
+            Sloupce bez vyúčtování jsou jen odhad podle tokenů, které aplikace spotřebovala. Přesné částky se doplní po napojení
+            Anthropic a OpenAI (záložka Napojení).
           </p>
         )}
       </section>
@@ -442,8 +467,9 @@ function CostsTab({
             <tr>
               <th>Služba</th>
               <th>Účtování</th>
-              <th className="finance-num">Částka</th>
+              <th className="finance-num">Zadaná částka</th>
               <th className="finance-num">Měsíčně v Kč</th>
+              <th>Zdroj částky</th>
               <th>Další platba</th>
               <th>Stav</th>
             </tr>
@@ -456,10 +482,13 @@ function CostsTab({
                 <tr className="finance-group-row">
                   <th colSpan={3}>{overview.categories[category]}</th>
                   <th className="finance-num">{formatCzk(subtotal)}</th>
-                  <th colSpan={2} />
+                  <th colSpan={3} />
                 </tr>
                 {rows.map(({ expense, monthly }) => {
-                  const next = nextPayment(expense);
+                  const next = nextPayment(expense, overview);
+                  const nextDays = next ? daysUntil(next) : null;
+                  const status = COST_STATUS_INFO[monthly.status];
+                  const domain = domainCheckFor(expense, overview);
                   return (
                     <tr key={expense.id} className="finance-row" onClick={() => onOpen(expense)} tabIndex={0} onKeyDown={(event) => event.key === 'Enter' && onOpen(expense)}>
                       <td>
@@ -468,14 +497,19 @@ function CostsTab({
                       </td>
                       <td>{BILLING_LABELS[expense.billingCycle]}</td>
                       <td className="finance-num">
-                        {formatMoney(expense.amount, expense.currency)}
-                        {expense.isEstimate && <span className="finance-chip finance-chip--estimate">odhad</span>}
+                        {monthly.fromBill ? <span className="finance-muted">podle faktur</span> : formatMoney(expense.amount, expense.currency)}
                       </td>
                       <td className="finance-num">
                         {isCounted(expense) ? formatCzk(monthly.czk) : '—'}
                         <div className="finance-row-sub">{isCounted(expense) ? monthly.basis : 'nepočítá se'}</div>
                       </td>
-                      <td>{next ? formatDate(next) : <span className="finance-muted">—</span>}</td>
+                      <td>
+                        <span className={`finance-chip finance-chip--${status.tone}`}>{status.label}</span>
+                      </td>
+                      <td>
+                        {next ? <span className={nextDays !== null && nextDays < 0 ? 'finance-error-text' : undefined}>{formatDate(next)}</span> : <span className="finance-muted">—</span>}
+                        {domain?.expiresAt && <div className="finance-row-sub">podle registru domén</div>}
+                      </td>
                       <td>
                         <span className={`finance-chip finance-chip--${expense.status}`}>{STATUS_LABELS[expense.status]}</span>
                       </td>
@@ -489,7 +523,7 @@ function CostsTab({
             <tr>
               <th colSpan={3}>Celkem za měsíc (aktivní náklady)</th>
               <th className="finance-num">{formatCzk(model.monthlyTotal)}</th>
-              <th colSpan={2} />
+              <th colSpan={3} />
             </tr>
           </tfoot>
         </table>
@@ -501,49 +535,53 @@ function CostsTab({
 function AiTab({ overview, model }: { overview: FinanceOverview; model: Model }) {
   const month = currentMonth();
   const rates = overview.rates.rates;
-  const thisMonthRows = overview.usage.rows
-    .filter((row) => row.month === month)
-    .sort((a, b) => b.costUsd - a.costUsd);
+  const thisMonthRows = overview.usage.rows.filter((row) => row.month === month).sort((a, b) => b.costUsd - a.costUsd);
   const billedThisMonth = overview.providerCosts
-    .filter((row) => row.month === month)
-    .sort((a, b) => b.amountUsd - a.amountUsd);
+    .filter((row) => row.month === month && (row.provider === 'anthropic' || row.provider === 'openai'))
+    .sort((a, b) => toCzk(b.amount, b.currency, rates) - toCzk(a.amount, a.currency, rates));
   const monthsWithData = model.chartMonths.filter((item) => Object.keys(item.values).length > 0).reverse();
+  const unconnected = (['anthropic', 'openai'] as const).filter((provider) => !overview.providers[provider].fetchedAt);
 
   return (
     <div className="finance-panel">
-      <div className="finance-provider-grid">
-        {(Object.keys(overview.providers) as CostSource[]).map((provider) => {
-          const status = overview.providers[provider];
-          const help = ADMIN_KEY_HELP[provider];
-          return (
-            <div key={provider} className={`finance-provider${status.error ? ' finance-provider--error' : ''}`}>
-              <div className="finance-provider-head">
-                <strong>{status.label} – skutečné vyúčtování</strong>
-                <span className={`finance-chip ${status.configured && !status.error ? 'finance-chip--active' : 'finance-chip--paused'}`}>
-                  {status.configured ? (status.error ? 'Chyba' : 'Napojeno') : 'Nenapojeno'}
-                </span>
-              </div>
-              {status.configured ? (
-                <>
-                  <span className="finance-muted">
-                    {status.fetchedAt ? `Naposledy načteno ${formatRelative(status.fetchedAt)}.` : 'Zatím nenačteno.'} Obnovuje se samo
-                    po otevření této stránky, nejvýš jednou za 3 hodiny.
-                  </span>
-                  {status.error && <span className="finance-error-text">{status.error}</span>}
-                </>
-              ) : (
-                <span className="finance-muted">
-                  Bez admin klíče se ukazuje jen odhad z provozu aplikace. {help.steps} Klíč uložte na Railway u služby API do proměnné{' '}
-                  <code>{help.variable}</code> a službu restartujte.
-                </span>
-              )}
-            </div>
-          );
-        })}
-      </div>
+      {unconnected.length > 0 && (
+        <div className="finance-callout finance-callout--warning">
+          {unconnected.map((provider) => SOURCE_LABELS[provider]).join(' a ')} {unconnected.length > 1 ? 'nejsou napojené' : 'není napojený'}:
+          jejich částky jsou jen odhad podle tokenů z provozu aplikace. Napojení nastavíte v záložce Napojení.
+        </div>
+      )}
+
+      {billedThisMonth.length > 0 && (
+        <section>
+          <h2 className="finance-section-title">{monthLabel(month, 'long')} podle vyúčtování</h2>
+          <div className="finance-table-wrap">
+            <table className="finance-table">
+              <thead>
+                <tr>
+                  <th>Poskytovatel</th>
+                  <th>Položka</th>
+                  <th className="finance-num">Částka</th>
+                </tr>
+              </thead>
+              <tbody>
+                {billedThisMonth.map((row) => (
+                  <tr key={`${row.provider}-${row.lineItem}`}>
+                    <td>{SOURCE_LABELS[row.provider]}</td>
+                    <td>{row.lineItem}</td>
+                    <td className="finance-num">
+                      {formatMoney(row.amount, row.currency)}
+                      <div className="finance-row-sub">{formatCzk(toCzk(row.amount, row.currency, rates))}</div>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </section>
+      )}
 
       <section>
-        <h2 className="finance-section-title">{monthLabel(month, 'long')} podle funkce (odhad z provozu)</h2>
+        <h2 className="finance-section-title">{monthLabel(month, 'long')} podle funkce (z provozu aplikace)</h2>
         {thisMonthRows.length ? (
           <div className="finance-table-wrap">
             <table className="finance-table">
@@ -554,7 +592,7 @@ function AiTab({ overview, model }: { overview: FinanceOverview; model: Model })
                   <th className="finance-num">Volání</th>
                   <th className="finance-num">Tokeny vstup / výstup</th>
                   <th className="finance-num">Z cache</th>
-                  <th className="finance-num">Odhad</th>
+                  <th className="finance-num">Podle ceníku</th>
                 </tr>
               </thead>
               <tbody>
@@ -589,40 +627,11 @@ function AiTab({ overview, model }: { overview: FinanceOverview; model: Model })
         )}
         <p className="finance-muted">
           {overview.usage.firstLoggedAt
-            ? `Provoz se zaznamenává od ${formatDate(overview.usage.firstLoggedAt.slice(0, 10))}.`
+            ? `Provoz se zaznamenává od ${formatDate(overview.usage.firstLoggedAt)}.`
             : 'Provoz se začne zaznamenávat s prvním AI voláním po nasazení.'}{' '}
-          Odhad počítá s veřejnými ceníky; Brave má navíc $5 kreditu měsíčně zdarma.
+          Rozpis podle funkcí ukazuje, co kolik spotřebovalo; skutečná částka je ve vyúčtování výše.
         </p>
       </section>
-
-      {billedThisMonth.length > 0 && (
-        <section>
-          <h2 className="finance-section-title">{monthLabel(month, 'long')} podle vyúčtování</h2>
-          <div className="finance-table-wrap">
-            <table className="finance-table">
-              <thead>
-                <tr>
-                  <th>Poskytovatel</th>
-                  <th>Položka</th>
-                  <th className="finance-num">Částka</th>
-                </tr>
-              </thead>
-              <tbody>
-                {billedThisMonth.map((row) => (
-                  <tr key={`${row.provider}-${row.lineItem}`}>
-                    <td>{PROVIDER_LABELS[row.provider]}</td>
-                    <td>{row.lineItem}</td>
-                    <td className="finance-num">
-                      {formatUsd(row.amountUsd)}
-                      <div className="finance-row-sub">{formatCzk(toCzk(row.amountUsd, 'USD', rates))}</div>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        </section>
-      )}
 
       <section>
         <h2 className="finance-section-title">Po měsících</h2>

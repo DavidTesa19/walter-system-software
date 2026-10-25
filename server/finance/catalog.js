@@ -25,7 +25,7 @@ export const EXPENSE_STATUSES = ['active', 'planned', 'paused', 'cancelled'];
 export const CURRENCIES = ['CZK', 'USD', 'EUR'];
 
 // Where real billed amounts can come from (providers.js).
-export const COST_SOURCES = ['anthropic', 'openai'];
+export const COST_SOURCES = ['anthropic', 'openai', 'railway', 'cloudflare', 'google'];
 
 export const CATALOG = [
   {
@@ -36,13 +36,14 @@ export const CATALOG = [
     billingCycle: 'monthly',
     amount: 5,
     currency: 'USD',
+    costSource: 'railway',
     description:
       'Měsíční poplatek za hosting. Tarif Hobby stojí $5 a obsahuje $5 kreditu na spotřebu; tarif Pro $20 za člena týmu. ' +
-      'Railway účtuje zpětně kartou.',
+      'Railway účtuje kartou; s tokenem se načítají skutečné faktury včetně DPH (tarif i spotřeba dohromady).',
     usedFor:
       'Běží tu celá aplikace: API (api.waltersystem.cz), webová aplikace (app.waltersystem.cz), ' +
       'veřejný formulář (form.waltersystem.cz) a databáze PostgreSQL.',
-    envKeys: [],
+    envKeys: [{ name: 'RAILWAY_API_TOKEN', optional: true }],
     dashboardUrl: 'https://railway.com/dashboard',
     pricingUrl: 'https://railway.com/pricing',
   },
@@ -54,29 +55,32 @@ export const CATALOG = [
     billingCycle: 'usage',
     amount: 5,
     currency: 'USD',
+    costSource: 'railway',
     description:
       'CPU, paměť, síť a disk všech služeb nad kredit, který je v tarifu. Čtyři služby (tři weby a databáze) kredit $5 obvykle přesáhnou. ' +
       'Skutečnou částku ukazuje Railway v Usage.',
     usedFor: 'Provoz API, aplikace, formuláře a databáze PostgreSQL (zálohy uvnitř databáze zabírají místo na disku).',
-    envKeys: [{ name: 'DATABASE_URL' }],
+    envKeys: [{ name: 'DATABASE_URL' }, { name: 'RAILWAY_API_TOKEN', optional: true }],
     dashboardUrl: 'https://railway.com/dashboard',
     pricingUrl: 'https://docs.railway.com/pricing/plans',
   },
   {
     key: 'domain-waltersystem',
     name: 'Doména waltersystem.cz',
-    vendor: 'Registrátor domény',
+    vendor: 'WEDOS Internet, a.s.',
+    // Registrar and expiry date are read from the public .cz registry (checks.js).
+    domain: 'waltersystem.cz',
     category: 'domain',
     billingCycle: 'yearly',
     amount: 250,
     currency: 'CZK',
     description:
-      'Roční obnova domény .cz. Cena se liší podle registrátora (zhruba 180–350 Kč za rok). ' +
-      'Doplňte registrátora a datum obnovy, ať se obnova neprošvihne.',
+      'Roční obnova domény .cz u registrátora WEDOS. Datum expirace se čte z veřejného registru CZ.NIC; ' +
+      'cenu doplňte podle faktury od WEDOS.',
     usedFor: 'Adresy app.waltersystem.cz, api.waltersystem.cz a form.waltersystem.cz; odesílatel e-mailů noreply@waltersystem.cz.',
     envKeys: [{ name: 'ALLOWED_ORIGIN', optional: true }, { name: 'APP_BASE_URL', optional: true }],
-    dashboardUrl: '',
-    pricingUrl: 'https://www.domainoffer.net/tld/cz',
+    dashboardUrl: 'https://client.wedos.com/',
+    pricingUrl: 'https://www.wedos.cz/domeny',
   },
   {
     key: 'anthropic-api',
@@ -157,7 +161,12 @@ export const CATALOG = [
       'Platí se za požadavky nad měsíční limit zdarma (u našeptávače Places zhruba 10 000 požadavků měsíčně). ' +
       'Vyžaduje platební účet v Google Cloud.',
     usedFor: 'Našeptávání adres a lokalit a výběr místa na mapě u subjektů (Places API, Maps JavaScript API).',
-    envKeys: [{ name: 'VITE_GOOGLE_MAPS_API_KEY', scope: 'client' }],
+    costSource: 'google',
+    envKeys: [
+      { name: 'VITE_GOOGLE_MAPS_API_KEY', scope: 'client' },
+      { name: 'GOOGLE_BILLING_SERVICE_ACCOUNT', optional: true },
+      { name: 'GOOGLE_BILLING_EXPORT_TABLE', optional: true },
+    ],
     dashboardUrl: 'https://console.cloud.google.com/billing',
     pricingUrl: 'https://developers.google.com/maps/billing-and-pricing/pricing',
   },
@@ -171,7 +180,10 @@ export const CATALOG = [
     currency: 'USD',
     description: '10 GB úložiště měsíčně zdarma, pak $0,015 za GB a měsíc. Stahování dat je zdarma.',
     usedFor: 'Šifrované kopie nočních záloh databáze mimo Railway (Bezpečnost a zálohy › Zálohy).',
+    costSource: 'cloudflare',
     envKeys: [
+      { name: 'CLOUDFLARE_API_TOKEN', optional: true },
+      { name: 'CLOUDFLARE_ACCOUNT_ID', optional: true },
       { name: 'BACKUP_S3_ENDPOINT' },
       { name: 'BACKUP_S3_BUCKET' },
       { name: 'BACKUP_S3_ACCESS_KEY_ID' },
@@ -257,6 +269,9 @@ export const CATALOG = [
     pricingUrl: 'https://fullcalendar.io/pricing',
   },
 ];
+
+// Domains whose registrar and expiry the finance screen looks up.
+export const CATALOG_DOMAINS = CATALOG.filter((entry) => entry.domain).map((entry) => ({ key: entry.key, domain: entry.domain }));
 
 // The catalog entry as a new expense row.
 export const catalogExpense = (entry) => ({

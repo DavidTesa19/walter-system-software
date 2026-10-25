@@ -1,10 +1,12 @@
 // Admin API for the finance overview (Analýza › Finance): the cost list, the
-// AI usage log and the providers' real bills. Everything here is admin-only.
+// AI usage log, the providers' real bills and the checks on fixed-price
+// services. Everything here is admin-only.
 
 import { z } from 'zod/v4';
 import {
   BILLING_CYCLES,
   CATALOG,
+  CATALOG_DOMAINS,
   CATEGORY_LABELS,
   COST_SOURCES,
   CURRENCIES,
@@ -12,16 +14,22 @@ import {
   catalogExpense,
   describeKeys,
 } from './catalog.js';
-import { PROVIDER_LABELS, ProviderCostError, fetchProviderCosts, isProviderConfigured } from './providers.js';
+import { isBrevoConfigured, lookupBrevoPlan, lookupDomain } from './checks.js';
+import { env } from './http.js';
+import { BILLING_PROVIDERS, ProviderCostError, fetchProviderCosts, isProviderConfigured } from './providers.js';
 import { getRates } from './rates.js';
 import { createFileFinanceStore, createPgFinanceStore } from './store.js';
-import { setUsageSink } from './usage.js';
+import { setStateSink, setUsageSink } from './usage.js';
 
 const HISTORY_MONTHS = 12;
-// Provider bills are re-read when the screen opens and the last read is older
-// than this; the button on the screen reads them at once.
+// Bills are re-read when the screen opens and the last read is older than
+// this; the button on the screen reads them at once.
 const SYNC_MAX_AGE_MS = 3 * 3600 * 1000;
-const PROVIDERS = Object.keys(PROVIDER_LABELS);
+const CHECK_MAX_AGE_MS = 6 * 3600 * 1000;
+const PROVIDERS = Object.keys(BILLING_PROVIDERS);
+
+const syncKey = (provider) => `sync:${provider}`;
+const domainKey = (domain) => `domain:${domain}`;
 
 const dateString = z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'Datum musí být ve tvaru RRRR-MM-DD.');
 const text = (max) => z.string().trim().max(max).nullable().optional();
@@ -65,6 +73,14 @@ const monthStart = (monthsBack) => {
   return { day: date.toISOString().slice(0, 10), date };
 };
 
+const isStale = (state, maxAge) => !state?.at || Date.now() - new Date(state.at).getTime() > maxAge;
+
+const errorMessage = (error, label) => {
+  if (error instanceof ProviderCostError) return error.message;
+  console.error(`${label}:`, error);
+  return 'Načtení se nezdařilo.';
+};
+
 const wrap = (fallback, handler) => async (req, res) => {
   try {
     await handler(req, res);
@@ -82,57 +98,82 @@ export function registerFinanceRoutes(app, { authenticateToken, requireRole, poo
   const guard = [authenticateToken, requireRole('admin')];
   const store = pool ? createPgFinanceStore(pool) : createFileFinanceStore(dataDir);
   setUsageSink((entry) => store.recordUsage(entry));
+  setStateSink((key, value) => store.setState(key, value));
 
-  // Per provider: when its bill was last read, the error if that failed, and
-  // the read in progress (so two open screens do not fetch twice).
-  const syncState = Object.fromEntries(PROVIDERS.map((provider) => [provider, { at: null, error: null, running: null }]));
-
-  const syncProvider = (provider, { firstSync }) => {
-    const state = syncState[provider];
-    if (state.running) return state.running;
-    // The first read takes the whole year; later ones refresh from the start
-    // of last month, which covers late corrections to the previous bill.
-    const from = monthStart(firstSync ? HISTORY_MONTHS - 1 : 1).date;
-    const tomorrow = new Date();
-    tomorrow.setUTCHours(24, 0, 0, 0);
-    state.running = fetchProviderCosts(provider, from, tomorrow)
-      .then((rows) => store.saveProviderCosts(provider, from.toISOString().slice(0, 10), tomorrow.toISOString().slice(0, 10), rows))
-      .then(() => {
-        state.at = new Date().toISOString();
-        state.error = null;
-      })
-      .catch((error) => {
-        state.at = new Date().toISOString();
-        state.error = error instanceof ProviderCostError ? error.message : 'Náklady se nepodařilo načíst.';
-        if (!(error instanceof ProviderCostError)) console.error(`${PROVIDER_LABELS[provider]} costs not synced:`, error);
-      })
-      .finally(() => {
-        state.running = null;
-      });
-    return state.running;
+  // Reads in progress, so two open screens do not fetch the same thing twice.
+  const running = new Map();
+  const once = (key, work) => {
+    if (!running.has(key)) running.set(key, work().finally(() => running.delete(key)));
+    return running.get(key);
   };
 
-  const syncProviders = async ({ force, fetchedAt }) => {
-    await Promise.all(
-      PROVIDERS.filter((provider) => isProviderConfigured(provider)).map((provider) => {
-        const last = syncState[provider].at ?? fetchedAt[provider] ?? null;
-        const stale = !last || Date.now() - new Date(last).getTime() > SYNC_MAX_AGE_MS;
-        return force || stale ? syncProvider(provider, { firstSync: !fetchedAt[provider] }) : null;
-      })
-    );
+  // A provider's bills. The first successful read takes the whole year; later
+  // ones refresh from the start of last month, which also catches late
+  // corrections to the previous bill. Its state remembers the last attempt,
+  // the last success and what the provider said about the open period.
+  const syncProvider = (provider, previous) =>
+    once(syncKey(provider), async () => {
+      const from = monthStart(previous?.okAt ? 1 : HISTORY_MONTHS - 1).date;
+      const tomorrow = new Date();
+      tomorrow.setUTCHours(24, 0, 0, 0);
+      const now = new Date().toISOString();
+      try {
+        const { rows, details } = await fetchProviderCosts(provider, from, tomorrow);
+        await store.saveProviderCosts(provider, from.toISOString().slice(0, 10), tomorrow.toISOString().slice(0, 10), rows);
+        await store.setState(syncKey(provider), { at: now, okAt: now, error: null, details: details ?? null });
+      } catch (error) {
+        await store
+          .setState(syncKey(provider), { ...(previous ?? {}), at: now, error: errorMessage(error, `${BILLING_PROVIDERS[provider].label} costs not synced`) })
+          .catch(() => {});
+      }
+    });
+
+  // A check of a fixed-price service (domain expiry, Brevo plan), kept for a
+  // few hours; a failed check keeps the last good value next to the error.
+  const refreshCheck = (key, previous, force, load) => {
+    if (!force && !isStale(previous, CHECK_MAX_AGE_MS)) return null;
+    return once(key, async () => {
+      const now = new Date().toISOString();
+      try {
+        await store.setState(key, { at: now, error: null, value: await load() });
+      } catch (error) {
+        await store.setState(key, { ...(previous ?? {}), at: now, error: errorMessage(error, `Finance check ${key} failed`) }).catch(() => {});
+      }
+    });
   };
 
-  const overview = async ({ forceSync = false } = {}) => {
+  const stateKeys = [
+    ...PROVIDERS.map(syncKey),
+    'brave_quota',
+    'brevo_plan',
+    ...CATALOG_DOMAINS.map(({ domain }) => domainKey(domain)),
+  ];
+
+  const refreshAll = async (states, force) => {
+    await Promise.all([
+      ...PROVIDERS.filter((provider) => isProviderConfigured(provider)).map((provider) => {
+        const previous = states[syncKey(provider)];
+        return force || isStale(previous, SYNC_MAX_AGE_MS) ? syncProvider(provider, previous) : null;
+      }),
+      isBrevoConfigured() ? refreshCheck('brevo_plan', states.brevo_plan, force, lookupBrevoPlan) : null,
+      ...CATALOG_DOMAINS.map(({ domain }) =>
+        refreshCheck(domainKey(domain), states[domainKey(domain)], force, () => lookupDomain(domain))
+      ),
+    ]);
+  };
+
+  const overview = async ({ force = false } = {}) => {
     const since = monthStart(HISTORY_MONTHS - 1);
-    const before = await store.providerCostSummary(since.day);
-    await syncProviders({ force: forceSync, fetchedAt: before.fetchedAt });
-    const [expenses, keys, usage, providerCosts, rates] = await Promise.all([
+    await refreshAll(await store.getStates(stateKeys), force);
+    const [states, expenses, keys, usage, providerCosts, rates] = await Promise.all([
+      store.getStates(stateKeys),
       store.listExpenses(),
       store.catalogKeys(),
       store.usageSummary(since.date),
       store.providerCostSummary(since.day),
       getRates(),
     ]);
+    const brevo = states.brevo_plan;
     return {
       generatedAt: new Date().toISOString(),
       since: since.day,
@@ -147,17 +188,37 @@ export function registerFinanceRoutes(app, { authenticateToken, requireRole, poo
       keys: describeKeys(),
       usage,
       providers: Object.fromEntries(
-        PROVIDERS.map((provider) => [
-          provider,
-          {
-            label: PROVIDER_LABELS[provider],
-            configured: isProviderConfigured(provider),
-            fetchedAt: syncState[provider].at ?? providerCosts.fetchedAt[provider] ?? null,
-            error: isProviderConfigured(provider) ? syncState[provider].error : null,
-          },
-        ])
+        PROVIDERS.map((provider) => {
+          const configured = isProviderConfigured(provider);
+          const state = states[syncKey(provider)];
+          return [
+            provider,
+            {
+              label: BILLING_PROVIDERS[provider].label,
+              envKeys: BILLING_PROVIDERS[provider].envKeys,
+              configured,
+              fetchedAt: configured ? state?.okAt ?? providerCosts.fetchedAt[provider] ?? null : null,
+              checkedAt: configured ? state?.at ?? null : null,
+              error: configured ? state?.error ?? null : null,
+              details: configured ? state?.details ?? null : null,
+            },
+          ];
+        })
       ),
       providerCosts: providerCosts.rows,
+      checks: {
+        brave: { configured: Boolean(env('BRAVE_SEARCH_API_KEY')), quota: states.brave_quota ?? null },
+        brevo: {
+          configured: isBrevoConfigured(),
+          checkedAt: brevo?.at ?? null,
+          error: isBrevoConfigured() ? brevo?.error ?? null : null,
+          plans: brevo?.value?.plans ?? null,
+        },
+        domains: CATALOG_DOMAINS.map(({ key, domain }) => {
+          const state = states[domainKey(domain)];
+          return { catalogKey: key, domain, checkedAt: state?.at ?? null, error: state?.error ?? null, ...(state?.value ?? {}) };
+        }),
+      },
     };
   };
 
@@ -166,7 +227,7 @@ export function registerFinanceRoutes(app, { authenticateToken, requireRole, poo
   }));
 
   app.post('/api/finance/sync', ...guard, wrap('Náklady od poskytovatelů se nepodařilo načíst.', async (_req, res) => {
-    res.json(await overview({ forceSync: true }));
+    res.json(await overview({ force: true }));
   }));
 
   app.post('/api/finance/expenses', ...guard, wrap('Náklad se nepodařilo uložit.', async (req, res) => {
