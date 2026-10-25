@@ -33,6 +33,7 @@ import {
 import { matchRecord, recordWords } from './fuzzy.js';
 import { DocumentTextError, MAX_DOCUMENT_BYTES, documentText } from './documents.js';
 import { AresError, isValidIco, lookupByIco, normalizeIco, searchByName } from '../ares.js';
+import { PROPOSAL_LIMITS, ProposalError, buildNoteProposal, buildUpdateProposal } from './proposals.js';
 
 export class ToolError extends Error {}
 
@@ -271,6 +272,59 @@ const registryInput = z.object({
   name: z.string().min(2).max(120).optional().describe('Obchodní jméno nebo jeho část, když IČO neznáš.'),
   city: z.string().min(2).max(60).optional().describe('Město sídla – zúží hledání podle názvu.'),
 }).strict();
+
+const changeValue = z.string().max(4000).nullable().optional();
+const multiChangeValue = z.union([z.string().max(500), z.array(z.string().max(500)).max(10)]).nullable().optional();
+
+const proposeInput = z.object({
+  section,
+  role,
+  kind: kind.describe('subject = subjekt (klient/partner/tipař), commission = zakázka.'),
+  id: z.number().int().positive().describe('Interní id záznamu (poslední část ref).'),
+  changes: z
+    .object({
+      ico: changeValue.describe('Subjekt: IČO (8 číslic).'),
+      phone: multiChangeValue.describe('Subjekt: telefon; seznam = víc čísel. Nahradí stávající.'),
+      email: multiChangeValue.describe('Subjekt: e-mail; seznam = víc adres. Nahradí stávající.'),
+      website: multiChangeValue.describe('Subjekt: webové stránky.'),
+      tier: changeValue.describe(`Subjekt: úroveň – ${PROPOSAL_LIMITS.tiers.join(', ')}.`),
+      info: changeValue.describe('Subjekt: Popis / Poznámky (celý text pole, nahradí stávající).'),
+      state: changeValue.describe(`Zakázka: stav – ${PROPOSAL_LIMITS.states.join(', ')}.`),
+      deadline: changeValue.describe('Zakázka: termín, 2026-11-30 nebo 30.11.2026.'),
+      priority: changeValue.describe(`Zakázka: priorita – ${PROPOSAL_LIMITS.priorities.join(', ')}.`),
+      commission_value: changeValue.describe('Zakázka: provize.'),
+      budget: changeValue.describe('Zakázka: rozpočet.'),
+      notes: changeValue.describe('Zakázka: poznámky (celý text pole, nahradí stávající).'),
+    })
+    .strict()
+    .describe('Jen pole, která se mají změnit, s novou hodnotou; null pole vyprázdní.'),
+  reason: z.string().max(300).optional().describe('Krátce proč – uživatel to uvidí na kartě (např. „IČO podle ARES“).'),
+}).strict();
+
+const noteInput = z.object({
+  section,
+  role,
+  id: z.number().int().positive().describe('Interní id subjektu (poslední část ref).'),
+  text: z.string().min(1).max(4000).describe('Text poznámky, jak bude uložen.'),
+  reason: z.string().max(300).optional(),
+}).strict();
+
+// The record a proposal is about, read fresh (not from the run's cache), and
+// a label people recognise.
+async function loadForProposal(ctx, { section: sectionId, role: roleId, kind: kindId, id }) {
+  if (ctx.user.role === 'viewer') throw new ToolError('Uživatel má jen přístup ke čtení – změny navrhovat nelze.');
+  assertSection(ctx, sectionId);
+  ctx.proposalCount = (ctx.proposalCount ?? 0) + 1;
+  if (ctx.proposalCount > 10) throw new ToolError('V jedné odpovědi lze navrhnout nejvýš 10 změn. Navrhni zbytek v další odpovědi.');
+  const path = kindId === 'commission' ? commissionsPath(sectionId, roleId) : entitiesPath(sectionId, roleId);
+  const record = await ctx.api.request('GET', `${path}/${id}`);
+  const label = kindId === 'commission'
+    ? `${record.commission_id} · ${commissionName(record)}`
+    : `${record.entity_id ?? ''} · ${subjectName(record)}`;
+  return { record, label: truncate(label, 120) };
+}
+
+const PENDING_NOTE = 'Čeká na potvrzení: uživatel vidí kartu s tlačítky Potvrdit a Zamítnout. Zatím se nic nezměnilo – netvrď, že je změna provedena.';
 
 const openInput = z.object({
   section,
@@ -863,6 +917,54 @@ export const TOOLS = [
         if (error instanceof AresError) throw new ToolError(error.message);
         throw error;
       }
+    },
+  },
+  {
+    name: 'propose_update',
+    description:
+      'Navrhne změnu polí jednoho subjektu nebo zakázky. NIC NEZAPISUJE: uživateli se ukáže karta se starými a novými hodnotami ' +
+      'a změna se provede, až ji potvrdí tlačítkem Potvrdit. Subjekt: ico, phone, email, website, tier, info. ' +
+      'Zakázka: state, deadline, priority, commission_value, budget, notes. Jména, společnost, obor ani lokalitu měnit neumíš. ' +
+      'Použij, když uživatel o změnu žádá (např. „doplň IČO z ARES“, „posuň termín“, „nastav stav na Podepsáno“). ' +
+      'Před návrhem si záznam načti (get_subject / get_commission), ať víš, co v něm je. Jeden záznam = jeden návrh.',
+    input: proposeInput,
+    label: (input) => `Připravuji návrh změny (${Object.keys(input.changes ?? {}).join(', ')})`,
+    async run(input, ctx) {
+      const { record, label } = await loadForProposal(ctx, input);
+      let proposal;
+      try {
+        proposal = buildUpdateProposal({ kind: input.kind, section: input.section, role: input.role, record, changes: input.changes, reason: input.reason, label });
+      } catch (error) {
+        if (error instanceof ProposalError) throw new ToolError(error.message);
+        throw error;
+      }
+      ctx.emitProposal(proposal);
+      return {
+        navrh: proposal.id,
+        zaznam: label,
+        zmeny: proposal.changes.map((change) => `${change.label}: ${change.fromText} → ${change.toText}`),
+        stav: PENDING_NOTE,
+      };
+    },
+  },
+  {
+    name: 'propose_note',
+    description:
+      'Navrhne přidat poznámku k subjektu (klientovi, partnerovi, tipaři). NIC NEZAPISUJE: uživatel poznámku uvidí na kartě ' +
+      'a uloží ji tlačítkem Potvrdit. Použij, když si uživatel přeje něco poznamenat (shrnutí hovoru, domluvený další krok…).',
+    input: noteInput,
+    label: () => 'Připravuji návrh poznámky',
+    async run(input, ctx) {
+      const { record, label } = await loadForProposal(ctx, { ...input, kind: 'subject' });
+      let proposal;
+      try {
+        proposal = buildNoteProposal({ section: input.section, role: input.role, record, content: input.text, reason: input.reason, label });
+      } catch (error) {
+        if (error instanceof ProposalError) throw new ToolError(error.message);
+        throw error;
+      }
+      ctx.emitProposal(proposal);
+      return { navrh: proposal.id, zaznam: label, poznamka: truncate(proposal.note, 200), stav: PENDING_NOTE };
     },
   },
   {

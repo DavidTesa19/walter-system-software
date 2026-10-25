@@ -1,4 +1,4 @@
-import { API_BASE, apiDelete, apiGet, apiUpload } from '../utils/api';
+import { API_BASE, apiDelete, apiGet, apiPost, apiUpload } from '../utils/api';
 
 export type JarvisSection = 'public' | 'projects' | 'growth';
 export type JarvisRole = 'client' | 'partner' | 'tiper';
@@ -15,13 +15,47 @@ export interface JarvisOpenAction {
   label: string;
 }
 
+// A change Jarvis proposes; applied only when the user confirms it.
+export interface JarvisProposalChange {
+  field: string;
+  label: string;
+  fromText: string;
+  toText: string;
+}
+
+export interface JarvisProposal {
+  id: string;
+  type: 'update' | 'note';
+  kind: JarvisKind;
+  section: JarvisSection;
+  role: JarvisRole;
+  recordId: number;
+  label: string;
+  where: string;
+  changes?: JarvisProposalChange[];
+  note?: string;
+  reason?: string;
+}
+
+export type ProposalStatus = 'applied' | 'rejected' | 'stale' | 'failed';
+
+export interface ProposalDecision {
+  type: 'proposal_status';
+  id: string;
+  status: ProposalStatus;
+  error?: string;
+  at: string;
+}
+
 export type TranscriptItem =
   | { type: 'question'; text: string; at?: string; voice?: boolean; attachments?: AttachmentSummary[] }
   | { type: 'answer'; text: string; model?: string }
   | { type: 'note'; text: string }
   | { type: 'tool'; name: string; label: string; ok: boolean }
   | { type: 'notice'; text: string }
-  | { type: 'action'; action: JarvisOpenAction };
+  | { type: 'action'; action: JarvisOpenAction }
+  | { type: 'proposal'; proposal: JarvisProposal }
+  | ProposalDecision;
 
 export type AttachmentKind = 'image' | 'pdf' | 'text';
 
@@ -61,12 +95,22 @@ export interface JarvisContext {
   voice?: boolean;
 }
 
+export interface JarvisVoiceOption {
+  id: string;
+  label: string;
+  gender: 'female' | 'male' | 'neutral';
+}
+
 export interface JarvisStatus {
   available: boolean;
   model: string;
   // The server can transcribe and speak (OpenAI); otherwise the browser's own
   // speech engines are used.
   voice?: boolean;
+  voices?: JarvisVoiceOption[];
+  defaultVoice?: string;
+  speeds?: number[];
+  defaultSpeed?: number;
 }
 
 export type JarvisEvent =
@@ -78,6 +122,7 @@ export type JarvisEvent =
   | { event: 'tool'; data: { id: string; name: string; label: string } }
   | { event: 'tool_done'; data: { id: string; ok: boolean } }
   | { event: 'action'; data: JarvisOpenAction }
+  | { event: 'proposal'; data: JarvisProposal }
   | { event: 'notice'; data: { text: string } }
   | { event: 'error'; data: { message: string } }
   | { event: 'done'; data: { stopReason: string } };
@@ -118,11 +163,11 @@ export const jarvisApi = {
   },
 
   // Text in, spoken MP3 out.
-  async speech(text: string, signal?: AbortSignal): Promise<Blob> {
+  async speech(text: string, signal?: AbortSignal, options: { voice?: string | null; speed?: number } = {}): Promise<Blob> {
     const response = await fetch(`${API_BASE}/api/jarvis/speech`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', ...authHeaders() },
-      body: JSON.stringify({ text }),
+      body: JSON.stringify({ text, ...(options.voice ? { voice: options.voice } : {}), ...(options.speed ? { speed: options.speed } : {}) }),
       signal,
     });
     if (!response.ok) throw await failure(response, 'Odpověď se nepodařilo přečíst');
@@ -133,6 +178,9 @@ export const jarvisApi = {
   conversation: (id: string) =>
     apiGet<{ id: string; title: string | null; transcript: TranscriptItem[] }>(`/api/jarvis/conversations/${id}`),
   deleteConversation: (id: string) => apiDelete(`/api/jarvis/conversations/${id}`),
+  // Confirm (apply) or turn down a change Jarvis proposed.
+  decideProposal: (conversationId: string, proposalId: string, decision: 'apply' | 'reject') =>
+    apiPost<ProposalDecision>(`/api/jarvis/conversations/${conversationId}/proposals/${proposalId}`, { decision }),
 
   // Upload a file to attach to the next message.
   async uploadAttachment(file: File): Promise<UploadedAttachment> {

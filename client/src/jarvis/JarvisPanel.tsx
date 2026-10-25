@@ -1,9 +1,22 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import MarkdownMessage from '../components/MarkdownMessage';
 import { jarvisApi } from './jarvisApi';
-import type { AttachmentKind, AttachmentSummary, ConversationSummary, JarvisEvent, JarvisOpenAction, JarvisStatus, TranscriptItem } from './jarvisApi';
+import type {
+  AttachmentKind,
+  AttachmentSummary,
+  ConversationSummary,
+  JarvisEvent,
+  JarvisOpenAction,
+  JarvisStatus,
+  JarvisProposal,
+  JarvisVoiceOption,
+  ProposalDecision,
+  TranscriptItem,
+} from './jarvisApi';
 import { ATTACHMENT_ACCEPT, MAX_ATTACHMENTS, MAX_ATTACHMENT_BYTES, formatSize, namePastedImage, shrinkImage } from './attachmentFiles';
 import { useJarvisVoice } from './useJarvisVoice';
+import { PAUSE_OPTIONS, SPEED_OPTIONS, formatSpeed, loadVoiceSettings, saveVoiceSettings } from './voiceSettings';
+import type { VoiceSettings } from './voiceSettings';
 import { useJarvisFocus } from './jarvisFocus';
 import type { JarvisFocus } from './jarvisFocus';
 import { unlockAudio } from './voice';
@@ -58,6 +71,7 @@ interface Turn {
   answer: string | null;
   notices: string[];
   actions: JarvisOpenAction[];
+  proposals: JarvisProposal[];
 }
 
 // The flat transcript, grouped into one block per question.
@@ -65,7 +79,7 @@ function groupTurns(items: TranscriptItem[]): Turn[] {
   const turns: Turn[] = [];
   for (const item of items) {
     if (item.type === 'question') {
-      turns.push({ question: item, steps: [], answer: null, notices: [], actions: [] });
+      turns.push({ question: item, steps: [], answer: null, notices: [], actions: [], proposals: [] });
       continue;
     }
     const turn = turns[turns.length - 1];
@@ -74,6 +88,7 @@ function groupTurns(items: TranscriptItem[]): Turn[] {
     else if (item.type === 'answer') turn.answer = turn.answer ? `${turn.answer}\n\n${item.text}` : item.text;
     else if (item.type === 'notice') turn.notices.push(item.text);
     else if (item.type === 'action') turn.actions.push(item.action);
+    else if (item.type === 'proposal') turn.proposals.push(item.proposal);
   }
   return turns;
 }
@@ -82,6 +97,7 @@ interface LiveTurn {
   question: string;
   voice: boolean;
   attachments: AttachmentSummary[];
+  proposals: JarvisProposal[];
   steps: Array<{ id: string; label: string; done: boolean; ok: boolean }>;
   text: string;
   thinking: string;
@@ -104,6 +120,72 @@ interface PendingAttachment {
 
 const kindOfFile = (file: File): AttachmentKind =>
   file.type.startsWith('image/') ? 'image' : file.type === 'application/pdf' || /\.pdf$/i.test(file.name) ? 'pdf' : 'text';
+
+const DECISION_TEXT: Record<ProposalDecision['status'], string> = {
+  applied: 'Provedeno',
+  rejected: 'Zamítnuto',
+  stale: 'Neprovedeno – záznam se mezitím změnil',
+  failed: 'Nepodařilo se provést',
+};
+
+// A change Jarvis proposes: what it would change, and the user's decision.
+function ProposalCard({
+  proposal,
+  decision,
+  deciding,
+  disabled,
+  onDecide,
+}: {
+  proposal: JarvisProposal;
+  decision?: ProposalDecision;
+  deciding: boolean;
+  disabled: boolean;
+  onDecide: (decision: 'apply' | 'reject') => void;
+}) {
+  const state = decision?.status ?? 'pending';
+  return (
+    <div className={`jarvis-proposal jarvis-proposal--${state}`}>
+      <div className="jarvis-proposal-head">
+        <span className="jarvis-proposal-badge">{proposal.type === 'note' ? 'Nová poznámka' : 'Návrh změny'}</span>
+        <strong>{proposal.label}</strong>
+        <small>{proposal.where}</small>
+      </div>
+      {proposal.changes && proposal.changes.length > 0 && (
+        <dl className="jarvis-proposal-changes">
+          {proposal.changes.map((change) => (
+            <div key={change.field} className="jarvis-proposal-change">
+              <dt>{change.label}</dt>
+              <dd>
+                <span className="jarvis-proposal-from">{change.fromText}</span>
+                <span className="jarvis-proposal-arrow" aria-label="změnit na">→</span>
+                <span className="jarvis-proposal-to">{change.toText}</span>
+              </dd>
+            </div>
+          ))}
+        </dl>
+      )}
+      {proposal.note && <p className="jarvis-proposal-note">{proposal.note}</p>}
+      {proposal.reason && <p className="jarvis-proposal-reason">{proposal.reason}</p>}
+      {decision ? (
+        <div className={`jarvis-proposal-status jarvis-proposal-status--${decision.status}`}>
+          {decision.status === 'applied' ? '✓ ' : ''}
+          {DECISION_TEXT[decision.status]}
+          {decision.error && decision.status !== 'rejected' ? `: ${decision.error}` : ''}
+        </div>
+      ) : (
+        <div className="jarvis-proposal-buttons">
+          <button type="button" className="jarvis-proposal-apply" onClick={() => onDecide('apply')} disabled={disabled || deciding}>
+            {deciding ? 'Provádím…' : 'Potvrdit'}
+          </button>
+          <button type="button" className="jarvis-proposal-reject" onClick={() => onDecide('reject')} disabled={disabled || deciding}>
+            Zamítnout
+          </button>
+          {disabled && !deciding && <small>Potvrdit půjde, až Jarvis dopíše odpověď.</small>}
+        </div>
+      )}
+    </div>
+  );
+}
 
 // The attachments of a sent question, under its text.
 function QuestionAttachments({ attachments }: { attachments?: AttachmentSummary[] }) {
@@ -183,6 +265,13 @@ const Icon = {
     <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
       <rect x="9" y="3" width="6" height="11" rx="3" />
       <path d="M5 11a7 7 0 0 0 14 0M12 18v3" />
+    </svg>
+  ),
+  tune: (
+    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+      <path d="M4 7h10M18 7h2M4 17h4M12 17h8" />
+      <circle cx="16" cy="7" r="2" />
+      <circle cx="10" cy="17" r="2" />
     </svg>
   ),
   clip: (
@@ -276,6 +365,120 @@ function ReadAloudButton({ reading, onRead, onStop }: { reading: boolean; onRead
   );
 }
 
+const VOICE_SAMPLE =
+  'Dobrý den, tady Jarvis. Takhle zním, když čtu odpovědi. Klient Software House má jednu aktivní zakázku s termínem do konce měsíce.';
+
+const VOICE_GROUPS: Array<{ gender: JarvisVoiceOption['gender']; title: string }> = [
+  { gender: 'female', title: 'Ženské hlasy' },
+  { gender: 'male', title: 'Mužské hlasy' },
+  { gender: 'neutral', title: 'Neutrální' },
+];
+
+// How Jarvis sounds and when a spoken question goes off. Kept per browser.
+function VoiceSettingsPanel({
+  settings,
+  status,
+  onChange,
+  previewing,
+  onPreview,
+  onStopPreview,
+}: {
+  settings: VoiceSettings;
+  status: JarvisStatus | null;
+  onChange: (patch: Partial<VoiceSettings>) => void;
+  previewing: boolean;
+  onPreview: () => void;
+  onStopPreview: () => void;
+}) {
+  const voices = status?.voice ? status.voices ?? [] : [];
+  const selected = settings.voice ?? status?.defaultVoice ?? null;
+  return (
+    <div className="jarvis-voice-settings">
+      <section>
+        <h4>Hlas Jarvise</h4>
+        {voices.length > 0 ? (
+          VOICE_GROUPS.filter((group) => voices.some((voice) => voice.gender === group.gender)).map((group) => (
+            <div key={group.gender} className="jarvis-voice-group">
+              <span className="jarvis-voice-group-title">{group.title}</span>
+              <div className="jarvis-chip-row">
+                {voices
+                  .filter((voice) => voice.gender === group.gender)
+                  .map((voice) => (
+                    <button
+                      key={voice.id}
+                      type="button"
+                      className={`jarvis-choice${voice.id === selected ? ' jarvis-choice--on' : ''}`}
+                      aria-pressed={voice.id === selected}
+                      onClick={() => onChange({ voice: voice.id })}
+                    >
+                      {voice.label}
+                    </button>
+                  ))}
+              </div>
+            </div>
+          ))
+        ) : (
+          <p className="jarvis-voice-note">
+            Jarvis teď mluví hlasem prohlížeče, který zní roboticky. Přirozené hlasy se zapnou, jakmile bude na serveru
+            nastavený klíč OPENAI_API_KEY.
+          </p>
+        )}
+      </section>
+      <section>
+        <h4>Rychlost řeči</h4>
+        <div className="jarvis-chip-row">
+          {SPEED_OPTIONS.map((speed) => (
+            <button
+              key={speed}
+              type="button"
+              className={`jarvis-choice${speed === settings.speed ? ' jarvis-choice--on' : ''}`}
+              aria-pressed={speed === settings.speed}
+              onClick={() => onChange({ speed })}
+            >
+              {formatSpeed(speed)}
+            </button>
+          ))}
+        </div>
+        <button type="button" className="jarvis-chip-button jarvis-voice-preview" onClick={previewing ? onStopPreview : onPreview}>
+          {previewing ? Icon.stop : Icon.speakerSmall} {previewing ? 'Zastavit ukázku' : 'Poslechnout ukázku'}
+        </button>
+      </section>
+      <section>
+        <h4>Hlasový dotaz odeslat</h4>
+        <label className="jarvis-radio">
+          <input type="radio" name="jarvis-send-mode" checked={settings.sendMode === 'auto'} onChange={() => onChange({ sendMode: 'auto' })} />
+          <span>
+            <strong>Automaticky, když domluvím</strong>
+            <small>Krátké nadechnutí nevadí – dotaz odejde až po delší pauze.</small>
+          </span>
+        </label>
+        {settings.sendMode === 'auto' && (
+          <div className="jarvis-chip-row jarvis-radio-extra">
+            {PAUSE_OPTIONS.map((option) => (
+              <button
+                key={option.ms}
+                type="button"
+                className={`jarvis-choice${option.ms === settings.pauseMs ? ' jarvis-choice--on' : ''}`}
+                aria-pressed={option.ms === settings.pauseMs}
+                onClick={() => onChange({ pauseMs: option.ms })}
+              >
+                {option.label}
+              </button>
+            ))}
+          </div>
+        )}
+        <label className="jarvis-radio">
+          <input type="radio" name="jarvis-send-mode" checked={settings.sendMode === 'manual'} onChange={() => onChange({ sendMode: 'manual' })} />
+          <span>
+            <strong>Ručně, tlačítkem Odeslat</strong>
+            <small>Mluvte, jak dlouho chcete; nahrávání ukončíte sami.</small>
+          </span>
+        </label>
+      </section>
+    </div>
+  );
+}
+
 const formatElapsed = (seconds: number) => `${Math.floor(seconds / 60)}:${String(seconds % 60).padStart(2, '0')}`;
 
 function Steps({ steps, open }: { steps: Turn['steps']; open: boolean }) {
@@ -338,6 +541,8 @@ export default function JarvisPanel({ open, onOpen, onClose, viewLabel, launcher
   const focus = useJarvisFocus();
   const readAloudRef = useRef(readAloud);
   const [attachments, setAttachments] = useState<PendingAttachment[]>([]);
+  // Proposals whose decision is on its way to the server.
+  const [deciding, setDeciding] = useState<Set<string>>(() => new Set());
   const [dragging, setDragging] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const attachmentsRef = useRef<PendingAttachment[]>([]);
@@ -393,7 +598,16 @@ export default function JarvisPanel({ open, onOpen, onClose, viewLabel, launcher
   };
 
   // A spoken question goes off as soon as it has been transcribed.
-  const voice = useJarvisVoice(status?.voice, (text) => void send(text, true));
+  const [voiceSettings, setVoiceSettings] = useState<VoiceSettings>(loadVoiceSettings);
+  const [showVoiceSettings, setShowVoiceSettings] = useState(false);
+  const changeVoiceSettings = (patch: Partial<VoiceSettings>) => {
+    setVoiceSettings((current) => {
+      const next = { ...current, ...patch };
+      saveVoiceSettings(next);
+      return next;
+    });
+  };
+  const voice = useJarvisVoice(status?.voice, (text) => void send(text, true), voiceSettings);
   const { cancelListening, stopSpeaking } = voice;
   const listening = voice.listen !== 'idle';
   const speaking = voice.speakingKey !== null;
@@ -473,6 +687,7 @@ export default function JarvisPanel({ open, onOpen, onClose, viewLabel, launcher
   }, [open, closePanel, listening, speaking, cancelListening, stopSpeaking]);
 
   const openHistory = async () => {
+    setShowVoiceSettings(false);
     setShowHistory((value) => !value);
     if (!showHistory) {
       try {
@@ -518,6 +733,7 @@ export default function JarvisPanel({ open, onOpen, onClose, viewLabel, launcher
       question: message,
       voice: spoken,
       attachments: sending.map((attachment) => ({ name: attachment.name, kind: attachment.kind ?? 'text' })),
+      proposals: [],
       steps: [],
       text: '',
       thinking: '',
@@ -554,6 +770,9 @@ export default function JarvisPanel({ open, onOpen, onClose, viewLabel, launcher
           break;
         case 'action':
           setLive((turn) => (turn ? { ...turn, actions: [...turn.actions, event.data] } : turn));
+          break;
+        case 'proposal':
+          setLive((turn) => (turn ? { ...turn, proposals: [...turn.proposals, event.data] } : turn));
           break;
         case 'notice':
           setLive((turn) => (turn ? { ...turn, notices: [...turn.notices, event.data.text] } : turn));
@@ -616,6 +835,59 @@ export default function JarvisPanel({ open, onOpen, onClose, viewLabel, launcher
   };
 
   const turns = useMemo(() => groupTurns(transcript), [transcript]);
+  const decisions = useMemo(() => {
+    const map = new Map<string, ProposalDecision>();
+    for (const item of transcript) if (item.type === 'proposal_status') map.set(item.id, item);
+    return map;
+  }, [transcript]);
+
+  const decideProposal = async (proposalId: string, decision: 'apply' | 'reject') => {
+    if (!conversationId) return;
+    setDeciding((current) => new Set(current).add(proposalId));
+    try {
+      const result = await jarvisApi.decideProposal(conversationId, proposalId, decision);
+      setTranscript((items) => [...items, result]);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Rozhodnutí se nepodařilo uložit.');
+    } finally {
+      setDeciding((current) => {
+        const next = new Set(current);
+        next.delete(proposalId);
+        return next;
+      });
+    }
+  };
+
+  // Several pending proposals of one answer, confirmed one after another.
+  const applyAll = async (proposals: JarvisProposal[]) => {
+    for (const proposal of proposals) {
+      if (!decisions.has(proposal.id)) await decideProposal(proposal.id, 'apply');
+    }
+  };
+
+  const renderProposals = (proposals: JarvisProposal[], live: boolean) => {
+    if (proposals.length === 0) return null;
+    const open = proposals.filter((proposal) => !decisions.has(proposal.id));
+    return (
+      <div className="jarvis-proposals">
+        {proposals.map((proposal) => (
+          <ProposalCard
+            key={proposal.id}
+            proposal={proposal}
+            decision={decisions.get(proposal.id)}
+            deciding={deciding.has(proposal.id)}
+            disabled={live || busy}
+            onDecide={(decision) => void decideProposal(proposal.id, decision)}
+          />
+        ))}
+        {!live && open.length > 1 && (
+          <button type="button" className="jarvis-proposal-apply jarvis-proposal-all" onClick={() => void applyAll(open)} disabled={busy || deciding.size > 0}>
+            Potvrdit vše ({open.length})
+          </button>
+        )}
+      </div>
+    );
+  };
   const unavailable = status && !status.available;
   const subtitle = busy
     ? 'Pracuji…'
@@ -625,7 +897,7 @@ export default function JarvisPanel({ open, onOpen, onClose, viewLabel, launcher
         ? 'Přepisuji…'
         : speaking
           ? 'Mluvím…'
-          : 'AI asistent · zatím jen čte data';
+          : 'AI asistent';
 
   return (
     <>
@@ -681,6 +953,21 @@ export default function JarvisPanel({ open, onOpen, onClose, viewLabel, launcher
           <span>{subtitle}</span>
         </div>
         <div className="jarvis-header-actions">
+          {(voice.canSpeak || voice.canListen) && (
+            <button
+              type="button"
+              className={`jarvis-icon-button${showVoiceSettings ? ' jarvis-icon-button--on' : ''}`}
+              onClick={() => {
+                setShowVoiceSettings((value) => !value);
+                setShowHistory(false);
+              }}
+              title="Nastavení hlasu"
+              aria-label="Nastavení hlasu"
+              aria-expanded={showVoiceSettings}
+            >
+              {Icon.tune}
+            </button>
+          )}
           {voice.canSpeak && (
             <button
               type="button"
@@ -711,6 +998,17 @@ export default function JarvisPanel({ open, onOpen, onClose, viewLabel, launcher
           </button>
         </div>
       </header>
+
+      {showVoiceSettings && (
+        <VoiceSettingsPanel
+          settings={voiceSettings}
+          status={status}
+          onChange={changeVoiceSettings}
+          previewing={voice.speakingKey === 'preview'}
+          onPreview={() => void voice.speak(VOICE_SAMPLE, 'preview')}
+          onStopPreview={stopSpeaking}
+        />
+      )}
 
       {showHistory && (
         <div className="jarvis-history">
@@ -746,7 +1044,7 @@ export default function JarvisPanel({ open, onOpen, onClose, viewLabel, launcher
           <div className="jarvis-welcome">
             <JarvisMark large />
             <div className="jarvis-welcome-title">Na co se chcete zeptat?</div>
-            <p>Hledám v klientech, partnerech, tipařích a zakázkách, kam máte přístup, ve vašem kalendáři, v nahraných dokumentech i v rejstříku firem ARES. Data zatím jen čtu.</p>
+            <p>Hledám v klientech, partnerech, tipařích a zakázkách, kam máte přístup, ve vašem kalendáři, v nahraných dokumentech i v rejstříku firem ARES. Změny jen navrhuji – provedou se, až je potvrdíte.</p>
             {voice.canListen && (
               <p className="jarvis-welcome-voice">
                 {Icon.micSmall} Ptát se můžete i hlasem: klikněte na mikrofon a mluvte, odpovím nahlas.
@@ -793,6 +1091,7 @@ export default function JarvisPanel({ open, onOpen, onClose, viewLabel, launcher
                 onStop={stopSpeaking}
               />
             )}
+            {renderProposals(turn.proposals, false)}
             {turn.notices.map((notice, noticeIndex) => (
               <div key={noticeIndex} className="jarvis-notice">{notice}</div>
             ))}
@@ -834,6 +1133,7 @@ export default function JarvisPanel({ open, onOpen, onClose, viewLabel, launcher
                 <span>{live.thinking ? `…${live.thinking.slice(-120)}` : 'Přemýšlím…'}</span>
               </div>
             )}
+            {renderProposals(live.proposals, true)}
             {live.notices.map((notice, noticeIndex) => (
               <div key={noticeIndex} className="jarvis-notice">{notice}</div>
             ))}
@@ -959,7 +1259,11 @@ export default function JarvisPanel({ open, onOpen, onClose, viewLabel, launcher
                 {voice.listen === 'listening' && (
                   <>
                     <strong>{voice.interim || `Poslouchám… ${formatElapsed(voice.elapsed)}`}</strong>
-                    <span>Po krátké pauze dotaz odešlu sám</span>
+                    <span>
+                      {voiceSettings.sendMode === 'manual'
+                        ? 'Až domluvíte, klikněte na Odeslat'
+                        : `Odešlu, až ${String(voiceSettings.pauseMs / 1000).replace('.', ',')} s nebudete mluvit`}
+                    </span>
                   </>
                 )}
               </div>
@@ -991,7 +1295,18 @@ export default function JarvisPanel({ open, onOpen, onClose, viewLabel, launcher
               disabled={Boolean(unavailable)}
             />
           )}
-          {voice.canListen && !listening && (
+          {speaking && !listening && (
+            <button
+              type="button"
+              className="jarvis-mic jarvis-mic--stop"
+              onClick={stopSpeaking}
+              title="Zastavit čtení (Esc)"
+              aria-label="Zastavit čtení"
+            >
+              {Icon.stop}
+            </button>
+          )}
+          {voice.canListen && !listening && !speaking && (
             <button
               type="button"
               className="jarvis-mic"

@@ -17,7 +17,7 @@ import {
   truncate,
 } from './catalog.js';
 import { createFileConversationStore, createPgConversationStore } from './store.js';
-import { MAX_AUDIO_BYTES, MAX_SPEECH_CHARS, isVoiceConfigured, synthesize, transcribe } from './voice.js';
+import { MAX_AUDIO_BYTES, MAX_SPEECH_CHARS, TTS_SPEED, TTS_SPEEDS, TTS_VOICE, TTS_VOICES, isVoiceConfigured, synthesize, transcribe } from './voice.js';
 import {
   AttachmentError,
   MAX_ATTACHMENTS,
@@ -29,6 +29,7 @@ import {
   prepareAttachment,
 } from './attachments.js';
 import { recordAiUsage } from '../finance/usage.js';
+import { ProposalError, applyProposal, describeProposal } from './proposals.js';
 
 const MAX_MESSAGE_LENGTH = 8000;
 const HOURLY_LIMIT = Number(process.env.JARVIS_HOURLY_LIMIT) > 0 ? Number(process.env.JARVIS_HOURLY_LIMIT) : 60;
@@ -47,6 +48,33 @@ const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{
 
 const zeroUsage = () => ({ input: 0, output: 0, cacheRead: 0, cacheWrite: 0 });
 
+const PROPOSAL_STATUS_TEXT = {
+  applied: 'uživatel potvrdil, provedeno',
+  rejected: 'uživatel zamítl, neprovedeno',
+  stale: 'neprovedeno – záznam se mezitím změnil',
+  failed: 'provedení selhalo',
+};
+
+// What became of Jarvis's proposed changes since the user's last message,
+// and which still wait for a decision — so its next answer knows.
+export function proposalOutcomes(transcript = []) {
+  const lastQuestion = transcript.map((item) => item.type).lastIndexOf('question');
+  const proposals = new Map(transcript.filter((item) => item.type === 'proposal' && item.proposal).map((item) => [item.proposal.id, item.proposal]));
+  const decided = new Set();
+  const lines = [];
+  transcript.forEach((item, index) => {
+    if (item.type !== 'proposal_status') return;
+    decided.add(item.id);
+    const proposal = proposals.get(item.id);
+    if (index > lastQuestion && proposal) {
+      lines.push(`Návrh ${describeProposal(proposal)}: ${PROPOSAL_STATUS_TEXT[item.status] ?? item.status}${item.error ? ` (${item.error})` : ''}`);
+    }
+  });
+  const pending = [...proposals.values()].filter((proposal) => !decided.has(proposal.id));
+  for (const proposal of pending.slice(-10)) lines.push(`Návrh ${describeProposal(proposal)}: stále čeká na potvrzení`);
+  return lines;
+}
+
 const isReplayable = (message) => !(message.role === 'assistant' && Array.isArray(message.content) && message.content.length === 0);
 
 // Text from the browser that goes into the <kontext> block: kept short and
@@ -55,7 +83,7 @@ const cleanContextText = (value, max = 160) => String(value ?? '').replace(/[<>]
 
 // What the app tells Jarvis at the start of every user message. It changes
 // every turn, so it lives here rather than in the cached system prompt.
-export function buildContextBlock(user, context, attachmentNames = []) {
+export function buildContextBlock(user, context, attachmentNames = [], proposalLines = []) {
   const now = new Date().toLocaleString('cs-CZ', {
     timeZone: 'Europe/Prague',
     weekday: 'long',
@@ -73,6 +101,7 @@ export function buildContextBlock(user, context, attachmentNames = []) {
   if (context?.view) lines.push(`Obrazovka: ${cleanContextText(context.view)}`);
   if (context?.voice === true) lines.push('Režim: hlasový (uživatel otázku řekl nahlas a odpověď mu bude přečtena)');
   if (attachmentNames.length) lines.push(`Přílohy této zprávy: ${attachmentNames.map((name) => cleanContextText(name, 120)).join(', ')}`);
+  for (const line of proposalLines) lines.push(cleanContextText(line, 400));
   // The profile open in a grid, and the zakázka selected in it.
   const describeOpen = (record, title) => {
     if (
@@ -162,9 +191,16 @@ export function registerJarvisRoutes(app, { authenticateToken, pool, dataDir, po
   });
 
   // `voice` says whether the server can listen and speak; without it the
-  // browser uses its own (lower quality) speech engines.
+  // browser uses its own (lower quality) speech engines. `voices` are the
+  // ones a user can pick, with the default voice and speed.
   app.get('/api/jarvis/status', authenticateToken, (_req, res) => {
-    res.json({ available: isJarvisConfigured(), model: JARVIS_MODEL, voice: isVoiceConfigured() });
+    const voice = isVoiceConfigured();
+    res.json({
+      available: isJarvisConfigured(),
+      model: JARVIS_MODEL,
+      voice,
+      ...(voice ? { voices: TTS_VOICES, defaultVoice: TTS_VOICE, speeds: TTS_SPEEDS, defaultSpeed: TTS_SPEED } : {}),
+    });
   });
 
   const rawAudio = express.raw({ type: ['audio/*', 'application/octet-stream'], limit: MAX_AUDIO_BYTES });
@@ -208,7 +244,8 @@ export function registerJarvisRoutes(app, { authenticateToken, pool, dataDir, po
       if (!res.writableFinished) abort.abort();
     });
     try {
-      const audio = Buffer.from(await (await synthesize(text, abort.signal, Number(req.user.id))).arrayBuffer());
+      const options = { voice: req.body?.voice, speed: req.body?.speed };
+      const audio = Buffer.from(await (await synthesize(text, abort.signal, Number(req.user.id), options)).arrayBuffer());
       res.setHeader('Content-Type', 'audio/mpeg');
       res.setHeader('Cache-Control', 'no-store');
       res.end(audio);
@@ -251,6 +288,73 @@ export function registerJarvisRoutes(app, { authenticateToken, pool, dataDir, po
     } catch (error) {
       console.error('Jarvis: deleting a conversation failed:', error);
       res.status(500).json({ error: 'Nepodařilo se smazat konverzaci.' });
+    }
+  });
+
+  // The user's decision on a proposed change: apply it (through this server's
+  // API as the AI agent acting for them, its own changeset in the change log)
+  // or turn it down. Either way the outcome joins the transcript, and Jarvis
+  // hears about it with the next message.
+  app.post('/api/jarvis/conversations/:id/proposals/:proposalId', authenticateToken, async (req, res) => {
+    const userId = Number(req.user.id);
+    const decision = req.body?.decision;
+    if (decision !== 'apply' && decision !== 'reject') return res.status(400).json({ error: 'Neznámé rozhodnutí.' });
+    if (!UUID_PATTERN.test(req.params.id)) return res.status(404).json({ error: 'Konverzace nenalezena.' });
+    if (running.has(req.params.id)) return res.status(409).json({ error: 'Počkejte, až Jarvis dokončí odpověď.' });
+
+    let conversation;
+    try {
+      conversation = await store.get(req.params.id, userId);
+    } catch (error) {
+      console.error('Jarvis: loading a conversation failed:', error);
+      return res.status(500).json({ error: 'Nepodařilo se načíst konverzaci.' });
+    }
+    if (!conversation) return res.status(404).json({ error: 'Konverzace nenalezena.' });
+    const transcript = conversation.transcript ?? [];
+    const proposal = transcript.find((item) => item.type === 'proposal' && item.proposal?.id === req.params.proposalId)?.proposal;
+    if (!proposal) return res.status(404).json({ error: 'Návrh nenalezen.' });
+    if (transcript.some((item) => item.type === 'proposal_status' && item.id === proposal.id)) {
+      return res.status(409).json({ error: 'Tento návrh už je vyřízený.' });
+    }
+
+    running.add(conversation.id);
+    try {
+      let status = 'rejected';
+      let error;
+      if (decision === 'apply') {
+        if (req.user.role === 'viewer') {
+          status = 'failed';
+          error = 'Máte jen přístup ke čtení.';
+        } else {
+          const api = createApiClient({
+            baseUrl,
+            token: signAgentToken(req.user),
+            changesetId: `jarvis-${conversation.id.slice(0, 8)}-${proposal.id.slice(0, 8)}`,
+            note: `Jarvis, potvrzeno uživatelem: ${truncate(describeProposal(proposal), 300)}`,
+          });
+          try {
+            await applyProposal(proposal, api);
+            status = 'applied';
+          } catch (applyError) {
+            if (applyError instanceof ProposalError) {
+              status = 'stale';
+              error = applyError.message;
+            } else {
+              status = 'failed';
+              error = applyError?.status === 403 ? 'Na tento záznam nemáte oprávnění.' : 'Změnu se nepodařilo provést.';
+              console.error('Jarvis: applying a proposal failed:', applyError?.message ?? applyError);
+            }
+          }
+        }
+      }
+      const item = { type: 'proposal_status', id: proposal.id, status, ...(error ? { error } : {}), at: new Date().toISOString() };
+      await store.append(conversation.id, userId, { messages: [], transcript: [item], usage: zeroUsage() });
+      res.json(item);
+    } catch (error) {
+      console.error('Jarvis: recording a proposal decision failed:', error);
+      res.status(500).json({ error: 'Rozhodnutí se nepodařilo uložit.' });
+    } finally {
+      running.delete(conversation.id);
     }
   });
 
@@ -318,7 +422,15 @@ export function registerJarvisRoutes(app, { authenticateToken, pool, dataDir, po
       const userMessage = {
         role: 'user',
         content: [
-          { type: 'text', text: buildContextBlock(user, req.body?.context, attachments.map((attachment) => attachment.name)) },
+          {
+            type: 'text',
+            text: buildContextBlock(
+              user,
+              req.body?.context,
+              attachments.map((attachment) => attachment.name),
+              proposalOutcomes(conversation?.transcript)
+            ),
+          },
           ...attachments.map(attachmentBlock),
           { type: 'text', text: question },
         ],
@@ -353,6 +465,11 @@ export function registerJarvisRoutes(app, { authenticateToken, pool, dataDir, po
         emitAction: (action) => {
           pendingActions.push({ type: 'action', action });
           emit('action', action);
+        },
+        // A proposed change: shown as a card, applied only when confirmed.
+        emitProposal: (proposal) => {
+          pendingActions.push({ type: 'proposal', proposal });
+          emit('proposal', proposal);
         },
       };
 

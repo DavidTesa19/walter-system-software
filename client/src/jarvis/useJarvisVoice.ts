@@ -10,7 +10,8 @@ import {
   toSpeechText,
   unlockAudio,
 } from './voice';
-import type { BrowserListening, Recording, Speaker } from './voice';
+import type { BrowserListening, ListenOptions, Recording, Speaker } from './voice';
+import type { VoiceSettings } from './voiceSettings';
 
 export type ListenState = 'idle' | 'starting' | 'listening' | 'transcribing';
 
@@ -34,7 +35,7 @@ const recognitionError = (code: string) => {
 // Jarvis's ears and mouth. `serverVoice` comes from /api/jarvis/status:
 // true uses the server (OpenAI) both ways, false the browser's own engines,
 // undefined (status not loaded yet) neither.
-export function useJarvisVoice(serverVoice: boolean | undefined, onTranscript: (text: string) => void) {
+export function useJarvisVoice(serverVoice: boolean | undefined, onTranscript: (text: string) => void, settings: VoiceSettings) {
   const [listen, setListen] = useState<ListenState>('idle');
   const [elapsed, setElapsed] = useState(0);
   const [interim, setInterim] = useState('');
@@ -50,6 +51,9 @@ export function useJarvisVoice(serverVoice: boolean | undefined, onTranscript: (
   const transcribeAbortRef = useRef<AbortController | null>(null);
   const cancelledRef = useRef(false);
   const onTranscriptRef = useRef(onTranscript);
+  // Read when speaking or listening starts, so a changed setting applies to
+  // the next answer or question without rebuilding the speakers.
+  const settingsRef = useRef(settings);
   const speakerRef = useRef<Speaker | null>(null);
   const speakTokenRef = useRef(0);
 
@@ -57,13 +61,28 @@ export function useJarvisVoice(serverVoice: boolean | undefined, onTranscript: (
     onTranscriptRef.current = onTranscript;
   }, [onTranscript]);
 
+  useEffect(() => {
+    settingsRef.current = settings;
+  }, [settings]);
+
+  const listenOptions = (): ListenOptions => ({
+    autoStop: settingsRef.current.sendMode === 'auto',
+    silenceMs: settingsRef.current.pauseMs,
+  });
+
   const setListenState = (state: ListenState) => {
     listenRef.current = state;
     setListen(state);
   };
 
   const useServer = serverVoice === true;
-  const serverSpeaker = useMemo(() => createServerSpeaker((text, signal) => jarvisApi.speech(text, signal)), []);
+  const serverSpeaker = useMemo(
+    () =>
+      createServerSpeaker((text, signal) =>
+        jarvisApi.speech(text, signal, { voice: settingsRef.current.voice, speed: settingsRef.current.speed })
+      ),
+    []
+  );
   const browserSpeaker = useMemo(() => createBrowserSpeaker(), []);
   const canListen = serverVoice !== undefined && (useServer ? canRecord() : canRecognizeInBrowser());
   const canSpeak = serverVoice !== undefined && (useServer || browserSpeaker !== null);
@@ -88,7 +107,7 @@ export function useJarvisVoice(serverVoice: boolean | undefined, onTranscript: (
       for (const speaker of speakers) {
         speakerRef.current = speaker;
         try {
-          await speaker.speak(text);
+          await speaker.speak(text, { rate: settingsRef.current.speed });
           break;
         } catch (err) {
           console.warn('Jarvis: reading aloud failed', err);
@@ -114,7 +133,7 @@ export function useJarvisVoice(serverVoice: boolean | undefined, onTranscript: (
     if (!useServer) {
       let listening: BrowserListening;
       try {
-        listening = startBrowserRecognition(setInterim, (code) => setError(recognitionError(code)));
+        listening = startBrowserRecognition(setInterim, (code) => setError(recognitionError(code)), listenOptions());
       } catch (err) {
         setError(err instanceof Error ? err.message : 'Rozpoznávání řeči selhalo.');
         return;
@@ -135,7 +154,7 @@ export function useJarvisVoice(serverVoice: boolean | undefined, onTranscript: (
     try {
       recording = await startRecording((value) => {
         levelRef.current = value;
-      });
+      }, listenOptions());
     } catch (err) {
       setListenState('idle');
       setError(micError(err));

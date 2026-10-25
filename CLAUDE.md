@@ -235,9 +235,20 @@ inherited one falls back to the browser's serif. Needs `ANTHROPIC_API_KEY`;
   IČO is checked against its mod-11 check digit before ARES is asked; a city
   goes to ARES as `sidlo.textovaAdresa` (ARES refuses searches over 1 000
   hits). People are returned with name and role only — the register's home
-  addresses and birth dates are left out on purpose. Jarvis has no write
-  tools yet, so it shows ARES data but never stores it; the user fills in the
-  subject's IČO field.
+  addresses and birth dates are left out on purpose. Jarvis stores an IČO
+  only through a confirmed `propose_update`.
+- **Changes with approval** (`propose_update`, `propose_note`,
+  `server/jarvis/proposals.js`): Jarvis never writes on its own. A propose
+  tool checks the values (IČO check digit, allowed states/priorities/tiers,
+  real dates), records each field's current and new value, and the panel
+  shows a card; `POST /api/jarvis/conversations/:id/proposals/:pid` with
+  `apply` writes it through the app's API with the agent token (its own
+  changeset in the change log), `reject` declines. A field that changed since
+  the card was made is not overwritten (status `stale`). Decisions are
+  transcript items (`proposal_status`) and reach Jarvis's next turn through
+  `proposalOutcomes` in the `<kontext>` block. Only fields in
+  `SUBJECT_FIELDS` / `COMMISSION_FIELDS` can be changed — names, companies,
+  obor and places are trees the profile panel edits; viewers cannot propose.
 - **Answers written before a tool call vanish on Opus 5.5**: text between tool
   calls comes back as a thinking-block progress note, so "answer, then
   open_record" ends the turn with nothing to show. The prompt asks for the
@@ -264,8 +275,14 @@ inherited one falls back to the browser's serif. Needs `ANTHROPIC_API_KEY`;
   audio body) and read-aloud (`POST /api/jarvis/speech`) go through OpenAI with
   `OPENAI_API_KEY` — Claude has no audio. Env: `JARVIS_STT_MODEL`
   (gpt-4o-transcribe), `JARVIS_TTS_MODEL` (gpt-4o-mini-tts), `JARVIS_TTS_VOICE`
-  (onyx), `JARVIS_STT_LANGUAGE` (cs; empty = auto), `JARVIS_VOICE_HOURLY_LIMIT`
-  (300). Without the key the browser's own engines stand in (Chrome on Windows
+  (default voice, cedar), `JARVIS_STT_LANGUAGE` (cs; empty = auto),
+  `JARVIS_VOICE_HOURLY_LIMIT` (300). Each user picks a voice (`TTS_VOICES`,
+  13 OpenAI voices by gender) and speed in the panel's voice menu
+  (`voiceSettings.ts`, localStorage); speed goes to OpenAI's `speed`
+  parameter, so faster speech keeps its pitch. Spoken questions go off after
+  a chosen pause (default 2.5 s — a breath is shorter) or, in manual mode,
+  only on the send button; the browser recognizer runs continuously so the
+  same pause applies to it. Without the key the browser's own engines stand in (Chrome on Windows
   only has the robotic "Microsoft Jakub" for Czech). A spoken question sends
   `context.voice`, which adds "Režim: hlasový" to the `<kontext>` block — the
   `<hlas>` rules in the system prompt stay static. The mic level lives in a ref

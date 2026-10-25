@@ -74,7 +74,9 @@ export function splitForSpeech(text: string, firstLimit = 220, limit = 650): str
 
 export interface Speaker {
   // Resolves when the text has been read, or as soon as stop() is called.
-  speak(text: string): Promise<void>;
+  // `rate` is the browser voice's speed; the server voice gets its speed with
+  // each request instead (the server speeds speech up without changing pitch).
+  speak(text: string, options?: { rate?: number }): Promise<void>;
   stop(): void;
 }
 
@@ -170,7 +172,7 @@ export function createBrowserSpeaker(): Speaker | null {
     finish = null;
   };
 
-  const speak = (text: string) => {
+  const speak = (text: string, options?: { rate?: number }) => {
     stop();
     // Chrome cuts off utterances after ~15 s, so read sentence-sized pieces.
     const pieces = splitForSpeech(text, 200, 200);
@@ -181,6 +183,7 @@ export function createBrowserSpeaker(): Speaker | null {
       pieces.forEach((piece, index) => {
         const utterance = new SpeechSynthesisUtterance(piece);
         utterance.lang = 'cs-CZ';
+        utterance.rate = options?.rate ?? 1;
         if (voice) utterance.voice = voice;
         if (index === pieces.length - 1) {
           utterance.onend = () => resolve();
@@ -211,14 +214,24 @@ const MIME_TYPES = ['audio/webm;codecs=opus', 'audio/webm', 'audio/mp4', 'audio/
 export const canRecord = () =>
   typeof window !== 'undefined' && typeof MediaRecorder !== 'undefined' && Boolean(navigator.mediaDevices?.getUserMedia);
 
-const SILENCE_AFTER_SPEECH_MS = 1500;
 const NO_SPEECH_TIMEOUT_MS = 8000;
 const MAX_RECORDING_MS = 120_000;
+// Sent by hand, a question can be long: a dictated note, a list of changes.
+const MAX_MANUAL_RECORDING_MS = 300_000;
+
+export interface ListenOptions {
+  // true: the question goes off by itself after `silenceMs` of silence.
+  // false: listening goes on until stop() (the send button).
+  autoStop: boolean;
+  silenceMs: number;
+}
+
+const DEFAULT_LISTEN: ListenOptions = { autoStop: true, silenceMs: 2500 };
 
 // Records from the microphone until stop(), or until the speaker pauses after
 // saying something (so a question goes off by itself, like in a call).
 // onLevel gets the input loudness 0–1 for the meter.
-export async function startRecording(onLevel: (level: number) => void): Promise<Recording> {
+export async function startRecording(onLevel: (level: number) => void, options: ListenOptions = DEFAULT_LISTEN): Promise<Recording> {
   // Made before the permission prompt, while the click still counts: Safari
   // keeps a context made later suspended, and the pause detection with it.
   const ctx = new AudioContext();
@@ -289,7 +302,11 @@ export async function startRecording(onLevel: (level: number) => void): Promise<
       lastLoudAt = now;
     }
     const heardSpeech = speechMs >= 250;
-    if (heardSpeech && now - lastLoudAt > SILENCE_AFTER_SPEECH_MS) finish('silence');
+    if (!options.autoStop) {
+      if (now - startedAt > MAX_MANUAL_RECORDING_MS) finish('limit');
+      return;
+    }
+    if (heardSpeech && now - lastLoudAt > options.silenceMs) finish('silence');
     else if (!heardSpeech && now - startedAt > NO_SPEECH_TIMEOUT_MS) finish('no-speech');
     else if (now - startedAt > MAX_RECORDING_MS) finish('limit');
   }, 50);
@@ -348,14 +365,22 @@ export interface BrowserListening {
 }
 
 // Chrome, Edge and Safari can transcribe on their own (Chrome sends the audio
-// to Google). It ends by itself when the speaker pauses.
-export function startBrowserRecognition(onInterim: (text: string) => void, onError: (code: string) => void): BrowserListening {
+// to Google). The recognizer would end at its own short pause, so it runs
+// continuously and the pause length is ours, as with the server's voice.
+export function startBrowserRecognition(
+  onInterim: (text: string) => void,
+  onError: (code: string) => void,
+  options: ListenOptions = DEFAULT_LISTEN
+): BrowserListening {
   const Recognizer = recognizerConstructor();
   if (!Recognizer) throw new Error('Prohlížeč neumí rozpoznávat řeč.');
   const recognizer = new Recognizer();
   recognizer.lang = 'cs-CZ';
   recognizer.interimResults = true;
-  recognizer.continuous = false;
+  recognizer.continuous = true;
+  const startedAt = Date.now();
+  let lastHeardAt = 0;
+  let heardText = '';
 
   let finalText = '';
   let cancelled = false;
@@ -371,12 +396,27 @@ export function startBrowserRecognition(onInterim: (text: string) => void, onErr
       if (item.isFinal) finalText += item[0].transcript;
       else interim += item[0].transcript;
     }
-    onInterim(`${finalText}${interim}`.trim());
+    heardText = `${finalText}${interim}`.trim();
+    lastHeardAt = Date.now();
+    onInterim(heardText);
   };
+  const timer = window.setInterval(() => {
+    const now = Date.now();
+    if (!options.autoStop) {
+      if (now - startedAt > MAX_MANUAL_RECORDING_MS) recognizer.stop();
+      return;
+    }
+    if (heardText && now - lastHeardAt > options.silenceMs) recognizer.stop();
+    else if (!heardText && now - startedAt > NO_SPEECH_TIMEOUT_MS) recognizer.stop();
+  }, 200);
   recognizer.onerror = (event) => {
     if (event.error !== 'aborted' && event.error !== 'no-speech') onError(event.error);
   };
-  recognizer.onend = () => resolveResult(cancelled ? '' : finalText.trim());
+  recognizer.onend = () => {
+    window.clearInterval(timer);
+    // Text still marked interim when it was stopped by hand counts too.
+    resolveResult(cancelled ? '' : (finalText.trim() || heardText));
+  };
   recognizer.start();
 
   return {
