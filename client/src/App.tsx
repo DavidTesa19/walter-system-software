@@ -23,6 +23,7 @@ import FullCalendarView from './views/FullCalendarView';
 import AnalyticsView from './views/AnalyticsView';
 import AdminUsersView from './views/AdminUsersView';
 import SafetyView from './views/SafetyView';
+import FinanceView from './views/FinanceView';
 import JarvisPanel from './jarvis/JarvisPanel';
 import type { JarvisOpenAction } from './jarvis/jarvisApi';
 import ProjectsSectionView from './views/ProjectsSectionView';
@@ -89,6 +90,7 @@ const VIEW_LABELS: Record<AppView, string> = {
   calendar: 'Kalendář',
   teamchat: 'Týmový chat',
   analytics: 'Analytika',
+  finance: 'Finance',
   admin_users: 'Správa uživatelů',
   safety: 'Bezpečnost a zálohy',
   entities_active: 'Aktuální subjekty',
@@ -664,6 +666,8 @@ const AppContent: React.FC = () => {
                 return <FullCalendarView />;
               case 'analytics':
                   return <AnalyticsView />;
+              case 'finance':
+                return <FinanceView />;
               case 'admin_users':
                 return <AdminUsersView />;
               case 'safety':

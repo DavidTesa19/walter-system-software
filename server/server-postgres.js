@@ -57,6 +57,8 @@ import { reenterRequestContext, requestContextMiddleware } from "./safety/contex
 import { registerSafetyRoutes } from "./safety/routes.js";
 import { registerJarvisRoutes } from "./jarvis/routes.js";
 import { registerAresRoutes } from "./ares.js";
+import { registerFinanceRoutes } from "./finance/routes.js";
+import { openAiUsageTokens, recordAiUsage } from "./finance/usage.js";
 
 dotenv.config();
 
@@ -1190,6 +1192,8 @@ async function searchWeb(query, maxResults = 3, fetchContent = true) {
       }
     });
 
+    recordAiUsage({ provider: "brave", feature: "web_search", units: 1 });
+
     const results = response.data.web?.results || [];
     const enrichedResults = [];
     for (const result of results) {
@@ -1342,6 +1346,15 @@ registerJarvisRoutes(app, {
   dataDir: DATA_DIR,
   port: PORT,
   signAgentToken: (user) => jwt.sign({ ...toAuthUser(user), actorType: 'ai_agent' }, EFFECTIVE_JWT_SECRET, { expiresIn: '15m' }),
+});
+
+// Analýza › Finance: the cost list, the AI usage log and the providers' bills —
+// admin only. Registered here so the usage log is ready before any AI call.
+registerFinanceRoutes(app, {
+  authenticateToken,
+  requireRole,
+  pool: db.isPostgres() ? db.getPool() : null,
+  dataDir: DATA_DIR,
 });
 
 // File-based database functions (development mode)
@@ -1637,6 +1650,13 @@ app.post("/api/chat", authenticateToken, async (req, res) => {
 
     const message = ensureNonEmptyResponse(flowResult.responseMessage, model, flowResult.completion);
     const resolvedModel = flowResult.model ?? model;
+    recordAiUsage({
+      provider: provider === SUPPORTED_PROVIDERS.claude ? "anthropic" : "openai",
+      model: resolvedModel,
+      feature: "chat",
+      userId: req.user?.id,
+      ...openAiUsageTokens(flowResult.completion?.usage),
+    });
 
     res.json({
       message,
@@ -1711,7 +1731,8 @@ app.post("/api/chat/stream", authenticateToken, async (req, res) => {
     const apiParams = {
       model,
       messages: messagesWithSystem,
-      stream: true
+      stream: true,
+      stream_options: { include_usage: true }
     };
 
     if (useWebSearch) {
@@ -1743,8 +1764,19 @@ app.post("/api/chat/stream", authenticateToken, async (req, res) => {
     let fullContent = "";
     let totalTokens = { prompt: 0, completion: 0, total: 0 };
     let toolCalls = [];
+    // OpenAI sends the token counts in one extra chunk after the last content
+    // (stream_options.include_usage); they are only logged, not shown.
+    const streamUsage = { input: 0, cacheRead: 0, output: 0 };
+    const addStreamUsage = (usage) => {
+      if (!usage) return;
+      const tokens = openAiUsageTokens(usage);
+      streamUsage.input += tokens.input;
+      streamUsage.cacheRead += tokens.cacheRead;
+      streamUsage.output += tokens.output;
+    };
 
     for await (const chunk of stream) {
+      addStreamUsage(chunk.usage);
       const delta = chunk.choices[0]?.delta;
       const content = delta?.content || "";
       if (content) {
@@ -1815,7 +1847,8 @@ app.post("/api/chat/stream", authenticateToken, async (req, res) => {
           const followUpParams = {
             model,
             messages: messagesWithSystem,
-            stream: true
+            stream: true,
+            stream_options: { include_usage: true }
           };
 
           if (!isRestrictedModel) {
@@ -1836,6 +1869,7 @@ app.post("/api/chat/stream", authenticateToken, async (req, res) => {
           fullContent = '';
 
           for await (const followUpChunk of followUpStream) {
+            addStreamUsage(followUpChunk.usage);
             const followUpContent = followUpChunk.choices[0]?.delta?.content || '';
             if (followUpContent) {
               fullContent += followUpContent;
@@ -1876,6 +1910,7 @@ app.post("/api/chat/stream", authenticateToken, async (req, res) => {
       }
     }
 
+    recordAiUsage({ provider: "openai", model, feature: "chat", userId: req.user?.id, ...streamUsage });
     res.end();
   } catch (error) {
     console.error("Streaming error:", error);

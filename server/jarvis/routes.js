@@ -28,6 +28,7 @@ import {
   deleteFiles,
   prepareAttachment,
 } from './attachments.js';
+import { recordAiUsage } from '../finance/usage.js';
 
 const MAX_MESSAGE_LENGTH = 8000;
 const HOURLY_LIMIT = Number(process.env.JARVIS_HOURLY_LIMIT) > 0 ? Number(process.env.JARVIS_HOURLY_LIMIT) : 60;
@@ -185,7 +186,7 @@ export function registerJarvisRoutes(app, { authenticateToken, pool, dataDir, po
       if (!res.writableFinished) abort.abort();
     });
     try {
-      res.json({ text: await transcribe(req.body, req.headers['content-type'], abort.signal) });
+      res.json({ text: await transcribe(req.body, req.headers['content-type'], abort.signal, Number(req.user.id)) });
     } catch (error) {
       if (abort.signal.aborted) return;
       console.error('Jarvis: transcription failed:', error?.message ?? error);
@@ -207,7 +208,7 @@ export function registerJarvisRoutes(app, { authenticateToken, pool, dataDir, po
       if (!res.writableFinished) abort.abort();
     });
     try {
-      const audio = Buffer.from(await (await synthesize(text, abort.signal)).arrayBuffer());
+      const audio = Buffer.from(await (await synthesize(text, abort.signal, Number(req.user.id))).arrayBuffer());
       res.setHeader('Content-Type', 'audio/mpeg');
       res.setHeader('Cache-Control', 'no-store');
       res.end(audio);
@@ -375,6 +376,7 @@ export function registerJarvisRoutes(app, { authenticateToken, pool, dataDir, po
         transcript: pendingActions.splice(0),
         usage: result.usage,
       });
+      recordAiUsage({ provider: 'anthropic', model: JARVIS_MODEL, feature: 'jarvis', userId, ...result.usage });
       console.log(
         `Jarvis turn: user ${userId}, ${result.stopReason}, tokens in ${result.usage.input} / out ${result.usage.output}` +
         ` / cache read ${result.usage.cacheRead} / cache write ${result.usage.cacheWrite}`

@@ -17,6 +17,7 @@ import {
 import { installDbContextHook } from './safety/context.js';
 import { installSafetyLayer } from './safety/pg-install.js';
 import { installJarvisSchema } from './jarvis/store.js';
+import { installFinanceSchema } from './finance/store.js';
 
 dotenv.config();
 const { Pool } = pkg;
@@ -1312,6 +1313,13 @@ export async function initDatabase() {
       await installJarvisSchema(client);
     } catch (error) {
       console.error('✗ Jarvis schema could not be created:', error.message);
+    }
+
+    // The finance overview's cost list, AI usage log and provider bills.
+    try {
+      await installFinanceSchema(client);
+    } catch (error) {
+      console.error('✗ Finance schema could not be created:', error.message);
     }
 
     // Change log, delete/truncate/drop guards and AI agent brakes. Runs last so

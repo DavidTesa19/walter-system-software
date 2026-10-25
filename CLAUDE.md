@@ -151,6 +151,30 @@ entity tables), the public-table INSERTs and the commission joins
 JSON helpers in `entity-commission-json.js`, and on the client the section's
 API types, normalisers, `mapXEntityUpdates`, row mirrors and `entitySync.ts`.
 
+## Finance overview (`server/finance/`, Analýza › Finance)
+
+Admin-only screen (`FinanceView.tsx`, `client/src/finance/`) listing everything
+the app costs. Three kinds of data (`server/finance/store.js`, Postgres or
+`server/data/finance.json` in the JSON dev backend):
+
+- **`finance_expenses`** — the cost list admins edit. `catalog.js` lists every
+  service found in the code (hosting, domain, AI, mail, maps, R2, …) with an
+  estimated price; the screen offers to import the ones not yet in the list.
+  A new paid service or API key belongs in `CATALOG`, with its env var names
+  (names only — the API reports set/unset, never values).
+- **`finance_ai_usage`** — one row per AI call, priced by `pricing.js`. **Every
+  new call to Anthropic, OpenAI or Brave must call `recordAiUsage`**
+  (`finance/usage.js`; fire-and-forget, never throws), or its cost is missing
+  from the screen. Update `pricing.js` when a model or price changes; an
+  unknown model is logged without a price and flagged on the screen.
+- **`finance_provider_costs`** — the real bills, read from Anthropic's
+  `cost_report` and OpenAI's `organization/costs` with `ANTHROPIC_ADMIN_KEY` /
+  `OPENAI_ADMIN_KEY` (admin keys, not the call keys). Re-read when the screen
+  opens if older than 3 h; the first read takes 12 months.
+
+The two telemetry tables are in `AUDIT_EXCLUDED_TABLES`; `finance_expenses` is
+logged. CZK conversion uses ČNB's daily fixing (`rates.js`, fixed fallback).
+
 ## Jarvis, the AI agent (`server/jarvis/`, `client/src/jarvis/`)
 
 Claude (model `JARVIS_MODEL`, default `claude-opus-5-5`; effort `JARVIS_EFFORT`,

@@ -10,6 +10,7 @@
 import AdmZip from 'adm-zip';
 import Anthropic from '@anthropic-ai/sdk';
 import { extractText, getDocumentProxy } from 'unpdf';
+import { recordAiUsage } from '../finance/usage.js';
 
 export const MAX_DOCUMENT_BYTES = 25 * 1024 * 1024;
 // Same model as Jarvis unless set otherwise (a cheaper one is a fine choice:
@@ -175,6 +176,15 @@ async function transcribe(block, signal) {
     { signal }
   );
   const message = await stream.finalMessage();
+  recordAiUsage({
+    provider: 'anthropic',
+    model: message.model ?? OCR_MODEL,
+    feature: 'jarvis_ocr',
+    input: message.usage?.input_tokens,
+    output: message.usage?.output_tokens,
+    cacheRead: message.usage?.cache_read_input_tokens,
+    cacheWrite: message.usage?.cache_creation_input_tokens,
+  });
   if (message.stop_reason === 'refusal') throw new DocumentTextError('Dokument se nepodařilo přečíst.');
   const text = message.content.filter((item) => item.type === 'text').map((item) => item.text).join('');
   return { text, truncated: message.stop_reason === 'max_tokens' };

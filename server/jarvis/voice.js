@@ -4,6 +4,7 @@
 // falls back to its own speech engines, so nothing here is required.
 
 import OpenAI, { toFile } from 'openai';
+import { recordAiUsage } from '../finance/usage.js';
 
 export const STT_MODEL = process.env.JARVIS_STT_MODEL || 'gpt-4o-transcribe';
 export const TTS_MODEL = process.env.JARVIS_TTS_MODEL || 'gpt-4o-mini-tts';
@@ -40,7 +41,7 @@ export const isVoiceConfigured = () => Boolean(process.env.OPENAI_API_KEY);
 // The extension tells OpenAI the container; codecs parameters are dropped.
 export const audioExtension = (mimeType) => AUDIO_EXTENSIONS[String(mimeType ?? '').split(';')[0].trim().toLowerCase()] ?? null;
 
-export async function transcribe(buffer, mimeType, signal) {
+export async function transcribe(buffer, mimeType, signal, userId = null) {
   const extension = audioExtension(mimeType) ?? 'webm';
   const result = await getClient().audio.transcriptions.create(
     {
@@ -51,11 +52,24 @@ export async function transcribe(buffer, mimeType, signal) {
     },
     { signal }
   );
+  // gpt-4o-transcribe reports tokens, whisper-1 seconds.
+  const usage = result.usage;
+  recordAiUsage({
+    provider: 'openai',
+    model: STT_MODEL,
+    feature: 'voice_stt',
+    userId,
+    ...(usage?.type === 'duration'
+      ? { units: usage.seconds }
+      : { input: usage?.input_tokens, output: usage?.output_tokens }),
+  });
   return String(result.text ?? '').trim();
 }
 
 // Returns the fetch Response, so the MP3 can be streamed straight through.
-export function synthesize(text, signal) {
+// The speech API reports no usage; the log counts characters instead.
+export function synthesize(text, signal, userId = null) {
+  recordAiUsage({ provider: 'openai', model: TTS_MODEL, feature: 'voice_tts', userId, units: text.length });
   return getClient().audio.speech.create(
     {
       model: TTS_MODEL,

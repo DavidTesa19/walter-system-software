@@ -165,6 +165,19 @@ const Icons = {
       <line x1="6" y1="20" x2="6" y2="14" />
     </svg>
   ),
+  Analysis: () => (
+    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M21.21 15.89A10 10 0 1 1 8 2.83" />
+      <path d="M22 12A10 10 0 0 0 12 2v10z" />
+    </svg>
+  ),
+  Finance: () => (
+    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <rect x="2" y="5" width="20" height="14" rx="2" />
+      <line x1="2" y1="10" x2="22" y2="10" />
+      <line x1="6" y1="15" x2="10" y2="15" />
+    </svg>
+  ),
   Users: () => (
     <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
       <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"></path>
@@ -264,7 +277,8 @@ const Sidebar: React.FC<SidebarProps> = ({
       },
       { id: 'calendar', views: ['calendar'] },
       { id: 'teamchat', views: ['teamchat'] },
-      { id: 'other', views: ['future', 'chatbot', 'palettes', 'analytics', 'admin_users', 'safety'] }
+      { id: 'analysis', views: ['analytics', 'finance'] },
+      { id: 'other', views: ['future', 'chatbot', 'palettes', 'admin_users', 'safety'] }
     ];
 
     const activeGroup = groups.find(g => g.views.includes(activeView as string));
@@ -473,6 +487,15 @@ const Sidebar: React.FC<SidebarProps> = ({
       items: [{ id: 'teamchat', label: 'Týmový chat', icon: <Icons.TeamChat /> }]
     },
     {
+      id: 'analysis',
+      label: 'Analýza',
+      icon: <Icons.Analysis />,
+      items: [
+        { id: 'analytics', label: 'Analytika', icon: <Icons.Analytics /> },
+        { id: 'finance', label: 'Finance', icon: <Icons.Finance /> }
+      ]
+    },
+    {
       id: 'other',
       label: 'Ostatní',
       icon: <Icons.Other />,
@@ -480,7 +503,6 @@ const Sidebar: React.FC<SidebarProps> = ({
         { id: 'future', label: 'Budoucí funkce', icon: <Icons.Future /> },
         { id: 'chatbot', label: 'AI Asistent', icon: <Icons.Chatbot /> },
         { id: 'palettes', label: 'Motivy', icon: <Icons.Palettes /> },
-        { id: 'analytics', label: 'Analytika', icon: <Icons.Analytics /> },
         { id: 'admin_users', label: 'Správa uživatelů', icon: <Icons.Users /> },
         { id: 'safety', label: 'Bezpečnost a zálohy', icon: <Icons.Safety /> }
       ]
