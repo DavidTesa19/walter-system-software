@@ -19,7 +19,8 @@ import { fetchGoogleBilling, isGoogleBillingConfigured } from './google-billing.
 
 export { ProviderCostError };
 
-const MAX_PAGES = 12;
+// 31 daily buckets a page: two years of history at most.
+const MAX_PAGES = 24;
 
 // ---------- Anthropic: USD cents as decimal strings, one bucket per day ----------
 

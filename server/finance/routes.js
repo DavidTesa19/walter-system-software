@@ -1,6 +1,6 @@
 // Admin API for the finance overview (Analýza › Finance): the cost list, the
-// AI usage log, the providers' real bills and the checks on fixed-price
-// services. Everything here is admin-only.
+// AI usage log, the providers' real bills, the checks on fixed-price services
+// and the payment history. Everything here is admin-only.
 
 import { z } from 'zod/v4';
 import {
@@ -15,6 +15,7 @@ import {
   describeKeys,
 } from './catalog.js';
 import { isBrevoConfigured, lookupBrevoPlan, lookupDomain } from './checks.js';
+import { HISTORY_START, buildHistory, recurringPayments } from './history.js';
 import { env } from './http.js';
 import { BILLING_PROVIDERS, ProviderCostError, fetchProviderCosts, isProviderConfigured } from './providers.js';
 import { getRates } from './rates.js';
@@ -60,6 +61,24 @@ const expenseInput = z
     costSource: z.enum(COST_SOURCES).nullable().optional(),
   })
   .strict();
+
+const paymentFields = z
+  .object({
+    paidOn: dateString.refine((value) => value >= HISTORY_START, 'Historie začíná 1. 9. 2025.'),
+    expenseId: z.number().int().positive().nullable().optional(),
+    category: z.enum(Object.keys(CATEGORY_LABELS)),
+    description: text(500),
+    amount: z.number().min(0, 'Částka nemůže být záporná.').max(100_000_000),
+    currency: z.enum(CURRENCIES),
+    // What the bank actually charged in CZK; when set, no rate is applied.
+    amountCzk: z.number().min(0).max(1_000_000_000).nullable().optional(),
+    note: text(2000),
+  })
+  .strict();
+const paymentInput = paymentFields.refine(
+  (value) => Boolean(value.expenseId) || Boolean(value.description?.trim()),
+  'Vyberte službu, nebo vyplňte popis platby.'
+);
 
 const firstIssue = (error) => error.issues[0]?.message ?? 'Neplatná data.';
 
@@ -107,20 +126,22 @@ export function registerFinanceRoutes(app, { authenticateToken, requireRole, poo
     return running.get(key);
   };
 
-  // A provider's bills. The first successful read takes the whole year; later
-  // ones refresh from the start of last month, which also catches late
-  // corrections to the previous bill. Its state remembers the last attempt,
-  // the last success and what the provider said about the open period.
+  // A provider's bills. The first successful read goes back to the start of
+  // the history (09/2025); later ones refresh from the start of last month,
+  // which also catches late corrections to the previous bill. Its state
+  // remembers the last attempt, the last success, how far back the bills go
+  // and what the provider said about the open period.
   const syncProvider = (provider, previous) =>
     once(syncKey(provider), async () => {
-      const from = monthStart(previous?.okAt ? 1 : HISTORY_MONTHS - 1).date;
+      const complete = previous?.okAt && previous.historyFrom === HISTORY_START;
+      const from = complete ? monthStart(1).date : new Date(`${HISTORY_START}T00:00:00Z`);
       const tomorrow = new Date();
       tomorrow.setUTCHours(24, 0, 0, 0);
       const now = new Date().toISOString();
       try {
         const { rows, details } = await fetchProviderCosts(provider, from, tomorrow);
         await store.saveProviderCosts(provider, from.toISOString().slice(0, 10), tomorrow.toISOString().slice(0, 10), rows);
-        await store.setState(syncKey(provider), { at: now, okAt: now, error: null, details: details ?? null });
+        await store.setState(syncKey(provider), { at: now, okAt: now, error: null, historyFrom: HISTORY_START, details: details ?? null });
       } catch (error) {
         await store
           .setState(syncKey(provider), { ...(previous ?? {}), at: now, error: errorMessage(error, `${BILLING_PROVIDERS[provider].label} costs not synced`) })
@@ -250,6 +271,46 @@ export function registerFinanceRoutes(app, { authenticateToken, requireRole, poo
     const id = Number(req.params.id);
     if (!Number.isInteger(id)) return res.status(400).json({ error: 'Neplatné ID.' });
     if (!(await store.deleteExpense(id))) return res.status(404).json({ error: 'Náklad neexistuje.' });
+    res.status(204).end();
+  }));
+
+  // The payment history: bills, months filled in from fixed costs, payments
+  // added by hand. Bills are refreshed like on the overview, and new months of
+  // the fixed costs are filled in on every load.
+  app.get('/api/finance/history', ...guard, wrap('Historii výdajů se nepodařilo načíst.', async (_req, res) => {
+    await refreshAll(await store.getStates(stateKeys), false);
+    const [states, expenses] = await Promise.all([store.getStates(stateKeys), store.listExpenses()]);
+    const domainChecks = CATALOG_DOMAINS.map(({ key, domain }) => ({ catalogKey: key, ...(states[domainKey(domain)]?.value ?? {}) }));
+    await store.addRecurringPayments(recurringPayments(expenses, domainChecks));
+    res.json(await buildHistory({ store, expenses }));
+  }));
+
+  const checkExpense = async (expenseId) => !expenseId || Boolean(await store.getExpense(expenseId));
+
+  app.post('/api/finance/payments', ...guard, wrap('Platbu se nepodařilo uložit.', async (req, res) => {
+    const parsed = paymentInput.safeParse(req.body);
+    if (!parsed.success) return res.status(400).json({ error: firstIssue(parsed.error) });
+    if (!(await checkExpense(parsed.data.expenseId))) return res.status(400).json({ error: 'Vybraná služba neexistuje.' });
+    res.status(201).json(await store.createPayment(parsed.data));
+  }));
+
+  app.put('/api/finance/payments/:id', ...guard, wrap('Platbu se nepodařilo uložit.', async (req, res) => {
+    const id = Number(req.params.id);
+    if (!Number.isInteger(id)) return res.status(400).json({ error: 'Neplatné ID.' });
+    const parsed = paymentFields.partial().safeParse(req.body);
+    if (!parsed.success) return res.status(400).json({ error: firstIssue(parsed.error) });
+    if (!(await checkExpense(parsed.data.expenseId))) return res.status(400).json({ error: 'Vybraná služba neexistuje.' });
+    const payment = await store.updatePayment(id, parsed.data);
+    if (!payment) return res.status(404).json({ error: 'Platba neexistuje.' });
+    res.json(payment);
+  }));
+
+  // A month filled in from a fixed cost is hidden rather than deleted, so the
+  // next fill does not bring it back.
+  app.delete('/api/finance/payments/:id', ...guard, wrap('Platbu se nepodařilo smazat.', async (req, res) => {
+    const id = Number(req.params.id);
+    if (!Number.isInteger(id)) return res.status(400).json({ error: 'Neplatné ID.' });
+    if (!(await store.deletePayment(id))) return res.status(404).json({ error: 'Platba neexistuje.' });
     res.status(204).end();
   }));
 

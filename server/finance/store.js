@@ -5,6 +5,10 @@
 //   finance_provider_costs  what each provider billed per day and line item,
 //                           in the provider's currency, copied from its
 //                           billing API (providers.js)
+//   finance_payments        the payment history admins keep by hand: one-off
+//                           payments and the months filled in from fixed
+//                           costs (origin 'recurring'); provider bills are
+//                           not copied here, the history reads them directly
 //   finance_state           small cached documents: each connector's last
 //                           sync, Railway's open billing period, the Brave
 //                           quota, the Brevo plan, domain expiry dates
@@ -81,6 +85,25 @@ export async function installFinanceSchema(client) {
   `);
   await client.query(`ALTER TABLE finance_provider_costs ADD COLUMN IF NOT EXISTS currency TEXT NOT NULL DEFAULT 'USD'`);
   await client.query(`
+    CREATE TABLE IF NOT EXISTS finance_payments (
+      id SERIAL PRIMARY KEY,
+      paid_on DATE NOT NULL,
+      expense_id INTEGER,
+      category TEXT NOT NULL DEFAULT 'other',
+      description TEXT,
+      amount NUMERIC(14, 2) NOT NULL DEFAULT 0,
+      currency TEXT NOT NULL DEFAULT 'CZK',
+      amount_czk NUMERIC(14, 2),
+      note TEXT,
+      origin TEXT NOT NULL DEFAULT 'manual',
+      recurring_key TEXT UNIQUE,
+      dismissed BOOLEAN NOT NULL DEFAULT false,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+      updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
+    )
+  `);
+  await client.query(`CREATE INDEX IF NOT EXISTS idx_finance_payments_paid_on ON finance_payments (paid_on)`);
+  await client.query(`
     CREATE TABLE IF NOT EXISTS finance_state (
       key TEXT PRIMARY KEY,
       value JSONB NOT NULL,
@@ -126,6 +149,41 @@ const toExpense = (row) => {
   expense.updatedAt = row.updated_at;
   return expense;
 };
+
+// Payment fields an admin can set; origin, recurring key and dismissal are
+// the server's.
+const PAYMENT_COLUMNS = {
+  paidOn: 'paid_on',
+  expenseId: 'expense_id',
+  category: 'category',
+  description: 'description',
+  amount: 'amount',
+  currency: 'currency',
+  amountCzk: 'amount_czk',
+  note: 'note',
+};
+
+const PAYMENT_SELECT = `
+  SELECT id, paid_on::text AS paid_on, expense_id, category, description, amount::float8 AS amount, currency,
+         amount_czk::float8 AS amount_czk, note, origin, recurring_key, dismissed, created_at, updated_at
+    FROM finance_payments`;
+
+const toPayment = (row) => ({
+  id: row.id,
+  paidOn: row.paid_on,
+  expenseId: row.expense_id ?? null,
+  category: row.category,
+  description: row.description ?? null,
+  amount: Number(row.amount ?? 0),
+  currency: row.currency,
+  amountCzk: row.amount_czk === null || row.amount_czk === undefined ? null : Number(row.amount_czk),
+  note: row.note ?? null,
+  origin: row.origin,
+  recurringKey: row.recurring_key ?? null,
+  dismissed: Boolean(row.dismissed),
+  createdAt: row.created_at,
+  updatedAt: row.updated_at,
+});
 
 // Sums duplicate (day, line item) rows: a provider can split one line item
 // across projects or workspaces. A provider bills in one currency.
@@ -291,6 +349,86 @@ export function createPgFinanceStore(pool) {
       };
     },
 
+    // Every bill day since a date, for the history (converted per day).
+    async providerCostDays(sinceDay) {
+      const { rows } = await pool.query(
+        `SELECT provider, day::text AS day, line_item, currency, amount::float8 AS amount
+           FROM finance_provider_costs
+          WHERE day >= $1::date AND amount <> 0
+          ORDER BY day`,
+        [sinceDay]
+      );
+      return rows.map((row) => ({ provider: row.provider, day: row.day, lineItem: row.line_item, amount: row.amount, currency: row.currency }));
+    },
+
+    async listPayments() {
+      const { rows } = await pool.query(`${PAYMENT_SELECT} WHERE NOT dismissed ORDER BY paid_on, id`);
+      return rows.map(toPayment);
+    },
+
+    async getPayment(id) {
+      const { rows } = await pool.query(`${PAYMENT_SELECT} WHERE id = $1`, [id]);
+      return rows[0] ? toPayment(rows[0]) : null;
+    },
+
+    async createPayment(data) {
+      const fields = Object.keys(data).filter((field) => PAYMENT_COLUMNS[field]);
+      const { rows } = await pool.query(
+        `INSERT INTO finance_payments (${fields.map((field) => PAYMENT_COLUMNS[field]).join(', ')}, origin)
+         VALUES (${fields.map((_, index) => `$${index + 1}`).join(', ')}, 'manual')
+         RETURNING id`,
+        fields.map((field) => data[field])
+      );
+      return this.getPayment(rows[0].id);
+    },
+
+    async updatePayment(id, data) {
+      const fields = Object.keys(data).filter((field) => PAYMENT_COLUMNS[field]);
+      if (!fields.length) return this.getPayment(id);
+      const { rowCount } = await pool.query(
+        `UPDATE finance_payments
+            SET ${fields.map((field, index) => `${PAYMENT_COLUMNS[field]} = $${index + 2}`).join(', ')}, updated_at = now()
+          WHERE id = $1 AND NOT dismissed`,
+        [id, ...fields.map((field) => data[field])]
+      );
+      return rowCount ? this.getPayment(id) : null;
+    },
+
+    // A month filled in from a fixed cost is only hidden, so it does not come
+    // back on the next fill; a payment added by hand is deleted.
+    async deletePayment(id) {
+      const { rows } = await pool.query(`SELECT origin, dismissed FROM finance_payments WHERE id = $1`, [id]);
+      if (!rows[0] || rows[0].dismissed) return false;
+      if (rows[0].origin === 'recurring') {
+        await pool.query(`UPDATE finance_payments SET dismissed = true, updated_at = now() WHERE id = $1`, [id]);
+      } else {
+        await pool.query(`DELETE FROM finance_payments WHERE id = $1`, [id]);
+      }
+      return true;
+    },
+
+    // Adds the given recurring months; one that exists (or was hidden) stays as it is.
+    async addRecurringPayments(payments) {
+      if (!payments.length) return 0;
+      const { rowCount } = await pool.query(
+        `INSERT INTO finance_payments (paid_on, expense_id, category, description, amount, currency, origin, recurring_key)
+         SELECT p.paid_on, p.expense_id, p.category, p.description, p.amount, p.currency, 'recurring', p.recurring_key
+           FROM jsonb_to_recordset($1::jsonb) AS p(paid_on date, expense_id integer, category text, description text,
+                                                  amount numeric, currency text, recurring_key text)
+         ON CONFLICT (recurring_key) DO NOTHING`,
+        [JSON.stringify(payments.map((payment) => ({
+          paid_on: payment.paidOn,
+          expense_id: payment.expenseId,
+          category: payment.category,
+          description: payment.description,
+          amount: payment.amount,
+          currency: payment.currency,
+          recurring_key: payment.recurringKey,
+        })))]
+      );
+      return rowCount;
+    },
+
     async getStates(keys) {
       const { rows } = await pool.query(`SELECT key, value FROM finance_state WHERE key = ANY($1::text[])`, [keys]);
       return Object.fromEntries(rows.map((row) => [row.key, row.value]));
@@ -312,9 +450,9 @@ export function createFileFinanceStore(dataDir) {
   const read = () => {
     try {
       const data = JSON.parse(fs.readFileSync(file, 'utf8'));
-      return { expenses: [], usage: [], providerCosts: [], nextId: 1, ...data };
+      return { expenses: [], usage: [], providerCosts: [], payments: [], nextId: 1, nextPaymentId: 1, ...data };
     } catch {
-      return { expenses: [], usage: [], providerCosts: [], nextId: 1 };
+      return { expenses: [], usage: [], providerCosts: [], payments: [], nextId: 1, nextPaymentId: 1 };
     }
   };
   const write = (data) => {
@@ -441,6 +579,79 @@ export function createFileFinanceStore(dataDir) {
         rows: [...groups.values()].filter((row) => row.amount !== 0).sort((a, b) => a.month.localeCompare(b.month)),
         fetchedAt: data.syncedAt ?? {},
       };
+    },
+
+    async providerCostDays(sinceDay) {
+      return read()
+        .providerCosts.filter((row) => row.day >= sinceDay && (row.amount ?? row.amountUsd ?? 0) !== 0)
+        .map((row) => ({
+          provider: row.provider, day: row.day, lineItem: row.lineItem, amount: row.amount ?? row.amountUsd, currency: row.currency ?? 'USD',
+        }))
+        .sort((a, b) => a.day.localeCompare(b.day));
+    },
+
+    async listPayments() {
+      return read()
+        .payments.filter((payment) => !payment.dismissed)
+        .sort((a, b) => a.paidOn.localeCompare(b.paidOn) || a.id - b.id);
+    },
+
+    async getPayment(id) {
+      return read().payments.find((payment) => payment.id === id) ?? null;
+    },
+
+    async createPayment(input) {
+      const data = read();
+      const now = new Date().toISOString();
+      const payment = {
+        id: data.nextPaymentId,
+        expenseId: null, category: 'other', description: null, amount: 0, currency: 'CZK', amountCzk: null, note: null,
+        ...Object.fromEntries(Object.entries(input).filter(([field]) => PAYMENT_COLUMNS[field])),
+        origin: 'manual', recurringKey: null, dismissed: false, createdAt: now, updatedAt: now,
+      };
+      data.nextPaymentId += 1;
+      data.payments.push(payment);
+      write(data);
+      return payment;
+    },
+
+    async updatePayment(id, input) {
+      const data = read();
+      const payment = data.payments.find((item) => item.id === id && !item.dismissed);
+      if (!payment) return null;
+      Object.assign(payment, Object.fromEntries(Object.entries(input).filter(([field]) => PAYMENT_COLUMNS[field])), {
+        updatedAt: new Date().toISOString(),
+      });
+      write(data);
+      return payment;
+    },
+
+    async deletePayment(id) {
+      const data = read();
+      const payment = data.payments.find((item) => item.id === id);
+      if (!payment || payment.dismissed) return false;
+      if (payment.origin === 'recurring') payment.dismissed = true;
+      else data.payments = data.payments.filter((item) => item.id !== id);
+      write(data);
+      return true;
+    },
+
+    async addRecurringPayments(payments) {
+      const data = read();
+      const keys = new Set(data.payments.map((payment) => payment.recurringKey).filter(Boolean));
+      const now = new Date().toISOString();
+      let added = 0;
+      for (const payment of payments) {
+        if (keys.has(payment.recurringKey)) continue;
+        data.payments.push({
+          id: data.nextPaymentId, amountCzk: null, note: null, ...payment, origin: 'recurring', dismissed: false, createdAt: now, updatedAt: now,
+        });
+        data.nextPaymentId += 1;
+        keys.add(payment.recurringKey);
+        added += 1;
+      }
+      if (added) write(data);
+      return added;
     },
 
     async getStates(keys) {

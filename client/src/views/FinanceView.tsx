@@ -3,6 +3,7 @@ import { financeApi } from '../finance/financeApi';
 import type { Expense, ExpenseInput, FinanceOverview } from '../finance/financeApi';
 import ConnectionsTab from '../finance/ConnectionsTab';
 import ExpenseModal from '../finance/ExpenseModal';
+import HistoryTab from '../finance/HistoryTab';
 import { AiCostChart, CategoryBars } from '../finance/FinanceCharts';
 import type { AiMonth } from '../finance/FinanceCharts';
 import {
@@ -32,10 +33,11 @@ import {
 import type { MeasuredMonths } from '../finance/financeMath';
 import './FinanceView.css';
 
-type FinanceTab = 'overview' | 'costs' | 'connections' | 'ai' | 'keys';
+type FinanceTab = 'overview' | 'history' | 'costs' | 'connections' | 'ai' | 'keys';
 
 const TABS: Array<{ id: FinanceTab; label: string }> = [
   { id: 'overview', label: 'Přehled' },
+  { id: 'history', label: 'Historie' },
   { id: 'costs', label: 'Náklady' },
   { id: 'connections', label: 'Napojení' },
   { id: 'ai', label: 'AI spotřeba' },
@@ -282,6 +284,7 @@ export default function FinanceView() {
 
           <div className="finance-card" role="tabpanel">
             {tab === 'overview' && <OverviewTab overview={overview} model={model} onOpen={setEditing} />}
+            {tab === 'history' && <HistoryTab />}
             {tab === 'costs' && (
               <CostsTab overview={overview} model={model} showInactive={showInactive} onToggleInactive={setShowInactive} onOpen={setEditing} />
             )}

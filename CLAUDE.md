@@ -186,8 +186,24 @@ Data (`server/finance/store.js`, Postgres or `server/data/finance.json`):
   (`finance/usage.js`; fire-and-forget, never throws). It breaks costs down per
   feature; once a provider is connected its bill replaces the estimate.
 
+- **History** (tab Historie, `server/finance/history.js`, `HistoryTab.tsx`):
+  every payment month by month from **09/2025** (`HISTORY_START`). Three
+  entry kinds, never copied into one another: `bill` (provider bills read
+  straight from `finance_provider_costs`, one entry per provider and month),
+  `recurring` (months filled in from confirmed fixed costs into
+  `finance_payments` on every history load — active, not an estimate,
+  amount > 0, monthly or yearly, not billed by a configured connector; a
+  domain year after its RDAP expiry is skipped) and `manual`. Removing a
+  recurring month only sets `dismissed`, so the next fill does not bring it
+  back. Every foreign amount is converted at the **ČNB rate of its own day**
+  (`createDayRates`, ČNB yearly files) unless the admin typed the exact CZK
+  charged (`amount_czk`). A connector's first sync — and the first sync after
+  `HISTORY_START` moves — reads bills back to that date (`historyFrom` in its
+  sync state).
+
 The telemetry tables (`finance_ai_usage`, `finance_provider_costs`,
-`finance_state`) are in `AUDIT_EXCLUDED_TABLES`; `finance_expenses` is logged.
+`finance_state`) are in `AUDIT_EXCLUDED_TABLES`; `finance_expenses` and
+`finance_payments` are logged.
 CZK conversion uses ČNB's daily fixing (`rates.js`, fixed fallback). To test
 a connector locally, pass its token as an env var to a wrapper around
 `server.js` — never write tokens into tracked files.

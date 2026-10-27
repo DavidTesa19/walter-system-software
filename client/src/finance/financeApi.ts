@@ -134,6 +134,64 @@ export interface FinanceOverview {
   };
 }
 
+/** bill: a connected provider's bill; recurring: a month filled in from a fixed cost; manual: added by hand. */
+export type HistoryKind = 'bill' | 'recurring' | 'manual';
+
+export interface HistoryEntry {
+  /** p<id> for payments, b:<provider>:<month> for bills. */
+  id: string;
+  kind: HistoryKind;
+  paymentId: number | null;
+  provider: CostSource | null;
+  date: string;
+  month: string;
+  expenseId: number | null;
+  service: string;
+  description: string | null;
+  category: string;
+  /** In `currency`. */
+  amount: number;
+  currency: string;
+  czk: number;
+  /** The CZK amount is what the bank charged, typed in by hand. */
+  exactCzk: boolean;
+  /** The ČNB fixing used, for a payment in a foreign currency. */
+  rate: { value: number; day: string | null; fallback: boolean } | null;
+  note: string | null;
+  /** A bill's line items for the month. */
+  lines: Array<{ lineItem: string; amount: number; czk: number }> | null;
+}
+
+export interface HistoryService {
+  id: number;
+  name: string;
+  category: string;
+  currency: Currency;
+  amount: number;
+  /** A connector already brings this service's bills into the history. */
+  billedByConnector: boolean;
+}
+
+export interface FinanceHistory {
+  /** YYYY-MM of the first month. */
+  start: string;
+  months: string[];
+  categories: Record<string, string>;
+  services: HistoryService[];
+  entries: HistoryEntry[];
+}
+
+export interface PaymentInput {
+  paidOn: string;
+  expenseId: number | null;
+  category: string;
+  description: string | null;
+  amount: number;
+  currency: Currency;
+  amountCzk: number | null;
+  note: string | null;
+}
+
 export const financeApi = {
   overview: () => apiGet<FinanceOverview>('/api/finance/overview'),
   sync: () => apiPost<FinanceOverview>('/api/finance/sync', {}),
@@ -141,4 +199,8 @@ export const financeApi = {
   createExpense: (input: ExpenseInput) => apiPost<Expense>('/api/finance/expenses', input),
   updateExpense: (id: number, input: Partial<ExpenseInput>) => apiPut<Expense>(`/api/finance/expenses/${id}`, input),
   deleteExpense: (id: number) => apiDelete<void>(`/api/finance/expenses/${id}`),
+  history: () => apiGet<FinanceHistory>('/api/finance/history'),
+  createPayment: (input: PaymentInput) => apiPost<unknown>('/api/finance/payments', input),
+  updatePayment: (id: number, input: Partial<PaymentInput>) => apiPut<unknown>(`/api/finance/payments/${id}`, input),
+  deletePayment: (id: number) => apiDelete<void>(`/api/finance/payments/${id}`),
 };
