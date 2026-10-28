@@ -264,6 +264,19 @@ inherited one falls back to the browser's serif. Needs `ANTHROPIC_API_KEY`;
 - **`jarvis_conversations.messages` is append-only**: an assistant message is
   stored together with its tool results, never edited afterwards. The panel
   renders the separate `transcript`.
+- **Long conversations are trimmed on Anthropic's side** (`CONTEXT_MANAGEMENT`
+  in agent.js), never by editing the stored history — a client-side edit or
+  keep-tail summary would invalidate every later thinking block. Past
+  `JARVIS_CLEAR_TOOLS_AT` (40 000) input tokens, old tool results become a
+  placeholder (the latest 8 stay; the write tools' small results are never
+  cleared; at least 10 000 tokens at a time, since clearing rewrites the
+  prompt cache). Past `JARVIS_COMPACT_AT` (120 000, API minimum 50 000) the API
+  writes a `compaction` summary at the start of the reply; it is stored with
+  the reply, and the API ignores everything before the last one. Its usage
+  iteration is not in the top-level counts, so `addUsage` adds it. The panel
+  shows the compaction as a step. To test, run `runJarvisTurn` from a script
+  in `server/` on a synthetic history of large `search` results with
+  `JARVIS_COMPACT_AT=50000` (about half a dollar per run).
 - Tool inputs are validated with zod (`zod/v4`) before running; a tool failure
   goes back to the model as an `is_error` result, never as an exception.
 - To try it locally, the JSON dev server works too (conversations go to

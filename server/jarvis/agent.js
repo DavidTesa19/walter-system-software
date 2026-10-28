@@ -32,7 +32,56 @@ const ANSWER_NUDGE =
 // thinking-binding-controls: with drop_block, an earlier thinking block whose
 // prefix no longer matches (a deploy changed the prompt or tools mid-
 // conversation) is dropped instead of failing the request.
-const BETAS = ['server-side-fallback-2026-07-01', 'thinking-binding-controls-2026-08-01'];
+// context-management + compact: long conversations, below.
+const BETAS = [
+  'server-side-fallback-2026-07-01',
+  'thinking-binding-controls-2026-08-01',
+  'context-management-2025-06-27',
+  'compact-2026-01-12',
+];
+
+const envNumber = (name, fallback) => (Number(process.env[name]) > 0 ? Number(process.env[name]) : fallback);
+
+// Long conversations. The whole history is sent with every question, so a
+// long one gets slower and dearer each time. Both measures run on Anthropic's
+// side: the stored history stays append-only and replays exactly as it ran,
+// and neither invalidates Claude's earlier thinking.
+// - Old tool results (search hits, record lists, document text: most of a long
+//   conversation) are replaced by a placeholder once the request passes
+//   CLEAR_TOOLS_AT tokens, keeping the latest KEEP_TOOL_USES. Clearing rewrites
+//   the prompt cache from that point, so it waits until at least
+//   CLEAR_AT_LEAST tokens can go. Results of the tools that change things stay:
+//   they are small and say what Jarvis proposed, added or drafted.
+// - Past COMPACT_AT tokens (the API's minimum is 50 000) the API summarises the
+//   conversation so far into a `compaction` block at the start of the reply.
+//   It is stored with the reply like any other content; from then on the API
+//   ignores everything before it.
+const CLEAR_TOOLS_AT = envNumber('JARVIS_CLEAR_TOOLS_AT', 40000);
+const KEEP_TOOL_USES = 8;
+const CLEAR_AT_LEAST = 10000;
+const COMPACT_AT = Math.max(50000, envNumber('JARVIS_COMPACT_AT', 120000));
+const KEEP_TOOL_RESULTS = [
+  'propose_update',
+  'propose_note',
+  'calendar_add_event',
+  'calendar_update_event',
+  'calendar_delete_event',
+  'draft_email',
+];
+const CONTEXT_MANAGEMENT = {
+  edits: [
+    {
+      type: 'clear_tool_uses_20250919',
+      trigger: { type: 'input_tokens', value: CLEAR_TOOLS_AT },
+      keep: { type: 'tool_uses', value: KEEP_TOOL_USES },
+      clear_at_least: { type: 'input_tokens', value: CLEAR_AT_LEAST },
+      exclude_tools: KEEP_TOOL_RESULTS,
+    },
+    { type: 'compact_20260112', trigger: { type: 'input_tokens', value: COMPACT_AT } },
+  ],
+};
+
+const COMPACTION_LABEL = 'Zkracuji dlouhou konverzaci';
 
 let anthropicClient = null;
 export const isJarvisConfigured = () => Boolean(process.env.ANTHROPIC_API_KEY);
@@ -52,13 +101,30 @@ export function contentForHistory(content) {
 
 const zeroUsage = () => ({ input: 0, output: 0, cacheRead: 0, cacheWrite: 0 });
 
+// A compaction is billed on top of the reply: the top-level counts leave its
+// iteration out.
 const addUsage = (total, usage) => {
   if (!usage) return;
-  total.input += usage.input_tokens ?? 0;
-  total.output += usage.output_tokens ?? 0;
-  total.cacheRead += usage.cache_read_input_tokens ?? 0;
-  total.cacheWrite += usage.cache_creation_input_tokens ?? 0;
+  const compactions = (usage.iterations ?? []).filter((iteration) => iteration.type === 'compaction');
+  for (const part of [usage, ...compactions]) {
+    total.input += part.input_tokens ?? 0;
+    total.output += part.output_tokens ?? 0;
+    total.cacheRead += part.cache_read_input_tokens ?? 0;
+    total.cacheWrite += part.cache_creation_input_tokens ?? 0;
+  }
 };
+
+// What context management did to this request, for the server log.
+function logContextEdits(message) {
+  const applied = message.context_management?.applied_edits ?? [];
+  const parts = applied.map((edit) =>
+    edit.type === 'clear_tool_uses_20250919'
+      ? `cleared ${edit.cleared_tool_uses} tool results (${edit.cleared_input_tokens} tokens)`
+      : `${edit.type} (${edit.cleared_input_tokens ?? '?'} tokens)`
+  );
+  if (message.content.some((block) => block.type === 'compaction')) parts.push('compacted the conversation');
+  if (parts.length) console.log(`Jarvis context: ${parts.join(', ')}`);
+}
 
 function friendlyError(error) {
   if (error instanceof Anthropic.AuthenticationError) return 'Jarvis nemá platný klíč k Claude API (ANTHROPIC_API_KEY).';
@@ -102,6 +168,7 @@ export async function runJarvisTurn({ history, toolContext, emit, onStep, signal
             block_binding: { prefix_mismatch_behavior: 'drop_block' },
           },
           output_config: { effort: JARVIS_EFFORT },
+          context_management: CONTEXT_MANAGEMENT,
           // tools + system are the stable, cached prefix; top-level
           // cache_control caches the growing conversation after it.
           system: [{ type: 'text', text: SYSTEM_PROMPT, cache_control: { type: 'ephemeral' } }],
@@ -112,12 +179,18 @@ export async function runJarvisTurn({ history, toolContext, emit, onStep, signal
         { signal }
       );
 
+      // A compaction is written before anything else and can take a while:
+      // the panel shows it as a step.
+      const compactionStep = { id: `compaction-${round}`, label: COMPACTION_LABEL };
       for await (const event of stream) {
         if (event.type === 'content_block_delta') {
           if (event.delta.type === 'text_delta') emit('text', { delta: event.delta.text });
           else if (event.delta.type === 'thinking_delta' && event.delta.thinking) emit('thinking', { delta: event.delta.thinking });
+          else if (event.delta.type === 'compaction_delta') emit('tool_done', { id: compactionStep.id, ok: true });
         } else if (event.type === 'content_block_start' && event.content_block.type === 'text') {
           emit('text_start', {});
+        } else if (event.type === 'content_block_start' && event.content_block.type === 'compaction') {
+          emit('tool', { ...compactionStep, name: 'compaction' });
         }
       }
       message = await stream.finalMessage();
@@ -137,6 +210,10 @@ export async function runJarvisTurn({ history, toolContext, emit, onStep, signal
     }
 
     addUsage(usage, message.usage);
+    logContextEdits(message);
+    const compacted = message.content.some((block) => block.type === 'compaction')
+      ? [{ type: 'tool', name: 'compaction', label: 'Dlouhá konverzace zkrácena', ok: true }]
+      : [];
 
     if (message.stop_reason === 'refusal') {
       const text = 'Tuto žádost nemohu zpracovat. Zkuste ji prosím formulovat jinak.';
@@ -155,7 +232,7 @@ export async function runJarvisTurn({ history, toolContext, emit, onStep, signal
       const kept = content.filter((block) => block.type !== 'tool_use');
       if (!answer && message.stop_reason === 'end_turn' && !askedForAnswer) {
         // Nothing to read: drop this reply (it is the last message, never sent
-        // back) and ask for the answer. The nudge is stored with the history so
+        // back; a compaction in it is simply redone) and ask for the answer. The nudge is stored with the history so
         // the conversation replays exactly as it ran.
         askedForAnswer = true;
         const nudge = { role: 'system', content: ANSWER_NUDGE };
@@ -167,7 +244,7 @@ export async function runJarvisTurn({ history, toolContext, emit, onStep, signal
       // containing one, which would break every later question.
       const assistant = kept.length ? { role: 'assistant', content: kept } : null;
       if (assistant) messages = [...messages, assistant];
-      await onStep(assistant ? [assistant] : [], answer ? [{ type: 'answer', text: answer, model: message.model }] : []);
+      await onStep(assistant ? [assistant] : [], [...compacted, ...(answer ? [{ type: 'answer', text: answer, model: message.model }] : [])]);
       if (message.stop_reason === 'max_tokens') emit('notice', { text: 'Odpověď byla příliš dlouhá a je zkrácená.' });
       return { usage, stopReason: message.stop_reason };
     }
@@ -195,6 +272,7 @@ export async function runJarvisTurn({ history, toolContext, emit, onStep, signal
     await onStep(
       [assistant, toolResults],
       [
+        ...compacted,
         ...(answer ? [{ type: 'note', text: answer }] : []),
         ...steps.map((step, index) => ({ type: 'tool', name: step.name, label: step.label, ok: !results[index].isError })),
       ]
