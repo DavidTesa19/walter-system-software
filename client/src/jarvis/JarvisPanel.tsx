@@ -1080,7 +1080,8 @@ export default function JarvisPanel({ open, onOpen, onClose, viewLabel, launcher
     const readAloudNow = spoken || readAloudRef.current;
     const answerKey = `answer-${turns.length}`;
     let streamedText = '';
-    let reading: ReturnType<typeof voice.streamSpeech> = null;
+    // Assigned from the event callback, so TypeScript must not narrow it to null.
+    let reading = null as ReturnType<typeof voice.streamSpeech>;
     const dropReading = () => {
       streamedText = '';
       reading?.cancel();
