@@ -21,13 +21,14 @@ import type {
 } from './jarvisApi';
 import { ATTACHMENT_ACCEPT, MAX_ATTACHMENTS, MAX_ATTACHMENT_BYTES, formatSize, namePastedImage, shrinkImage } from './attachmentFiles';
 import { useJarvisVoice } from './useJarvisVoice';
+import type { LastRecording } from './useJarvisVoice';
 import { announceCalendarChange } from './calendarEvents';
 import { TASKS_CHANGED_EVENT } from '../tasks/tasksApi';
 import { PAUSE_OPTIONS, SPEED_OPTIONS, formatSpeed, loadVoiceSettings, saveVoiceSettings } from './voiceSettings';
 import type { VoiceSettings } from './voiceSettings';
 import { useJarvisFocus } from './jarvisFocus';
 import type { JarvisFocus } from './jarvisFocus';
-import { isConversationEnd, unlockAudio } from './voice';
+import { isConversationEnd, isLowQualityMicrophone, unlockAudio } from './voice';
 import './JarvisPanel.css';
 
 const CONVERSATION_KEY = 'walterJarvisConversation';
@@ -640,6 +641,7 @@ function VoiceSettingsPanel({
   previewing,
   onPreview,
   onStopPreview,
+  lastRecording,
 }: {
   settings: VoiceSettings;
   status: JarvisStatus | null;
@@ -647,7 +649,24 @@ function VoiceSettingsPanel({
   previewing: boolean;
   onPreview: () => void;
   onStopPreview: () => void;
+  lastRecording: LastRecording | null;
 }) {
+  // The last recording plays through a plain Audio element: a recorded WebM
+  // has no length, which the browser's own player shows as a broken timeline.
+  const [playingRecording, setPlayingRecording] = useState(false);
+  const recordingAudioRef = useRef<HTMLAudioElement | null>(null);
+  useEffect(() => () => recordingAudioRef.current?.pause(), []);
+  const toggleRecording = (url: string) => {
+    recordingAudioRef.current?.pause();
+    if (playingRecording) {
+      setPlayingRecording(false);
+      return;
+    }
+    const audio = new Audio(url);
+    recordingAudioRef.current = audio;
+    audio.onended = () => setPlayingRecording(false);
+    audio.play().then(() => setPlayingRecording(true), () => setPlayingRecording(false));
+  };
   const engines = status?.voice ? status.engines ?? [] : [];
   const engine = engines.find((item) => item.id === settings.engine) ?? engines.find((item) => item.id === status?.defaultEngine) ?? engines[0];
   const voices = engine?.voices ?? [];
@@ -755,6 +774,35 @@ function VoiceSettingsPanel({
           </span>
         </label>
       </section>
+      {status?.voice && (
+        <section>
+          <h4>Mikrofon</h4>
+          {lastRecording ? (
+            <>
+              {lastRecording.device && <p className="jarvis-voice-hint">{lastRecording.device}</p>}
+              {lastRecording.avoided && (
+                <p className="jarvis-voice-hint">
+                  Mikrofon sluchátek ({lastRecording.avoided}) Jarvis vynechal: přes Bluetooth by vám rozuměl špatně.
+                </p>
+              )}
+              {isLowQualityMicrophone(lastRecording.device) && (
+                <p className="jarvis-voice-warning">
+                  Bluetooth sluchátka při nahrávání přepnou do režimu hands-free s nekvalitním zvukem a Jarvis vám pak špatně
+                  rozumí. Mluvte raději do mikrofonu počítače nebo do sluchátek s kabelem (zvuk může dál hrát do sluchátek).
+                </p>
+              )}
+              <button type="button" className="jarvis-chip-button jarvis-voice-preview" onClick={() => toggleRecording(lastRecording.url)}>
+                {playingRecording ? Icon.stop : Icon.speakerSmall} {playingRecording ? 'Zastavit' : 'Poslechnout poslední nahrávku'}
+              </button>
+              <p className="jarvis-voice-hint">
+                Takhle Jarvis slyšel váš poslední dotaz. Je-li nahrávka tichá, zkreslená nebo trhaná, je potíž v mikrofonu.
+              </p>
+            </>
+          ) : (
+            <p className="jarvis-voice-hint">Až se zeptáte hlasem, uvidíte tu, jaký mikrofon se použil, a poslední nahrávku si poslechnete.</p>
+          )}
+        </section>
+      )}
       <section>
         <h4>Po hlasové odpovědi</h4>
         <label className="jarvis-radio">
@@ -1460,6 +1508,7 @@ export default function JarvisPanel({ open, onOpen, onClose, viewLabel, launcher
           previewing={voice.speakingKey === 'preview'}
           onPreview={() => void voice.speak(VOICE_SAMPLE, 'preview')}
           onStopPreview={stopSpeaking}
+          lastRecording={voice.lastRecording}
         />
       )}
 

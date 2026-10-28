@@ -41,8 +41,8 @@ export const OPENAI_PRICES = {
 // 900 characters a minute.
 const TTS_USD_PER_MINUTE = 0.015;
 const TTS_CHARS_PER_MINUTE = 900;
-// Whisper-style transcription reports seconds instead of tokens.
-const STT_USD_PER_MINUTE = 0.006;
+// gpt-transcribe and whisper-1 report seconds instead of tokens.
+const STT_USD_PER_MINUTE = { 'gpt-transcribe': 0.0045, default: 0.006 };
 // Brave Search: $5 per 1 000 requests (with $5 of free credit a month).
 const BRAVE_USD_PER_SEARCH = 0.005;
 
@@ -63,7 +63,9 @@ export function estimateCostUsd({ provider, model, feature, input = 0, output = 
   if (provider === 'brave') return units * BRAVE_USD_PER_SEARCH;
   // The TTS model reports no tokens (priced by length); gpt-audio does.
   if (feature === 'voice_tts' && !input && !output) return (units / TTS_CHARS_PER_MINUTE) * TTS_USD_PER_MINUTE;
-  if (feature === 'voice_stt' && units > 0 && !input && !output) return (units / 60) * STT_USD_PER_MINUTE;
+  if (feature === 'voice_stt' && units > 0 && !input && !output) {
+    return (units / 60) * (String(model ?? '').startsWith('gpt-transcribe') ? STT_USD_PER_MINUTE['gpt-transcribe'] : STT_USD_PER_MINUTE.default);
+  }
 
   const table = provider === 'anthropic' ? ANTHROPIC_PRICES : provider === 'openai' ? OPENAI_PRICES : null;
   const price = table ? findPrice(table, model) : null;

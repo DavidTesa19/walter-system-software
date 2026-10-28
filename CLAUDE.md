@@ -369,9 +369,20 @@ inherited one falls back to the browser's serif. Needs `ANTHROPIC_API_KEY`;
   is a chat model: `isFaithfulReading` compares its transcript with the text
   and anything that drifts falls back to the classic engine. It has no speed
   parameter, so the tempo is asked for in words (`TEMPO`). Other env:
-  `JARVIS_TTS_ENGINE`, `JARVIS_STT_MODEL` (gpt-4o-transcribe),
-  `JARVIS_TTS_VOICE` (default voice, cedar), `JARVIS_STT_LANGUAGE` (cs; empty
-  = auto), `JARVIS_VOICE_HOURLY_LIMIT` (300). Each user picks an engine, a
+  `JARVIS_TTS_ENGINE`, `JARVIS_STT_MODEL` (gpt-transcribe; gpt-4o-transcribe
+  is deprecated and stops on 26 Feb 2027), `JARVIS_TTS_VOICE` (default voice,
+  cedar), `JARVIS_STT_LANGUAGE` (cs; empty = auto; gpt-transcribe takes it as
+  `languages: [..]`), `JARVIS_VOICE_HOURLY_LIMIT` (300). **Transcription**:
+  measured on TTS-spoken Czech questions, clean and with noise and a
+  laptop-mic band, both gpt-transcribe and gpt-4o-transcribe are within a
+  few % word errors *with* the context prompt (`STT_PROMPT`) and drift into
+  Slovak without it; `keywords` did not help. So when a user reports
+  "it hears the wrong words", suspect the microphone first: a Bluetooth
+  headset in hands-free mode sends narrowband, compressed audio.
+  `startRecording` avoids it when the computer has another microphone
+  (`chooseMicrophone`; device names are only known after the first
+  permission), and the voice menu's "Mikrofon" section shows the device used
+  and plays back the last recording. Recording is Opus at 64 kb/s. Each user picks an engine, a
   voice (`TTS_VOICES`, by gender; the conversational engine has 10 of them) and
   speed in the panel's voice menu (`voiceSettings.ts`, localStorage). Native
   Czech quality would need a different provider (e.g. ElevenLabs); that is a

@@ -1675,3 +1675,14 @@ button.jarvis-attention-item:hover {
   opacity: 0.55;
   cursor: default;
 }
+
+/* A warning when the microphone is a Bluetooth headset in hands-free mode. */
+.jarvis-voice-warning {
+  margin: 4px 0;
+  padding: 8px 10px;
+  border-radius: 8px;
+  background: color-mix(in srgb, #f59e0b 16%, transparent);
+  color: #92400e;
+  font-size: 0.78rem;
+  line-height: 1.45;
+}

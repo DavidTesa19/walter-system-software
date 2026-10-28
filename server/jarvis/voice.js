@@ -16,7 +16,9 @@
 import OpenAI, { toFile } from 'openai';
 import { recordAiUsage } from '../finance/usage.js';
 
-export const STT_MODEL = process.env.JARVIS_STT_MODEL || 'gpt-4o-transcribe';
+// gpt-4o-transcribe is deprecated (it stops working on 26 Feb 2027);
+// gpt-transcribe was as accurate on Czech test questions and is cheaper.
+export const STT_MODEL = process.env.JARVIS_STT_MODEL || 'gpt-transcribe';
 // The dated snapshot: the bare alias stayed on the older March 2025 model.
 export const TTS_MODEL = process.env.JARVIS_TTS_MODEL || 'gpt-4o-mini-tts-2025-12-15';
 export const AUDIO_MODEL = process.env.JARVIS_AUDIO_MODEL || 'gpt-audio-1.5';
@@ -69,8 +71,14 @@ const STT_LANGUAGE = process.env.JARVIS_STT_LANGUAGE ?? 'cs';
 export const MAX_AUDIO_BYTES = 10 * 1024 * 1024;
 export const MAX_SPEECH_CHARS = 4000;
 
-// Words the transcriber would otherwise guess at.
-const STT_PROMPT = 'Dotaz do aplikace Walter System (WSS): klienti, partneři, tipaři, zakázky, obor, zaměření, kraj, lokalita, Growth Club, Neveřejné.';
+// What the recording is about. Without it, short Czech questions came back
+// partly in Slovak. gpt-transcribe takes it as context; the older models
+// read it as text that came before the recording.
+const STT_PROMPT =
+  'Uživatel mluví česky k AI asistentovi v CRM aplikaci Walter System. Ptá se na klienty, partnery, tipaře a zakázky ' +
+  '(obor, zaměření, kraj, lokalita, sekce Veřejné, Neveřejné a Growth Club), na kalendář a úkoly, nebo diktuje e-mail.';
+// gpt-transcribe takes a list of expected languages; the older models one.
+const isGptTranscribe = (model) => model.startsWith('gpt-transcribe');
 
 // Tone, not speed (that is the `speed` parameter): a person talking, not a
 // narrator reading — the old "calm" wording made every answer drag.
@@ -106,11 +114,11 @@ export async function transcribe(buffer, mimeType, signal, userId = null) {
       file: await toFile(buffer, `question.${extension}`),
       model: STT_MODEL,
       prompt: STT_PROMPT,
-      ...(STT_LANGUAGE ? { language: STT_LANGUAGE } : {}),
+      ...(STT_LANGUAGE ? (isGptTranscribe(STT_MODEL) ? { languages: [STT_LANGUAGE] } : { language: STT_LANGUAGE }) : {}),
     },
     { signal }
   );
-  // gpt-4o-transcribe reports tokens, whisper-1 seconds.
+  // gpt-transcribe and whisper-1 report seconds, gpt-4o-transcribe tokens.
   const usage = result.usage;
   recordAiUsage({
     provider: 'openai',

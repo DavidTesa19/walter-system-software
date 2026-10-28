@@ -439,7 +439,16 @@ export interface Recording {
   stop(): void;
   // Ends it and throws the audio away.
   cancel(): void;
-  result: Promise<{ blob: Blob | null; end: RecordingEnd }>;
+  result: Promise<RecordingResult>;
+}
+
+export interface RecordingResult {
+  blob: Blob | null;
+  end: RecordingEnd;
+  // The microphone's name as the system reports it.
+  device: string;
+  // A Bluetooth headset's microphone that was passed over for this one.
+  avoided: string | null;
 }
 
 const MIME_TYPES = ['audio/webm;codecs=opus', 'audio/webm', 'audio/mp4', 'audio/ogg;codecs=opus'];
@@ -465,6 +474,23 @@ export interface ListenOptions {
 
 const DEFAULT_LISTEN: ListenOptions = { autoStop: true, silenceMs: 2500 };
 
+// The system's default microphone, unless it is a Bluetooth headset in
+// hands-free mode and the computer has another one (names are only known once
+// the page may use the microphone, so the very first recording takes the default).
+async function chooseMicrophone(): Promise<{ deviceId: string; avoided: string } | null> {
+  try {
+    const inputs = (await navigator.mediaDevices.enumerateDevices()).filter((device) => device.kind === 'audioinput');
+    const current = inputs.find((device) => device.deviceId === 'default') ?? inputs[0];
+    if (!current || !isLowQualityMicrophone(current.label)) return null;
+    const better = inputs.find(
+      (device) => device.deviceId !== 'default' && device.deviceId !== 'communications' && device.label && !isLowQualityMicrophone(device.label)
+    );
+    return better ? { deviceId: better.deviceId, avoided: current.label.replace(/^(Default|Výchozí)\s*-\s*/i, '') } : null;
+  } catch {
+    return null;
+  }
+}
+
 // Records from the microphone until stop(), or until the speaker pauses after
 // saying something (so a question goes off by itself, like in a call).
 // onLevel gets the input loudness 0–1 for the meter.
@@ -474,13 +500,20 @@ export async function startRecording(onLevel: (level: number) => void, options: 
   // when the microphone reopens by itself after an answer.
   const ctx = audioContext();
   void ctx.resume();
+  const choice = await chooseMicrophone();
   const stream = await navigator.mediaDevices.getUserMedia({
-    audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: true },
+    audio: {
+      echoCancellation: true,
+      noiseSuppression: true,
+      autoGainControl: true,
+      ...(choice ? { deviceId: { exact: choice.deviceId } } : {}),
+    },
   });
   let recorder: MediaRecorder;
   try {
     const mimeType = MIME_TYPES.find((type) => MediaRecorder.isTypeSupported(type));
-    recorder = new MediaRecorder(stream, mimeType ? { mimeType, audioBitsPerSecond: 32000 } : undefined);
+    // 64 kb/s keeps the compression far from what transcription can hear.
+    recorder = new MediaRecorder(stream, mimeType ? { mimeType, audioBitsPerSecond: 64000 } : undefined);
   } catch (error) {
     stream.getTracks().forEach((track) => track.stop());
     throw error;
@@ -496,9 +529,10 @@ export async function startRecording(onLevel: (level: number) => void, options: 
   input.connect(analyser);
   const samples = new Float32Array(analyser.fftSize);
 
+  const device = stream.getAudioTracks()[0]?.label ?? '';
   let end: RecordingEnd = 'stopped';
-  let resolveResult: (value: { blob: Blob | null; end: RecordingEnd }) => void = () => undefined;
-  const result = new Promise<{ blob: Blob | null; end: RecordingEnd }>((resolve) => {
+  let resolveResult: (value: RecordingResult) => void = () => undefined;
+  const result = new Promise<RecordingResult>((resolve) => {
     resolveResult = resolve;
   });
 
@@ -553,7 +587,7 @@ export async function startRecording(onLevel: (level: number) => void, options: 
     input.disconnect();
     onLevel(0);
     const keep = end !== 'cancelled' && end !== 'no-speech' && chunks.length > 0;
-    resolveResult({ blob: keep ? new Blob(chunks, { type: recorder.mimeType || 'audio/webm' }) : null, end });
+    resolveResult({ blob: keep ? new Blob(chunks, { type: recorder.mimeType || 'audio/webm' }) : null, end, device, avoided: choice?.avoided ?? null });
   };
   recorder.start(250);
 
@@ -563,6 +597,11 @@ export async function startRecording(onLevel: (level: number) => void, options: 
     result,
   };
 }
+
+// Bluetooth headphones switch to their "hands-free" profile while a page uses
+// their microphone: narrowband, heavily compressed audio that transcription
+// gets badly wrong. Windows and macOS name the device accordingly.
+export const isLowQualityMicrophone = (device: string) => /hands-?free|bluetooth|airpods/i.test(device);
 
 // ---------- listening without the server: the browser's recognizer ----------
 

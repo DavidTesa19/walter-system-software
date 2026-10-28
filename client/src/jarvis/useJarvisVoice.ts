@@ -22,6 +22,13 @@ export type ListenState = 'idle' | 'starting' | 'listening' | 'transcribing';
 // speaks: the conversation is over.
 const FOLLOW_UP_NO_SPEECH_MS = 7000;
 
+// The last question as recorded, and with which microphone.
+export interface LastRecording {
+  url: string;
+  device: string;
+  avoided: string | null;
+}
+
 export interface TranscriptInfo {
   // Said into a microphone that reopened by itself after an answer.
   followUp: boolean;
@@ -59,6 +66,8 @@ export function useJarvisVoice(
   const [interim, setInterim] = useState('');
   const [speakingKey, setSpeakingKey] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  // The last question as recorded, to hear what Jarvis heard (voice menu).
+  const [lastRecording, setLastRecording] = useState<LastRecording | null>(null);
 
   // The microphone's loudness 0–1, read by the meter on its own animation
   // frame so the panel does not re-render 20 times a second.
@@ -248,8 +257,15 @@ export function useJarvisVoice(
     if (cancelledRef.current) recording.cancel();
     else setListenState('listening');
 
-    const { blob, end } = await recording.result;
+    const { blob, end, device, avoided } = await recording.result;
     recordingRef.current = null;
+    if (blob) {
+      const url = URL.createObjectURL(blob);
+      setLastRecording((previous) => {
+        if (previous) URL.revokeObjectURL(previous.url);
+        return { url, device, avoided };
+      });
+    }
     if (!blob) {
       setListenState('idle');
       // Silence after an answer just ends the conversation.
@@ -308,6 +324,7 @@ export function useJarvisVoice(
     canSpeak,
     listen,
     followUp,
+    lastRecording,
     levelRef,
     elapsed,
     interim,
