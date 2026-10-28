@@ -91,7 +91,7 @@ const SALESMAN_VIEWER_ALLOWED_VIEWS: AppView[] = [
   'projects_subjects_active', 'projects_subjects_pending', 'projects_subjects_archived',
   'growth_active', 'growth_pending', 'growth_archived',
   'growth_subjects_active', 'growth_subjects_pending', 'growth_subjects_archived',
-  'teamchat', 'palettes',
+  'teamchat', 'palettes', 'tasks', 'bugs',
 ];
 
 export const isViewAllowedForRole = (role: UserRole | undefined, view: AppView): boolean => {

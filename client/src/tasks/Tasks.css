@@ -1,0 +1,455 @@
+/* Task rows, the quick-add line and the small controls shared by the Úkoly
+   section and the floating widget. Colours come from the palette variables,
+   so both follow the user's theme. */
+
+.tasks-view,
+.tasks-widget {
+  --task-font: var(--font-body, "Sora", "Inter", "Segoe UI", system-ui, sans-serif);
+  --task-surface: var(--color-surface, #ffffff);
+  --task-border: color-mix(in srgb, var(--color-border, rgba(15, 23, 42, 0.14)) 90%, transparent);
+  --task-muted: var(--color-text-muted, #64748b);
+  --task-accent: var(--color-primary, #2563eb);
+  --task-star: #e5a00d;
+  --task-danger: var(--color-danger, #dc2626);
+  --task-success: var(--color-success, #16a34a);
+  font-family: var(--task-font);
+  color: var(--color-text, #0f172a);
+}
+
+/* ---------- a task ---------- */
+
+.task-row {
+  position: relative;
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  padding: 10px 10px 10px 12px;
+  border: 1px solid var(--task-border);
+  border-radius: 12px;
+  background: var(--task-surface);
+  box-shadow: 0 1px 2px rgba(15, 23, 42, 0.04);
+  transition: border-color 0.15s ease, box-shadow 0.15s ease, opacity 0.15s ease;
+}
+
+.task-row[draggable="true"] {
+  cursor: grab;
+}
+
+.task-row:hover {
+  border-color: color-mix(in srgb, var(--task-accent) 35%, var(--task-border));
+  box-shadow: 0 4px 14px -6px rgba(15, 23, 42, 0.18);
+}
+
+.task-row--important {
+  border-left: 3px solid var(--task-star);
+  padding-left: 10px;
+}
+
+.task-row--compact {
+  padding: 7px 8px 7px 10px;
+  border-radius: 10px;
+  gap: 8px;
+}
+
+.task-check {
+  flex: 0 0 auto;
+  width: 20px;
+  height: 20px;
+  margin-top: 1px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  border: 2px solid color-mix(in srgb, var(--task-muted) 70%, transparent);
+  border-radius: 50%;
+  background: transparent;
+  color: #ffffff;
+  cursor: pointer;
+  transition: background-color 0.15s ease, border-color 0.15s ease;
+}
+
+.task-check:hover:not(:disabled) {
+  border-color: var(--task-success);
+  background: color-mix(in srgb, var(--task-success) 14%, transparent);
+}
+
+.task-check[aria-pressed="true"] {
+  border-color: var(--task-success);
+  background: var(--task-success);
+}
+
+.task-check:disabled {
+  cursor: default;
+  opacity: 0.6;
+}
+
+.task-body {
+  flex: 1 1 auto;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+
+.task-title {
+  display: block;
+  width: 100%;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: inherit;
+  font: inherit;
+  font-size: 0.92rem;
+  font-weight: 550;
+  line-height: 1.35;
+  text-align: left;
+  overflow-wrap: anywhere;
+  cursor: text;
+}
+
+.task-title:disabled {
+  cursor: inherit;
+  color: inherit;
+}
+
+.task-row--compact .task-title {
+  font-size: 0.86rem;
+}
+
+.task-row--done .task-title {
+  color: var(--task-muted);
+  text-decoration: line-through;
+  text-decoration-color: color-mix(in srgb, var(--task-muted) 60%, transparent);
+  font-weight: 450;
+}
+
+.task-note {
+  color: var(--task-muted);
+  font-size: 0.8rem;
+  line-height: 1.4;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  display: -webkit-box;
+  -webkit-line-clamp: 3;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+.task-meta {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  margin-top: 2px;
+}
+
+.task-meta-text {
+  color: var(--task-muted);
+  font-size: 0.74rem;
+}
+
+.task-chip {
+  display: inline-flex;
+  align-items: center;
+  padding: 1px 8px;
+  border-radius: 999px;
+  font-size: 0.72rem;
+  font-weight: 600;
+  line-height: 1.6;
+  background: color-mix(in srgb, var(--task-muted) 14%, transparent);
+  color: var(--task-muted);
+}
+
+.task-chip--overdue {
+  background: color-mix(in srgb, var(--task-danger) 15%, transparent);
+  color: var(--task-danger);
+}
+
+.task-chip--today {
+  background: color-mix(in srgb, var(--task-accent) 15%, transparent);
+  color: var(--task-accent);
+}
+
+.task-chip--soon {
+  background: color-mix(in srgb, #d97706 15%, transparent);
+  color: #b45309;
+}
+
+:root[data-theme="dark"] .task-chip--soon {
+  color: #f0b04a;
+}
+
+.task-chip--person {
+  background: color-mix(in srgb, var(--color-accent, #0ea5e9) 14%, transparent);
+  color: color-mix(in srgb, var(--color-accent, #0ea5e9) 80%, var(--color-text, #0f172a));
+}
+
+/* The quick moves float over the row's top-right corner on hover, so they
+   never take width from the title. */
+.task-actions {
+  position: absolute;
+  top: 5px;
+  right: 5px;
+  display: flex;
+  align-items: center;
+  gap: 1px;
+  padding: 2px;
+  border: 1px solid var(--task-border);
+  border-radius: 10px;
+  background: var(--task-surface);
+  box-shadow: 0 6px 16px -8px rgba(15, 23, 42, 0.35);
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.12s ease;
+}
+
+.task-actions:empty {
+  display: none;
+}
+
+.task-row:hover .task-actions,
+.task-row:focus-within .task-actions {
+  opacity: 1;
+  pointer-events: auto;
+}
+
+/* Touch screens have no hover: the controls sit in the row instead. */
+@media (hover: none) {
+  .task-actions {
+    position: static;
+    opacity: 1;
+    pointer-events: auto;
+    border: 0;
+    box-shadow: none;
+    background: transparent;
+  }
+}
+
+.task-important-mark {
+  display: inline-flex;
+  vertical-align: -2px;
+  margin-right: 5px;
+  color: var(--task-star);
+}
+
+.task-action {
+  width: 28px;
+  height: 28px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--task-muted);
+  cursor: pointer;
+  transition: background-color 0.15s ease, color 0.15s ease;
+}
+
+.task-action:hover {
+  background: color-mix(in srgb, var(--task-accent) 12%, transparent);
+  color: var(--task-accent);
+}
+
+.task-action--danger:hover {
+  background: color-mix(in srgb, var(--task-danger) 12%, transparent);
+  color: var(--task-danger);
+}
+
+.task-star.is-on,
+.task-star.is-on:hover {
+  color: var(--task-star);
+}
+
+/* ---------- editing ---------- */
+
+.task-editor {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 10px;
+  border: 1px solid color-mix(in srgb, var(--task-accent) 45%, var(--task-border));
+  border-radius: 12px;
+  background: var(--task-surface);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--task-accent) 14%, transparent);
+}
+
+.task-editor-fields {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.task-editor-fields label {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  flex: 1 1 140px;
+  font-size: 0.72rem;
+  font-weight: 600;
+  color: var(--task-muted);
+}
+
+.task-editor-buttons {
+  display: flex;
+  justify-content: flex-end;
+  gap: 6px;
+}
+
+.task-input {
+  width: 100%;
+  box-sizing: border-box;
+  padding: 7px 10px;
+  border: 1px solid var(--task-border);
+  border-radius: 9px;
+  background: color-mix(in srgb, var(--color-surface-alt, #f8fafc) 70%, var(--task-surface));
+  color: var(--color-text, #0f172a);
+  font: inherit;
+  font-size: 0.86rem;
+}
+
+.task-input:focus {
+  outline: none;
+  border-color: var(--task-accent);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--task-accent) 18%, transparent);
+}
+
+.task-textarea {
+  resize: vertical;
+  min-height: 52px;
+}
+
+.task-input--inline {
+  width: auto;
+  padding: 5px 9px;
+  font-size: 0.8rem;
+}
+
+.task-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  padding: 7px 14px;
+  border: 1px solid transparent;
+  border-radius: 9px;
+  font: inherit;
+  font-size: 0.84rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background-color 0.15s ease, opacity 0.15s ease;
+}
+
+.task-btn:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+
+.task-btn--primary {
+  background: var(--task-accent);
+  color: var(--color-primary-contrast, #ffffff);
+}
+
+.task-btn--primary:hover:not(:disabled) {
+  background: var(--color-primary-hover, var(--task-accent));
+}
+
+.task-btn--ghost {
+  background: transparent;
+  border-color: var(--task-border);
+  color: var(--color-text, #0f172a);
+}
+
+.task-btn--ghost:hover {
+  background: color-mix(in srgb, var(--task-muted) 10%, transparent);
+}
+
+/* ---------- adding ---------- */
+
+.task-quick-add {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.task-quick-add-line {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.task-quick-add-plus {
+  flex: 0 0 auto;
+  width: 22px;
+  height: 22px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 50%;
+  background: color-mix(in srgb, var(--task-accent) 14%, transparent);
+  color: var(--task-accent);
+  font-weight: 700;
+  line-height: 1;
+}
+
+.task-quick-add-input {
+  flex: 1 1 auto;
+  min-width: 0;
+  padding: 8px 2px;
+  border: 0;
+  border-bottom: 1px solid transparent;
+  background: transparent;
+  color: var(--color-text, #0f172a);
+  font: inherit;
+  font-size: 0.95rem;
+}
+
+.task-quick-add-input:focus {
+  outline: none;
+  border-bottom-color: var(--task-accent);
+}
+
+.task-quick-add--compact .task-quick-add-input {
+  font-size: 0.86rem;
+  padding: 6px 2px;
+}
+
+.task-quick-add-options {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  padding-left: 30px;
+}
+
+.task-segmented {
+  display: inline-flex;
+  flex-wrap: wrap;
+  padding: 2px;
+  border: 1px solid var(--task-border);
+  border-radius: 10px;
+  background: color-mix(in srgb, var(--color-surface-alt, #f8fafc) 70%, var(--task-surface));
+}
+
+.task-segmented button {
+  padding: 4px 11px;
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--task-muted);
+  font: inherit;
+  font-size: 0.78rem;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.task-segmented button:hover {
+  color: var(--color-text, #0f172a);
+}
+
+.task-segmented button.is-active {
+  background: var(--task-surface);
+  color: var(--task-accent);
+  box-shadow: 0 1px 3px rgba(15, 23, 42, 0.12);
+}

@@ -58,6 +58,8 @@ import { registerSafetyRoutes } from "./safety/routes.js";
 import { registerJarvisRoutes } from "./jarvis/routes.js";
 import { registerAresRoutes } from "./ares.js";
 import { registerFinanceRoutes } from "./finance/routes.js";
+import { registerTaskRoutes } from "./tasks/routes.js";
+import { registerBugReportRoutes } from "./bugs/routes.js";
 import { openAiUsageTokens, recordAiUsage, recordBraveQuota } from "./finance/usage.js";
 
 dotenv.config();
@@ -1357,6 +1359,11 @@ registerFinanceRoutes(app, {
   pool: db.isPostgres() ? db.getPool() : null,
   dataDir: DATA_DIR,
 });
+
+// Úkoly (personal and team to-do lists) and Hlášení chyb (bug reports with
+// screenshots) — every signed-in user.
+registerTaskRoutes(app, { authenticateToken, pool: db.isPostgres() ? db.getPool() : null, dataDir: DATA_DIR });
+registerBugReportRoutes(app, { authenticateToken, pool: db.isPostgres() ? db.getPool() : null, dataDir: DATA_DIR });
 
 // File-based database functions (development mode)
 function readDb() {

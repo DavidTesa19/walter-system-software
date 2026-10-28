@@ -208,6 +208,34 @@ CZK conversion uses ČNB's daily fixing (`rates.js`, fixed fallback). To test
 a connector locally, pass its token as an env var to a wrapper around
 `server.js` — never write tokens into tracked files.
 
+## Úkoly and Hlášení chyb (`server/tasks/`, `server/bugs/`)
+
+Úkoly is the team's simple to-do list, separate from Budoucí funkce (product
+ideas): one `tasks` table holds every user's personal list (`list =
+'personal'`, `owner_user_id`) and the shared team list (`list = 'team'`,
+optional `assignee_user_id`). A task is `todo`, `later` or `done`; a `later`
+task with a `due_date` comes back to "K udělání" on that day by itself
+(`taskBucket` in `client/src/tasks/tasksApi.ts`, the browser's own date).
+Anyone signed in can read every list; a personal list is changed only by its
+owner or an admin, the team list by anyone but viewers. The section
+(`TasksView.tsx`) and the top-right floating window (`FloatingTools.tsx`,
+Alt+T) share `useTaskList`, which drops a reload that started before a change
+finished — otherwise a quick second add vanishes until the next refresh.
+
+Hlášení chyb: the bug button next to it opens `BugReportDialog` from any
+screen (title, description, severity, screenshots by Ctrl+V, drop, file or
+`getDisplayMedia` capture); the date, the screen and the author are filled in.
+Screenshots go up as multipart (`reenterRequestContext` after multer) into
+`bug_report_screenshots` (bytea, raster images only, deleted with their
+report, kept out of the change log in `AUDIT_EXCLUDED_TABLES`). Admins and
+managers triage; a report is deleted by an admin, or by its author while
+still `new`.
+
+The floating buttons sit at z-index 950, under the profile panel. Several
+non-grid screens have buttons in the top-right corner, so `.main-content`
+gets a 30px band at the top except on the grid screens (FloatingTools.css);
+check a new screen's top-right corner against the buttons.
+
 ## Jarvis, the AI agent (`server/jarvis/`, `client/src/jarvis/`)
 
 Claude (model `JARVIS_MODEL`, default `claude-opus-5-5`; effort `JARVIS_EFFORT`,

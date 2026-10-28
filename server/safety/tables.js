@@ -38,6 +38,10 @@ export const AUDIT_EXCLUDED_TABLES = new Set([
   'finance_ai_usage',
   'finance_provider_costs',
   'finance_state',
+  // Screenshot bytes attached to bug reports: the trigger would copy every
+  // image into the log as hex. The reports themselves (bug_reports) are
+  // logged, and the screenshots are in the backups.
+  'bug_report_screenshots',
 ]);
 
 // Never inside a backup archive: the log and the backups themselves.

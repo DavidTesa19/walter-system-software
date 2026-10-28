@@ -186,6 +186,20 @@ const Icons = {
       <path d="M16 3.13a4 4 0 0 1 0 7.75"></path>
     </svg>
   ),
+  Tasks: () => (
+    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M9 11l3 3L22 4" />
+      <path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11" />
+    </svg>
+  ),
+  Bug: () => (
+    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M8 2l1.88 1.88M14.12 3.88L16 2" />
+      <path d="M9 7.13v-1a3.003 3.003 0 1 1 6 0v1" />
+      <path d="M12 20c-3.3 0-6-2.7-6-6v-3a4 4 0 0 1 4-4h4a4 4 0 0 1 4 4v3c0 3.3-2.7 6-6 6Z" />
+      <path d="M12 20v-9M6.53 9C4.6 8.8 3 7.1 3 5M6 13H2M3 21c0-2.1 1.7-3.9 3.8-4M20.97 5c0 2.1-1.6 3.8-3.5 4M22 13h-4M17.2 17c2.1.1 3.8 1.9 3.8 4" />
+    </svg>
+  ),
   Safety: () => (
     <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
       <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"></path>
@@ -238,6 +252,7 @@ const Sidebar: React.FC<SidebarProps> = ({
     growth_commissions: true,
     calendar: true,
     teamchat: true,
+    tasks: true,
     other: true
   });
 
@@ -277,8 +292,9 @@ const Sidebar: React.FC<SidebarProps> = ({
       },
       { id: 'calendar', views: ['calendar'] },
       { id: 'teamchat', views: ['teamchat'] },
+      { id: 'tasks', views: ['tasks'] },
       { id: 'analysis', views: ['analytics', 'finance'] },
-      { id: 'other', views: ['future', 'chatbot', 'palettes', 'admin_users', 'safety'] }
+      { id: 'other', views: ['future', 'bugs', 'chatbot', 'palettes', 'admin_users', 'safety'] }
     ];
 
     const activeGroup = groups.find(g => g.views.includes(activeView as string));
@@ -481,6 +497,12 @@ const Sidebar: React.FC<SidebarProps> = ({
       items: [{ id: 'calendar', label: 'Kalendář', icon: <Icons.Calendar /> }]
     },
     {
+      id: 'tasks',
+      label: 'Úkoly',
+      icon: <Icons.Tasks />,
+      items: [{ id: 'tasks', label: 'Úkoly', icon: <Icons.Tasks /> }]
+    },
+    {
       id: 'teamchat',
       label: 'Týmový chat',
       icon: <Icons.TeamChat />,
@@ -501,6 +523,7 @@ const Sidebar: React.FC<SidebarProps> = ({
       icon: <Icons.Other />,
       items: [
         { id: 'future', label: 'Budoucí funkce', icon: <Icons.Future /> },
+        { id: 'bugs', label: 'Hlášení chyb', icon: <Icons.Bug /> },
         { id: 'chatbot', label: 'AI Asistent', icon: <Icons.Chatbot /> },
         { id: 'palettes', label: 'Motivy', icon: <Icons.Palettes /> },
         { id: 'admin_users', label: 'Správa uživatelů', icon: <Icons.Users /> },

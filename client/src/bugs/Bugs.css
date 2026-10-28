@@ -1,0 +1,403 @@
+/* The bug report dialog and the pieces Hlášení chyb shares with it. The
+   dialog is portalled to <body>, where no app font is set, so it names its
+   own. */
+
+.bug-dialog-backdrop,
+.bugs-view {
+  --bug-font: var(--font-body, "Sora", "Inter", "Segoe UI", system-ui, sans-serif);
+  --bug-surface: var(--color-surface, #ffffff);
+  --bug-border: color-mix(in srgb, var(--color-border, rgba(15, 23, 42, 0.14)) 90%, transparent);
+  --bug-muted: var(--color-text-muted, #64748b);
+  --bug-accent: var(--color-primary, #2563eb);
+  --bug-danger: var(--color-danger, #dc2626);
+  --bug-low: #64748b;
+  --bug-medium: #2a78d6;
+  --bug-high: #d97706;
+  --bug-critical: #dc2626;
+  font-family: var(--bug-font);
+  color: var(--color-text, #0f172a);
+}
+
+.bug-dialog-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 1600;
+  display: flex;
+  align-items: flex-start;
+  justify-content: center;
+  padding: 6vh 16px 16px;
+  background: rgba(15, 23, 42, 0.42);
+  backdrop-filter: blur(3px);
+  overflow-y: auto;
+}
+
+/* While the screen is being captured the dialog steps out of the picture. */
+.bug-dialog-backdrop.is-capturing {
+  visibility: hidden;
+}
+
+.bug-dialog {
+  width: min(620px, 100%);
+  border: 1px solid var(--bug-border);
+  border-radius: 20px;
+  background: var(--bug-surface);
+  box-shadow: 0 30px 80px -20px rgba(15, 23, 42, 0.45);
+  animation: bug-dialog-in 0.18s ease-out;
+}
+
+@keyframes bug-dialog-in {
+  from { opacity: 0; transform: translateY(-8px) scale(0.98); }
+  to { opacity: 1; transform: none; }
+}
+
+.bug-dialog-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 20px 22px 0;
+}
+
+.bug-dialog-header h2 {
+  margin: 0;
+  font-size: 1.25rem;
+  font-weight: 750;
+  letter-spacing: -0.02em;
+}
+
+.bug-dialog-context {
+  margin: 4px 0 0;
+  color: var(--bug-muted);
+  font-size: 0.8rem;
+}
+
+.bug-dialog-body {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  padding: 18px 22px 22px;
+}
+
+.bug-dialog-footer {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  margin-top: 4px;
+}
+
+.bug-dialog-sent {
+  align-items: center;
+  text-align: center;
+}
+
+.bug-dialog-sent p {
+  margin: 0;
+  line-height: 1.55;
+}
+
+.bug-sent-mark {
+  width: 52px;
+  height: 52px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 50%;
+  background: color-mix(in srgb, var(--color-success, #16a34a) 15%, transparent);
+  color: var(--color-success, #16a34a);
+  font-size: 1.6rem;
+  font-weight: 700;
+}
+
+.bug-icon-btn {
+  width: 32px;
+  height: 32px;
+  flex: 0 0 auto;
+  border: 0;
+  border-radius: 10px;
+  background: transparent;
+  color: var(--bug-muted);
+  font-size: 1.4rem;
+  line-height: 1;
+  cursor: pointer;
+}
+
+.bug-icon-btn:hover {
+  background: color-mix(in srgb, var(--bug-muted) 12%, transparent);
+  color: var(--color-text, #0f172a);
+}
+
+.bug-field {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin: 0;
+}
+
+.bug-field > span {
+  font-size: 0.8rem;
+  font-weight: 650;
+  color: var(--bug-muted);
+}
+
+.bug-input {
+  width: 100%;
+  box-sizing: border-box;
+  padding: 9px 12px;
+  border: 1px solid var(--bug-border);
+  border-radius: 10px;
+  background: color-mix(in srgb, var(--color-surface-alt, #f8fafc) 70%, var(--bug-surface));
+  color: var(--color-text, #0f172a);
+  font: inherit;
+  font-size: 0.9rem;
+}
+
+.bug-input:focus {
+  outline: none;
+  border-color: var(--bug-accent);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--bug-accent) 18%, transparent);
+}
+
+.bug-textarea {
+  resize: vertical;
+  min-height: 80px;
+  line-height: 1.5;
+}
+
+.bug-hint {
+  color: var(--bug-muted);
+  font-size: 0.78rem;
+}
+
+.bug-error {
+  padding: 9px 12px;
+  border-radius: 10px;
+  background: color-mix(in srgb, var(--bug-danger) 12%, transparent);
+  color: var(--bug-danger);
+  font-size: 0.86rem;
+}
+
+.bug-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  padding: 9px 16px;
+  border: 1px solid transparent;
+  border-radius: 10px;
+  font: inherit;
+  font-size: 0.86rem;
+  font-weight: 650;
+  white-space: nowrap;
+  cursor: pointer;
+  transition: background-color 0.15s ease, opacity 0.15s ease;
+}
+
+.bug-btn:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+
+.bug-btn--primary {
+  background: var(--bug-accent);
+  color: var(--color-primary-contrast, #ffffff);
+}
+
+.bug-btn--primary:hover:not(:disabled) {
+  background: var(--color-primary-hover, var(--bug-accent));
+}
+
+.bug-btn--ghost {
+  background: transparent;
+  border-color: var(--bug-border);
+  color: var(--color-text, #0f172a);
+}
+
+.bug-btn--ghost:hover:not(:disabled) {
+  background: color-mix(in srgb, var(--bug-muted) 10%, transparent);
+}
+
+.bug-btn--danger {
+  background: transparent;
+  border-color: color-mix(in srgb, var(--bug-danger) 45%, transparent);
+  color: var(--bug-danger);
+}
+
+.bug-btn--danger:hover {
+  background: color-mix(in srgb, var(--bug-danger) 10%, transparent);
+}
+
+/* ---------- severity ---------- */
+
+.bug-severity--low { --sev: var(--bug-low); }
+.bug-severity--medium { --sev: var(--bug-medium); }
+.bug-severity--high { --sev: var(--bug-high); }
+.bug-severity--critical { --sev: var(--bug-critical); }
+
+.bug-severity-picker {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 8px;
+}
+
+@media (max-width: 520px) {
+  .bug-severity-picker {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+.bug-severity-option {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+  padding: 9px 8px;
+  border: 1px solid var(--bug-border);
+  border-radius: 10px;
+  background: transparent;
+  color: var(--color-text, #0f172a);
+  font: inherit;
+  font-size: 0.86rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background-color 0.15s ease, border-color 0.15s ease;
+}
+
+.bug-severity-option:hover {
+  border-color: var(--sev);
+}
+
+.bug-severity-option.is-active {
+  border-color: var(--sev);
+  background: color-mix(in srgb, var(--sev) 14%, transparent);
+  color: color-mix(in srgb, var(--sev) 75%, var(--color-text, #0f172a));
+  box-shadow: 0 0 0 1px var(--sev) inset;
+}
+
+.bug-severity-dot {
+  width: 9px;
+  height: 9px;
+  flex: 0 0 auto;
+  border-radius: 50%;
+  background: var(--sev);
+}
+
+.bug-severity-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 3px 10px;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--sev) 14%, transparent);
+  color: color-mix(in srgb, var(--sev) 80%, var(--color-text, #0f172a));
+  font-size: 0.76rem;
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+/* ---------- screenshots ---------- */
+
+.bug-dropzone {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 14px;
+  border: 1.5px dashed var(--bug-border);
+  border-radius: 14px;
+  transition: border-color 0.15s ease, background-color 0.15s ease;
+}
+
+.bug-dropzone.is-dragging {
+  border-color: var(--bug-accent);
+  background: color-mix(in srgb, var(--bug-accent) 7%, transparent);
+}
+
+.bug-dropzone-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+
+.bug-shots {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+.bug-shot {
+  position: relative;
+  width: 112px;
+  margin: 0;
+  padding: 0;
+  border: 1px solid var(--bug-border);
+  border-radius: 10px;
+  overflow: hidden;
+  background: color-mix(in srgb, var(--bug-muted) 8%, transparent);
+}
+
+.bug-shot img {
+  display: block;
+  width: 100%;
+  height: 76px;
+  object-fit: cover;
+}
+
+.bug-shot figcaption {
+  padding: 3px 6px;
+  color: var(--bug-muted);
+  font-size: 0.7rem;
+}
+
+.bug-shot-remove {
+  position: absolute;
+  top: 4px;
+  right: 4px;
+  width: 22px;
+  height: 22px;
+  border: 0;
+  border-radius: 50%;
+  background: rgba(15, 23, 42, 0.7);
+  color: #ffffff;
+  font-size: 0.95rem;
+  line-height: 1;
+  cursor: pointer;
+}
+
+.bug-shots--large .bug-shot {
+  width: 180px;
+}
+
+.bug-shots--large .bug-shot img {
+  height: 112px;
+}
+
+.bug-shot--button {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 112px;
+  cursor: zoom-in;
+}
+
+.bug-shot--button:hover {
+  border-color: var(--bug-accent);
+}
+
+.bug-lightbox {
+  position: fixed;
+  inset: 0;
+  z-index: 1700;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+  background: rgba(15, 23, 42, 0.82);
+  cursor: zoom-out;
+}
+
+.bug-lightbox img {
+  max-width: 100%;
+  max-height: 100%;
+  border-radius: 8px;
+  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.5);
+}

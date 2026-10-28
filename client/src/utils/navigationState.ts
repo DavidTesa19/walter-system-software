@@ -26,7 +26,10 @@ const VALID_APP_VIEWS: AppView[] = [
   "growth_subjects_pending",
   "growth_subjects_archived",
   "admin_users",
-  "safety"
+  "safety",
+  "finance",
+  "tasks",
+  "bugs"
 ];
 
 type FutureFunctionsViewMode = "active" | "archive";

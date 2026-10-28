@@ -17,6 +17,8 @@ import { registerSafetyRoutes } from "./safety/routes.js";
 import { registerJarvisRoutes } from "./jarvis/routes.js";
 import { registerAresRoutes } from "./ares.js";
 import { registerFinanceRoutes } from "./finance/routes.js";
+import { registerTaskRoutes } from "./tasks/routes.js";
+import { registerBugReportRoutes } from "./bugs/routes.js";
 import { openAiUsageTokens, recordAiUsage, recordBraveQuota } from "./finance/usage.js";
 import {
   normalizeNotificationEmail,
@@ -1653,6 +1655,11 @@ registerFinanceRoutes(app, {
   pool: null,
   dataDir: DATA_DIR,
 });
+
+// Úkoly (personal and team to-do lists) and Hlášení chyb (bug reports with
+// screenshots) — every signed-in user.
+registerTaskRoutes(app, { authenticateToken, pool: null, dataDir: DATA_DIR });
+registerBugReportRoutes(app, { authenticateToken, pool: null, dataDir: DATA_DIR });
 
 const requireAccessScope = (...allowedScopes) => {
   return (req, res, next) => {

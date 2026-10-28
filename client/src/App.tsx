@@ -24,6 +24,9 @@ import AnalyticsView from './views/AnalyticsView';
 import AdminUsersView from './views/AdminUsersView';
 import SafetyView from './views/SafetyView';
 import FinanceView from './views/FinanceView';
+import TasksView from './views/TasksView';
+import BugReportsView from './views/BugReportsView';
+import FloatingTools from './components/FloatingTools';
 import JarvisPanel from './jarvis/JarvisPanel';
 import type { JarvisOpenAction } from './jarvis/jarvisApi';
 import ProjectsSectionView from './views/ProjectsSectionView';
@@ -93,6 +96,8 @@ const VIEW_LABELS: Record<AppView, string> = {
   finance: 'Finance',
   admin_users: 'Správa uživatelů',
   safety: 'Bezpečnost a zálohy',
+  tasks: 'Úkoly',
+  bugs: 'Hlášení chyb',
   entities_active: 'Aktuální subjekty',
   entities_pending: 'Subjekty ke schválení',
   entities_archived: 'Archiv subjektů',
@@ -672,6 +677,10 @@ const AppContent: React.FC = () => {
                 return <AdminUsersView />;
               case 'safety':
                 return <SafetyView />;
+              case 'tasks':
+                return <TasksView />;
+              case 'bugs':
+                return <BugReportsView />;
               case 'entities_active':
               case 'entities_pending':
               case 'entities_archived':
@@ -698,6 +707,7 @@ const AppContent: React.FC = () => {
           })()}
         </div>
         {!isFullscreenView && <Footer />}
+        <FloatingTools viewId={effectiveView} viewLabel={VIEW_LABELS[effectiveView]} onNavigate={handleViewChange} />
         <JarvisPanel
           open={jarvisOpen}
           onOpen={openJarvis}

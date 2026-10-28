@@ -1,0 +1,258 @@
+/* The floating buttons in the top-right corner (Úkoly, bug report) and the
+   small task window the Úkoly button opens into. Below the profile panel and
+   the other right-hand overlays (z-index 1000), above the page content. */
+
+.floating-tools {
+  position: fixed;
+  top: 8px;
+  right: 16px;
+  z-index: 950;
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  font-family: var(--font-body, "Sora", "Inter", "Segoe UI", system-ui, sans-serif);
+  pointer-events: none;
+}
+
+.floating-tools > * {
+  pointer-events: auto;
+}
+
+.floating-tool {
+  position: relative;
+  height: 38px;
+  min-width: 38px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+  padding: 0 11px;
+  border: 1px solid color-mix(in srgb, var(--color-border, rgba(15, 23, 42, 0.14)) 90%, transparent);
+  border-radius: 12px;
+  background: color-mix(in srgb, var(--color-surface, #ffffff) 92%, transparent);
+  color: var(--color-text, #0f172a);
+  font: inherit;
+  font-size: 0.86rem;
+  font-weight: 650;
+  box-shadow: 0 8px 22px -10px rgba(15, 23, 42, 0.35), 0 1px 3px rgba(15, 23, 42, 0.08);
+  backdrop-filter: blur(10px);
+  cursor: pointer;
+  transition: transform 0.15s ease, box-shadow 0.15s ease, border-color 0.15s ease, color 0.15s ease;
+}
+
+.floating-tool:hover {
+  transform: translateY(-1px);
+  border-color: color-mix(in srgb, var(--color-primary, #2563eb) 50%, transparent);
+  box-shadow: 0 12px 26px -10px rgba(15, 23, 42, 0.4), 0 1px 3px rgba(15, 23, 42, 0.08);
+}
+
+.floating-tool:focus-visible {
+  outline: 2px solid var(--color-primary, #2563eb);
+  outline-offset: 2px;
+}
+
+.floating-tool--bug {
+  padding: 0;
+  color: var(--color-text-muted, #64748b);
+}
+
+.floating-tool--bug:hover {
+  color: var(--color-danger, #dc2626);
+  border-color: color-mix(in srgb, var(--color-danger, #dc2626) 50%, transparent);
+}
+
+.floating-tool--tasks {
+  color: var(--color-primary, #2563eb);
+}
+
+.floating-tool-label {
+  color: var(--color-text, #0f172a);
+}
+
+.floating-tool-badge {
+  min-width: 20px;
+  height: 20px;
+  padding: 0 6px;
+  box-sizing: border-box;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 999px;
+  background: var(--color-primary, #2563eb);
+  color: var(--color-primary-contrast, #ffffff);
+  font-size: 0.72rem;
+  font-weight: 700;
+}
+
+/* ---------- the task window ---------- */
+
+.tasks-widget {
+  width: 340px;
+  max-height: min(560px, calc(100vh - 24px));
+  display: flex;
+  flex-direction: column;
+  border: 1px solid var(--task-border);
+  border-radius: 16px;
+  background: var(--color-surface, #ffffff);
+  box-shadow: 0 24px 60px -18px rgba(15, 23, 42, 0.45), 0 2px 6px rgba(15, 23, 42, 0.08);
+  overflow: hidden;
+  animation: tasks-widget-in 0.16s ease-out;
+  transform-origin: top right;
+}
+
+@keyframes tasks-widget-in {
+  from { opacity: 0; transform: scale(0.94); }
+  to { opacity: 1; transform: none; }
+}
+
+@media (max-width: 520px) {
+  .tasks-widget {
+    width: calc(100vw - 80px);
+  }
+}
+
+.tasks-widget-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 8px 8px 8px 10px;
+  border-bottom: 1px solid var(--task-border);
+  background: color-mix(in srgb, var(--color-surface-alt, #f8fafc) 60%, var(--color-surface, #ffffff));
+}
+
+.tasks-widget-tabs {
+  display: inline-flex;
+  gap: 2px;
+  padding: 2px;
+  border-radius: 10px;
+  background: color-mix(in srgb, var(--task-muted) 10%, transparent);
+}
+
+.tasks-widget-tabs button {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 5px 12px;
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--task-muted);
+  font: inherit;
+  font-size: 0.82rem;
+  font-weight: 650;
+  cursor: pointer;
+}
+
+.tasks-widget-tabs button.is-active {
+  background: var(--color-surface, #ffffff);
+  color: var(--color-text, #0f172a);
+  box-shadow: 0 1px 3px rgba(15, 23, 42, 0.14);
+}
+
+.tasks-widget-count {
+  min-width: 16px;
+  padding: 0 5px;
+  border-radius: 999px;
+  background: var(--task-accent);
+  color: var(--color-primary-contrast, #ffffff);
+  font-size: 0.68rem;
+  line-height: 1.5;
+  text-align: center;
+}
+
+.tasks-widget-header-actions {
+  display: flex;
+  gap: 2px;
+}
+
+.tasks-widget-add {
+  padding: 6px 12px;
+  border-bottom: 1px solid var(--task-border);
+}
+
+.tasks-widget-error {
+  margin: 8px 10px 0;
+  padding: 7px 10px;
+  border-radius: 8px;
+  background: color-mix(in srgb, var(--task-danger) 12%, transparent);
+  color: var(--task-danger);
+  font-size: 0.8rem;
+  cursor: pointer;
+}
+
+.tasks-widget-list {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 10px;
+}
+
+.tasks-widget-empty {
+  padding: 18px 8px;
+  color: var(--task-muted);
+  font-size: 0.84rem;
+  text-align: center;
+}
+
+.tasks-widget-group {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-top: 6px;
+  padding: 4px 2px;
+  border: 0;
+  background: none;
+  color: var(--task-muted);
+  font: inherit;
+  font-size: 0.74rem;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  text-align: left;
+  cursor: pointer;
+}
+
+.tasks-widget-group--static {
+  cursor: default;
+}
+
+.tasks-widget-chevron {
+  display: inline-block;
+  font-size: 1rem;
+  line-height: 1;
+  transition: transform 0.15s ease;
+}
+
+.tasks-widget-chevron.is-open {
+  transform: rotate(90deg);
+}
+
+.tasks-widget-group-count {
+  padding: 0 6px;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--task-muted) 14%, transparent);
+  font-size: 0.7rem;
+  letter-spacing: 0;
+}
+
+/* Several screens (Finance, Bezpečnost, Budoucí funkce, Kalendář) have their
+   own buttons in the top-right corner. Every screen except the grids keeps a
+   thin band free at the top, so the floating buttons never cover them. The
+   grid screens' toolbars leave the corner free, and their fixed height is
+   load-bearing (see .main-content), so they are left alone. */
+.main-content:not(.main-content--table-scroll)::before {
+  content: '';
+  display: block;
+  flex: 0 0 var(--floating-tools-band, 30px);
+}
+
+/* Budoucí funkce is sized like a grid screen but has "+ Přidat funkci" in the
+   corner: its page takes the band inside its own fixed height instead. */
+.future-functions-page {
+  box-sizing: border-box;
+  padding-top: 48px;
+}

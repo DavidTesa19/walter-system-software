@@ -18,6 +18,8 @@ import { installDbContextHook } from './safety/context.js';
 import { installSafetyLayer } from './safety/pg-install.js';
 import { installJarvisSchema } from './jarvis/store.js';
 import { installFinanceSchema } from './finance/store.js';
+import { installTaskSchema } from './tasks/store.js';
+import { installBugReportSchema } from './bugs/store.js';
 
 dotenv.config();
 const { Pool } = pkg;
@@ -1320,6 +1322,14 @@ export async function initDatabase() {
       await installFinanceSchema(client);
     } catch (error) {
       console.error('✗ Finance schema could not be created:', error.message);
+    }
+
+    // Úkoly and Hlášení chyb.
+    try {
+      await installTaskSchema(client);
+      await installBugReportSchema(client);
+    } catch (error) {
+      console.error('✗ Tasks / bug report schema could not be created:', error.message);
     }
 
     // Change log, delete/truncate/drop guards and AI agent brakes. Runs last so
