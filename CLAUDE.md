@@ -413,7 +413,7 @@ inherited one falls back to the browser's serif. Needs `ANTHROPIC_API_KEY`;
   voice and speed in the panel's voice menu (`voiceSettings.ts`,
   localStorage). `TTS_VOICES` is six voices, the best three per gender from a
   comparison of all nine gpt-audio voices reading Czech (Marin, Shimmer,
-  Coral; Cedar, Verse, Echo), each with a description and a face drawn in
+  Coral; Cedar, Verse, Echo), each with a face drawn in
   `VoiceAvatar.tsx` (a new voice needs one, or it gets a grey silhouette).
   Picking one plays a sample in it (`speak(..., { voice })`); the chosen
   face replaces the menu button's icon. An older stored choice no longer on

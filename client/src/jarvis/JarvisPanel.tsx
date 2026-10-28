@@ -727,7 +727,6 @@ function VoiceSettingsPanel({
                     >
                       <VoiceAvatar voice={voice.id} size={44} />
                       <strong>{voice.label}</strong>
-                      {voice.description && <small>{voice.description}</small>}
                     </button>
                   ))}
               </div>

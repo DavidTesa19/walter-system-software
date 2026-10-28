@@ -27,15 +27,14 @@ export const AUDIO_MODEL = process.env.JARVIS_AUDIO_MODEL || 'gpt-audio-1.5';
 // gender that read Czech best when all nine of gpt-audio's voices read the
 // same answers (2026-10-28: accent, intonation and how well a transcriber
 // understood them; the differences were small). Each has a face in the panel
-// (client/src/jarvis/VoiceAvatar.tsx). All six are on both engines and on
-// gpt-realtime-2.1-mini, the TTS models' successor.
+// (client/src/jarvis/VoiceAvatar.tsx). All six are on both engines.
 export const TTS_VOICES = [
-  { id: 'marin', label: 'Marin', gender: 'female', description: 'Přirozená a vlídná' },
-  { id: 'shimmer', label: 'Shimmer', gender: 'female', description: 'Jasná a energická' },
-  { id: 'coral', label: 'Coral', gender: 'female', description: 'Vřelá a přátelská' },
-  { id: 'cedar', label: 'Cedar', gender: 'male', description: 'Klidný, hlubší hlas' },
-  { id: 'verse', label: 'Verse', gender: 'male', description: 'Živý a výrazný' },
-  { id: 'echo', label: 'Echo', gender: 'male', description: 'Věcný a vyrovnaný' },
+  { id: 'marin', label: 'Marin', gender: 'female' },
+  { id: 'shimmer', label: 'Shimmer', gender: 'female' },
+  { id: 'coral', label: 'Coral', gender: 'female' },
+  { id: 'cedar', label: 'Cedar', gender: 'male' },
+  { id: 'verse', label: 'Verse', gender: 'male' },
+  { id: 'echo', label: 'Echo', gender: 'male' },
 ];
 const VOICE_IDS = new Set(TTS_VOICES.map((voice) => voice.id));
 // A voice no longer offered (an older choice) reads in the default one.

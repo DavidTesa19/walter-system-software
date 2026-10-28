@@ -1203,7 +1203,7 @@
   font-weight: 600;
 }
 
-/* A voice to pick: its face, name and character. Three to a row. */
+/* A voice to pick: its face and name. Three to a row. */
 .jarvis-voice-cards {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
@@ -1245,12 +1245,6 @@
 
 .jarvis-voice-card strong {
   font-size: 0.8rem;
-}
-
-.jarvis-voice-card small {
-  color: var(--jarvis-muted);
-  font-size: 0.68rem;
-  line-height: 1.25;
 }
 
 .jarvis-voice-avatar {

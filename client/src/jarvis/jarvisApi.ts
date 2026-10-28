@@ -154,8 +154,6 @@ export interface JarvisVoiceOption {
   id: string;
   label: string;
   gender: 'female' | 'male' | 'neutral';
-  // What the voice is like, in a few words.
-  description?: string;
 }
 
 export interface JarvisVoiceEngine {
