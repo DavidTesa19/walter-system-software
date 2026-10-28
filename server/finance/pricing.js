@@ -28,7 +28,10 @@ export const OPENAI_PRICES = {
   'gpt-5-mini': { input: 0.25, cacheRead: 0.025, output: 2 },
   'gpt-5': { input: 1.25, cacheRead: 0.125, output: 10 },
   'gpt-4o-mini-tts': { input: 0.6, cacheRead: 0.6, output: 12 },
-  // Jarvis's read-aloud voice: audio output tokens.
+  // Jarvis's read-aloud voice: audio output tokens (voice.js weighs the
+  // realtime model's few text tokens down to the audio price).
+  'gpt-realtime-2.1-mini': { input: 0.6, cacheRead: 0.06, output: 20 },
+  'gpt-realtime-2.1': { input: 4, cacheRead: 0.4, output: 64 },
   'gpt-audio-mini': { input: 0.6, cacheRead: 0.6, output: 20 },
   'gpt-audio': { input: 2.5, cacheRead: 2.5, output: 64 },
   'gpt-4o-mini': { input: 0.15, cacheRead: 0.075, output: 0.6 },
@@ -36,9 +39,9 @@ export const OPENAI_PRICES = {
   'gpt-4o': { input: 2.5, cacheRead: 1.25, output: 10 },
 };
 
-// Read-aloud returns audio, not a token count. OpenAI estimates
-// gpt-4o-mini-tts at about $0.015 a minute; Czech speech runs at roughly
-// 900 characters a minute.
+// The old TTS engine (gpt-4o-mini-tts, removed 2026-10-28; its rows are still
+// in the log) returned audio, not a token count. OpenAI estimated it at about
+// $0.015 a minute; Czech speech runs at roughly 900 characters a minute.
 const TTS_USD_PER_MINUTE = 0.015;
 const TTS_CHARS_PER_MINUTE = 900;
 // gpt-transcribe and whisper-1 report seconds instead of tokens.

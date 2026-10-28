@@ -273,8 +273,8 @@ export function registerJarvisRoutes(app, { authenticateToken, pool, dataDir, po
     }
   });
 
-  // Text in, spoken MP3 out. The browser asks sentence by sentence, so the
-  // first words play while the rest is still being made.
+  // Text in, speech out (WAV or MP3, by engine). The browser asks sentence by
+  // sentence, so the first words play while the rest is still being made.
   app.post('/api/jarvis/speech', authenticateToken, async (req, res) => {
     if (!isVoiceConfigured()) return res.status(503).json({ error: 'Hlas není na serveru nastavený (chybí OPENAI_API_KEY).' });
     const text = typeof req.body?.text === 'string' ? req.body.text.trim() : '';
@@ -288,8 +288,8 @@ export function registerJarvisRoutes(app, { authenticateToken, pool, dataDir, po
     });
     try {
       const options = { voice: req.body?.voice, speed: req.body?.speed, engine: req.body?.engine };
-      const audio = await synthesize(text, abort.signal, Number(req.user.id), options);
-      res.setHeader('Content-Type', 'audio/mpeg');
+      const { audio, contentType } = await synthesize(text, abort.signal, Number(req.user.id), options);
+      res.setHeader('Content-Type', contentType);
       res.setHeader('Cache-Control', 'no-store');
       res.end(audio);
     } catch (error) {

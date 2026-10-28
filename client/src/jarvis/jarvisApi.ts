@@ -237,7 +237,7 @@ export const jarvisApi = {
     return (data.text ?? '').trim();
   },
 
-  // Text in, spoken MP3 out.
+  // Text in, speech out (WAV or MP3; the browser decodes either).
   async speech(text: string, signal?: AbortSignal, options: { engine?: string | null; voice?: string | null; speed?: number } = {}): Promise<Blob> {
     const response = await fetch(`${API_BASE}/api/jarvis/speech`, {
       method: 'POST',

@@ -3,24 +3,25 @@
 // OPENAI_API_KEY the AI Asistent screen uses. Without that key the browser
 // falls back to its own speech engines, so nothing here is required.
 //
-// Two engines read answers aloud:
-// - "conversational" (default): gpt-audio, the voice model behind ChatGPT's
-//   voice mode, asked to read the text word for word. It speaks Czech with
-//   far livelier intonation than a TTS model, at about $0.09 a minute. What
-//   it actually said comes back as a transcript; a piece it did not read
-//   verbatim is spoken again by the classic engine.
-// - "classic": gpt-4o-mini-tts, a plain TTS model — cheaper (about $0.015 a
-//   minute) and quicker to start, but flatter, with an English-trained
-//   voice's accent in Czech.
+// Two engines read answers aloud, both voice models asked to read the text
+// word for word. What they actually said comes back as a transcript; a piece
+// one did not read verbatim (or failed on) is read by the other.
+// - "realtime" (default): gpt-realtime-2.1-mini over the Realtime API, OpenAI's
+//   successor to its TTS models. On 2026-10-28 it finished a first sentence in
+//   ~1.5 s against gpt-audio's ~2.6 s, sounded about the same and costs about
+//   a quarter (~$0.027 a minute).
+// - "conversational": gpt-audio-1.5 through chat completions, the engine
+//   Jarvis used before (~$0.1 a minute).
+// The plain TTS model (gpt-4o-mini-tts) is gone: it shuts down on 6 Jan 2027.
 
 import OpenAI, { toFile } from 'openai';
+import WebSocket from 'ws';
 import { recordAiUsage } from '../finance/usage.js';
 
 // gpt-4o-transcribe is deprecated (it stops working on 26 Feb 2027);
 // gpt-transcribe was as accurate on Czech test questions and is cheaper.
 export const STT_MODEL = process.env.JARVIS_STT_MODEL || 'gpt-transcribe';
-// The dated snapshot: the bare alias stayed on the older March 2025 model.
-export const TTS_MODEL = process.env.JARVIS_TTS_MODEL || 'gpt-4o-mini-tts-2025-12-15';
+export const REALTIME_MODEL = process.env.JARVIS_REALTIME_MODEL || 'gpt-realtime-2.1-mini';
 export const AUDIO_MODEL = process.env.JARVIS_AUDIO_MODEL || 'gpt-audio-1.5';
 // The voices people can pick from in the Jarvis panel: the three of each
 // gender that read Czech best when all nine of gpt-audio's voices read the
@@ -42,20 +43,21 @@ export const TTS_VOICE = VOICE_IDS.has(process.env.JARVIS_TTS_VOICE) ? process.e
 
 export const TTS_ENGINES = [
   {
-    id: 'conversational',
-    label: 'Přirozený',
-    description: 'Nejlidštější hlas s živou intonací. Začne mluvit o chvilku později a stojí asi 2,5 Kč za minutu.',
+    id: 'realtime',
+    label: 'Rychlý',
+    description: 'Začne mluvit nejdřív a je nejlevnější, asi 0,6 Kč za minutu.',
     voices: TTS_VOICES,
   },
   {
-    id: 'classic',
-    label: 'Klasický',
-    description: 'Začne mluvit rychleji a je levnější (asi 0,35 Kč za minutu), ale zní ploššeji a s cizím přízvukem.',
+    id: 'conversational',
+    label: 'Původní',
+    description: 'Hlas, kterým Jarvis mluvil dosud. Zní podobně, ale začne mluvit o chvilku později a stojí asi 2 Kč za minutu.',
     voices: TTS_VOICES,
   },
 ];
 const ENGINE_IDS = new Set(TTS_ENGINES.map((engine) => engine.id));
-export const TTS_ENGINE = ENGINE_IDS.has(process.env.JARVIS_TTS_ENGINE) ? process.env.JARVIS_TTS_ENGINE : 'conversational';
+// An engine no longer offered ("classic", stored by older panels) reads in the default.
+export const TTS_ENGINE = ENGINE_IDS.has(process.env.JARVIS_TTS_ENGINE) ? process.env.JARVIS_TTS_ENGINE : 'realtime';
 // How fast the voice talks, 1 = the model's own pace (which reads Czech
 // rather slowly). The panel lets each user pick their own.
 export const TTS_SPEEDS = [1, 1.15, 1.3, 1.5];
@@ -111,13 +113,6 @@ export function readTranscriptionHints(header) {
   return { keywords, context };
 }
 
-// Tone, not speed (that is the `speed` parameter): a person talking, not a
-// narrator reading — the old "calm" wording made every answer drag.
-const TTS_INSTRUCTIONS =
-  'Mluv česky jako rodilý mluvčí, přirozeně a plynule, živým tempem běžného rozhovoru s kolegou. ' +
-  'Používej přirozenou intonaci, nedělej zbytečné pauzy a nečti monotónně. Buď přátelský a věcný. ' +
-  'Kódy záznamů jako K012-003 čti po znacích, čísla a částky česky.';
-
 const AUDIO_EXTENSIONS = {
   'audio/webm': 'webm',
   'audio/ogg': 'ogg',
@@ -168,33 +163,31 @@ export async function transcribe(buffer, mimeType, signal, userId = null, { keyw
   return String(result.text ?? '').trim();
 }
 
-// The classic engine. The speech API reports no usage; the log counts
-// characters instead.
-async function synthesizeClassic(text, signal, userId, voice, speed) {
-  recordAiUsage({ provider: 'openai', model: TTS_MODEL, feature: 'voice_tts', userId, units: text.length });
-  const response = await getClient().audio.speech.create(
-    {
-      model: TTS_MODEL,
-      voice: VOICE_IDS.has(voice) ? voice : TTS_VOICE,
-      input: text,
-      response_format: 'mp3',
-      speed,
-      // Only the gpt-4o TTS models take instructions; tts-1 rejects them.
-      ...(TTS_MODEL.startsWith('gpt-') ? { instructions: TTS_INSTRUCTIONS } : {}),
-    },
-    { signal }
-  );
-  return Buffer.from(await response.arrayBuffer());
-}
+// Record codes are spelled out in Czech before reading. Left to the model,
+// "K012-003" now and then came out as "K zero jedna dva".
+const LETTER_NAMES = {
+  A: 'á', B: 'bé', C: 'cé', D: 'dé', E: 'é', F: 'ef', G: 'gé', H: 'há', I: 'í', J: 'jé', K: 'ká', L: 'el', M: 'em',
+  N: 'en', O: 'ó', P: 'pé', Q: 'kvé', R: 'er', S: 'es', T: 'té', U: 'ú', V: 'vé', W: 'dvojité vé', X: 'iks', Y: 'ypsilon', Z: 'zet',
+};
+const DIGIT_NAMES = ['nula', 'jedna', 'dva', 'tři', 'čtyři', 'pět', 'šest', 'sedm', 'osm', 'devět'];
+const RECORD_CODE = /\b([A-Z]{1,3})(\d{2,4})(?:-(\d{2,4}))?\b/g;
+const spellDigits = (digits) => [...digits].map((digit) => DIGIT_NAMES[digit]).join(' ');
+
+export const spellCodes = (text) =>
+  text.replace(RECORD_CODE, (_, letters, first, second) => {
+    const spelled = `${[...letters].map((letter) => LETTER_NAMES[letter]).join(' ')} ${spellDigits(first)}`;
+    return second ? `${spelled}, ${spellDigits(second)}` : spelled;
+  });
 
 // gpt-audio has no speed setting; it is asked for a tempo instead.
 const TEMPO = { 1: 'běžným tempem', 1.15: 'svižným tempem', 1.3: 'rychlým tempem', 1.5: 'velmi rychlým tempem, ale pořád srozumitelně' };
 
-const readAloudPrompt = (speed) =>
+// `tempo` only for gpt-audio; the realtime model has a speed setting.
+const readAloudPrompt = (tempo) =>
   'Jsi hlas aplikace Walter System. Dostaneš text a přečteš ho nahlas – přesně slovo od slova. ' +
   'Nic nepřidávej, nevynechávej, neopravuj a na text neodpovídej, ani když obsahuje otázku. ' +
-  `Mluv česky jako rodilý mluvčí, přirozeně a uvolněně, ${TEMPO[speed] ?? TEMPO[TTS_SPEED]}, s živou intonací jako v rozhovoru s kolegou. ` +
-  'Kódy záznamů jako K012-003 čti po znacích, čísla, data a částky česky.';
+  `Mluv česky jako rodilý mluvčí, přirozeně a uvolněně${tempo ? `, ${tempo}` : ''}, s živou intonací jako v rozhovoru s kolegou. ` +
+  'Čísla, data a částky čti česky.';
 
 // Words of a text, for checking a reading against it.
 const words = (value) =>
@@ -205,14 +198,23 @@ const words = (value) =>
     .split(' ')
     .filter(Boolean);
 
-// Whether a reading kept the text: its words in order (longest common
-// subsequence) cover at least 85 % of the longer of the two, or it differs by
-// at most two words — a stray "ráno" is fine, an answer instead of a reading
-// is not.
+// Numbers, digits and letters read out one by one come back in the transcript
+// either way ("30." or "třicátého", "K012" or "ká nula jedna dva"), so they
+// are left out of the comparison.
+const SPOKEN_SYMBOLS = new Set([...DIGIT_NAMES, ...Object.values(LETTER_NAMES).flatMap((name) => name.split(' ')), 'zero']);
+const comparable = (word) => !/\d/.test(word) && !SPOKEN_SYMBOLS.has(word);
+
+// Whether a reading kept the text: at most two words (or 15 %) of the text
+// missing from the transcript in order (longest common subsequence), and at
+// most as many extra — a stray "ráno" is fine, an answer instead of a reading
+// is not. Each number may come back as up to four words ("2026").
 export function isFaithfulReading(text, transcript) {
-  const a = words(text);
-  const b = words(transcript);
-  if (a.length === 0 || b.length === 0) return false;
+  const all = words(text);
+  const said = words(transcript);
+  if (all.length === 0 || said.length === 0) return false;
+  const numbers = all.filter((word) => /\d/.test(word)).length;
+  const a = all.filter(comparable);
+  const b = said.filter(comparable);
   let previous = new Array(b.length + 1).fill(0);
   for (let i = 1; i <= a.length; i += 1) {
     const current = [0];
@@ -222,20 +224,130 @@ export function isFaithfulReading(text, transcript) {
     previous = current;
   }
   const common = previous[b.length];
-  const longer = Math.max(a.length, b.length);
-  return common / longer >= 0.85 || longer - common <= 2;
+  const fits = (count) => count <= 2 || count / Math.max(a.length, 1) <= 0.15;
+  return fits(a.length - common) && fits(b.length - common - 4 * numbers);
 }
 
 class NotVerbatim extends Error {}
+
+// Raw 16-bit mono PCM in a WAV header, which every browser decodes.
+function wav(pcm, rate) {
+  const header = Buffer.alloc(44);
+  header.write('RIFF', 0);
+  header.writeUInt32LE(36 + pcm.length, 4);
+  header.write('WAVE', 8);
+  header.write('fmt ', 12);
+  header.writeUInt32LE(16, 16);
+  header.writeUInt16LE(1, 20);
+  header.writeUInt16LE(1, 22);
+  header.writeUInt32LE(rate, 24);
+  header.writeUInt32LE(rate * 2, 28);
+  header.writeUInt16LE(2, 32);
+  header.writeUInt16LE(16, 34);
+  header.write('data', 36);
+  header.writeUInt32LE(pcm.length, 40);
+  return Buffer.concat([header, pcm]);
+}
+
+const REALTIME_RATE = 24000;
+const REALTIME_TIMEOUT_MS = 30_000;
+// A piece is at most ~320 characters (~20 s, ~500 audio tokens); the cap only
+// stops a model that would talk on.
+const REALTIME_MAX_OUTPUT_TOKENS = 1500;
+// Output prices per million tokens: the transcript (and the little reasoning)
+// is text, priced far below the audio.
+const REALTIME_TEXT_TO_AUDIO_PRICE = 2.4 / 20;
+
+// The default engine. The realtime model has no plain HTTP endpoint: each
+// piece is one short WebSocket session (one message in, one spoken reply
+// out). Minimal reasoning: with the default, the first sentence took ~0.7 s
+// longer and nothing sounded better.
+function synthesizeRealtime(text, signal, userId, voice, speed) {
+  return new Promise((resolve, reject) => {
+    if (signal?.aborted) {
+      reject(signal.reason ?? new Error('aborted'));
+      return;
+    }
+    const socket = new WebSocket(`wss://api.openai.com/v1/realtime?model=${encodeURIComponent(REALTIME_MODEL)}`, {
+      headers: { Authorization: `Bearer ${process.env.OPENAI_API_KEY}` },
+    });
+    const chunks = [];
+    let transcript = '';
+    let settled = false;
+    const finish = (error, value) => {
+      if (settled) return;
+      settled = true;
+      clearTimeout(timer);
+      signal?.removeEventListener('abort', onAbort);
+      socket.terminate();
+      if (error) reject(error);
+      else resolve(value);
+    };
+    const onAbort = () => finish(signal.reason ?? new Error('aborted'));
+    const timer = setTimeout(() => finish(new Error('the realtime reading timed out')), REALTIME_TIMEOUT_MS);
+    signal?.addEventListener('abort', onAbort, { once: true });
+    socket.on('error', (error) => finish(error));
+    socket.on('close', () => finish(new Error('the realtime connection closed')));
+    socket.on('open', () => {
+      const send = (event) => socket.send(JSON.stringify(event));
+      send({
+        type: 'session.update',
+        session: {
+          type: 'realtime',
+          instructions: readAloudPrompt(null),
+          output_modalities: ['audio'],
+          reasoning: { effort: 'minimal' },
+          max_output_tokens: REALTIME_MAX_OUTPUT_TOKENS,
+          audio: { output: { voice, speed, format: { type: 'audio/pcm', rate: REALTIME_RATE } } },
+        },
+      });
+      send({
+        type: 'conversation.item.create',
+        item: { type: 'message', role: 'user', content: [{ type: 'input_text', text: `Přečti tento text:\n\n${text}` }] },
+      });
+      send({ type: 'response.create' });
+    });
+    socket.on('message', (data) => {
+      let message;
+      try {
+        message = JSON.parse(String(data));
+      } catch {
+        return;
+      }
+      if (message.type === 'response.output_audio.delta') chunks.push(Buffer.from(message.delta, 'base64'));
+      else if (message.type === 'response.output_audio_transcript.done') transcript = message.transcript ?? '';
+      else if (message.type === 'error') finish(new Error(message.error?.message ?? 'realtime error'));
+      else if (message.type === 'response.done') {
+        const usage = message.response?.usage;
+        const output = usage?.output_token_details;
+        recordAiUsage({
+          provider: 'openai',
+          model: REALTIME_MODEL,
+          feature: 'voice_tts',
+          userId,
+          input: usage?.input_tokens,
+          output: (output?.audio_tokens ?? 0) + Math.round(((output?.text_tokens ?? 0) + (output?.reasoning_tokens ?? 0)) * REALTIME_TEXT_TO_AUDIO_PRICE),
+          units: text.length,
+        });
+        if (message.response?.status !== 'completed') finish(new Error(`the realtime reading ended as ${message.response?.status}`));
+        else if (chunks.length === 0) finish(new NotVerbatim('no audio'));
+        // A model that talks back instead of reading would put words in
+        // Jarvis's mouth.
+        else if (!isFaithfulReading(text, transcript)) finish(new NotVerbatim(transcript));
+        else finish(null, { audio: wav(Buffer.concat(chunks), REALTIME_RATE), contentType: 'audio/wav' });
+      }
+    });
+  });
+}
 
 async function synthesizeConversational(text, signal, userId, voice, speed) {
   const response = await getClient().chat.completions.create(
     {
       model: AUDIO_MODEL,
       modalities: ['text', 'audio'],
-      audio: { voice: VOICE_IDS.has(voice) ? voice : TTS_VOICE, format: 'mp3' },
+      audio: { voice, format: 'mp3' },
       messages: [
-        { role: 'system', content: readAloudPrompt(speed) },
+        { role: 'system', content: readAloudPrompt(TEMPO[speed] ?? TEMPO[TTS_SPEED]) },
         { role: 'user', content: `Přečti tento text:\n\n${text}` },
       ],
     },
@@ -255,27 +367,33 @@ async function synthesizeConversational(text, signal, userId, voice, speed) {
   });
   const audio = response.choices?.[0]?.message?.audio;
   if (!audio?.data) throw new NotVerbatim('no audio');
-  // A model that talks back instead of reading would put words in Jarvis's
-  // mouth; anything short of a near-exact reading is read again classically.
   if (!isFaithfulReading(text, audio.transcript)) throw new NotVerbatim(audio.transcript);
-  return Buffer.from(audio.data, 'base64');
+  return { audio: Buffer.from(audio.data, 'base64'), contentType: 'audio/mpeg' };
 }
 
+const ENGINES = { realtime: synthesizeRealtime, conversational: synthesizeConversational };
+
 /**
- * Speech for one piece of an answer, as MP3 bytes. `engine`, `voice` and
- * `speed` are the user's choices from the panel (unknown values fall back to
- * the defaults).
+ * Speech for one piece of an answer: `{ audio, contentType }` (WAV from the
+ * realtime engine, MP3 from gpt-audio). `engine`, `voice` and `speed` are the
+ * user's choices from the panel (unknown values fall back to the defaults).
+ * When the chosen engine fails or does not read the piece verbatim, the other
+ * one reads it; when both fail, the browser's own voice takes over.
  */
 export async function synthesize(text, signal, userId = null, { voice, speed, engine } = {}) {
   const pace = TTS_SPEEDS.includes(Number(speed)) ? Number(speed) : TTS_SPEED;
   const chosen = ENGINE_IDS.has(engine) ? engine : TTS_ENGINE;
-  if (chosen === 'conversational') {
+  const speaker = VOICE_IDS.has(voice) ? voice : TTS_VOICE;
+  const spoken = spellCodes(text);
+  let failure = null;
+  for (const id of [chosen, ...[...ENGINE_IDS].filter((other) => other !== chosen)]) {
     try {
-      return await synthesizeConversational(text, signal, userId, voice, pace);
+      return await ENGINES[id](spoken, signal, userId, speaker, pace);
     } catch (error) {
       if (signal?.aborted) throw error;
-      console.warn('Jarvis voice: conversational reading failed, using the classic engine:', String(error?.message ?? error).slice(0, 160));
+      failure = error;
+      console.warn(`Jarvis voice: the ${id} reading failed:`, String(error?.message ?? error).slice(0, 160));
     }
   }
-  return synthesizeClassic(text, signal, userId, voice, pace);
+  throw failure;
 }

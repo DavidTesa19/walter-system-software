@@ -361,20 +361,34 @@ inherited one falls back to the browser's serif. Needs `ANTHROPIC_API_KEY`;
   audio body) and read-aloud (`POST /api/jarvis/speech`) go through OpenAI with
   `OPENAI_API_KEY` — Claude has no audio. OpenAI's voices are trained mostly
   on English, which is why Czech sounds flat and slightly foreign. Two
-  read-aloud engines (`TTS_ENGINES`): **Přirozený** (`conversational`, the
-  default, `JARVIS_AUDIO_MODEL` gpt-audio-1.5 through chat completions; far
-  livelier intonation, ~4 s to start, ~2.5 Kč/min) and **Klasický** (`classic`,
-  `JARVIS_TTS_MODEL` gpt-4o-mini-tts-2025-12-15, the `speed` parameter, ~0.35
-  Kč/min). **gpt-4o-mini-tts shuts down on 6 Jan 2027** (OpenAI's
-  deprecations page); its named successor is gpt-realtime-2.1-mini, Realtime
-  API only (WebSocket; Node 22's global WebSocket can authenticate with the
-  `openai-insecure-api-key.<key>` subprotocol). Measured 2026-10-28 it starts
-  in ~1.5 s instead of gpt-audio's ~4 s, read verbatim and was rated about the
-  same, at ~$20/M audio tokens (~0.6 Kč/min). Until the classic engine is
-  replaced, the conversational one has no fallback after that date. The conversational model is asked to read the text verbatim, but it
-  is a chat model: `isFaithfulReading` compares its transcript with the text
-  and anything that drifts falls back to the classic engine. It has no speed
-  parameter, so the tempo is asked for in words (`TEMPO`). Other env:
+  read-aloud engines (`TTS_ENGINES`), both voice *chat* models asked to read
+  the text verbatim:
+  - **Rychlý** (`realtime`, the default, `JARVIS_REALTIME_MODEL`
+    gpt-realtime-2.1-mini). It is Realtime-API only, so each piece is one
+    short WebSocket session through the `ws` package (`synthesizeRealtime`).
+    Railway's Node may be 20, which has no global WebSocket.
+    - Session settings: `reasoning: { effort: 'minimal' }` (the default
+      reasoning added ~0.7 s and nothing audible) and the real
+      `audio.output.speed`.
+    - Output is 24 kHz PCM, returned as WAV.
+    - First sentence ~1.3–2.4 s through the route; ~0.6 Kč/min.
+  - **Původní** (`conversational`, `JARVIS_AUDIO_MODEL` gpt-audio-1.5 through
+    chat completions, MP3). ~2–2.5 s per first sentence, ~2 Kč/min. It has
+    no speed parameter, so the tempo is asked for in words (`TEMPO`).
+  - The plain TTS engine (gpt-4o-mini-tts, "Klasický") was removed on
+    2026-10-28: OpenAI shuts it down on 6 Jan 2027. A stored `classic` choice,
+    or `JARVIS_TTS_ENGINE=classic`, falls back to the default engine.
+  - `isFaithfulReading` compares each reading's transcript with the text. A
+    piece one engine fails on or does not read verbatim goes to the other;
+    if both fail, the route returns 502 and the browser's voice reads the
+    rest.
+  - Record codes are spelled out in Czech before reading (`spellCodes`:
+    "K012-003" → "ká nula jedna dva, nula nula tři"). Left to the model,
+    they sometimes came out as "K zero jedna dva".
+  - The faithfulness check ignores digits, digit names and letter names,
+    since the transcript writes them either way.
+
+  Other env:
   `JARVIS_TTS_ENGINE`, `JARVIS_STT_MODEL` (gpt-transcribe; gpt-4o-transcribe
   is deprecated and stops on 26 Feb 2027), `JARVIS_TTS_VOICE` (default voice,
   cedar), `JARVIS_STT_LANGUAGE` (cs; empty = auto; gpt-transcribe takes it as

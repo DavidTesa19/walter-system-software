@@ -3,8 +3,8 @@
 export type SendMode = 'auto' | 'manual';
 
 export interface VoiceSettings {
-  // 'conversational' (natural, gpt-audio) or 'classic' (TTS); null = the
-  // server's default.
+  // 'realtime' (fast) or 'conversational' (gpt-audio, the earlier one); null
+  // or an engine no longer offered = the server's default.
   engine: string | null;
   // A server voice id (Marin, Cedar, …); null = the server's default.
   voice: string | null;
