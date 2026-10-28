@@ -69,6 +69,35 @@ export interface CalendarDecision {
   at: string;
 }
 
+// An e-mail Jarvis drafted. It is never sent by Jarvis: the card lets the user
+// edit it, copy it or open it in their own mail program.
+export interface JarvisEmailDraft {
+  id: string;
+  to: string[];
+  cc: string[];
+  subject: string;
+  body: string;
+  related?: JarvisOpenAction;
+}
+
+// What needs the user's attention: their zakázky past or near their deadline,
+// untouched ones, and personal to-dos due (GET /api/jarvis/attention).
+export type AttentionKind = 'overdue' | 'today' | 'task' | 'soon' | 'stale';
+
+export interface AttentionItem {
+  kind: AttentionKind;
+  label: string;
+  detail: string;
+  ref?: string;
+  action?: JarvisOpenAction;
+}
+
+export interface JarvisAttention {
+  urgent: number;
+  counts: Record<AttentionKind, number>;
+  items: AttentionItem[];
+}
+
 export type TranscriptItem =
   | { type: 'question'; text: string; at?: string; voice?: boolean; attachments?: AttachmentSummary[] }
   | { type: 'answer'; text: string; model?: string }
@@ -79,7 +108,8 @@ export type TranscriptItem =
   | { type: 'proposal'; proposal: JarvisProposal }
   | ProposalDecision
   | { type: 'calendar'; card: JarvisCalendarCard }
-  | CalendarDecision;
+  | CalendarDecision
+  | { type: 'email'; draft: JarvisEmailDraft };
 
 export type AttachmentKind = 'image' | 'pdf' | 'text';
 
@@ -125,13 +155,21 @@ export interface JarvisVoiceOption {
   gender: 'female' | 'male' | 'neutral';
 }
 
+export interface JarvisVoiceEngine {
+  id: string;
+  label: string;
+  description: string;
+  voices: JarvisVoiceOption[];
+}
+
 export interface JarvisStatus {
   available: boolean;
   model: string;
   // The server can transcribe and speak (OpenAI); otherwise the browser's own
   // speech engines are used.
   voice?: boolean;
-  voices?: JarvisVoiceOption[];
+  engines?: JarvisVoiceEngine[];
+  defaultEngine?: string;
   defaultVoice?: string;
   speeds?: number[];
   defaultSpeed?: number;
@@ -148,6 +186,7 @@ export type JarvisEvent =
   | { event: 'action'; data: JarvisOpenAction }
   | { event: 'proposal'; data: JarvisProposal }
   | { event: 'calendar'; data: JarvisCalendarCard }
+  | { event: 'email'; data: JarvisEmailDraft }
   | { event: 'notice'; data: { text: string } }
   | { event: 'error'; data: { message: string } }
   | { event: 'done'; data: { stopReason: string } };
@@ -188,16 +227,23 @@ export const jarvisApi = {
   },
 
   // Text in, spoken MP3 out.
-  async speech(text: string, signal?: AbortSignal, options: { voice?: string | null; speed?: number } = {}): Promise<Blob> {
+  async speech(text: string, signal?: AbortSignal, options: { engine?: string | null; voice?: string | null; speed?: number } = {}): Promise<Blob> {
     const response = await fetch(`${API_BASE}/api/jarvis/speech`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', ...authHeaders() },
-      body: JSON.stringify({ text, ...(options.voice ? { voice: options.voice } : {}), ...(options.speed ? { speed: options.speed } : {}) }),
+      body: JSON.stringify({
+        text,
+        ...(options.engine ? { engine: options.engine } : {}),
+        ...(options.voice ? { voice: options.voice } : {}),
+        ...(options.speed ? { speed: options.speed } : {}),
+      }),
       signal,
     });
     if (!response.ok) throw await failure(response, 'Odpověď se nepodařilo přečíst');
     return response.blob();
   },
+
+  attention: (fresh = false) => apiGet<JarvisAttention>(`/api/jarvis/attention${fresh ? '?fresh=1' : ''}`),
 
   conversations: () => apiGet<ConversationSummary[]>('/api/jarvis/conversations'),
   conversation: (id: string) =>

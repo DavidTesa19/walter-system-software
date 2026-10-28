@@ -28,6 +28,9 @@ export const OPENAI_PRICES = {
   'gpt-5-mini': { input: 0.25, cacheRead: 0.025, output: 2 },
   'gpt-5': { input: 1.25, cacheRead: 0.125, output: 10 },
   'gpt-4o-mini-tts': { input: 0.6, cacheRead: 0.6, output: 12 },
+  // Jarvis's read-aloud voice: audio output tokens.
+  'gpt-audio-mini': { input: 0.6, cacheRead: 0.6, output: 20 },
+  'gpt-audio': { input: 2.5, cacheRead: 2.5, output: 64 },
   'gpt-4o-mini': { input: 0.15, cacheRead: 0.075, output: 0.6 },
   'gpt-4o-transcribe': { input: 2.5, cacheRead: 2.5, output: 10 },
   'gpt-4o': { input: 2.5, cacheRead: 1.25, output: 10 },
@@ -58,7 +61,8 @@ const findPrice = (table, model) => {
  */
 export function estimateCostUsd({ provider, model, feature, input = 0, output = 0, cacheRead = 0, cacheWrite = 0, units = 0 }) {
   if (provider === 'brave') return units * BRAVE_USD_PER_SEARCH;
-  if (feature === 'voice_tts') return (units / TTS_CHARS_PER_MINUTE) * TTS_USD_PER_MINUTE;
+  // The TTS model reports no tokens (priced by length); gpt-audio does.
+  if (feature === 'voice_tts' && !input && !output) return (units / TTS_CHARS_PER_MINUTE) * TTS_USD_PER_MINUTE;
   if (feature === 'voice_stt' && units > 0 && !input && !output) return (units / 60) * STT_USD_PER_MINUTE;
 
   const table = provider === 'anthropic' ? ANTHROPIC_PRICES : provider === 'openai' ? OPENAI_PRICES : null;

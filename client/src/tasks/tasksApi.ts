@@ -38,7 +38,7 @@ export type TaskScope = { list: 'team' } | { list: 'personal'; ownerUserId: numb
 // The widget and the section show the same lists; a change in one tells the
 // other to reload. Announced on the next tick, after the caller has applied
 // the saved task (see useTaskList's invalidate).
-const TASKS_CHANGED_EVENT = 'walter:tasks-changed';
+export const TASKS_CHANGED_EVENT = 'walter:tasks-changed';
 const announceChange = () => window.setTimeout(() => window.dispatchEvent(new Event(TASKS_CHANGED_EVENT)), 0);
 
 export const tasksApi = {

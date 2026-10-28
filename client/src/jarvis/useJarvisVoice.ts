@@ -79,7 +79,11 @@ export function useJarvisVoice(serverVoice: boolean | undefined, onTranscript: (
   const serverSpeaker = useMemo(
     () =>
       createServerSpeaker((text, signal) =>
-        jarvisApi.speech(text, signal, { voice: settingsRef.current.voice, speed: settingsRef.current.speed })
+        jarvisApi.speech(text, signal, {
+          engine: settingsRef.current.engine,
+          voice: settingsRef.current.voice,
+          speed: settingsRef.current.speed,
+        })
       ),
     []
   );

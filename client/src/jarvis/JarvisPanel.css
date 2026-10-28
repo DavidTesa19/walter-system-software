@@ -1209,6 +1209,13 @@
   font-size: 0.78rem;
 }
 
+.jarvis-voice-hint {
+  margin: 0;
+  font-size: 0.78rem;
+  line-height: 1.4;
+  color: var(--jarvis-muted);
+}
+
 .jarvis-voice-note {
   margin: 0;
   font-size: 0.82rem;
@@ -1473,4 +1480,198 @@
     transition: none;
     animation: none;
   }
+}
+
+/* An e-mail draft: editable, sent by the user from their own mail program. */
+.jarvis-email {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-top: 10px;
+  padding: 12px;
+  border: 1px solid var(--jarvis-border);
+  border-radius: 12px;
+  background: var(--jarvis-soft);
+}
+
+.jarvis-email-field {
+  display: grid;
+  grid-template-columns: 64px 1fr;
+  align-items: center;
+  gap: 8px;
+  font-size: 0.85rem;
+}
+
+.jarvis-email-field > span:first-child {
+  color: var(--jarvis-muted);
+}
+
+.jarvis-email-field input,
+.jarvis-email-body {
+  width: 100%;
+  box-sizing: border-box;
+  border: 1px solid var(--jarvis-border);
+  border-radius: 8px;
+  padding: 6px 8px;
+  background: var(--jarvis-surface);
+  color: inherit;
+  font: inherit;
+}
+
+.jarvis-email-body {
+  resize: vertical;
+  line-height: 1.45;
+  font-size: 0.88rem;
+}
+
+.jarvis-email-hint {
+  color: var(--jarvis-muted);
+}
+
+/* ---------- reminders ---------- */
+
+/* How many things are late or due today; the dot for an unseen answer
+   keeps the other corner. */
+.jarvis-launcher-count {
+  position: absolute;
+  top: -6px;
+  left: -6px;
+  min-width: 20px;
+  height: 20px;
+  padding: 0 5px;
+  box-sizing: border-box;
+  border-radius: 10px;
+  background: #ef4444;
+  color: #ffffff;
+  border: 2px solid var(--color-surface, #ffffff);
+  font-size: 0.68rem;
+  font-weight: 700;
+  line-height: 16px;
+  text-align: center;
+}
+
+.jarvis-bell {
+  position: relative;
+}
+
+.jarvis-bell-count {
+  position: absolute;
+  top: 1px;
+  right: 1px;
+  min-width: 15px;
+  height: 15px;
+  padding: 0 3px;
+  box-sizing: border-box;
+  border-radius: 8px;
+  background: #ef4444;
+  color: #ffffff;
+  font-size: 0.6rem;
+  font-weight: 700;
+  line-height: 15px;
+  text-align: center;
+}
+
+.jarvis-attention {
+  flex-shrink: 0;
+  max-height: 50%;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  border-bottom: 1px solid var(--jarvis-border);
+  padding: 8px;
+  background: var(--jarvis-soft);
+}
+
+.jarvis-attention > p {
+  margin: 6px 8px;
+  font-size: 0.86rem;
+}
+
+.jarvis-attention-item {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  padding: 8px 10px;
+  border: 0;
+  border-radius: 10px;
+  background: none;
+  color: inherit;
+  text-align: left;
+  font: inherit;
+}
+
+button.jarvis-attention-item {
+  cursor: pointer;
+}
+
+button.jarvis-attention-item:hover {
+  background: color-mix(in srgb, var(--jarvis-accent) 10%, transparent);
+}
+
+.jarvis-attention-kind {
+  flex-shrink: 0;
+  min-width: 74px;
+  padding: 2px 7px;
+  border-radius: 999px;
+  font-size: 0.7rem;
+  font-weight: 600;
+  text-align: center;
+  background: color-mix(in srgb, var(--jarvis-muted) 15%, transparent);
+  color: var(--jarvis-muted);
+}
+
+.jarvis-attention-kind--overdue {
+  background: color-mix(in srgb, #ef4444 16%, transparent);
+  color: #dc2626;
+}
+
+.jarvis-attention-kind--today,
+.jarvis-attention-kind--task {
+  background: color-mix(in srgb, #f59e0b 18%, transparent);
+  color: #b45309;
+}
+
+.jarvis-attention-kind--soon {
+  background: color-mix(in srgb, var(--jarvis-accent) 15%, transparent);
+  color: var(--jarvis-accent);
+}
+
+.jarvis-attention-text {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.jarvis-attention-text span {
+  font-size: 0.86rem;
+  overflow-wrap: anywhere;
+}
+
+.jarvis-attention-text small {
+  color: var(--jarvis-muted);
+  font-size: 0.74rem;
+}
+
+.jarvis-attention-briefing,
+.jarvis-suggestions button.jarvis-suggestion--briefing {
+  border: 1px solid color-mix(in srgb, var(--jarvis-accent) 45%, transparent);
+  background: color-mix(in srgb, var(--jarvis-accent) 10%, var(--jarvis-surface));
+  color: inherit;
+  font: inherit;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.jarvis-attention-briefing {
+  margin: 6px 8px 2px;
+  padding: 8px 12px;
+  border-radius: 10px;
+  font-size: 0.86rem;
+}
+
+.jarvis-attention-briefing:disabled {
+  opacity: 0.55;
+  cursor: default;
 }

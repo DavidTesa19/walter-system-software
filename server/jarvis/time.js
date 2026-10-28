@@ -28,7 +28,8 @@ export function pragueTime({ year, month, day, hour = 0, minute = 0 }) {
   return new Date(guess - offset);
 }
 
-export const pragueMidnight = (day) => pragueTime(day);
+// The start of a day; any time of day in `day` (pragueParts) is dropped.
+export const pragueMidnight = ({ year, month, day }) => pragueTime({ year, month, day });
 
 export function parseDay(text) {
   const iso = /^(\d{4})-(\d{2})-(\d{2})$/.exec(text);

@@ -17,7 +17,18 @@ import {
   truncate,
 } from './catalog.js';
 import { createFileConversationStore, createPgConversationStore } from './store.js';
-import { MAX_AUDIO_BYTES, MAX_SPEECH_CHARS, TTS_SPEED, TTS_SPEEDS, TTS_VOICE, TTS_VOICES, isVoiceConfigured, synthesize, transcribe } from './voice.js';
+import {
+  MAX_AUDIO_BYTES,
+  MAX_SPEECH_CHARS,
+  TTS_ENGINE,
+  TTS_ENGINES,
+  TTS_SPEED,
+  TTS_SPEEDS,
+  TTS_VOICE,
+  isVoiceConfigured,
+  synthesize,
+  transcribe,
+} from './voice.js';
 import {
   AttachmentError,
   MAX_ATTACHMENTS,
@@ -31,6 +42,8 @@ import {
 import { recordAiUsage } from '../finance/usage.js';
 import { ProposalError, applyProposal, describeProposal } from './proposals.js';
 import { CalendarError, calendarOutcomes, cardState, decideCalendarCard } from './calendarActions.js';
+import { computeAttention, createAttentionCache } from './attention.js';
+import { loadRows } from './tools.js';
 
 const MAX_MESSAGE_LENGTH = 8000;
 const HOURLY_LIMIT = Number(process.env.JARVIS_HOURLY_LIMIT) > 0 ? Number(process.env.JARVIS_HOURLY_LIMIT) : 60;
@@ -200,8 +213,35 @@ export function registerJarvisRoutes(app, { authenticateToken, pool, dataDir, po
       available: isJarvisConfigured(),
       model: JARVIS_MODEL,
       voice,
-      ...(voice ? { voices: TTS_VOICES, defaultVoice: TTS_VOICE, speeds: TTS_SPEEDS, defaultSpeed: TTS_SPEED } : {}),
+      ...(voice
+        ? { engines: TTS_ENGINES, defaultEngine: TTS_ENGINE, defaultVoice: TTS_VOICE, speeds: TTS_SPEEDS, defaultSpeed: TTS_SPEED }
+        : {}),
     });
+  });
+
+  // What needs the user's attention (the launcher's number and the panel's
+  // reminders). Plain rules over their data, no AI; cached for a few minutes.
+  const attentionCache = createAttentionCache();
+  app.get('/api/jarvis/attention', authenticateToken, async (req, res) => {
+    try {
+      const user = req.user;
+      const value = await attentionCache.get(
+        Number(user.id),
+        () =>
+          computeAttention({
+            api: createApiClient({ baseUrl, token: signAgentToken(user), changesetId: null, note: null }),
+            user,
+            sections: sectionsForScope(user.accessScope ?? user.access_scope),
+            roles: ROLES,
+            loadRows,
+          }),
+        { fresh: req.query.fresh === '1' }
+      );
+      res.json(value);
+    } catch (error) {
+      console.error('Jarvis: the attention check failed:', error?.message ?? error);
+      res.status(500).json({ error: 'Upozornění se nepodařilo načíst.' });
+    }
   });
 
   const rawAudio = express.raw({ type: ['audio/*', 'application/octet-stream'], limit: MAX_AUDIO_BYTES });
@@ -245,8 +285,8 @@ export function registerJarvisRoutes(app, { authenticateToken, pool, dataDir, po
       if (!res.writableFinished) abort.abort();
     });
     try {
-      const options = { voice: req.body?.voice, speed: req.body?.speed };
-      const audio = Buffer.from(await (await synthesize(text, abort.signal, Number(req.user.id), options)).arrayBuffer());
+      const options = { voice: req.body?.voice, speed: req.body?.speed, engine: req.body?.engine };
+      const audio = await synthesize(text, abort.signal, Number(req.user.id), options);
       res.setHeader('Content-Type', 'audio/mpeg');
       res.setHeader('Cache-Control', 'no-store');
       res.end(audio);
@@ -521,6 +561,11 @@ export function registerJarvisRoutes(app, { authenticateToken, pool, dataDir, po
         emitProposal: (proposal) => {
           pendingActions.push({ type: 'proposal', proposal });
           emit('proposal', proposal);
+        },
+        // An e-mail draft: shown as an editable card, never sent by Jarvis.
+        emitEmail: (draft) => {
+          pendingActions.push({ type: 'email', draft });
+          emit('email', draft);
         },
         // A calendar change (made, or a deletion awaiting the user's click).
         emitCalendar: (card) => {

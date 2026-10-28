@@ -7,6 +7,7 @@
 // a tool runs (the model's arguments are untrusted), and results are kept
 // compact: each one is re-read on every later turn of the conversation.
 
+import crypto from 'node:crypto';
 import { z } from 'zod/v4';
 import {
   FIELD_LABELS,
@@ -46,6 +47,7 @@ import {
   overlapping,
   snapshot,
 } from './calendarActions.js';
+import { computeAttention } from './attention.js';
 
 export class ToolError extends Error {}
 
@@ -84,7 +86,7 @@ function assertSection(ctx, value) {
   }
 }
 
-async function loadRows(ctx, { sections, roles, kinds, statuses }) {
+export async function loadRows(ctx, { sections, roles, kinds, statuses }) {
   const jobs = [];
   for (const sectionId of sections) {
     for (const roleId of roles) {
@@ -264,6 +266,20 @@ const changesInput = z.object({
 
 const dayText = z.string().regex(/^(\d{4}-\d{2}-\d{2}|\d{1,2}\.\s*\d{1,2}\.\s*\d{4})$/, 'Datum jako 2026-10-20 nebo 20.10.2026');
 
+const tasksInput = z.object({
+  list: z.enum(['personal', 'team', 'all']).optional().describe('personal = osobní úkoly uživatele, team = týmový seznam, all = oba (výchozí).'),
+  include_done: z.boolean().optional().describe('Přidat i nedávno hotové úkoly (výchozí ne).'),
+}).strict();
+
+// Where the Úkoly screen shows a task: one put off to a day is back in
+// "K udělání" on that day (taskBucket in the client's tasksApi.ts).
+const TASK_BUCKET_LABELS = { todo: 'K udělání', later: 'Později', done: 'Hotovo' };
+function taskBucket(task, todayKey) {
+  if (task.status === 'done') return 'done';
+  if (task.status === 'later' && (!task.dueDate || task.dueDate > todayKey)) return 'later';
+  return 'todo';
+}
+
 const calendarInput = z.object({
   from: dayText.optional().describe('První den (2026-10-20 nebo 20.10.2026). Výchozí dnes.'),
   to: dayText.optional().describe('Poslední den včetně. Výchozí 6 dní po from (tedy týden).'),
@@ -383,6 +399,22 @@ const asToolError = (error) => {
   if (error?.status === 404) return new ToolError('Tuto událost v kalendáři uživatele nevidím – najdi ji znovu přes calendar.');
   return error;
 };
+
+// Plain enough to catch a typo, not a full RFC check.
+const EMAIL_PATTERN = /^[^\s@<>(),;:"]+@[^\s@<>(),;:"]+\.[^\s@<>(),;:"]{2,}$/;
+const emailList = z.array(z.string().trim().max(254)).max(10);
+
+const emailInput = z.object({
+  to: emailList.optional().describe('Adresy příjemců (např. z pole E-mail v get_subject). Bez adresy nech prázdné.'),
+  cc: emailList.optional().describe('Kopie.'),
+  subject: z.string().trim().min(1).max(200).describe('Předmět e-mailu.'),
+  body: z.string().trim().min(1).max(8000).describe('Celý text e-mailu včetně oslovení a podpisu.'),
+  related: z
+    .object({ section, role, id: z.number().int().positive() })
+    .strict()
+    .optional()
+    .describe('Subjekt, kterého se e-mail týká (z ref), aby šel z karty otevřít.'),
+}).strict();
 
 const openInput = z.object({
   section,
@@ -1046,6 +1078,103 @@ export const TOOLS = [
       } catch (error) {
         throw asToolError(error);
       }
+    },
+  },
+  {
+    name: 'tasks',
+    description:
+      'Úkoly (sekce Úkoly): osobní seznam uživatele a týmový seznam. Vrátí otevřené úkoly s termínem, důležitostí a ' +
+      'tím, komu jsou přidělené. Použij pro „co mám udělat“, „jaké mám úkoly“, ranní přehled. Úkoly jen čte, neupravuje.',
+    input: tasksInput,
+    label: () => 'Procházím úkoly',
+    async run(input, ctx) {
+      const teamById = await loadTeam(ctx);
+      const today = pragueParts(new Date());
+      const todayKey = `${today.year}-${String(today.month).padStart(2, '0')}-${String(today.day).padStart(2, '0')}`;
+      const lists = input.list === 'personal' ? ['personal'] : input.list === 'team' ? ['team'] : ['personal', 'team'];
+      const result = {};
+      for (const list of lists) {
+        const page = await ctx.api.get(`/api/tasks?list=${list}`);
+        const tasks = (page?.tasks ?? [])
+          .map((task) => ({ task, bucket: taskBucket(task, todayKey) }))
+          .filter(({ bucket }) => input.include_done || bucket !== 'done')
+          .sort((a, b) =>
+            Number(b.task.important) - Number(a.task.important) ||
+            (a.task.dueDate ?? '9999').localeCompare(b.task.dueDate ?? '9999')
+          );
+        result[list === 'personal' ? 'osobni' : 'tymove'] = {
+          k_udelani: tasks.filter(({ bucket }) => bucket === 'todo').length,
+          pozdeji: tasks.filter(({ bucket }) => bucket === 'later').length,
+          ukoly: tasks.slice(0, 40).map(({ task, bucket }) => ({
+            nazev: truncate(task.title, 200),
+            stav: TASK_BUCKET_LABELS[bucket],
+            termin: task.dueDate ? formatPrague(task.dueDate, { dateOnly: true }) : undefined,
+            po_terminu: bucket !== 'done' && task.dueDate && task.dueDate < todayKey ? true : undefined,
+            dulezity: task.important || undefined,
+            prideleno: task.assigneeUserId ? teamById.get(Number(task.assigneeUserId))?.username ?? undefined : undefined,
+            poznamka: task.note ? truncate(task.note, 200) : undefined,
+          })),
+        };
+      }
+      return result;
+    },
+  },
+  {
+    name: 'reminders',
+    description:
+      'Co potřebuje pozornost uživatele: jeho zakázky po termínu, s termínem dnes nebo do 3 dnů, jeho zakázky beze změny ' +
+      'přes 30 dní a jeho osobní úkoly na dnes nebo po termínu. Stejný seznam, jaký aplikace ukazuje jako upozornění. ' +
+      'Použij pro ranní přehled a otázky „co hoří“, „na co nesmím zapomenout“.',
+    input: z.object({}).strict(),
+    label: () => 'Kontroluji upozornění',
+    async run(_input, ctx) {
+      const attention = await computeAttention({ api: ctx.api, user: ctx.user, sections: ctx.sections, roles: ROLES, loadRows });
+      const KIND_LABELS = { overdue: 'po termínu', today: 'termín dnes', soon: 'termín do 3 dnů', stale: 'beze změny', task: 'úkol' };
+      return {
+        pocty: Object.fromEntries(Object.entries(attention.counts).map(([kindId, count]) => [KIND_LABELS[kindId], count])),
+        polozky: attention.items.map((item) => ({ typ: KIND_LABELS[item.kind], co: item.label, detail: item.detail, ref: item.ref })),
+      };
+    },
+  },
+  {
+    name: 'draft_email',
+    description:
+      'Připraví koncept e-mailu: uživatel ho dostane na kartu, kde ho může upravit, zkopírovat nebo otevřít ve svém ' +
+      'e-mailovém programu (Gmail, Outlook…). NIC NEODESÍLÁ – odeslání je vždy na uživateli. Použij, když chce napsat ' +
+      'e-mail, odpověď, nabídku, připomínku nebo poděkování. Adresu příjemce vezmi ze záznamu (get_subject), nevymýšlej ji.',
+    input: emailInput,
+    label: (input) => `Píšu koncept e-mailu „${truncate(input.subject, 40)}“`,
+    async run(input, ctx) {
+      const invalid = [...(input.to ?? []), ...(input.cc ?? [])].filter((address) => !EMAIL_PATTERN.test(address));
+      if (invalid.length) throw new ToolError(`Neplatná e-mailová adresa: ${invalid.join(', ')}. Oprav ji, nebo adresu vynech.`);
+      let related;
+      if (input.related) {
+        assertSection(ctx, input.related.section);
+        const record = await ctx.api.get(`${entitiesPath(input.related.section, input.related.role)}/${input.related.id}`);
+        related = {
+          type: 'open_record',
+          section: input.related.section,
+          role: input.related.role,
+          kind: 'subject',
+          id: input.related.id,
+          entityId: input.related.id,
+          status: record.status ?? 'accepted',
+          label: truncate(`${record.entity_id ?? ''} · ${subjectName(record)}`, 120),
+        };
+      }
+      const draft = {
+        id: crypto.randomUUID(),
+        to: input.to ?? [],
+        cc: input.cc ?? [],
+        subject: input.subject,
+        body: input.body,
+        ...(related ? { related } : {}),
+      };
+      ctx.emitEmail(draft);
+      return {
+        koncept: draft.id,
+        stav: 'Koncept je na kartě pod odpovědí; uživatel ho může upravit, zkopírovat nebo otevřít v poště. Neodeslal se.',
+      };
     },
   },
   {

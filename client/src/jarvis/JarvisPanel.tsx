@@ -2,11 +2,15 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import MarkdownMessage from '../components/MarkdownMessage';
 import { jarvisApi } from './jarvisApi';
 import type {
+  AttentionItem,
+  AttentionKind,
   AttachmentKind,
   AttachmentSummary,
   CalendarDecision,
   JarvisCalendarCard,
   ConversationSummary,
+  JarvisEmailDraft,
+  JarvisAttention,
   JarvisEvent,
   JarvisOpenAction,
   JarvisStatus,
@@ -18,6 +22,7 @@ import type {
 import { ATTACHMENT_ACCEPT, MAX_ATTACHMENTS, MAX_ATTACHMENT_BYTES, formatSize, namePastedImage, shrinkImage } from './attachmentFiles';
 import { useJarvisVoice } from './useJarvisVoice';
 import { announceCalendarChange } from './calendarEvents';
+import { TASKS_CHANGED_EVENT } from '../tasks/tasksApi';
 import { PAUSE_OPTIONS, SPEED_OPTIONS, formatSpeed, loadVoiceSettings, saveVoiceSettings } from './voiceSettings';
 import type { VoiceSettings } from './voiceSettings';
 import { useJarvisFocus } from './jarvisFocus';
@@ -29,7 +34,15 @@ const CONVERSATION_KEY = 'walterJarvisConversation';
 // Read answers to typed questions aloud too (spoken ones always are).
 const READ_ALOUD_KEY = 'walterJarvisReadAloud';
 
+// The system prompt's <prehled> rules answer exactly this message.
+const BRIEFING_PROMPT = 'Připrav mi ranní přehled na dnešek.';
+const BRIEFING_SUGGESTION = 'Ranní přehled';
+// Reminders are rechecked this often while the app is open (the server
+// caches them for five minutes).
+const ATTENTION_REFRESH_MS = 10 * 60 * 1000;
+
 const SUGGESTIONS = [
+  BRIEFING_SUGGESTION,
   'Co mám tento týden?',
   'Co víme o klientovi …?',
   'Které zakázky nemají odpovědnou osobu?',
@@ -76,6 +89,7 @@ interface Turn {
   actions: JarvisOpenAction[];
   proposals: JarvisProposal[];
   calendar: JarvisCalendarCard[];
+  emails: JarvisEmailDraft[];
 }
 
 // The flat transcript, grouped into one block per question.
@@ -83,7 +97,7 @@ function groupTurns(items: TranscriptItem[]): Turn[] {
   const turns: Turn[] = [];
   for (const item of items) {
     if (item.type === 'question') {
-      turns.push({ question: item, steps: [], answer: null, notices: [], actions: [], proposals: [], calendar: [] });
+      turns.push({ question: item, steps: [], answer: null, notices: [], actions: [], proposals: [], calendar: [], emails: [] });
       continue;
     }
     const turn = turns[turns.length - 1];
@@ -94,6 +108,7 @@ function groupTurns(items: TranscriptItem[]): Turn[] {
     else if (item.type === 'action') turn.actions.push(item.action);
     else if (item.type === 'proposal') turn.proposals.push(item.proposal);
     else if (item.type === 'calendar') turn.calendar.push(item.card);
+    else if (item.type === 'email') turn.emails.push(item.draft);
   }
   return turns;
 }
@@ -104,6 +119,7 @@ interface LiveTurn {
   attachments: AttachmentSummary[];
   proposals: JarvisProposal[];
   calendar: JarvisCalendarCard[];
+  emails: JarvisEmailDraft[];
   steps: Array<{ id: string; label: string; done: boolean; ok: boolean }>;
   text: string;
   thinking: string;
@@ -281,6 +297,148 @@ function CalendarCard({
   );
 }
 
+// Long mailto: links are cut off by some mail programs; past this the text
+// goes to the clipboard instead and the user pastes it.
+const MAILTO_LIMIT = 1800;
+
+// An e-mail Jarvis drafted. Jarvis never sends it: the user edits it here and
+// sends it from their own mail program.
+function EmailCard({ draft, onOpenRecord }: { draft: JarvisEmailDraft; onOpenRecord: (action: JarvisOpenAction) => void }) {
+  const [to, setTo] = useState(draft.to.join(', '));
+  const [subject, setSubject] = useState(draft.subject);
+  const [body, setBody] = useState(draft.body);
+  const [hint, setHint] = useState<string | null>(null);
+  const cc = draft.cc.join(', ');
+  const recipients = to.split(/[,;]\s*/).map((item) => item.trim()).filter(Boolean).join(',');
+
+  const copy = async (text: string, done: string) => {
+    try {
+      await navigator.clipboard.writeText(text);
+      setHint(done);
+    } catch {
+      setHint('Kopírování se nepodařilo – označte text a zkopírujte ho ručně.');
+    }
+  };
+  const query = (fields: Record<string, string>) =>
+    Object.entries(fields).filter(([, value]) => value).map(([key, value]) => `${key}=${encodeURIComponent(value)}`).join('&');
+  const openMailto = async () => {
+    const full = `mailto:${recipients}?${query({ cc, subject, body })}`;
+    if (full.length <= MAILTO_LIMIT) {
+      window.location.href = full;
+      return;
+    }
+    await copy(body, 'Text je ve schránce – v novém e-mailu ho vložte Ctrl+V.');
+    window.location.href = `mailto:${recipients}?${query({ cc, subject })}`;
+  };
+  const openWeb = (url: string) => window.open(url, '_blank', 'noopener');
+
+  return (
+    <div className="jarvis-email">
+      <div className="jarvis-proposal-head">
+        <span className="jarvis-proposal-badge">Koncept e-mailu</span>
+        <small>Jarvis nic neodesílá – odešlete ho sami ze své pošty.</small>
+      </div>
+      <label className="jarvis-email-field">
+        <span>Komu</span>
+        <input value={to} onChange={(event) => setTo(event.target.value)} placeholder="adresa@firma.cz" />
+      </label>
+      {cc && (
+        <div className="jarvis-email-field">
+          <span>Kopie</span>
+          <span>{cc}</span>
+        </div>
+      )}
+      <label className="jarvis-email-field">
+        <span>Předmět</span>
+        <input value={subject} onChange={(event) => setSubject(event.target.value)} />
+      </label>
+      <textarea className="jarvis-email-body" value={body} onChange={(event) => setBody(event.target.value)} rows={Math.min(14, body.split('\n').length + 2)} />
+      <div className="jarvis-proposal-buttons">
+        <button type="button" className="jarvis-proposal-apply" onClick={() => void openMailto()}>
+          Otevřít v e-mailu
+        </button>
+        <button
+          type="button"
+          className="jarvis-proposal-reject"
+          onClick={() => openWeb(`https://mail.google.com/mail/?view=cm&fs=1&${query({ to: recipients, cc, su: subject, body })}`)}
+        >
+          Gmail
+        </button>
+        <button
+          type="button"
+          className="jarvis-proposal-reject"
+          onClick={() => openWeb(`https://outlook.office.com/mail/deeplink/compose?${query({ to: recipients, cc, subject, body })}`)}
+        >
+          Outlook
+        </button>
+        <button type="button" className="jarvis-proposal-reject" onClick={() => void copy(body, 'Text e-mailu je zkopírovaný.')}>
+          Kopírovat text
+        </button>
+        {draft.related && (
+          <button type="button" className="jarvis-action" onClick={() => onOpenRecord(draft.related as JarvisOpenAction)}>
+            Otevřít · {draft.related.label}
+          </button>
+        )}
+      </div>
+      {hint && <small className="jarvis-email-hint">{hint}</small>}
+    </div>
+  );
+}
+
+const ATTENTION_LABELS: Record<AttentionKind, string> = {
+  overdue: 'Po termínu',
+  today: 'Dnes',
+  task: 'Úkol',
+  soon: 'Brzy',
+  stale: 'Beze změny',
+};
+
+// What needs the user's attention, with a way to each record and to the
+// day's overview.
+function AttentionList({
+  attention,
+  onOpenRecord,
+  onBriefing,
+  disabled,
+}: {
+  attention: JarvisAttention | null;
+  onOpenRecord: (action: JarvisOpenAction) => void;
+  onBriefing: () => void;
+  disabled: boolean;
+}) {
+  const items: AttentionItem[] = attention?.items ?? [];
+  return (
+    <div className="jarvis-attention">
+      {attention === null && <p className="jarvis-muted">Načítám…</p>}
+      {attention !== null && items.length === 0 && <p className="jarvis-muted">Nic nehoří – žádné zakázky po termínu ani úkoly na dnes.</p>}
+      {items.map((item, index) => {
+        const content = (
+          <>
+            <span className={`jarvis-attention-kind jarvis-attention-kind--${item.kind}`}>{ATTENTION_LABELS[item.kind]}</span>
+            <span className="jarvis-attention-text">
+              <span>{item.label}</span>
+              <small>{item.detail}</small>
+            </span>
+          </>
+        );
+        const action = item.action;
+        return action ? (
+          <button key={index} type="button" className="jarvis-attention-item" onClick={() => onOpenRecord(action)} title="Otevřít záznam">
+            {content}
+          </button>
+        ) : (
+          <div key={index} className="jarvis-attention-item">
+            {content}
+          </div>
+        );
+      })}
+      <button type="button" className="jarvis-attention-briefing" onClick={onBriefing} disabled={disabled}>
+        Připravit ranní přehled
+      </button>
+    </div>
+  );
+}
+
 // The attachments of a sent question, under its text.
 function QuestionAttachments({ attachments }: { attachments?: AttachmentSummary[] }) {
   if (!attachments?.length) return null;
@@ -410,6 +568,12 @@ const Icon = {
       <path d="m16 9 5 6M21 9l-5 6" />
     </svg>
   ),
+  bell: (
+    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+      <path d="M6 8a6 6 0 0 1 12 0c0 7 3 9 3 9H3s3-2 3-9" />
+      <path d="M10.3 21a1.94 1.94 0 0 0 3.4 0" />
+    </svg>
+  ),
   speakerSmall: (
     <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
       <path d="M11 5 6 9H3v6h3l5 4V5Z" />
@@ -484,10 +648,32 @@ function VoiceSettingsPanel({
   onPreview: () => void;
   onStopPreview: () => void;
 }) {
-  const voices = status?.voice ? status.voices ?? [] : [];
-  const selected = settings.voice ?? status?.defaultVoice ?? null;
+  const engines = status?.voice ? status.engines ?? [] : [];
+  const engine = engines.find((item) => item.id === settings.engine) ?? engines.find((item) => item.id === status?.defaultEngine) ?? engines[0];
+  const voices = engine?.voices ?? [];
+  // A voice the chosen engine lacks falls back to the default one.
+  const selected = voices.some((voice) => voice.id === settings.voice) ? settings.voice : status?.defaultVoice ?? null;
   return (
     <div className="jarvis-voice-settings">
+      {engines.length > 1 && (
+        <section>
+          <h4>Druh hlasu</h4>
+          <div className="jarvis-chip-row">
+            {engines.map((item) => (
+              <button
+                key={item.id}
+                type="button"
+                className={`jarvis-choice${item.id === engine?.id ? ' jarvis-choice--on' : ''}`}
+                aria-pressed={item.id === engine?.id}
+                onClick={() => onChange({ engine: item.id })}
+              >
+                {item.label}
+              </button>
+            ))}
+          </div>
+          {engine && <p className="jarvis-voice-hint">{engine.description}</p>}
+        </section>
+      )}
       <section>
         <h4>Hlas Jarvise</h4>
         {voices.length > 0 ? (
@@ -620,6 +806,8 @@ export default function JarvisPanel({ open, onOpen, onClose, viewLabel, launcher
   const [transcript, setTranscript] = useState<TranscriptItem[]>([]);
   const [conversations, setConversations] = useState<ConversationSummary[]>([]);
   const [showHistory, setShowHistory] = useState(false);
+  const [attention, setAttention] = useState<JarvisAttention | null>(null);
+  const [showAttention, setShowAttention] = useState(false);
   const [input, setInput] = useState('');
   const [live, setLive] = useState<LiveTurn | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -734,6 +922,31 @@ export default function JarvisPanel({ open, onOpen, onClose, viewLabel, launcher
     jarvisApi.status().then(setStatus).catch(() => setStatus({ available: false, model: '', voice: false }));
   }, [open, status]);
 
+  // Reminders, checked when the app opens and every few minutes for the
+  // launcher's number, and at once after a to-do changes.
+  const loadAttention = useCallback(async (fresh = false) => {
+    try {
+      setAttention(await jarvisApi.attention(fresh));
+    } catch {
+      // Reminders are a convenience; the panel works without them.
+    }
+  }, []);
+
+  useEffect(() => {
+    void loadAttention();
+    const timer = window.setInterval(() => void loadAttention(), ATTENTION_REFRESH_MS);
+    const onTasksChanged = () => void loadAttention(true);
+    window.addEventListener(TASKS_CHANGED_EVENT, onTasksChanged);
+    return () => {
+      window.clearInterval(timer);
+      window.removeEventListener(TASKS_CHANGED_EVENT, onTasksChanged);
+    };
+  }, [loadAttention]);
+
+  useEffect(() => {
+    if (open) void loadAttention();
+  }, [open, loadAttention]);
+
   const loadConversation = useCallback(async (id: string | null) => {
     setConversationId(id);
     writeStored(CONVERSATION_KEY, id);
@@ -780,8 +993,16 @@ export default function JarvisPanel({ open, onOpen, onClose, viewLabel, launcher
     return () => window.removeEventListener('keydown', onKey);
   }, [open, closePanel, listening, speaking, cancelListening, stopSpeaking]);
 
+  const toggleAttention = () => {
+    setShowVoiceSettings(false);
+    setShowHistory(false);
+    setShowAttention((value) => !value);
+    if (!showAttention) void loadAttention(true);
+  };
+
   const openHistory = async () => {
     setShowVoiceSettings(false);
+    setShowAttention(false);
     setShowHistory((value) => !value);
     if (!showHistory) {
       try {
@@ -820,6 +1041,7 @@ export default function JarvisPanel({ open, onOpen, onClose, viewLabel, launcher
     // Typed questions start here from a key press: let their answer play later.
     unlockAudio();
     setShowHistory(false);
+    setShowAttention(false);
     const controller = new AbortController();
     abortRef.current = controller;
     let activeId = conversationId;
@@ -829,6 +1051,7 @@ export default function JarvisPanel({ open, onOpen, onClose, viewLabel, launcher
       attachments: sending.map((attachment) => ({ name: attachment.name, kind: attachment.kind ?? 'text' })),
       proposals: [],
       calendar: [],
+      emails: [],
       steps: [],
       text: '',
       thinking: '',
@@ -873,6 +1096,9 @@ export default function JarvisPanel({ open, onOpen, onClose, viewLabel, launcher
           setLive((turn) => (turn ? { ...turn, calendar: [...turn.calendar, event.data] } : turn));
           // Additions and edits are already in the calendar.
           if (event.data.action !== 'delete') announceCalendarChange();
+          break;
+        case 'email':
+          setLive((turn) => (turn ? { ...turn, emails: [...turn.emails, event.data] } : turn));
           break;
         case 'notice':
           setLive((turn) => (turn ? { ...turn, notices: [...turn.notices, event.data.text] } : turn));
@@ -1029,6 +1255,7 @@ export default function JarvisPanel({ open, onOpen, onClose, viewLabel, launcher
     );
   };
   const unavailable = status && !status.available;
+  const urgent = attention?.urgent ?? 0;
   const subtitle = busy
     ? 'Pracuji…'
     : voice.listen === 'listening'
@@ -1055,6 +1282,11 @@ export default function JarvisPanel({ open, onOpen, onClose, viewLabel, launcher
     >
       <SparkIcon size={26} />
       {unseen && !busy && <span className="jarvis-launcher-badge" />}
+      {urgent > 0 && (
+        <span className="jarvis-launcher-count" title={`Upozornění: ${urgent}`}>
+          {urgent > 9 ? '9+' : urgent}
+        </span>
+      )}
       <span className="jarvis-launcher-tip" aria-hidden="true">
         Jarvis <kbd>Alt+J</kbd>
       </span>
@@ -1093,6 +1325,17 @@ export default function JarvisPanel({ open, onOpen, onClose, viewLabel, launcher
           <span>{subtitle}</span>
         </div>
         <div className="jarvis-header-actions">
+          <button
+            type="button"
+            className={`jarvis-icon-button jarvis-bell${showAttention ? ' jarvis-icon-button--on' : ''}`}
+            onClick={toggleAttention}
+            title="Upozornění: termíny, úkoly a zakázky beze změny"
+            aria-label="Upozornění"
+            aria-expanded={showAttention}
+          >
+            {Icon.bell}
+            {urgent > 0 && <span className="jarvis-bell-count">{urgent > 9 ? '9+' : urgent}</span>}
+          </button>
           {(voice.canSpeak || voice.canListen) && (
             <button
               type="button"
@@ -1100,6 +1343,7 @@ export default function JarvisPanel({ open, onOpen, onClose, viewLabel, launcher
               onClick={() => {
                 setShowVoiceSettings((value) => !value);
                 setShowHistory(false);
+                setShowAttention(false);
               }}
               title="Nastavení hlasu"
               aria-label="Nastavení hlasu"
@@ -1150,6 +1394,15 @@ export default function JarvisPanel({ open, onOpen, onClose, viewLabel, launcher
         />
       )}
 
+      {showAttention && (
+        <AttentionList
+          attention={attention}
+          onOpenRecord={openRecord}
+          onBriefing={() => void send(BRIEFING_PROMPT)}
+          disabled={busy || Boolean(unavailable)}
+        />
+      )}
+
       {showHistory && (
         <div className="jarvis-history">
           {conversations.length === 0 && <p className="jarvis-muted">Zatím žádné konverzace.</p>}
@@ -1195,8 +1448,11 @@ export default function JarvisPanel({ open, onOpen, onClose, viewLabel, launcher
                 <button
                   key={suggestion}
                   type="button"
+                  className={suggestion === BRIEFING_SUGGESTION ? 'jarvis-suggestion--briefing' : undefined}
                   onClick={() => {
-                    if (suggestion.includes('…')) {
+                    if (suggestion === BRIEFING_SUGGESTION) {
+                      void send(BRIEFING_PROMPT);
+                    } else if (suggestion.includes('…')) {
                       setInput(suggestion.replace('…', ''));
                       inputRef.current?.focus();
                     } else {
@@ -1233,6 +1489,7 @@ export default function JarvisPanel({ open, onOpen, onClose, viewLabel, launcher
             )}
             {renderProposals(turn.proposals, false)}
             {renderCalendar(turn.calendar, false)}
+            {turn.emails.map((draft) => <EmailCard key={draft.id} draft={draft} onOpenRecord={openRecord} />)}
             {turn.notices.map((notice, noticeIndex) => (
               <div key={noticeIndex} className="jarvis-notice">{notice}</div>
             ))}
@@ -1276,6 +1533,7 @@ export default function JarvisPanel({ open, onOpen, onClose, viewLabel, launcher
             )}
             {renderProposals(live.proposals, true)}
             {renderCalendar(live.calendar, true)}
+            {live.emails.map((draft) => <EmailCard key={draft.id} draft={draft} onOpenRecord={openRecord} />)}
             {live.notices.map((notice, noticeIndex) => (
               <div key={noticeIndex} className="jarvis-notice">{notice}</div>
             ))}

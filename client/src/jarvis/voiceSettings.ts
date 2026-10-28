@@ -3,6 +3,9 @@
 export type SendMode = 'auto' | 'manual';
 
 export interface VoiceSettings {
+  // 'conversational' (natural, gpt-audio) or 'classic' (TTS); null = the
+  // server's default.
+  engine: string | null;
   // A server voice id (Marin, Cedar, …); null = the server's default.
   voice: string | null;
   // 1 = the voice's own pace.
@@ -23,7 +26,7 @@ export const PAUSE_OPTIONS = [
   { ms: 4000, label: 'Dlouhá (4 s)' },
 ];
 
-export const DEFAULT_VOICE_SETTINGS: VoiceSettings = { voice: null, speed: 1.15, sendMode: 'auto', pauseMs: 2500 };
+export const DEFAULT_VOICE_SETTINGS: VoiceSettings = { engine: null, voice: null, speed: 1.15, sendMode: 'auto', pauseMs: 2500 };
 
 const STORAGE_KEY = 'walterJarvisVoiceSettings';
 
@@ -32,6 +35,7 @@ export function loadVoiceSettings(): VoiceSettings {
     const stored = JSON.parse(localStorage.getItem(STORAGE_KEY) ?? 'null') as Partial<VoiceSettings> | null;
     if (!stored || typeof stored !== 'object') return DEFAULT_VOICE_SETTINGS;
     return {
+      engine: typeof stored.engine === 'string' ? stored.engine : null,
       voice: typeof stored.voice === 'string' ? stored.voice : null,
       speed: SPEED_OPTIONS.includes(Number(stored.speed)) ? Number(stored.speed) : DEFAULT_VOICE_SETTINGS.speed,
       sendMode: stored.sendMode === 'manual' ? 'manual' : 'auto',

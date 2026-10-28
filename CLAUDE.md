@@ -346,13 +346,23 @@ inherited one falls back to the browser's serif. Needs `ANTHROPIC_API_KEY`;
 - **Voice** (`server/jarvis/voice.js`, `client/src/jarvis/voice.ts`,
   `useJarvisVoice.ts`): speech-to-text (`POST /api/jarvis/transcribe`, raw
   audio body) and read-aloud (`POST /api/jarvis/speech`) go through OpenAI with
-  `OPENAI_API_KEY` — Claude has no audio. Env: `JARVIS_STT_MODEL`
-  (gpt-4o-transcribe), `JARVIS_TTS_MODEL` (gpt-4o-mini-tts), `JARVIS_TTS_VOICE`
-  (default voice, cedar), `JARVIS_STT_LANGUAGE` (cs; empty = auto),
-  `JARVIS_VOICE_HOURLY_LIMIT` (300). Each user picks a voice (`TTS_VOICES`,
-  13 OpenAI voices by gender) and speed in the panel's voice menu
-  (`voiceSettings.ts`, localStorage); speed goes to OpenAI's `speed`
-  parameter, so faster speech keeps its pitch. Spoken questions go off after
+  `OPENAI_API_KEY` — Claude has no audio. OpenAI's voices are trained mostly
+  on English, which is why Czech sounds flat and slightly foreign. Two
+  read-aloud engines (`TTS_ENGINES`): **Přirozený** (`conversational`, the
+  default, `JARVIS_AUDIO_MODEL` gpt-audio-1.5 through chat completions; far
+  livelier intonation, ~4 s to start, ~2 Kč/min) and **Klasický** (`classic`,
+  `JARVIS_TTS_MODEL` gpt-4o-mini-tts-2025-12-15, the `speed` parameter, ~0.35
+  Kč/min). The conversational model is asked to read the text verbatim, but it
+  is a chat model: `isFaithfulReading` compares its transcript with the text
+  and anything that drifts falls back to the classic engine. It has no speed
+  parameter, so the tempo is asked for in words (`TEMPO`). Other env:
+  `JARVIS_TTS_ENGINE`, `JARVIS_STT_MODEL` (gpt-4o-transcribe),
+  `JARVIS_TTS_VOICE` (default voice, cedar), `JARVIS_STT_LANGUAGE` (cs; empty
+  = auto), `JARVIS_VOICE_HOURLY_LIMIT` (300). Each user picks an engine, a
+  voice (`TTS_VOICES`, by gender; the conversational engine has 10 of them) and
+  speed in the panel's voice menu (`voiceSettings.ts`, localStorage). Native
+  Czech quality would need a different provider (e.g. ElevenLabs); that is a
+  new paid service and the user's decision. Spoken questions go off after
   a chosen pause (default 2.5 s — a breath is shorter) or, in manual mode,
   only on the send button; the browser recognizer runs continuously so the
   same pause applies to it. Without the key the browser's own engines stand in (Chrome on Windows
@@ -361,6 +371,24 @@ inherited one falls back to the browser's serif. Needs `ANTHROPIC_API_KEY`;
   `<hlas>` rules in the system prompt stay static. The mic level lives in a ref
   that `LevelMeter` reads on its own animation frame; putting it in React state
   re-renders the whole panel 20× a second.
+- **E-mail drafts** (`draft_email` in tools.js): Jarvis only drafts. The
+  draft is a transcript item (`type: 'email'`) shown as an editable card
+  (`EmailCard` in JarvisPanel.tsx) that opens it via `mailto:`, Gmail's or
+  Outlook's compose URL, or copies the text. A `mailto:` link over ~1 800
+  characters goes out without the body, which is copied to the clipboard
+  instead (some mail programs cut long links). There is no sending from the
+  server, on purpose.
+- **Reminders and the morning briefing** (`server/jarvis/attention.js`,
+  `GET /api/jarvis/attention`, cached 5 min per user, `?fresh=1` bypasses):
+  plain rules, no AI — the user's assigned zakázky past their deadline, due
+  today or within 3 days, untouched for 30 days (not Uzavřeno/Zrušeno/
+  Odloženo), and personal to-dos due today or earlier. The launcher shows how
+  many are late or due today; the bell in the panel lists them (an item opens
+  its record). Jarvis reads the same list with the `reminders` tool and Úkoly
+  with `tasks` (read-only). "Ranní přehled" sends `BRIEFING_PROMPT`, which the
+  `<prehled>` rules in the system prompt answer. "Připomeň mi…" becomes a
+  calendar event. Day boundaries are Prague midnight (`pragueMidnight` drops
+  any time of day it is given).
 - To test voice without a microphone, override
   `navigator.mediaDevices.getUserMedia` in the page to return a
   `MediaStreamDestination` stream playing a `/api/jarvis/speech` MP3: the pause
