@@ -166,24 +166,146 @@ export function unlockAudio() {
   }
 }
 
-// Reads through the server: each piece comes back as an MP3, the next is
-// fetched while the current one plays.
-export function createServerSpeaker(fetchAudio: (text: string, signal: AbortSignal) => Promise<Blob>): Speaker {
-  let controller: AbortController | null = null;
-  let source: AudioBufferSourceNode | null = null;
+// ---------- the server's voice, piece by piece ----------
 
-  const stop = () => {
-    controller?.abort();
-    controller = null;
-    try {
-      source?.stop();
-    } catch {
-      // Already finished.
+export type FetchAudio = (text: string, signal: AbortSignal) => Promise<Blob>;
+
+// The end of a sentence: the next one starts with a capital letter, so
+// "28. 10. 2026" is not cut.
+const SENTENCE_END = /[.!?…](?=\s+[A-ZÁČĎÉĚÍŇÓŘŠŤÚŮÝŽ„"(])/gu;
+
+// Each piece is one request for audio. The first is short, so the voice
+// starts quickly; later ones hold a few sentences, so the intonation does not
+// restart too often. The next pieces are fetched while one is playing.
+const FIRST_PIECE_MIN = 50;
+const PIECE_MIN = 140;
+const PIECE_MAX = 320;
+const LOOKAHEAD = 2;
+
+// The part of an answer still being written that will not change any more:
+// whole lines, plus the whole sentences of the line being written. A table
+// waits until the line after it starts (its header row is only known by the
+// |---| row under it), an unfinished code block until it is closed.
+export function settledMarkdown(markdown: string): string {
+  const lineEnd = markdown.lastIndexOf('\n') + 1;
+  const lines = markdown.slice(0, lineEnd).split('\n').slice(0, -1);
+  const writing = markdown.slice(lineEnd);
+  const isTableRow = (line: string) => line.trimStart().startsWith('|');
+  let tail = '';
+  if (writing.trim() && !isTableRow(writing)) {
+    const ends = [...writing.matchAll(SENTENCE_END)];
+    const last = ends[ends.length - 1];
+    if (last?.index !== undefined) tail = writing.slice(0, last.index + 1);
+  } else {
+    while (lines.length > 0 && isTableRow(lines[lines.length - 1])) lines.pop();
+  }
+  let settled = (lines.length > 0 ? `${lines.join('\n')}\n` : '') + tail;
+  if ((settled.split('```').length - 1) % 2 === 1) settled = settled.slice(0, settled.lastIndexOf('```'));
+  return settled;
+}
+
+// A sentence too long for one piece is split between words.
+function splitLong(piece: string): string[] {
+  const parts: string[] = [];
+  let rest = piece;
+  while (rest.length > PIECE_MAX) {
+    const cut = rest.lastIndexOf(' ', PIECE_MAX);
+    parts.push(rest.slice(0, cut > 0 ? cut : PIECE_MAX).trim());
+    rest = rest.slice(cut > 0 ? cut : PIECE_MAX).trim();
+  }
+  if (rest) parts.push(rest);
+  return parts;
+}
+
+// Cuts settled speech text into pieces. `used` is how much of `rest` they
+// took; until the answer is complete, a short last piece waits for more.
+export function cutPieces(rest: string, complete: boolean, first: boolean): { pieces: string[]; used: number } {
+  const ends = [...rest.matchAll(SENTENCE_END)].map((match) => (match.index ?? 0) + 1);
+  // Settled text always ends at the end of a sentence or a line.
+  ends.push(rest.length);
+  const pieces: string[] = [];
+  let start = 0;
+  for (let index = 0; index < ends.length; index += 1) {
+    const piece = rest.slice(start, ends[index]).trim();
+    if (!piece) continue;
+    const min = first && pieces.length === 0 ? FIRST_PIECE_MIN : PIECE_MIN;
+    const next = ends[index + 1];
+    const fullWithNext = next !== undefined && rest.slice(start, next).trim().length > PIECE_MAX;
+    if (piece.length >= min || fullWithNext || (complete && next === undefined)) {
+      pieces.push(piece);
+      start = ends[index];
     }
-    source = null;
+  }
+  return { pieces: pieces.flatMap(splitLong), used: start };
+}
+
+// The server's voice failed partway; `remaining` is what was not read.
+export class SpeechFailure extends Error {
+  remaining: string;
+  constructor(remaining: string) {
+    super('Reading aloud failed');
+    this.remaining = remaining;
+  }
+}
+
+export interface SpeechStream {
+  // The answer so far (Markdown): its settled sentences start being read.
+  update(markdown: string): void;
+  // The whole answer (Markdown, or text already prepared for speech).
+  finish(markdown: string): void;
+  finishText(text: string): void;
+  stop(): void;
+  // true: read to the end; false: stopped. Rejects with SpeechFailure when
+  // the voice fails, once the whole text is known.
+  done: Promise<boolean>;
+}
+
+// Reads an answer through the server, if need be while it is still being
+// written: the first sentence's audio is requested as soon as the sentence is
+// complete, and it starts playing as soon as it arrives.
+export function createSpeechStream(fetchAudio: FetchAudio, { onStart }: { onStart?: () => void } = {}): SpeechStream {
+  const controller = new AbortController();
+  const { signal } = controller;
+  const pieces: string[] = [];
+  const buffers: Array<Promise<AudioBuffer>> = [];
+  let consumed = '';
+  let complete = false;
+  let playing = 0;
+  let source: AudioBufferSourceNode | null = null;
+  let wake: (() => void) | null = null;
+  const notify = () => {
+    const resume = wake;
+    wake = null;
+    resume?.();
+  };
+  const waitForMore = () =>
+    new Promise<void>((resolve) => {
+      wake = resolve;
+    });
+  signal.addEventListener('abort', notify, { once: true });
+
+  const load = (index: number) =>
+    (buffers[index] ??= fetchAudio(pieces[index], signal).then(async (blob) => audioContext().decodeAudioData(await blob.arrayBuffer())));
+  const prefetch = () => {
+    for (let index = playing; index < Math.min(pieces.length, playing + 1 + LOOKAHEAD); index += 1) load(index).catch(() => undefined);
   };
 
-  const play = (buffer: AudioBuffer, signal: AbortSignal) =>
+  const take = (text: string, isComplete: boolean) => {
+    if (complete || signal.aborted) return;
+    let rest: string;
+    if (text.startsWith(consumed)) rest = text.slice(consumed.length);
+    // Rewritten under us (rare): wait for the final text and read on from there.
+    else if (isComplete) rest = text.slice(Math.min(consumed.length, text.length));
+    else return;
+    const cut = cutPieces(rest, isComplete, pieces.length === 0);
+    consumed += rest.slice(0, cut.used);
+    pieces.push(...cut.pieces);
+    complete = isComplete;
+    prefetch();
+    notify();
+  };
+
+  const play = (buffer: AudioBuffer) =>
     new Promise<void>((resolve) => {
       const ctx = audioContext();
       const node = ctx.createBufferSource();
@@ -195,33 +317,74 @@ export function createServerSpeaker(fetchAudio: (text: string, signal: AbortSign
       node.start();
     });
 
-  const speak = async (text: string) => {
-    stop();
-    const own = new AbortController();
-    controller = own;
-    const pieces = splitForSpeech(text);
-    const pending: Array<Promise<AudioBuffer>> = [];
-    const load = (index: number) =>
-      (pending[index] ??= fetchAudio(pieces[index], own.signal).then(async (blob) => audioContext().decodeAudioData(await blob.arrayBuffer())));
-    try {
-      const ctx = audioContext();
-      if (ctx.state === 'suspended') await ctx.resume();
-      for (let index = 0; index < pieces.length; index += 1) {
-        const buffer = await load(index);
-        if (own.signal.aborted) return;
-        if (index + 1 < pieces.length) load(index + 1).catch(() => undefined);
-        await play(buffer, own.signal);
-        if (own.signal.aborted) return;
+  const run = async (): Promise<boolean> => {
+    const ctx = audioContext();
+    if (ctx.state === 'suspended') await ctx.resume();
+    for (playing = 0; ; playing += 1) {
+      while (playing >= pieces.length) {
+        if (signal.aborted) return false;
+        if (complete) return true;
+        await waitForMore();
       }
-    } catch (error) {
-      if (own.signal.aborted) return;
-      throw error;
-    } finally {
-      if (controller === own) controller = null;
+      prefetch();
+      let buffer: AudioBuffer;
+      try {
+        buffer = await load(playing);
+      } catch (error) {
+        if (signal.aborted) return false;
+        console.warn('Jarvis: the server voice failed', error);
+        while (!complete && !signal.aborted) await waitForMore();
+        if (signal.aborted) return false;
+        throw new SpeechFailure(pieces.slice(playing).join(' '));
+      }
+      if (signal.aborted) return false;
+      if (playing === 0) onStart?.();
+      await play(buffer);
+      if (signal.aborted) return false;
     }
   };
 
-  return { speak, stop };
+  const done = run();
+  // A failure is reported through `done`; nobody may be listening yet.
+  done.catch(() => undefined);
+
+  return {
+    update: (markdown) => take(toSpeechText(settledMarkdown(markdown)), false),
+    finish: (markdown) => take(toSpeechText(markdown), true),
+    finishText: (text) => take(text, true),
+    stop: () => {
+      controller.abort();
+      try {
+        source?.stop();
+      } catch {
+        // Already finished.
+      }
+      source = null;
+    },
+    done,
+  };
+}
+
+// Reads prepared text through the server (see createSpeechStream).
+export function createServerSpeaker(fetchAudio: FetchAudio): Speaker {
+  let current: SpeechStream | null = null;
+  return {
+    async speak(text: string) {
+      current?.stop();
+      const stream = createSpeechStream(fetchAudio);
+      current = stream;
+      stream.finishText(text);
+      try {
+        await stream.done;
+      } finally {
+        if (current === stream) current = null;
+      }
+    },
+    stop() {
+      current?.stop();
+      current = null;
+    },
+  };
 }
 
 // The browser's own voices. Quality depends on the system: Edge has natural

@@ -378,7 +378,15 @@ inherited one falls back to the browser's serif. Needs `ANTHROPIC_API_KEY`;
   (`noSpeechMs`), and "děkuji, to je vše" and the like (`isConversationEnd`)
   end it instead of being sent. Recording uses the shared, already unlocked
   `AudioContext`, because Safari keeps one created outside a click suspended
-  and the pause detection would hear nothing. The mic level lives in a ref
+  and the pause detection would hear nothing. **Reading starts early**
+  (`createSpeechStream` in voice.ts): with the server voice an answer is read
+  while it is still streaming. `settledMarkdown` keeps only what can no
+  longer change (whole lines, finished sentences; a table waits for the line
+  after it, a code block for its closing fence), so the spoken text is always
+  a prefix of the final one. `cutPieces` makes the first piece short (≥ 50
+  chars, ~2.5 s to voice instead of ~4–5 s) and later ones 140–320 chars,
+  two fetched ahead. Text dropped for a tool call stops the reading. Each
+  piece is one `/api/jarvis/speech` request. The mic level lives in a ref
   that `LevelMeter` reads on its own animation frame; putting it in React state
   re-renders the whole panel 20× a second.
 - **E-mail drafts** (`draft_email` in tools.js): Jarvis only drafts. The

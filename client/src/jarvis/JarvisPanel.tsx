@@ -1074,6 +1074,18 @@ export default function JarvisPanel({ open, onOpen, onClose, viewLabel, launcher
     const controller = new AbortController();
     abortRef.current = controller;
     let activeId = conversationId;
+    // Answer aloud what was asked aloud (or everything, when chosen). With the
+    // server's voice the reading starts while the answer is still being
+    // written; text later dropped for a tool call is not read on.
+    const readAloudNow = spoken || readAloudRef.current;
+    const answerKey = `answer-${turns.length}`;
+    let streamedText = '';
+    let reading: ReturnType<typeof voice.streamSpeech> = null;
+    const dropReading = () => {
+      streamedText = '';
+      reading?.cancel();
+      reading = null;
+    };
     setLive({
       question: message,
       voice: spoken,
@@ -1097,15 +1109,22 @@ export default function JarvisPanel({ open, onOpen, onClose, viewLabel, launcher
           break;
         case 'text':
           setLive((turn) => (turn ? { ...turn, text: turn.text + event.data.delta, thinking: '' } : turn));
+          streamedText += event.data.delta;
+          if (readAloudNow) {
+            reading ??= voice.streamSpeech(answerKey);
+            reading?.update(streamedText);
+          }
           break;
         case 'text_reset':
           setLive((turn) => (turn ? { ...turn, text: '' } : turn));
+          dropReading();
           break;
         case 'thinking':
           setLive((turn) => (turn ? { ...turn, thinking: (turn.thinking + event.data.delta).slice(-240) } : turn));
           break;
         case 'tool':
           // Text written before a tool call is a progress note, not the answer.
+          dropReading();
           setLive((turn) =>
             turn ? { ...turn, text: '', thinking: '', steps: [...turn.steps, { id: event.data.id, label: event.data.label, done: false, ok: true }] } : turn
           );
@@ -1159,6 +1178,10 @@ export default function JarvisPanel({ open, onOpen, onClose, viewLabel, launcher
       if (!controller.signal.aborted) setError(err instanceof Error ? err.message : 'Jarvis neodpověděl.');
     } finally {
       abortRef.current = null;
+      // The rest of a streamed answer is read on while the transcript reloads.
+      let streamedReading: Promise<boolean> | null = null;
+      if (controller.signal.aborted || !streamedText.trim()) dropReading();
+      else if (reading) streamedReading = reading.finish(streamedText);
       // The server's transcript is the record of what happened; show that.
       // `handsNeeded`: the answer left a card to click (a change to confirm, a
       // deletion, an e-mail), so the conversation does not go on by voice.
@@ -1183,12 +1206,12 @@ export default function JarvisPanel({ open, onOpen, onClose, viewLabel, launcher
       setLive(null);
       if (openRef.current) inputRef.current?.focus();
       else setUnseen(true);
-      // Answer aloud what was asked aloud (or everything, when chosen). In a
-      // spoken conversation the microphone then reopens for the next question,
-      // unless the answer was stopped, the panel closed or the tab hidden.
-      if (answer && !controller.signal.aborted && (spoken || readAloudRef.current)) {
+      // In a spoken conversation the microphone then reopens for the next
+      // question, unless the answer was stopped, the panel closed or the tab
+      // hidden.
+      if (answer && !controller.signal.aborted && readAloudNow) {
         const spokenAnswer = answer;
-        void voice.speak(spokenAnswer.text, spokenAnswer.key).then((finished) => {
+        void (streamedReading ?? voice.speak(spokenAnswer.text, spokenAnswer.key)).then((finished) => {
           const goOn = finished && spoken && !spokenAnswer.handsNeeded && voiceSettingsRef.current.conversation;
           if (goOn && openRef.current && !document.hidden) void voice.startListening({ followUp: true });
         });

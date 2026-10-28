@@ -4,7 +4,9 @@ import {
   canRecognizeInBrowser,
   canRecord,
   createBrowserSpeaker,
+  SpeechFailure,
   createServerSpeaker,
+  createSpeechStream,
   playListenCue,
   startBrowserRecognition,
   startRecording,
@@ -93,17 +95,16 @@ export function useJarvisVoice(
   };
 
   const useServer = serverVoice === true;
-  const serverSpeaker = useMemo(
-    () =>
-      createServerSpeaker((text, signal) =>
-        jarvisApi.speech(text, signal, {
-          engine: settingsRef.current.engine,
-          voice: settingsRef.current.voice,
-          speed: settingsRef.current.speed,
-        })
-      ),
+  const fetchSpeech = useCallback(
+    (text: string, signal: AbortSignal) =>
+      jarvisApi.speech(text, signal, {
+        engine: settingsRef.current.engine,
+        voice: settingsRef.current.voice,
+        speed: settingsRef.current.speed,
+      }),
     []
   );
+  const serverSpeaker = useMemo(() => createServerSpeaker(fetchSpeech), [fetchSpeech]);
   const browserSpeaker = useMemo(() => createBrowserSpeaker(), []);
   const canListen = serverVoice !== undefined && (useServer ? canRecord() : canRecognizeInBrowser());
   const canSpeak = serverVoice !== undefined && (useServer || browserSpeaker !== null);
@@ -126,14 +127,17 @@ export function useJarvisVoice(
       const token = speakTokenRef.current;
       setSpeakingKey(key);
       const speakers = (useServer ? [serverSpeaker, browserSpeaker] : [browserSpeaker]).filter((item): item is Speaker => item !== null);
+      let unread = text;
       for (const speaker of speakers) {
         speakerRef.current = speaker;
         try {
-          await speaker.speak(text, { rate: settingsRef.current.speed });
+          await speaker.speak(unread, { rate: settingsRef.current.speed });
           break;
         } catch (err) {
           console.warn('Jarvis: reading aloud failed', err);
           if (speakTokenRef.current !== token) return false;
+          // What the server's voice already read is not read again.
+          if (err instanceof SpeechFailure) unread = err.remaining;
         }
       }
       if (speakTokenRef.current !== token) return false;
@@ -142,6 +146,51 @@ export function useJarvisVoice(
       return true;
     },
     [browserSpeaker, serverSpeaker, stopSpeaking, useServer]
+  );
+
+  // Starts reading an answer while Jarvis is still writing it, so the first
+  // sentence is heard sooner. Server voice only: the browser's own voice is
+  // instant anyway and reads the whole answer through speak().
+  const streamSpeech = useCallback(
+    (key: string) => {
+      if (!useServer) return null;
+      stopSpeaking();
+      const token = speakTokenRef.current;
+      const stream = createSpeechStream(fetchSpeech, {
+        onStart: () => {
+          if (speakTokenRef.current === token) setSpeakingKey(key);
+        },
+      });
+      speakerRef.current = { speak: () => Promise.resolve(), stop: () => stream.stop() };
+      const done = stream.done
+        .catch(async (err: unknown) => {
+          // The server's voice failed: the browser's reads the rest.
+          if (speakTokenRef.current !== token || !(err instanceof SpeechFailure) || !browserSpeaker) return false;
+          setSpeakingKey(key);
+          speakerRef.current = browserSpeaker;
+          await browserSpeaker.speak(err.remaining, { rate: settingsRef.current.speed });
+          return true;
+        })
+        .then((finished) => {
+          if (speakTokenRef.current !== token) return false;
+          speakerRef.current = null;
+          setSpeakingKey(null);
+          return finished;
+        });
+      return {
+        update: (markdown: string) => stream.update(markdown),
+        // Resolves true when the whole answer was read, false when stopped.
+        finish: (markdown: string) => {
+          stream.finish(markdown);
+          return done;
+        },
+        // What was written turned out not to be the answer (a note before a tool).
+        cancel: () => {
+          if (speakTokenRef.current === token) stopSpeaking();
+        },
+      };
+    },
+    [browserSpeaker, fetchSpeech, stopSpeaking, useServer]
   );
 
   // `followUp`: opened by the conversation after an answer, not by a click.
@@ -269,6 +318,7 @@ export function useJarvisVoice(
     stopListening,
     cancelListening,
     speak,
+    streamSpeech,
     stopSpeaking,
   };
 }
