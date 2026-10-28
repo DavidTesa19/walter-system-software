@@ -15,6 +15,9 @@ export interface VoiceSettings {
   sendMode: SendMode;
   // How long a pause ends the question in 'auto' mode.
   pauseMs: number;
+  // After reading the answer to a spoken question, listen again for the next
+  // one, like a phone call.
+  conversation: boolean;
 }
 
 export const SPEED_OPTIONS = [1, 1.15, 1.3, 1.5];
@@ -26,7 +29,14 @@ export const PAUSE_OPTIONS = [
   { ms: 4000, label: 'Dlouhá (4 s)' },
 ];
 
-export const DEFAULT_VOICE_SETTINGS: VoiceSettings = { engine: null, voice: null, speed: 1.15, sendMode: 'auto', pauseMs: 2500 };
+export const DEFAULT_VOICE_SETTINGS: VoiceSettings = {
+  engine: null,
+  voice: null,
+  speed: 1.15,
+  sendMode: 'auto',
+  pauseMs: 2500,
+  conversation: true,
+};
 
 const STORAGE_KEY = 'walterJarvisVoiceSettings';
 
@@ -40,6 +50,7 @@ export function loadVoiceSettings(): VoiceSettings {
       speed: SPEED_OPTIONS.includes(Number(stored.speed)) ? Number(stored.speed) : DEFAULT_VOICE_SETTINGS.speed,
       sendMode: stored.sendMode === 'manual' ? 'manual' : 'auto',
       pauseMs: PAUSE_OPTIONS.some((option) => option.ms === stored.pauseMs) ? Number(stored.pauseMs) : DEFAULT_VOICE_SETTINGS.pauseMs,
+      conversation: stored.conversation !== false,
     };
   } catch {
     return DEFAULT_VOICE_SETTINGS;

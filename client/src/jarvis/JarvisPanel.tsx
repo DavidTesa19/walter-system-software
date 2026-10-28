@@ -27,7 +27,7 @@ import { PAUSE_OPTIONS, SPEED_OPTIONS, formatSpeed, loadVoiceSettings, saveVoice
 import type { VoiceSettings } from './voiceSettings';
 import { useJarvisFocus } from './jarvisFocus';
 import type { JarvisFocus } from './jarvisFocus';
-import { unlockAudio } from './voice';
+import { isConversationEnd, unlockAudio } from './voice';
 import './JarvisPanel.css';
 
 const CONVERSATION_KEY = 'walterJarvisConversation';
@@ -755,6 +755,23 @@ function VoiceSettingsPanel({
           </span>
         </label>
       </section>
+      <section>
+        <h4>Po hlasové odpovědi</h4>
+        <label className="jarvis-radio">
+          <input type="radio" name="jarvis-conversation" checked={settings.conversation} onChange={() => onChange({ conversation: true })} />
+          <span>
+            <strong>Poslouchat dál (rozhovor)</strong>
+            <small>Po přečtení odpovědi se mikrofon zapne sám (ozve se krátký tón). Rozhovor skončí, když chvíli mlčíte nebo řeknete „to je vše“.</small>
+          </span>
+        </label>
+        <label className="jarvis-radio">
+          <input type="radio" name="jarvis-conversation" checked={!settings.conversation} onChange={() => onChange({ conversation: false })} />
+          <span>
+            <strong>Čekat na kliknutí na mikrofon</strong>
+            <small>Každý další dotaz začnete sami.</small>
+          </span>
+        </label>
+      </section>
     </div>
   );
 }
@@ -882,6 +899,9 @@ export default function JarvisPanel({ open, onOpen, onClose, viewLabel, launcher
   // A spoken question goes off as soon as it has been transcribed.
   const [voiceSettings, setVoiceSettings] = useState<VoiceSettings>(loadVoiceSettings);
   const [showVoiceSettings, setShowVoiceSettings] = useState(false);
+  // Read after an answer has been spoken, when the latest settings count.
+  const voiceSettingsRef = useRef(voiceSettings);
+  voiceSettingsRef.current = voiceSettings;
   const changeVoiceSettings = (patch: Partial<VoiceSettings>) => {
     setVoiceSettings((current) => {
       const next = { ...current, ...patch };
@@ -889,7 +909,16 @@ export default function JarvisPanel({ open, onOpen, onClose, viewLabel, launcher
       return next;
     });
   };
-  const voice = useJarvisVoice(status?.voice, (text) => void send(text, true), voiceSettings);
+  // "Děkuji, to je vše" into a microphone that reopened after an answer ends
+  // the conversation instead of becoming a question.
+  const voice = useJarvisVoice(
+    status?.voice,
+    (text, { followUp }) => {
+      if (followUp && isConversationEnd(text)) return;
+      void send(text, true);
+    },
+    voiceSettings
+  );
   const { cancelListening, stopSpeaking } = voice;
   const listening = voice.listen !== 'idle';
   const speaking = voice.speakingKey !== null;
@@ -1131,14 +1160,22 @@ export default function JarvisPanel({ open, onOpen, onClose, viewLabel, launcher
     } finally {
       abortRef.current = null;
       // The server's transcript is the record of what happened; show that.
-      let answer: { text: string; key: string } | null = null;
+      // `handsNeeded`: the answer left a card to click (a change to confirm, a
+      // deletion, an e-mail), so the conversation does not go on by voice.
+      let answer: { text: string; key: string; handsNeeded: boolean } | null = null;
       if (activeId) {
         try {
           const data = await jarvisApi.conversation(activeId);
           setTranscript(data.transcript);
           const all = groupTurns(data.transcript);
           const last = all[all.length - 1];
-          if (last?.answer) answer = { text: last.answer, key: `answer-${all.length - 1}` };
+          if (last?.answer) {
+            answer = {
+              text: last.answer,
+              key: `answer-${all.length - 1}`,
+              handsNeeded: last.proposals.length > 0 || last.emails.length > 0 || last.calendar.some((card) => card.action === 'delete'),
+            };
+          }
         } catch {
           // Keep what is on screen.
         }
@@ -1146,8 +1183,16 @@ export default function JarvisPanel({ open, onOpen, onClose, viewLabel, launcher
       setLive(null);
       if (openRef.current) inputRef.current?.focus();
       else setUnseen(true);
-      // Answer aloud what was asked aloud (or everything, when chosen).
-      if (answer && !controller.signal.aborted && (spoken || readAloudRef.current)) void voice.speak(answer.text, answer.key);
+      // Answer aloud what was asked aloud (or everything, when chosen). In a
+      // spoken conversation the microphone then reopens for the next question,
+      // unless the answer was stopped, the panel closed or the tab hidden.
+      if (answer && !controller.signal.aborted && (spoken || readAloudRef.current)) {
+        const spokenAnswer = answer;
+        void voice.speak(spokenAnswer.text, spokenAnswer.key).then((finished) => {
+          const goOn = finished && spoken && !spokenAnswer.handsNeeded && voiceSettingsRef.current.conversation;
+          if (goOn && openRef.current && !document.hidden) void voice.startListening({ followUp: true });
+        });
+      }
     }
   }
 
@@ -1660,9 +1705,11 @@ export default function JarvisPanel({ open, onOpen, onClose, viewLabel, launcher
                   <>
                     <strong>{voice.interim || `Poslouchám… ${formatElapsed(voice.elapsed)}`}</strong>
                     <span>
-                      {voiceSettings.sendMode === 'manual'
-                        ? 'Až domluvíte, klikněte na Odeslat'
-                        : `Odešlu, až ${String(voiceSettings.pauseMs / 1000).replace('.', ',')} s nebudete mluvit`}
+                      {voice.followUp && !voice.interim
+                        ? 'Můžete pokračovat. Když nic neřeknete, rozhovor skončí.'
+                        : voiceSettings.sendMode === 'manual'
+                          ? 'Až domluvíte, klikněte na Odeslat'
+                          : `Odešlu, až ${String(voiceSettings.pauseMs / 1000).replace('.', ',')} s nebudete mluvit`}
                     </span>
                   </>
                 )}

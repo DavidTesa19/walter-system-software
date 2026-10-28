@@ -70,6 +70,76 @@ export function splitForSpeech(text: string, firstLimit = 220, limit = 650): str
   return pieces;
 }
 
+// ---------- conversation ----------
+
+// Said instead of a next question, these end a spoken conversation rather
+// than going to Jarvis ("děkuji, to je vše").
+const CONVERSATION_ENDINGS = new Set([
+  'konec',
+  'konec rozhovoru',
+  'ukonči rozhovor',
+  'ukončit',
+  'stačí',
+  'to stačí',
+  'to je vše',
+  'to je všechno',
+  'to je zatím vše',
+  'to je zatím všechno',
+  'nic',
+  'nic dalšího',
+  'nic víc',
+  'už nic',
+  'díky',
+  'děkuji',
+  'děkuju',
+  'dobře díky',
+  'ne díky',
+  'ne děkuji',
+  'ne děkuju',
+  'díky to je vše',
+  'děkuji to je vše',
+  'děkuju to je vše',
+  'díky to je všechno',
+  'děkuji to je všechno',
+  'děkuju to je všechno',
+  'na shledanou',
+]);
+
+export function isConversationEnd(text: string): boolean {
+  const normalized = text
+    .toLocaleLowerCase('cs')
+    .replace(/[.,!?…;:„“"]/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+  return CONVERSATION_ENDINGS.has(normalized);
+}
+
+// A short rising tone: the microphone is on again by itself, speak now.
+export async function playListenCue() {
+  try {
+    const ctx = audioContext();
+    if (ctx.state === 'suspended') await ctx.resume();
+    const start = ctx.currentTime;
+    const gain = ctx.createGain();
+    gain.gain.setValueAtTime(0.0001, start);
+    gain.gain.exponentialRampToValueAtTime(0.12, start + 0.02);
+    gain.gain.exponentialRampToValueAtTime(0.0001, start + 0.22);
+    gain.connect(ctx.destination);
+    const tone = ctx.createOscillator();
+    tone.type = 'sine';
+    tone.frequency.setValueAtTime(660, start);
+    tone.frequency.setValueAtTime(880, start + 0.09);
+    tone.connect(gain);
+    tone.start(start);
+    tone.stop(start + 0.24);
+    // The recording measures the room's noise in its first moments; let the
+    // tone finish first.
+    await new Promise((resolve) => window.setTimeout(resolve, 260));
+  } catch {
+    // No Web Audio: listening starts without the tone.
+  }
+}
+
 // ---------- speaking ----------
 
 export interface Speaker {
@@ -224,6 +294,10 @@ export interface ListenOptions {
   // false: listening goes on until stop() (the send button).
   autoStop: boolean;
   silenceMs: number;
+  // Give up when nothing is said for this long, in either mode (the
+  // microphone reopened after an answer and the user has nothing to add).
+  // Without it, only `autoStop` listening gives up, after 8 s.
+  noSpeechMs?: number;
 }
 
 const DEFAULT_LISTEN: ListenOptions = { autoStop: true, silenceMs: 2500 };
@@ -232,26 +306,20 @@ const DEFAULT_LISTEN: ListenOptions = { autoStop: true, silenceMs: 2500 };
 // saying something (so a question goes off by itself, like in a call).
 // onLevel gets the input loudness 0–1 for the meter.
 export async function startRecording(onLevel: (level: number) => void, options: ListenOptions = DEFAULT_LISTEN): Promise<Recording> {
-  // Made before the permission prompt, while the click still counts: Safari
-  // keeps a context made later suspended, and the pause detection with it.
-  const ctx = new AudioContext();
+  // The shared context, unlocked by an earlier click: Safari keeps a context
+  // made outside one suspended, and the pause detection with it. That matters
+  // when the microphone reopens by itself after an answer.
+  const ctx = audioContext();
   void ctx.resume();
-  let stream: MediaStream;
+  const stream = await navigator.mediaDevices.getUserMedia({
+    audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: true },
+  });
   let recorder: MediaRecorder;
-  try {
-    stream = await navigator.mediaDevices.getUserMedia({
-      audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: true },
-    });
-  } catch (error) {
-    void ctx.close();
-    throw error;
-  }
   try {
     const mimeType = MIME_TYPES.find((type) => MediaRecorder.isTypeSupported(type));
     recorder = new MediaRecorder(stream, mimeType ? { mimeType, audioBitsPerSecond: 32000 } : undefined);
   } catch (error) {
     stream.getTracks().forEach((track) => track.stop());
-    void ctx.close();
     throw error;
   }
   const chunks: Blob[] = [];
@@ -261,7 +329,8 @@ export async function startRecording(onLevel: (level: number) => void, options: 
 
   const analyser = ctx.createAnalyser();
   analyser.fftSize = 1024;
-  ctx.createMediaStreamSource(stream).connect(analyser);
+  const input = ctx.createMediaStreamSource(stream);
+  input.connect(analyser);
   const samples = new Float32Array(analyser.fftSize);
 
   let end: RecordingEnd = 'stopped';
@@ -271,6 +340,7 @@ export async function startRecording(onLevel: (level: number) => void, options: 
   });
 
   const startedAt = Date.now();
+  const noSpeechMs = options.noSpeechMs ?? (options.autoStop ? NO_SPEECH_TIMEOUT_MS : Infinity);
   let floor = 0;
   let floorSamples = 0;
   let speechMs = 0;
@@ -302,19 +372,22 @@ export async function startRecording(onLevel: (level: number) => void, options: 
       lastLoudAt = now;
     }
     const heardSpeech = speechMs >= 250;
+    if (!heardSpeech && now - startedAt > noSpeechMs) {
+      finish('no-speech');
+      return;
+    }
     if (!options.autoStop) {
       if (now - startedAt > MAX_MANUAL_RECORDING_MS) finish('limit');
       return;
     }
     if (heardSpeech && now - lastLoudAt > options.silenceMs) finish('silence');
-    else if (!heardSpeech && now - startedAt > NO_SPEECH_TIMEOUT_MS) finish('no-speech');
     else if (now - startedAt > MAX_RECORDING_MS) finish('limit');
   }, 50);
 
   recorder.onstop = () => {
     window.clearInterval(timer);
     stream.getTracks().forEach((track) => track.stop());
-    void ctx.close();
+    input.disconnect();
     onLevel(0);
     const keep = end !== 'cancelled' && end !== 'no-speech' && chunks.length > 0;
     resolveResult({ blob: keep ? new Blob(chunks, { type: recorder.mimeType || 'audio/webm' }) : null, end });
@@ -379,6 +452,7 @@ export function startBrowserRecognition(
   recognizer.interimResults = true;
   recognizer.continuous = true;
   const startedAt = Date.now();
+  const noSpeechMs = options.noSpeechMs ?? (options.autoStop ? NO_SPEECH_TIMEOUT_MS : Infinity);
   let lastHeardAt = 0;
   let heardText = '';
 
@@ -402,12 +476,15 @@ export function startBrowserRecognition(
   };
   const timer = window.setInterval(() => {
     const now = Date.now();
+    if (!heardText && now - startedAt > noSpeechMs) {
+      recognizer.stop();
+      return;
+    }
     if (!options.autoStop) {
       if (now - startedAt > MAX_MANUAL_RECORDING_MS) recognizer.stop();
       return;
     }
     if (heardText && now - lastHeardAt > options.silenceMs) recognizer.stop();
-    else if (!heardText && now - startedAt > NO_SPEECH_TIMEOUT_MS) recognizer.stop();
   }, 200);
   recognizer.onerror = (event) => {
     if (event.error !== 'aborted' && event.error !== 'no-speech') onError(event.error);

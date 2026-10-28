@@ -368,7 +368,17 @@ inherited one falls back to the browser's serif. Needs `ANTHROPIC_API_KEY`;
   same pause applies to it. Without the key the browser's own engines stand in (Chrome on Windows
   only has the robotic "Microsoft Jakub" for Czech). A spoken question sends
   `context.voice`, which adds "Režim: hlasový" to the `<kontext>` block — the
-  `<hlas>` rules in the system prompt stay static. The mic level lives in a ref
+  `<hlas>` rules in the system prompt stay static. **Conversation mode**
+  (`conversation` in voiceSettings, on by default): once the answer to a
+  spoken question has been read to the end, the mic reopens by itself with a
+  short tone (`startListening({ followUp: true })`, `playListenCue`). It does
+  not reopen when the reading was stopped, the panel is closed, the tab is
+  hidden, or the answer left a card to click (proposal, deletion, e-mail).
+  A follow-up gives up quietly after 7 s of silence in either send mode
+  (`noSpeechMs`), and "děkuji, to je vše" and the like (`isConversationEnd`)
+  end it instead of being sent. Recording uses the shared, already unlocked
+  `AudioContext`, because Safari keeps one created outside a click suspended
+  and the pause detection would hear nothing. The mic level lives in a ref
   that `LevelMeter` reads on its own animation frame; putting it in React state
   re-renders the whole panel 20× a second.
 - **E-mail drafts** (`draft_email` in tools.js): Jarvis only drafts. The
