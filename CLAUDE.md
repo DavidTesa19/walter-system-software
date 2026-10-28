@@ -363,9 +363,15 @@ inherited one falls back to the browser's serif. Needs `ANTHROPIC_API_KEY`;
   on English, which is why Czech sounds flat and slightly foreign. Two
   read-aloud engines (`TTS_ENGINES`): **Přirozený** (`conversational`, the
   default, `JARVIS_AUDIO_MODEL` gpt-audio-1.5 through chat completions; far
-  livelier intonation, ~4 s to start, ~2 Kč/min) and **Klasický** (`classic`,
+  livelier intonation, ~4 s to start, ~2.5 Kč/min) and **Klasický** (`classic`,
   `JARVIS_TTS_MODEL` gpt-4o-mini-tts-2025-12-15, the `speed` parameter, ~0.35
-  Kč/min). The conversational model is asked to read the text verbatim, but it
+  Kč/min). **gpt-4o-mini-tts shuts down on 6 Jan 2027** (OpenAI's
+  deprecations page); its named successor is gpt-realtime-2.1-mini, Realtime
+  API only (WebSocket; Node 22's global WebSocket can authenticate with the
+  `openai-insecure-api-key.<key>` subprotocol). Measured 2026-10-28 it starts
+  in ~1.5 s instead of gpt-audio's ~4 s, read verbatim and was rated about the
+  same, at ~$20/M audio tokens (~0.6 Kč/min). Until the classic engine is
+  replaced, the conversational one has no fallback after that date. The conversational model is asked to read the text verbatim, but it
   is a chat model: `isFaithfulReading` compares its transcript with the text
   and anything that drifts falls back to the classic engine. It has no speed
   parameter, so the tempo is asked for in words (`TEMPO`). Other env:
@@ -376,15 +382,28 @@ inherited one falls back to the browser's serif. Needs `ANTHROPIC_API_KEY`;
   measured on TTS-spoken Czech questions, clean and with noise and a
   laptop-mic band, both gpt-transcribe and gpt-4o-transcribe are within a
   few % word errors *with* the context prompt (`STT_PROMPT`) and drift into
-  Slovak without it; `keywords` did not help. So when a user reports
+  Slovak without it. Uncommon names are what it gets wrong, so the panel
+  sends **hints** with each recording (`transcriptionHints.ts`, header
+  `X-Jarvis-Hints`, base64 JSON, `readTranscriptionHints`): `keywords` (the
+  open record's code and name, names and codes from the last two answers,
+  records offered by open_record, the attention list) and the last answer as
+  `context`. On questions with uncommon names that cut word errors from
+  ~17 % to ~11 % and never inserted a name that was not said; generic domain
+  words as keywords did not help. When a user reports
   "it hears the wrong words", suspect the microphone first: a Bluetooth
   headset in hands-free mode sends narrowband, compressed audio.
   `startRecording` avoids it when the computer has another microphone
   (`chooseMicrophone`; device names are only known after the first
   permission), and the voice menu's "Mikrofon" section shows the device used
   and plays back the last recording. Recording is Opus at 64 kb/s. Each user picks an engine, a
-  voice (`TTS_VOICES`, by gender; the conversational engine has 10 of them) and
-  speed in the panel's voice menu (`voiceSettings.ts`, localStorage). Native
+  voice and speed in the panel's voice menu (`voiceSettings.ts`,
+  localStorage). `TTS_VOICES` is six voices, the best three per gender from a
+  comparison of all nine gpt-audio voices reading Czech (Marin, Shimmer,
+  Coral; Cedar, Verse, Echo), each with a description and a face drawn in
+  `VoiceAvatar.tsx` (a new voice needs one, or it gets a grey silhouette).
+  Picking one plays a sample in it (`speak(..., { voice })`); the chosen
+  face replaces the menu button's icon. An older stored choice no longer on
+  offer reads in the default voice. Native
   Czech quality would need a different provider (e.g. ElevenLabs); that is a
   new paid service and the user's decision. Spoken questions go off after
   a chosen pause (default 2.5 s — a breath is shorter) or, in manual mode,
@@ -392,7 +411,9 @@ inherited one falls back to the browser's serif. Needs `ANTHROPIC_API_KEY`;
   same pause applies to it. Without the key the browser's own engines stand in (Chrome on Windows
   only has the robotic "Microsoft Jakub" for Czech). A spoken question sends
   `context.voice`, which adds "Režim: hlasový" to the `<kontext>` block — the
-  `<hlas>` rules in the system prompt stay static. **Conversation mode**
+  `<hlas>` rules in the system prompt stay static (they also tell Jarvis
+  that names may be misheard and codes come as words, "ká dvanáct pomlčka
+  tři"). **Conversation mode**
   (`conversation` in voiceSettings, on by default): once the answer to a
   spoken question has been read to the end, the mic reopens by itself with a
   short tone (`startListening({ followUp: true })`, `playListenCue`). It does

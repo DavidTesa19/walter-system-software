@@ -22,34 +22,30 @@ export const STT_MODEL = process.env.JARVIS_STT_MODEL || 'gpt-transcribe';
 // The dated snapshot: the bare alias stayed on the older March 2025 model.
 export const TTS_MODEL = process.env.JARVIS_TTS_MODEL || 'gpt-4o-mini-tts-2025-12-15';
 export const AUDIO_MODEL = process.env.JARVIS_AUDIO_MODEL || 'gpt-audio-1.5';
-// The voices people can pick from in the Jarvis panel. All speak Czech;
-// Marin and Cedar are OpenAI's most natural ones.
+// The voices people can pick from in the Jarvis panel: the three of each
+// gender that read Czech best when all nine of gpt-audio's voices read the
+// same answers (2026-10-28: accent, intonation and how well a transcriber
+// understood them; the differences were small). Each has a face in the panel
+// (client/src/jarvis/VoiceAvatar.tsx). All six are on both engines and on
+// gpt-realtime-2.1-mini, the TTS models' successor.
 export const TTS_VOICES = [
-  { id: 'marin', label: 'Marin', gender: 'female' },
-  { id: 'coral', label: 'Coral', gender: 'female' },
-  { id: 'nova', label: 'Nova', gender: 'female' },
-  { id: 'shimmer', label: 'Shimmer', gender: 'female' },
-  { id: 'sage', label: 'Sage', gender: 'female' },
-  { id: 'cedar', label: 'Cedar', gender: 'male' },
-  { id: 'ash', label: 'Ash', gender: 'male' },
-  { id: 'verse', label: 'Verse', gender: 'male' },
-  { id: 'echo', label: 'Echo', gender: 'male' },
-  { id: 'onyx', label: 'Onyx', gender: 'male' },
-  { id: 'ballad', label: 'Ballad', gender: 'male' },
-  { id: 'fable', label: 'Fable', gender: 'male' },
-  { id: 'alloy', label: 'Alloy', gender: 'neutral' },
+  { id: 'marin', label: 'Marin', gender: 'female', description: 'Přirozená a vlídná' },
+  { id: 'shimmer', label: 'Shimmer', gender: 'female', description: 'Jasná a energická' },
+  { id: 'coral', label: 'Coral', gender: 'female', description: 'Vřelá a přátelská' },
+  { id: 'cedar', label: 'Cedar', gender: 'male', description: 'Klidný, hlubší hlas' },
+  { id: 'verse', label: 'Verse', gender: 'male', description: 'Živý a výrazný' },
+  { id: 'echo', label: 'Echo', gender: 'male', description: 'Věcný a vyrovnaný' },
 ];
 const VOICE_IDS = new Set(TTS_VOICES.map((voice) => voice.id));
+// A voice no longer offered (an older choice) reads in the default one.
 export const TTS_VOICE = VOICE_IDS.has(process.env.JARVIS_TTS_VOICE) ? process.env.JARVIS_TTS_VOICE : 'cedar';
-// gpt-audio has fewer voices than the TTS model.
-const CONVERSATIONAL_VOICE_IDS = new Set(['marin', 'coral', 'shimmer', 'sage', 'cedar', 'ash', 'verse', 'echo', 'ballad', 'alloy']);
 
 export const TTS_ENGINES = [
   {
     id: 'conversational',
     label: 'Přirozený',
-    description: 'Nejlidštější hlas s živou intonací. Začne mluvit o chvilku později a stojí asi 2 Kč za minutu.',
-    voices: TTS_VOICES.filter((voice) => CONVERSATIONAL_VOICE_IDS.has(voice.id)),
+    description: 'Nejlidštější hlas s živou intonací. Začne mluvit o chvilku později a stojí asi 2,5 Kč za minutu.',
+    voices: TTS_VOICES,
   },
   {
     id: 'classic',
@@ -80,6 +76,41 @@ const STT_PROMPT =
 // gpt-transcribe takes a list of expected languages; the older models one.
 const isGptTranscribe = (model) => model.startsWith('gpt-transcribe');
 
+// What a spoken question is likely to name, sent by the panel with the
+// recording: the open record and the names and codes in Jarvis's last answer
+// (`keywords`, exact spellings), and that answer itself (`context`). On test
+// questions with uncommon Czech names they cut word errors from 17 % to
+// about 11 %. Keywords are hints: a name nobody said stays out of the text.
+const MAX_KEYWORDS = 40;
+const MAX_KEYWORD_CHARS = 80;
+const MAX_CONTEXT_CHARS = 600;
+const NO_HINTS = { keywords: [], context: '' };
+
+// The X-Jarvis-Hints header: base64 of a JSON object (names are not ASCII).
+// gpt-transcribe refuses keywords with angle brackets or line breaks.
+export function readTranscriptionHints(header) {
+  if (typeof header !== 'string' || !header) return NO_HINTS;
+  let parsed;
+  try {
+    parsed = JSON.parse(Buffer.from(header, 'base64').toString('utf8'));
+  } catch {
+    return NO_HINTS;
+  }
+  const seen = new Set();
+  const keywords = [];
+  for (const raw of Array.isArray(parsed?.keywords) ? parsed.keywords : []) {
+    if (typeof raw !== 'string') continue;
+    const keyword = raw.replace(/[<>\r\n]+/g, ' ').replace(/\s+/g, ' ').trim();
+    const key = keyword.toLocaleLowerCase('cs');
+    if (keyword.length < 2 || keyword.length > MAX_KEYWORD_CHARS || seen.has(key)) continue;
+    seen.add(key);
+    keywords.push(keyword);
+    if (keywords.length === MAX_KEYWORDS) break;
+  }
+  const context = typeof parsed?.context === 'string' ? parsed.context.replace(/\s+/g, ' ').trim().slice(0, MAX_CONTEXT_CHARS) : '';
+  return { keywords, context };
+}
+
 // Tone, not speed (that is the `speed` parameter): a person talking, not a
 // narrator reading — the old "calm" wording made every answer drag.
 const TTS_INSTRUCTIONS =
@@ -107,14 +138,19 @@ export const isVoiceConfigured = () => Boolean(process.env.OPENAI_API_KEY);
 // The extension tells OpenAI the container; codecs parameters are dropped.
 export const audioExtension = (mimeType) => AUDIO_EXTENSIONS[String(mimeType ?? '').split(';')[0].trim().toLowerCase()] ?? null;
 
-export async function transcribe(buffer, mimeType, signal, userId = null) {
+export async function transcribe(buffer, mimeType, signal, userId = null, { keywords = [], context = '' } = NO_HINTS) {
   const extension = audioExtension(mimeType) ?? 'webm';
+  const modern = isGptTranscribe(STT_MODEL);
+  let prompt = context ? `${STT_PROMPT}\nPředchozí odpověď asistenta: ${context}` : STT_PROMPT;
+  // The older models have no keywords field; names in the prompt work there.
+  if (!modern && keywords.length) prompt += `\nJména a kódy: ${keywords.join(', ')}`;
   const result = await getClient().audio.transcriptions.create(
     {
       file: await toFile(buffer, `question.${extension}`),
       model: STT_MODEL,
-      prompt: STT_PROMPT,
-      ...(STT_LANGUAGE ? (isGptTranscribe(STT_MODEL) ? { languages: [STT_LANGUAGE] } : { language: STT_LANGUAGE }) : {}),
+      prompt,
+      ...(STT_LANGUAGE ? (modern ? { languages: [STT_LANGUAGE] } : { language: STT_LANGUAGE }) : {}),
+      ...(modern && keywords.length ? { keywords } : {}),
     },
     { signal }
   );
@@ -197,7 +233,7 @@ async function synthesizeConversational(text, signal, userId, voice, speed) {
     {
       model: AUDIO_MODEL,
       modalities: ['text', 'audio'],
-      audio: { voice: CONVERSATIONAL_VOICE_IDS.has(voice) ? voice : 'cedar', format: 'mp3' },
+      audio: { voice: VOICE_IDS.has(voice) ? voice : TTS_VOICE, format: 'mp3' },
       messages: [
         { role: 'system', content: readAloudPrompt(speed) },
         { role: 'user', content: `Přečti tento text:\n\n${text}` },

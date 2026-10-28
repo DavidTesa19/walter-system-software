@@ -27,6 +27,7 @@ import {
   TTS_VOICE,
   isVoiceConfigured,
   synthesize,
+  readTranscriptionHints,
   transcribe,
 } from './voice.js';
 import {
@@ -263,7 +264,8 @@ export function registerJarvisRoutes(app, { authenticateToken, pool, dataDir, po
       if (!res.writableFinished) abort.abort();
     });
     try {
-      res.json({ text: await transcribe(req.body, req.headers['content-type'], abort.signal, Number(req.user.id)) });
+      const hints = readTranscriptionHints(req.headers['x-jarvis-hints']);
+      res.json({ text: await transcribe(req.body, req.headers['content-type'], abort.signal, Number(req.user.id), hints) });
     } catch (error) {
       if (abort.signal.aborted) return;
       console.error('Jarvis: transcription failed:', error?.message ?? error);

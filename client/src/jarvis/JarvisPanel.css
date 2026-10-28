@@ -1203,6 +1203,61 @@
   font-weight: 600;
 }
 
+/* A voice to pick: its face, name and character. Three to a row. */
+.jarvis-voice-cards {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 6px;
+}
+
+.jarvis-voice-card {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+  padding: 8px 4px 7px;
+  border: 1px solid var(--jarvis-border);
+  border-radius: 10px;
+  background: var(--jarvis-surface);
+  color: inherit;
+  font: inherit;
+  text-align: center;
+  cursor: pointer;
+}
+
+.jarvis-voice-card:hover {
+  border-color: color-mix(in srgb, var(--jarvis-accent) 50%, transparent);
+}
+
+.jarvis-voice-card--on {
+  border-color: var(--jarvis-accent);
+  background: color-mix(in srgb, var(--jarvis-accent) 14%, var(--jarvis-surface));
+}
+
+.jarvis-voice-card .jarvis-voice-avatar {
+  margin-bottom: 3px;
+  border-radius: 50%;
+}
+
+.jarvis-voice-card--on .jarvis-voice-avatar {
+  box-shadow: 0 0 0 2px var(--jarvis-surface), 0 0 0 4px var(--jarvis-accent);
+}
+
+.jarvis-voice-card strong {
+  font-size: 0.8rem;
+}
+
+.jarvis-voice-card small {
+  color: var(--jarvis-muted);
+  font-size: 0.68rem;
+  line-height: 1.25;
+}
+
+.jarvis-voice-avatar {
+  display: block;
+  flex-shrink: 0;
+}
+
 .jarvis-voice-preview {
   align-self: flex-start;
   padding: 4px 11px;

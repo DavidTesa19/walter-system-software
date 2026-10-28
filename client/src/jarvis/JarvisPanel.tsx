@@ -29,6 +29,9 @@ import type { VoiceSettings } from './voiceSettings';
 import { useJarvisFocus } from './jarvisFocus';
 import type { JarvisFocus } from './jarvisFocus';
 import { isConversationEnd, isLowQualityMicrophone, unlockAudio } from './voice';
+import { buildTranscriptionHints } from './transcriptionHints';
+import { VoiceAvatar } from './VoiceAvatar';
+import type { HintSource } from './transcriptionHints';
 import './JarvisPanel.css';
 
 const CONVERSATION_KEY = 'walterJarvisConversation';
@@ -633,6 +636,16 @@ const VOICE_GROUPS: Array<{ gender: JarvisVoiceOption['gender']; title: string }
   { gender: 'neutral', title: 'Neutrální' },
 ];
 
+// The engine and voice in use: the user's choice, or the server's default
+// when the choice is not on offer (any more).
+function chosenVoice(settings: VoiceSettings, status: JarvisStatus | null) {
+  const engines = status?.voice ? status.engines ?? [] : [];
+  const engine = engines.find((item) => item.id === settings.engine) ?? engines.find((item) => item.id === status?.defaultEngine) ?? engines[0];
+  const voices = engine?.voices ?? [];
+  const selected = voices.some((voice) => voice.id === settings.voice) ? settings.voice : status?.defaultVoice ?? null;
+  return { engines, engine, voices, selected };
+}
+
 // How Jarvis sounds and when a spoken question goes off. Kept per browser.
 function VoiceSettingsPanel({
   settings,
@@ -647,7 +660,8 @@ function VoiceSettingsPanel({
   status: JarvisStatus | null;
   onChange: (patch: Partial<VoiceSettings>) => void;
   previewing: boolean;
-  onPreview: () => void;
+  // `voice`: a voice just picked, heard before the choice is saved.
+  onPreview: (voice?: string) => void;
   onStopPreview: () => void;
   lastRecording: LastRecording | null;
 }) {
@@ -667,11 +681,7 @@ function VoiceSettingsPanel({
     audio.onended = () => setPlayingRecording(false);
     audio.play().then(() => setPlayingRecording(true), () => setPlayingRecording(false));
   };
-  const engines = status?.voice ? status.engines ?? [] : [];
-  const engine = engines.find((item) => item.id === settings.engine) ?? engines.find((item) => item.id === status?.defaultEngine) ?? engines[0];
-  const voices = engine?.voices ?? [];
-  // A voice the chosen engine lacks falls back to the default one.
-  const selected = voices.some((voice) => voice.id === settings.voice) ? settings.voice : status?.defaultVoice ?? null;
+  const { engines, engine, voices, selected } = chosenVoice(settings, status);
   return (
     <div className="jarvis-voice-settings">
       {engines.length > 1 && (
@@ -699,18 +709,25 @@ function VoiceSettingsPanel({
           VOICE_GROUPS.filter((group) => voices.some((voice) => voice.gender === group.gender)).map((group) => (
             <div key={group.gender} className="jarvis-voice-group">
               <span className="jarvis-voice-group-title">{group.title}</span>
-              <div className="jarvis-chip-row">
+              {/* Picking a voice plays it, as in a phone's voice settings. */}
+              <div className="jarvis-voice-cards">
                 {voices
                   .filter((voice) => voice.gender === group.gender)
                   .map((voice) => (
                     <button
                       key={voice.id}
                       type="button"
-                      className={`jarvis-choice${voice.id === selected ? ' jarvis-choice--on' : ''}`}
+                      className={`jarvis-voice-card${voice.id === selected ? ' jarvis-voice-card--on' : ''}`}
                       aria-pressed={voice.id === selected}
-                      onClick={() => onChange({ voice: voice.id })}
+                      title={`Vybrat hlas ${voice.label} a poslechnout si ho`}
+                      onClick={() => {
+                        onChange({ voice: voice.id });
+                        onPreview(voice.id);
+                      }}
                     >
-                      {voice.label}
+                      <VoiceAvatar voice={voice.id} size={44} />
+                      <strong>{voice.label}</strong>
+                      {voice.description && <small>{voice.description}</small>}
                     </button>
                   ))}
               </div>
@@ -738,7 +755,7 @@ function VoiceSettingsPanel({
             </button>
           ))}
         </div>
-        <button type="button" className="jarvis-chip-button jarvis-voice-preview" onClick={previewing ? onStopPreview : onPreview}>
+        <button type="button" className="jarvis-chip-button jarvis-voice-preview" onClick={previewing ? onStopPreview : () => onPreview()}>
           {previewing ? Icon.stop : Icon.speakerSmall} {previewing ? 'Zastavit ukázku' : 'Poslechnout ukázku'}
         </button>
       </section>
@@ -957,6 +974,10 @@ export default function JarvisPanel({ open, onOpen, onClose, viewLabel, launcher
       return next;
     });
   };
+  // What a spoken question probably names, read when it is transcribed
+  // (filled in below, once the transcript is grouped).
+  const hintSourceRef = useRef<HintSource>({ focus: null, answers: [], actions: [], attention: [] });
+  const getHints = useCallback(() => buildTranscriptionHints(hintSourceRef.current), []);
   // "Děkuji, to je vše" into a microphone that reopened after an answer ends
   // the conversation instead of becoming a question.
   const voice = useJarvisVoice(
@@ -965,9 +986,11 @@ export default function JarvisPanel({ open, onOpen, onClose, viewLabel, launcher
       if (followUp && isConversationEnd(text)) return;
       void send(text, true);
     },
-    voiceSettings
+    voiceSettings,
+    getHints
   );
   const { cancelListening, stopSpeaking } = voice;
+  const headerVoice = chosenVoice(voiceSettings, status).selected;
   const listening = voice.listen !== 'idle';
   const speaking = voice.speakingKey !== null;
 
@@ -1278,6 +1301,12 @@ export default function JarvisPanel({ open, onOpen, onClose, viewLabel, launcher
   };
 
   const turns = useMemo(() => groupTurns(transcript), [transcript]);
+  hintSourceRef.current = {
+    focus,
+    answers: turns.flatMap((turn) => (turn.answer ? [turn.answer] : [])),
+    actions: turns.flatMap((turn) => turn.actions),
+    attention: attention?.items ?? [],
+  };
   const decisions = useMemo(() => {
     const map = new Map<string, ProposalDecision>();
     for (const item of transcript) if (item.type === 'proposal_status') map.set(item.id, item);
@@ -1466,7 +1495,8 @@ export default function JarvisPanel({ open, onOpen, onClose, viewLabel, launcher
               aria-label="Nastavení hlasu"
               aria-expanded={showVoiceSettings}
             >
-              {Icon.tune}
+              {/* The chosen voice's face, once the server's voices are known. */}
+              {headerVoice ? <VoiceAvatar voice={headerVoice} size={20} /> : Icon.tune}
             </button>
           )}
           {voice.canSpeak && (
@@ -1506,7 +1536,7 @@ export default function JarvisPanel({ open, onOpen, onClose, viewLabel, launcher
           status={status}
           onChange={changeVoiceSettings}
           previewing={voice.speakingKey === 'preview'}
-          onPreview={() => void voice.speak(VOICE_SAMPLE, 'preview')}
+          onPreview={(voiceId) => void voice.speak(VOICE_SAMPLE, 'preview', { voice: voiceId })}
           onStopPreview={stopSpeaking}
           lastRecording={voice.lastRecording}
         />

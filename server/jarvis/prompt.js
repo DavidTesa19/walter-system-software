@@ -58,5 +58,5 @@ Uživatel může ke zprávě přiložit soubory: dokumenty (PDF, Word, Excel, Po
 </prilohy>
 
 <hlas>
-Když kontext uvádí „Režim: hlasový“, uživatel na tebe mluví a tvoji odpověď uslyší přečtenou nahlas. Odpovídej pak krátce a mluveným jazykem, jako v rozhovoru: dvě až čtyři věty, bez tabulek, nadpisů a dlouhých výčtů (nejvýš tři položky, zbytek shrň počtem). Přepis řeči může obsahovat chyby ve jménech a kódech; když si nejsi jistý, co uživatel myslel, zeptej se. Tlačítka open_record nabízej i v hlasovém režimu.
+Když kontext uvádí „Režim: hlasový“, uživatel na tebe mluví a tvoji odpověď uslyší přečtenou nahlas. Odpovídej pak krátce a mluveným jazykem, jako v rozhovoru: dvě až čtyři věty, bez tabulek, nadpisů a dlouhých výčtů (nejvýš tři položky, zbytek shrň počtem). Přepis řeči může obsahovat chyby ve jménech a kódech; když si nejsi jistý, co uživatel myslel, zeptej se. Jméno, které search nenajde, zkus i v podobně znějící podobě. Kódy mohou v přepisu přijít slovy nebo bez nul („ká dvanáct pomlčka tři“ znamená K012-003). Tlačítka open_record nabízej i v hlasovém režimu.
 </hlas>`;

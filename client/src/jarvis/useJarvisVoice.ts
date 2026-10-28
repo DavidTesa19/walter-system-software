@@ -13,6 +13,7 @@ import {
   toSpeechText,
   unlockAudio,
 } from './voice';
+import type { TranscriptionHints } from './transcriptionHints';
 import type { BrowserListening, ListenOptions, Recording, Speaker } from './voice';
 import type { VoiceSettings } from './voiceSettings';
 
@@ -53,11 +54,13 @@ const recognitionError = (code: string) => {
 
 // Jarvis's ears and mouth. `serverVoice` comes from /api/jarvis/status:
 // true uses the server (OpenAI) both ways, false the browser's own engines,
-// undefined (status not loaded yet) neither.
+// undefined (status not loaded yet) neither. `getHints` names what the next
+// question probably mentions, for the server's transcription.
 export function useJarvisVoice(
   serverVoice: boolean | undefined,
   onTranscript: (text: string, info: TranscriptInfo) => void,
-  settings: VoiceSettings
+  settings: VoiceSettings,
+  getHints?: () => TranscriptionHints
 ) {
   const [listen, setListen] = useState<ListenState>('idle');
   // The current listening was started by the conversation, not by a click.
@@ -78,6 +81,7 @@ export function useJarvisVoice(
   const transcribeAbortRef = useRef<AbortController | null>(null);
   const cancelledRef = useRef(false);
   const onTranscriptRef = useRef(onTranscript);
+  const getHintsRef = useRef(getHints);
   // Read when speaking or listening starts, so a changed setting applies to
   // the next answer or question without rebuilding the speakers.
   const settingsRef = useRef(settings);
@@ -87,6 +91,10 @@ export function useJarvisVoice(
   useEffect(() => {
     onTranscriptRef.current = onTranscript;
   }, [onTranscript]);
+
+  useEffect(() => {
+    getHintsRef.current = getHints;
+  }, [getHints]);
 
   useEffect(() => {
     settingsRef.current = settings;
@@ -128,14 +136,21 @@ export function useJarvisVoice(
   // Reads an answer aloud; `key` names it, so its button can show "stop".
   // If the server's voice fails, the browser's takes over for this answer.
   // Resolves true when it was read to the end, false when it was stopped.
+  // `voice` reads in that voice instead of the chosen one (a sample of a voice
+  // just picked, before the new choice has reached the settings).
   const speak = useCallback(
-    async (markdown: string, key: string): Promise<boolean> => {
+    async (markdown: string, key: string, { voice }: { voice?: string } = {}): Promise<boolean> => {
       stopSpeaking();
       const text = toSpeechText(markdown);
       if (!text) return false;
       const token = speakTokenRef.current;
       setSpeakingKey(key);
-      const speakers = (useServer ? [serverSpeaker, browserSpeaker] : [browserSpeaker]).filter((item): item is Speaker => item !== null);
+      const server = voice
+        ? createServerSpeaker((piece, signal) =>
+            jarvisApi.speech(piece, signal, { engine: settingsRef.current.engine, voice, speed: settingsRef.current.speed })
+          )
+        : serverSpeaker;
+      const speakers = (useServer ? [server, browserSpeaker] : [browserSpeaker]).filter((item): item is Speaker => item !== null);
       let unread = text;
       for (const speaker of speakers) {
         speakerRef.current = speaker;
@@ -277,7 +292,7 @@ export function useJarvisVoice(
     const controller = new AbortController();
     transcribeAbortRef.current = controller;
     try {
-      const text = await jarvisApi.transcribe(blob, controller.signal);
+      const text = await jarvisApi.transcribe(blob, controller.signal, getHintsRef.current?.());
       if (controller.signal.aborted) return;
       if (text) onTranscriptRef.current(text, info);
       else setError('Nerozuměl jsem. Zkuste to prosím znovu.');

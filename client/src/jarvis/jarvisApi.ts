@@ -1,4 +1,5 @@
 import { API_BASE, apiDelete, apiGet, apiPost, apiUpload } from '../utils/api';
+import type { TranscriptionHints } from './transcriptionHints';
 
 export type JarvisSection = 'public' | 'projects' | 'growth';
 export type JarvisRole = 'client' | 'partner' | 'tiper';
@@ -153,6 +154,8 @@ export interface JarvisVoiceOption {
   id: string;
   label: string;
   gender: 'female' | 'male' | 'neutral';
+  // What the voice is like, in a few words.
+  description?: string;
 }
 
 export interface JarvisVoiceEngine {
@@ -205,6 +208,12 @@ const authHeaders = (): Record<string, string> => {
   return token ? { Authorization: `Bearer ${token}` } : {};
 };
 
+const toBase64 = (text: string) => {
+  let binary = '';
+  for (const byte of new TextEncoder().encode(text)) binary += String.fromCharCode(byte);
+  return btoa(binary);
+};
+
 const failure = async (response: Response, fallback: string) => {
   const data = await response.json().catch(() => ({}));
   return new Error(data?.error || `${fallback} (${response.status}).`);
@@ -213,11 +222,13 @@ const failure = async (response: Response, fallback: string) => {
 export const jarvisApi = {
   status: () => apiGet<JarvisStatus>('/api/jarvis/status'),
 
-  // A recorded question in, its text out.
-  async transcribe(audio: Blob, signal?: AbortSignal): Promise<string> {
+  // A recorded question in, its text out. The hints (names it probably
+  // mentions) travel in a header, base64 because names are not ASCII.
+  async transcribe(audio: Blob, signal?: AbortSignal, hints?: TranscriptionHints): Promise<string> {
+    const encoded = hints && (hints.keywords.length > 0 || hints.context) ? toBase64(JSON.stringify(hints)) : null;
     const response = await fetch(`${API_BASE}/api/jarvis/transcribe`, {
       method: 'POST',
-      headers: { 'Content-Type': audio.type || 'audio/webm', ...authHeaders() },
+      headers: { 'Content-Type': audio.type || 'audio/webm', ...(encoded ? { 'X-Jarvis-Hints': encoded } : {}), ...authHeaders() },
       body: audio,
       signal,
     });

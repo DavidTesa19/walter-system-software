@@ -112,7 +112,8 @@ export const CATALOG = [
     costSource: 'openai',
     description:
       'Platí se za tokeny. GPT-5: $1,25 / $10 za milion tokenů, GPT-5 mini $0,25 / $2, GPT-4o $2,50 / $10, GPT-4o mini $0,15 / $0,60. ' +
-      'Přepis řeči gpt-transcribe zhruba $0,0045 za minutu, předčítání gpt-4o-mini-tts zhruba $0,015 za minutu.',
+      'Přepis řeči gpt-transcribe zhruba $0,0045 za minutu, předčítání přirozeným hlasem gpt-audio-1.5 zhruba $0,11 za minutu, ' +
+      'klasickým gpt-4o-mini-tts zhruba $0,015 za minutu.',
     usedFor:
       'AI Asistent (modely GPT-5, GPT-5 mini, GPT-4o, GPT-4o mini) a hlas Jarvise: přepis mluveného dotazu a předčítání odpovědí.',
     envKeys: [{ name: 'OPENAI_API_KEY' }, { name: 'OPENAI_ADMIN_KEY', optional: true }],
