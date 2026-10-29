@@ -10,6 +10,7 @@ import Anthropic from '@anthropic-ai/sdk';
 import { SYSTEM_PROMPT } from './prompt.js';
 import { TOOL_DEFINITIONS, WEB_TOOL_NAMES, runTool, toolDefinitionsFor, toolLabel } from './tools.js';
 import { profileFor } from './models.js';
+import { isCreditExhausted, recordAnthropicCredit } from '../finance/usage.js';
 
 export const JARVIS_MODEL = process.env.JARVIS_MODEL || 'claude-opus-5-5';
 const JARVIS_EFFORT = process.env.JARVIS_EFFORT || 'medium';
@@ -170,7 +171,7 @@ function logContextEdits(message) {
 function friendlyError(error) {
   if (error instanceof Anthropic.AuthenticationError) return 'Jarvis nemá platný klíč k Claude API (ANTHROPIC_API_KEY).';
   // The account's prepaid credit ran out: no model answers until it is topped up.
-  if (/credit balance is too low/i.test(error?.message ?? '')) {
+  if (isCreditExhausted(error)) {
     return 'Na účtu Anthropic došel kredit, Jarvis teď neodpoví. Administrátor ho musí dobít (console.anthropic.com › Billing).';
   }
   // Attachments live 90 days; an older conversation that had one cannot go on.
@@ -271,11 +272,13 @@ export async function runJarvisTurn({ model = JARVIS_MODEL, routing = null, hist
         emit('text_reset', {});
         continue;
       }
+      if (isCreditExhausted(error)) recordAnthropicCredit(false);
       console.error('Jarvis model call failed:', error);
       emit('error', { message: friendlyError(error) });
       return { usage, stopReason: 'error' };
     }
 
+    recordAnthropicCredit(true);
     addUsage(usage, message.usage);
     logContextEdits(message);
     const compacted = message.content.some((block) => block.type === 'compaction')

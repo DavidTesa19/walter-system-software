@@ -169,6 +169,7 @@ export function registerFinanceRoutes(app, { authenticateToken, requireRole, poo
     ...PROVIDERS.map(syncKey),
     'brave_quota',
     'brevo_plan',
+    'anthropic_credit',
     ...CATALOG_DOMAINS.map(({ domain }) => domainKey(domain)),
   ];
 
@@ -231,6 +232,8 @@ export function registerFinanceRoutes(app, { authenticateToken, requireRole, poo
       providerCosts: providerCosts.rows,
       checks: {
         brave: { configured: Boolean(env('BRAVE_SEARCH_API_KEY')), quota: states.brave_quota ?? null },
+        // { ok, at }: false since `at`, when Anthropic refused a call for lack of credit.
+        anthropicCredit: states.anthropic_credit ?? null,
         brevo: {
           configured: isBrevoConfigured(),
           checkedAt: brevo?.at ?? null,

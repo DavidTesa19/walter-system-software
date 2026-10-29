@@ -131,6 +131,8 @@ export interface FinanceOverview {
     brave: { configured: boolean; quota: BraveQuota | null };
     brevo: { configured: boolean; checkedAt: string | null; error: string | null; plans: BrevoPlan[] | null };
     domains: DomainCheck[];
+    // ok: false since `at`, when Anthropic refused a call for lack of prepaid credit.
+    anthropicCredit?: { ok: boolean; at: string } | null;
   };
 }
 

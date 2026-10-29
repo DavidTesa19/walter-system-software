@@ -177,6 +177,13 @@ export default function FinanceView() {
 
       {overview && model && (
         <>
+          {overview.checks.anthropicCredit?.ok === false && (
+            <div className="finance-callout finance-callout--error">
+              Na účtu Anthropic došel předplacený kredit (zjištěno {formatDate(overview.checks.anthropicCredit.at)}). Jarvis do té doby
+              neodpovídá nikomu, na žádném modelu. Dobijte kredit v console.anthropic.com › Billing; varování zmizí s první úspěšnou
+              odpovědí.
+            </div>
+          )}
           {model.domainAlerts.map((alert) => (
             <div key={alert.domain} className={`finance-callout ${alert.days < 0 ? 'finance-callout--error' : 'finance-callout--warning'}`}>
               {alert.days < 0 ? (

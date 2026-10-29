@@ -52,6 +52,22 @@ export function recordBraveQuota(headers) {
     .catch((error) => console.error('Brave quota not recorded:', error.message));
 }
 
+// Whether the Anthropic account can be used: false once a call is refused for
+// lack of prepaid credit (every model then fails, Jarvis and the rest), true
+// again on the next call that goes through. Written only when it changes, so
+// the normal path costs nothing; the finance screen shows it as a warning.
+let anthropicCreditOk = null;
+export function recordAnthropicCredit(ok) {
+  if (anthropicCreditOk === ok) return;
+  anthropicCreditOk = ok;
+  if (!stateSink) return;
+  Promise.resolve()
+    .then(() => stateSink('anthropic_credit', { ok, at: new Date().toISOString() }))
+    .catch((error) => console.error('Anthropic credit state not recorded:', error.message));
+}
+
+export const isCreditExhausted = (error) => /credit balance is too low/i.test(error?.message ?? '');
+
 const count = (value) => (Number.isFinite(Number(value)) && Number(value) > 0 ? Math.round(Number(value)) : 0);
 
 /**
