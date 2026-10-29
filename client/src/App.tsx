@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback, useRef } from 'react';
+import React, { Suspense, lazy, useState, useEffect, useCallback, useRef } from 'react';
 import {
   AuthProvider,
   canAccessGrowthSystem,
@@ -14,23 +14,9 @@ import { UndoRedoProvider } from './utils/undoRedo';
 import Login from './auth/Login';
 import Sidebar from './components/Sidebar';
 import Footer from './components/Footer';
-import PaletteManager from './theme/PaletteManager';
-import GeneralSectionView from './views/GeneralSectionView';
-import FutureFunctionsView from './views/FutureFunctionsView';
-import ChatbotView from './views/ChatbotView';
-import TeamChatView from './views/TeamChatView';
-import FullCalendarView from './views/FullCalendarView';
-import AnalyticsView from './views/AnalyticsView';
-import AdminUsersView from './views/AdminUsersView';
-import SafetyView from './views/SafetyView';
-import FinanceView from './views/FinanceView';
-import TasksView from './views/TasksView';
-import BugReportsView from './views/BugReportsView';
 import FloatingTools from './components/FloatingTools';
 import JarvisPanel from './jarvis/JarvisPanel';
 import type { JarvisOpenAction } from './jarvis/jarvisApi';
-import ProjectsSectionView from './views/ProjectsSectionView';
-import GrowthSectionView from './views/GrowthSectionView';
 import { trackEvent, trackSectionStart } from './utils/analytics';
 import type { AppView } from './types/appView';
 import type { GlobalSearchResult, GridSearchNavigationTarget, SearchTable } from './types/globalSearch';
@@ -41,6 +27,24 @@ import { getStoredAppView, setStoredAppView } from './utils/navigationState';
 import { ActivityProvider } from './activity/ActivityContext';
 import { SubjectNavigationProvider, type SubjectNavigationRequest } from './utils/subjectNavigation';
 import './components/Sidebar.css';
+
+// Screens load the first time they are opened, so the app starts with a far
+// smaller download: ag-Grid, FullCalendar and the charts come with the
+// screens that use them.
+const PaletteManager = lazy(() => import('./theme/PaletteManager'));
+const GeneralSectionView = lazy(() => import('./views/GeneralSectionView'));
+const FutureFunctionsView = lazy(() => import('./views/FutureFunctionsView'));
+const ChatbotView = lazy(() => import('./views/ChatbotView'));
+const TeamChatView = lazy(() => import('./views/TeamChatView'));
+const FullCalendarView = lazy(() => import('./views/FullCalendarView'));
+const AnalyticsView = lazy(() => import('./views/AnalyticsView'));
+const AdminUsersView = lazy(() => import('./views/AdminUsersView'));
+const SafetyView = lazy(() => import('./views/SafetyView'));
+const FinanceView = lazy(() => import('./views/FinanceView'));
+const TasksView = lazy(() => import('./views/TasksView'));
+const BugReportsView = lazy(() => import('./views/BugReportsView'));
+const ProjectsSectionView = lazy(() => import('./views/ProjectsSectionView'));
+const GrowthSectionView = lazy(() => import('./views/GrowthSectionView'));
 
 type SearchField = keyof UserInterface;
 type SearchStatus = 'accepted' | 'pending' | 'archived';
@@ -653,6 +657,7 @@ const AppContent: React.FC = () => {
           onSearchNavigate={handleSearchNavigate}
         />
         <div className={mainContentClassName}>
+          <Suspense fallback={<div className="view-loading" aria-busy="true">Načítám…</div>}>
           {(() => {
             switch (effectiveView) {
               case 'active':
@@ -705,6 +710,7 @@ const AppContent: React.FC = () => {
                 return null;
             }
           })()}
+          </Suspense>
         </div>
         {!isFullscreenView && <Footer />}
         <FloatingTools viewId={effectiveView} viewLabel={VIEW_LABELS[effectiveView]} onNavigate={handleViewChange} />

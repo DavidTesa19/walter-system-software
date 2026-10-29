@@ -579,3 +579,10 @@
     padding-bottom: 0;
   }
 }
+
+/* Shown for a moment while a screen loads for the first time (App.tsx). */
+.view-loading {
+  padding: 32px;
+  color: var(--color-text-muted, #64748b);
+  font-size: 0.9rem;
+}
