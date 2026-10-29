@@ -38,7 +38,7 @@ import { buildTranscriptionHints } from './transcriptionHints';
 import { VoiceAvatar } from './VoiceAvatar';
 import { MODEL_CHOICES, modelLabel, readModelChoice, writeModelChoice } from './models';
 import type { ModelChoice } from './models';
-import type { AnswerRouting } from './jarvisApi';
+import type { AnswerRouting, FeedbackRating } from './jarvisApi';
 import type { HintSource } from './transcriptionHints';
 import './JarvisPanel.css';
 
@@ -99,6 +99,7 @@ interface Turn {
   answer: string | null;
   answerModel: string | null;
   answerRouting: AnswerRouting | null;
+  feedback: 'up' | 'down' | null;
   notices: string[];
   actions: JarvisOpenAction[];
   proposals: JarvisProposal[];
@@ -114,8 +115,14 @@ function groupTurns(items: TranscriptItem[]): Turn[] {
   for (const item of items) {
     if (item.type === 'question') {
       turns.push({
-        question: item, steps: [], answer: null, answerModel: null, answerRouting: null, notices: [], actions: [], proposals: [], calendar: [], emails: [], documents: [], sources: [],
+        question: item, steps: [], answer: null, answerModel: null, answerRouting: null, feedback: null, notices: [], actions: [], proposals: [], calendar: [], emails: [], documents: [], sources: [],
       });
+      continue;
+    }
+    // A rating names its own turn and may come long after it; the newest wins.
+    if (item.type === 'feedback') {
+      const rated = turns[item.turn];
+      if (rated) rated.feedback = item.rating === 'none' ? null : item.rating;
       continue;
     }
     const turn = turns[turns.length - 1];
@@ -1079,6 +1086,74 @@ interface JarvisPanelProps {
   onOpenRecord: (action: JarvisOpenAction) => void;
 }
 
+// 👍/👎 under an answer. Clicking the chosen one again takes it back; after 👎
+// an optional note says what was wrong. Admins read both in Finance › Jarvis.
+function AnswerFeedback({
+  rating,
+  onRate,
+}: {
+  rating: 'up' | 'down' | null;
+  onRate: (rating: FeedbackRating, comment?: string) => Promise<boolean>;
+}) {
+  const [asking, setAsking] = useState(false);
+  const [comment, setComment] = useState('');
+  const [sent, setSent] = useState(false);
+  const rate = (next: 'up' | 'down') => {
+    const value: FeedbackRating = rating === next ? 'none' : next;
+    void onRate(value);
+    setAsking(value === 'down');
+    setSent(false);
+  };
+  return (
+    <span className="jarvis-feedback">
+      <button
+        type="button"
+        className={`jarvis-feedback-button${rating === 'up' ? ' is-on' : ''}`}
+        onClick={() => rate('up')}
+        title="Dobrá odpověď"
+        aria-label="Dobrá odpověď"
+        aria-pressed={rating === 'up'}
+      >
+        👍
+      </button>
+      <button
+        type="button"
+        className={`jarvis-feedback-button${rating === 'down' ? ' is-on' : ''}`}
+        onClick={() => rate('down')}
+        title="Špatná odpověď"
+        aria-label="Špatná odpověď"
+        aria-pressed={rating === 'down'}
+      >
+        👎
+      </button>
+      {asking && !sent && (
+        <form
+          className="jarvis-feedback-comment"
+          onSubmit={(event) => {
+            event.preventDefault();
+            const note = comment.trim();
+            if (!note) {
+              setAsking(false);
+              return;
+            }
+            void onRate('down', note).then((saved) => setSent(saved));
+          }}
+        >
+          <input
+            value={comment}
+            onChange={(event) => setComment(event.target.value)}
+            placeholder="Co bylo špatně? (nepovinné)"
+            maxLength={500}
+            aria-label="Co bylo na odpovědi špatně"
+          />
+          <button type="submit" className="jarvis-chip-button">Odeslat</button>
+        </form>
+      )}
+      {sent && <span className="jarvis-feedback-thanks">Díky, zapsáno.</span>}
+    </span>
+  );
+}
+
 export default function JarvisPanel({ open, onOpen, onClose, viewLabel, launcherPlacement, onOpenRecord }: JarvisPanelProps) {
   const [status, setStatus] = useState<JarvisStatus | null>(null);
   const [conversationId, setConversationId] = useState<string | null>(() => readStored(CONVERSATION_KEY));
@@ -1549,6 +1624,21 @@ export default function JarvisPanel({ open, onOpen, onClose, viewLabel, launcher
   };
 
   const turns = useMemo(() => groupTurns(transcript), [transcript]);
+  // Resolves true once the rating is saved (the comment form waits for it).
+  const rateAnswer = useCallback(
+    async (turnIndex: number, rating: FeedbackRating, comment?: string) => {
+      if (!conversationId) return false;
+      try {
+        const item = await jarvisApi.feedback(conversationId, turnIndex, rating, comment);
+        setTranscript((items) => [...items, item]);
+        return true;
+      } catch (err) {
+        setError(err instanceof Error ? err.message : 'Hodnocení se nepodařilo uložit.');
+        return false;
+      }
+    },
+    [conversationId]
+  );
   // Files already filed under a subject, by the card they came from.
   const savedDocuments = useMemo(
     () => new Map(transcript.flatMap((item) => (item.type === 'document_saved' ? [[item.documentId, item] as const] : []))),
@@ -1902,13 +1992,20 @@ export default function JarvisPanel({ open, onOpen, onClose, viewLabel, launcher
                 <MarkdownMessage content={turn.answer} />
               </div>
             )}
-            {turn.answer && turn.answerModel && (
-              <div className="jarvis-answer-model">
-                {modelLabel(turn.answerModel)}
-                {turn.answerRouting &&
-                  (turn.answerRouting.mode === 'manual'
-                    ? ` · vybráno ručně${turn.answerRouting.reason ? `, ale ${turn.answerRouting.reason}` : ''}`
-                    : ` · automaticky: ${turn.answerRouting.reason ?? ''}`)}
+            {turn.answer && (
+              <div className="jarvis-answer-meta">
+                {turn.answerModel && (
+                  <span className="jarvis-answer-model">
+                    {modelLabel(turn.answerModel)}
+                    {turn.answerRouting &&
+                      (turn.answerRouting.mode === 'manual'
+                        ? ` · vybráno ručně${turn.answerRouting.reason ? `, ale ${turn.answerRouting.reason}` : ''}`
+                        : ` · automaticky: ${turn.answerRouting.reason ?? ''}`)}
+                  </span>
+                )}
+                {conversationId && (
+                  <AnswerFeedback rating={turn.feedback} onRate={(rating, comment) => rateAnswer(index, rating, comment)} />
+                )}
               </div>
             )}
             {turn.answer && voice.canSpeak && (

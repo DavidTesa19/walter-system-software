@@ -11,6 +11,8 @@
 //                           not copied here, the history reads them directly
 //   finance_ai_turns        one row per Jarvis question: time to answer,
 //                           tools, outcome, cost (the admins' usage view)
+//   finance_ai_feedback     👍/👎 on a Jarvis answer, with its question,
+//                           answer and model (one row per click)
 //   finance_state           small cached documents: each connector's last
 //                           sync, Railway's open billing period, the Brave
 //                           quota, the Brevo plan, domain expiry dates
@@ -86,6 +88,21 @@ export async function installFinanceSchema(client) {
     )
   `);
   await client.query(`CREATE INDEX IF NOT EXISTS idx_finance_ai_turns_created ON finance_ai_turns (created_at)`);
+  await client.query(`
+    CREATE TABLE IF NOT EXISTS finance_ai_feedback (
+      id BIGSERIAL PRIMARY KEY,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+      user_id INTEGER,
+      conversation_id TEXT,
+      turn INTEGER NOT NULL,
+      rating TEXT NOT NULL,
+      comment TEXT,
+      question TEXT,
+      answer TEXT,
+      model TEXT
+    )
+  `);
+  await client.query(`CREATE INDEX IF NOT EXISTS idx_finance_ai_feedback_created ON finance_ai_feedback (created_at)`);
   await client.query(`
     CREATE TABLE IF NOT EXISTS finance_provider_costs (
       provider TEXT NOT NULL,
@@ -335,10 +352,18 @@ export function createPgFinanceStore(pool) {
       );
     },
 
-    // The Jarvis questions since a date, newest first, and every AI call's
-    // cost per user and feature over the same days.
+    async recordFeedback(entry) {
+      await pool.query(
+        `INSERT INTO finance_ai_feedback (user_id, conversation_id, turn, rating, comment, question, answer, model)
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8)`,
+        [entry.userId, entry.conversationId, entry.turn, entry.rating, entry.comment, entry.question, entry.answer, entry.model]
+      );
+    },
+
+    // The Jarvis questions since a date, newest first, every AI call's cost
+    // per user and feature over the same days, and the ratings given.
     async aiActivity(since) {
-      const [turns, usage] = await Promise.all([
+      const [turns, usage, feedback] = await Promise.all([
         pool.query(
           `SELECT created_at, user_id, conversation_id, question, voice, status, stop_reason, error, duration_ms,
                   first_text_ms, tools, failed_tools, input_tokens, output_tokens, cache_read_tokens,
@@ -356,8 +381,27 @@ export function createPgFinanceStore(pool) {
             GROUP BY 1, 2`,
           [since]
         ),
+        pool.query(
+          `SELECT created_at, user_id, conversation_id, turn, rating, comment, question, answer, model
+             FROM finance_ai_feedback
+            WHERE created_at >= $1
+            ORDER BY created_at DESC
+            LIMIT ${TURN_LIMIT}`,
+          [since]
+        ),
       ]);
       return {
+        feedback: feedback.rows.map((row) => ({
+          at: row.created_at,
+          userId: row.user_id,
+          conversationId: row.conversation_id,
+          turn: row.turn,
+          rating: row.rating,
+          comment: row.comment,
+          question: row.question,
+          answer: row.answer,
+          model: row.model,
+        })),
         turns: turns.rows.map((row) => ({
           at: row.created_at,
           userId: row.user_id,
@@ -656,7 +700,17 @@ export function createFileFinanceStore(dataDir) {
         group.costUsd += row.costUsd ?? 0;
         usage.set(key, group);
       }
-      return { turns: (data.turns ?? []).filter(recent).reverse(), usage: [...usage.values()] };
+      return {
+        turns: (data.turns ?? []).filter(recent).reverse(),
+        usage: [...usage.values()],
+        feedback: (data.feedback ?? []).filter(recent).reverse(),
+      };
+    },
+
+    async recordFeedback(entry) {
+      const data = read();
+      data.feedback = [...(data.feedback ?? []), { ...entry, at: new Date().toISOString() }].slice(-TURN_LIMIT);
+      write(data);
     },
 
     async saveProviderCosts(provider, fromDay, toDay, rows) {

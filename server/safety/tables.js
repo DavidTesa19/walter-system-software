@@ -37,6 +37,7 @@ export const AUDIT_EXCLUDED_TABLES = new Set([
   // state. The cost list itself, finance_expenses, is logged.
   'finance_ai_usage',
   'finance_ai_turns',
+  'finance_ai_feedback',
   'finance_provider_costs',
   'finance_state',
   // Screenshot bytes attached to bug reports: the trigger would copy every

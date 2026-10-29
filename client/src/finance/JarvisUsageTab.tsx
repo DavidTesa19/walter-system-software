@@ -3,6 +3,7 @@ import { apiGet } from '../utils/api';
 import { financeApi } from './financeApi';
 import type { FinanceOverview, JarvisTurn, JarvisTurnStatus, JarvisUsage } from './financeApi';
 import { formatCount, formatCzk, toCzk } from './financeMath';
+import { modelLabel } from '../jarvis/models';
 
 const RANGES = [7, 30, 90];
 const RANGE_STORAGE_KEY = 'walterFinanceJarvisDays';
@@ -258,6 +259,67 @@ export default function JarvisUsageTab({ overview }: { overview: FinanceOverview
           <section>
             <h2 className="finance-section-title">Nepovedené odpovědi</h2>
             {turnTable(usage.failures, `Za ${usage.days} dní žádná — všechny otázky dostaly odpověď.`, true)}
+          </section>
+
+          <section>
+            <h2 className="finance-section-title">Hodnocení odpovědí</h2>
+            {usage.feedback.up + usage.feedback.down > 0 ? (
+              <>
+                <div className="finance-table-wrap">
+                  <table className="finance-table">
+                    <thead>
+                      <tr>
+                        <th>Model</th>
+                        <th className="finance-num">👍</th>
+                        <th className="finance-num">👎</th>
+                        <th className="finance-num">Spokojenost</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {usage.feedback.byModel.map((row) => (
+                        <tr key={row.model ?? 'unknown'}>
+                          <td>{row.model ? modelLabel(row.model) : 'Neznámý model'}</td>
+                          <td className="finance-num">{formatCount(row.up)}</td>
+                          <td className="finance-num">{formatCount(row.down)}</td>
+                          <td className="finance-num">{Math.round((row.up / (row.up + row.down)) * 100)} %</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+                {usage.feedback.recentDown.length > 0 && (
+                  <div className="finance-table-wrap">
+                    <table className="finance-table">
+                      <thead>
+                        <tr>
+                          <th>Kdy a kdo</th>
+                          <th>Otázka a odpověď</th>
+                          <th>Co bylo špatně</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {usage.feedback.recentDown.map((row, index) => (
+                          <tr key={`${row.at}-${index}`}>
+                            <td>
+                              {dateTime(row.at)}
+                              <div className="finance-row-sub">{personName(row.userId)}</div>
+                              {row.model && <div className="finance-row-sub">{modelLabel(row.model)}</div>}
+                            </td>
+                            <td>
+                              {row.question}
+                              <div className="finance-row-sub">{row.answer}</div>
+                            </td>
+                            <td>{row.comment ?? '—'}</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                )}
+              </>
+            ) : (
+              <div className="finance-empty">Za {usage.days} dní nikdo odpověď neohodnotil (👍/👎 pod odpovědí v panelu Jarvise).</div>
+            )}
           </section>
 
           {usage.tools.length > 0 && (

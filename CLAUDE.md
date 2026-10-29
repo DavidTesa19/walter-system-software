@@ -234,6 +234,16 @@ Data (`server/finance/store.js`, Postgres or `server/data/finance.json`):
   has no usage (the stream ended before its totals), so it costs 0 here.
   Roles are checked case-sensitively (`requireRole('admin')`): a local test
   user made with role `Admin` gets 403 on every Finance route.
+  **Ratings** (👍/👎 under each answer, `AnswerFeedback` in JarvisPanel.tsx,
+  `POST /api/jarvis/conversations/:id/feedback` with `turn` = the
+  question's position from 0): stored twice, as a `feedback` transcript
+  item (the panel shows it again; the newest per turn wins, `none` takes it
+  back) and in `finance_ai_feedback` (telemetry, with question, answer and
+  model). The tab shows 👍/👎 per model and the latest 👎 with the user's
+  note: the evidence for whether the cheaper models are good enough.
+  **The Anthropic credit**: a call refused for lack of prepaid credit sets
+  `anthropic_credit` in `finance_state` (`recordAnthropicCredit`, written
+  only on change); Finance shows a red warning until a call succeeds.
 
 The telemetry tables (`finance_ai_usage`, `finance_ai_turns`, `finance_provider_costs`,
 `finance_state`) are in `AUDIT_EXCLUDED_TABLES`; `finance_expenses` and

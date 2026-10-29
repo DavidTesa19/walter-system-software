@@ -46,7 +46,7 @@ import {
   prepareAttachment,
 } from './attachments.js';
 import { estimateCostUsd } from '../finance/pricing.js';
-import { recordAiUsage, recordJarvisTurn } from '../finance/usage.js';
+import { recordAiUsage, recordJarvisFeedback, recordJarvisTurn } from '../finance/usage.js';
 import { ProposalError, applyProposal, describeProposal } from './proposals.js';
 import { CalendarError, calendarOutcomes, cardState, decideCalendarCard } from './calendarActions.js';
 import { computeAttention, createAttentionCache } from './attention.js';
@@ -78,6 +78,24 @@ const PROPOSAL_STATUS_TEXT = {
   stale: 'neprovedeno – záznam se mezitím změnil',
   failed: 'provedení selhalo',
 };
+
+// The question, answer and model of the `turn`-th question in a transcript
+// (counted from 0, the way the panel groups it), or null when it has no answer.
+export function answerOfTurn(transcript, turn) {
+  let index = -1;
+  let found = null;
+  for (const item of transcript) {
+    if (item.type === 'question') {
+      index += 1;
+      if (index > turn) break;
+      if (index === turn) found = { question: item.text ?? '', answer: '', model: null };
+    } else if (found && item.type === 'answer') {
+      found.answer = found.answer ? `${found.answer}\n\n${item.text}` : item.text;
+      found.model = item.model ?? found.model;
+    }
+  }
+  return found?.answer ? found : null;
+}
 
 // How a question ended, for the usage view: 'ok' is an answer the user got
 // (cut short by max_tokens is 'truncated'); 'stopped' is the user's own stop.
@@ -572,6 +590,42 @@ export function registerJarvisRoutes(app, { authenticateToken, pool, dataDir, po
       res.status(500).json({ error: 'Rozhodnutí se nepodařilo uložit.' });
     } finally {
       running.delete(conversation.id);
+    }
+  });
+
+  // 👍/👎 on one answer (`turn`: the question's position in the conversation,
+  // from 0). Kept twice: as a transcript item, so the panel shows the choice
+  // again, and in the usage log (Finance › Jarvis) with the question, the
+  // answer and the model that gave it. 'none' takes a rating back.
+  app.post('/api/jarvis/conversations/:id/feedback', authenticateToken, async (req, res) => {
+    const userId = Number(req.user.id);
+    const turn = Number(req.body?.turn);
+    const rating = req.body?.rating;
+    const comment = typeof req.body?.comment === 'string' ? req.body.comment.trim().slice(0, 500) : '';
+    if (!UUID_PATTERN.test(req.params.id) || !Number.isInteger(turn) || turn < 0 || !['up', 'down', 'none'].includes(rating)) {
+      return res.status(400).json({ error: 'Neplatné hodnocení.' });
+    }
+    try {
+      const conversation = await store.get(req.params.id, userId);
+      if (!conversation) return res.status(404).json({ error: 'Konverzace nenalezena.' });
+      const rated = answerOfTurn(conversation.transcript ?? [], turn);
+      if (!rated) return res.status(404).json({ error: 'Odpověď nenalezena.' });
+      const item = { type: 'feedback', turn, rating, ...(comment ? { comment } : {}), at: new Date().toISOString() };
+      await store.append(conversation.id, userId, { messages: [], transcript: [item], usage: zeroUsage() });
+      await recordJarvisFeedback({
+        userId,
+        conversationId: conversation.id,
+        turn,
+        rating,
+        comment: comment || null,
+        question: truncate(rated.question, 300),
+        answer: truncate(rated.answer, 600),
+        model: rated.model,
+      });
+      res.json(item);
+    } catch (error) {
+      console.error('Jarvis: saving feedback failed:', error);
+      res.status(500).json({ error: 'Hodnocení se nepodařilo uložit.' });
     }
   });
 

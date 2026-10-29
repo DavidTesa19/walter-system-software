@@ -21,7 +21,7 @@ import { BILLING_PROVIDERS, ProviderCostError, fetchProviderCosts, isProviderCon
 import { getRates } from './rates.js';
 import { createFileFinanceStore, createPgFinanceStore } from './store.js';
 import { USAGE_DAYS, summarizeJarvisUsage } from './jarvis-usage.js';
-import { setStateSink, setTurnSink, setUsageSink } from './usage.js';
+import { setFeedbackSink, setStateSink, setTurnSink, setUsageSink } from './usage.js';
 
 const HISTORY_MONTHS = 12;
 // Bills are re-read when the screen opens and the last read is older than
@@ -120,6 +120,7 @@ export function registerFinanceRoutes(app, { authenticateToken, requireRole, poo
   setUsageSink((entry) => store.recordUsage(entry));
   setStateSink((key, value) => store.setState(key, value));
   setTurnSink((turn) => store.recordTurn(turn));
+  setFeedbackSink((entry) => store.recordFeedback(entry));
 
   // Reads in progress, so two open screens do not fetch the same thing twice.
   const running = new Map();

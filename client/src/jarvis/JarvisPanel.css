@@ -192,6 +192,14 @@
   min-width: 0;
 }
 
+/* A narrow panel shortens the title rather than letting it run under the buttons. */
+.jarvis-title strong,
+.jarvis-title span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 .jarvis-title strong {
   font-size: 1.05rem;
   font-weight: 700;
@@ -1823,16 +1831,75 @@ button.jarvis-attention-item:hover {
 }
 
 /* Which model answered (under each answer), and the model picker in the header. */
-.jarvis-answer-model {
+.jarvis-answer-meta {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px 10px;
   margin-top: 4px;
+}
+
+.jarvis-answer-model {
+  color: var(--jarvis-muted);
+  font-size: 0.72rem;
+}
+
+.jarvis-feedback {
+  display: inline-flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px;
+}
+
+.jarvis-feedback-button {
+  padding: 1px 6px;
+  border: 1px solid transparent;
+  border-radius: 8px;
+  background: transparent;
+  font-size: 0.8rem;
+  line-height: 1.4;
+  cursor: pointer;
+  opacity: 0.55;
+  filter: grayscale(1);
+}
+
+.jarvis-feedback-button:hover,
+.jarvis-feedback-button.is-on {
+  opacity: 1;
+  filter: none;
+}
+
+.jarvis-feedback-button.is-on {
+  border-color: var(--jarvis-border, rgba(127, 127, 127, 0.3));
+}
+
+.jarvis-feedback-comment {
+  display: inline-flex;
+  gap: 4px;
+}
+
+.jarvis-feedback-comment input {
+  min-width: 180px;
+  padding: 2px 8px;
+  border: 1px solid var(--jarvis-border, rgba(127, 127, 127, 0.3));
+  border-radius: 8px;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  font-size: 0.75rem;
+}
+
+.jarvis-feedback-thanks {
   color: var(--jarvis-muted);
   font-size: 0.72rem;
 }
 
 .jarvis-model-select {
-  max-width: 128px;
+  flex: 0 1 auto;
+  min-width: 0;
+  max-width: 84px;
   height: 32px;
-  padding: 0 6px;
+  padding: 0 4px;
   border: 1px solid var(--jarvis-border, rgba(127, 127, 127, 0.3));
   border-radius: 9px;
   background: transparent;

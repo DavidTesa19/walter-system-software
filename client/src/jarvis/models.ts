@@ -6,12 +6,12 @@ export type ModelChoice = 'auto' | 'opus' | 'sonnet' | 'haiku';
 export const MODEL_CHOICES: Array<{ value: ModelChoice; label: string; hint: string }> = [
   {
     value: 'auto',
-    label: 'Automaticky',
+    label: 'Auto',
     hint: 'Jednoduché dotazy jdou na Haiku, změny a hledání na webu na Sonnet, náročné úkoly na Opus.',
   },
-  { value: 'opus', label: 'Opus 5.5', hint: 'Nejchytřejší, ale nejdražší. Pro náročnou analýzu a dokumenty.' },
-  { value: 'sonnet', label: 'Sonnet 5.5', hint: 'Vyvážený: dobrý na změny, hledání a běžné dotazy.' },
-  { value: 'haiku', label: 'Haiku 5.5', hint: 'Nejrychlejší a nejlevnější. Na krátké dotazy na jeden údaj.' },
+  { value: 'opus', label: 'Opus', hint: 'Opus 5.5: nejchytřejší, ale nejdražší. Pro náročnou analýzu a dokumenty.' },
+  { value: 'sonnet', label: 'Sonnet', hint: 'Sonnet 5.5: vyvážený, dobrý na změny, hledání a běžné dotazy.' },
+  { value: 'haiku', label: 'Haiku', hint: 'Haiku 5.5: nejrychlejší a nejlevnější. Na krátké dotazy na jeden údaj.' },
 ];
 
 const NAMES: Record<string, string> = {

@@ -31,7 +31,33 @@ const listItem = (turn) => ({
   costUsd: turn.costUsd ?? 0,
 });
 
-export function summarizeJarvisUsage({ turns, usage }, days) {
+// 👍/👎 per model, and the latest answers rated 👎. Only the newest rating of
+// an answer counts: a user may change their mind, and 'none' takes it back.
+function summarizeFeedback(feedback) {
+  const latest = new Map();
+  for (const row of feedback) {
+    const key = `${row.conversationId}#${row.turn}`;
+    if (!latest.has(key)) latest.set(key, row);
+  }
+  const rated = [...latest.values()].filter((row) => row.rating === 'up' || row.rating === 'down');
+  const models = new Map();
+  for (const row of rated) {
+    const entry = models.get(row.model ?? '') ?? { model: row.model ?? null, up: 0, down: 0 };
+    entry[row.rating] += 1;
+    models.set(row.model ?? '', entry);
+  }
+  return {
+    up: rated.filter((row) => row.rating === 'up').length,
+    down: rated.filter((row) => row.rating === 'down').length,
+    byModel: [...models.values()].sort((a, b) => b.up + b.down - (a.up + a.down)),
+    recentDown: rated
+      .filter((row) => row.rating === 'down')
+      .slice(0, FAILED_LIST_SIZE)
+      .map(({ at, userId, question, answer, comment, model }) => ({ at, userId, question, answer, comment: comment ?? null, model: model ?? null })),
+  };
+}
+
+export function summarizeJarvisUsage({ turns, usage, feedback = [] }, days) {
   const durations = turns.filter((turn) => turn.status !== 'stopped').map((turn) => turn.durationMs).sort((a, b) => a - b);
   const firstText = turns.map((turn) => turn.firstTextMs).filter((ms) => Number.isFinite(ms)).sort((a, b) => a - b);
   const isFailure = (turn) => !ANSWERED.has(turn.status) && turn.status !== 'stopped';
@@ -100,5 +126,6 @@ export function summarizeJarvisUsage({ turns, usage }, days) {
     expensive: byCost.slice(0, LIST_SIZE).filter((turn) => (turn.costUsd ?? 0) > 0).map(listItem),
     slowest: bySlowness.slice(0, LIST_SIZE).map(listItem),
     failures: turns.filter(isFailure).slice(0, FAILED_LIST_SIZE).map(listItem),
+    feedback: summarizeFeedback(feedback),
   };
 }

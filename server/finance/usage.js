@@ -11,6 +11,7 @@ import { estimateCostUsd } from './pricing.js';
 let sink = null;
 let stateSink = null;
 let turnSink = null;
+let feedbackSink = null;
 
 /** Called once by registerFinanceRoutes with the store's recordUsage. */
 export function setUsageSink(fn) {
@@ -20,6 +21,17 @@ export function setUsageSink(fn) {
 /** Called once by registerFinanceRoutes with the store's recordTurn. */
 export function setTurnSink(fn) {
   turnSink = fn;
+}
+
+/** Called once by registerFinanceRoutes with the store's recordFeedback. */
+export function setFeedbackSink(fn) {
+  feedbackSink = fn;
+}
+
+// A 👍/👎 on a Jarvis answer. Unlike the logs above it is awaited: the panel
+// shows the rating as saved only once it is.
+export async function recordJarvisFeedback(entry) {
+  if (feedbackSink) await feedbackSink(entry);
 }
 
 /** Called once by registerFinanceRoutes with the store's setState. */

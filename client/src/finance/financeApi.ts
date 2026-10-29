@@ -239,6 +239,13 @@ export interface JarvisUsage {
   expensive: JarvisTurn[];
   slowest: JarvisTurn[];
   failures: JarvisTurn[];
+  // 👍/👎 on answers: the newest rating of each answer counts.
+  feedback: {
+    up: number;
+    down: number;
+    byModel: Array<{ model: string | null; up: number; down: number }>;
+    recentDown: Array<{ at: string; userId: number | null; question: string; answer: string; comment: string | null; model: string | null }>;
+  };
 }
 
 export const financeApi = {

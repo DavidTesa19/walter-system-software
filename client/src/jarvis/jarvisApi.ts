@@ -158,7 +158,18 @@ export type TranscriptItem =
   | { type: 'email'; draft: JarvisEmailDraft }
   | { type: 'document'; document: JarvisDocument }
   | JarvisDocumentSaved
+  | JarvisFeedback
   | { type: 'sources'; sources: JarvisSource[] };
+
+// 👍/👎 on the `turn`-th answer (from 0); 'none' takes it back. The newest wins.
+export type FeedbackRating = 'up' | 'down' | 'none';
+export interface JarvisFeedback {
+  type: 'feedback';
+  turn: number;
+  rating: FeedbackRating;
+  comment?: string;
+  at?: string;
+}
 
 export type AttachmentKind = 'image' | 'pdf' | 'text';
 
@@ -328,6 +339,9 @@ export const jarvisApi = {
   // subject unless another is named).
   saveDocument: (conversationId: string, documentId: string, subject?: Omit<JarvisDocumentSubject, 'label'>) =>
     apiPost<JarvisDocumentSaved>(`/api/jarvis/conversations/${conversationId}/documents/${documentId}/save`, subject ? { subject } : {}),
+
+  feedback: (conversationId: string, turn: number, rating: FeedbackRating, comment?: string) =>
+    apiPost<JarvisFeedback>(`/api/jarvis/conversations/${conversationId}/feedback`, { turn, rating, ...(comment ? { comment } : {}) }),
 
   attention: (fresh = false) => apiGet<JarvisAttention>(`/api/jarvis/attention${fresh ? '?fresh=1' : ''}`),
 
