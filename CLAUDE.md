@@ -315,6 +315,22 @@ inherited one falls back to the browser's serif. Needs `ANTHROPIC_API_KEY`;
   writing and card-making tools (`TEAM_CHAT_BLOCKED_TOOLS`). The `<kontext>`
   line "Režim: týmový chat" tells Jarvis why. Replies render as Markdown
   (TeamChatView checks the username).
+- **Models** (`server/jarvis/models.js`): Opus 5.5 (`JARVIS_MODEL`), Sonnet
+  5.5 (`JARVIS_MODEL_SONNET`), Haiku 5.5 (`JARVIS_MODEL_HAIKU`). The panel's
+  picker sends `model` (`auto` or a key); `auto` runs `chooseModel`: pattern
+  matching only, no API call. Each answer is stored with `model` and
+  `routing` (`{mode, key, reason}`) and the panel labels it. Costs are
+  logged per call with the model that ran (finance). Per-model differences:
+  `profileFor` (Haiku: no `fallbacks`, basic web tools `web_search_20250305`
+  / `web_fetch_20250910`, no context management or compaction beta;
+  `toolDefinitionsFor` builds the tool list). Thinking blocks and
+  code-execution blocks are removed from the history sent when a
+  conversation continues on another model (`historyForModel`; stored history
+  is not edited). Quality check: `node evals/jarvis/run.js --model haiku
+  --variant v90` (variants v90/v91 are the Haiku/Sonnet runs; they are not
+  baseline). On the nine-case subset Haiku passed 7/9, Sonnet 8/9; Haiku's
+  misses were bare pointers to a button on list/deadline questions, so those
+  words are not in its rule.
 - To try it locally, the JSON dev server works too (conversations go to
   `server/data/jarvis-conversations.json`). Live calls spend real Anthropic
   credits.

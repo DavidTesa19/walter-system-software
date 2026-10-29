@@ -6,6 +6,7 @@ import express from 'express';
 import multer from 'multer';
 import { createApiClient } from './api.js';
 import { JARVIS_MODEL, isJarvisConfigured, runJarvisTurn } from './agent.js';
+import { historyForModel, resolveModel } from './models.js';
 import {
   KINDS,
   ROLES,
@@ -610,6 +611,8 @@ export function registerJarvisRoutes(app, { authenticateToken, pool, dataDir, po
     if (!attachments) return res.status(400).json({ error: 'Přílohu se nepodařilo najít – nahrajte ji prosím znovu.' });
     // A message of attachments alone still needs a question.
     const question = text || (attachments.length === 1 ? 'Prohlédni si přílohu a řekni mi, co obsahuje.' : 'Prohlédni si přílohy a řekni mi, co obsahují.');
+    // The panel's choice ('auto' or a model), else matched to the question.
+    const { model, routing } = resolveModel({ requested: req.body?.model, question, hasAttachments: attachments.length > 0 });
 
     res.setHeader('Content-Type', 'text/event-stream; charset=utf-8');
     res.setHeader('Cache-Control', 'no-cache, no-transform');
@@ -638,7 +641,7 @@ export function registerJarvisRoutes(app, { authenticateToken, pool, dataDir, po
     try {
       if (!conversation) {
         conversationId = crypto.randomUUID();
-        await store.create({ id: conversationId, userId, title: truncate((text || attachments[0]?.name || '').replace(/\s+/g, ' '), 70), model: JARVIS_MODEL });
+        await store.create({ id: conversationId, userId, title: truncate((text || attachments[0]?.name || '').replace(/\s+/g, ' '), 70), model });
       }
       running.add(conversationId);
       emit('conversation', { id: conversationId, isNew: !conversation });
@@ -714,9 +717,16 @@ export function registerJarvisRoutes(app, { authenticateToken, pool, dataDir, po
       };
 
       result = await runJarvisTurn({
+        model,
+        routing,
         // An empty assistant message (stored by older versions when a reply
         // had no text) makes the API reject the whole history; skip it.
-        history: [...(conversation?.messages ?? []).filter(isReplayable), userMessage],
+        // A conversation carried on by another model drops the earlier model's thinking (models.js).
+        history: historyForModel(
+          [...(conversation?.messages ?? []).filter(isReplayable), userMessage],
+          model,
+          (conversation?.transcript ?? []).filter((item) => item.type === 'answer' && item.model).at(-1)?.model ?? null
+        ),
         toolContext,
         emit,
         signal: abort.signal,
@@ -735,9 +745,9 @@ export function registerJarvisRoutes(app, { authenticateToken, pool, dataDir, po
         transcript: pendingActions.splice(0),
         usage: result.usage,
       });
-      recordAiUsage({ provider: 'anthropic', model: JARVIS_MODEL, feature: 'jarvis', userId, ...result.usage });
+      recordAiUsage({ provider: 'anthropic', model, feature: 'jarvis', userId, ...result.usage });
       if (result.usage.webSearches) {
-        recordAiUsage({ provider: 'anthropic', model: JARVIS_MODEL, feature: 'web_search', userId, units: result.usage.webSearches });
+        recordAiUsage({ provider: 'anthropic', model, feature: 'web_search', userId, units: result.usage.webSearches });
       }
       console.log(
         `Jarvis turn: user ${userId}, ${result.stopReason}, tokens in ${result.usage.input} / out ${result.usage.output}` +
@@ -771,8 +781,8 @@ export function registerJarvisRoutes(app, { authenticateToken, pool, dataDir, po
         cacheWrite: usage.cacheWrite,
         webSearches,
         costUsd:
-          (estimateCostUsd({ provider: 'anthropic', model: JARVIS_MODEL, feature: 'jarvis', ...usage }) ?? 0) +
-          (estimateCostUsd({ provider: 'anthropic', model: JARVIS_MODEL, feature: 'web_search', units: webSearches }) ?? 0),
+          (estimateCostUsd({ provider: 'anthropic', model, feature: 'jarvis', ...usage }) ?? 0) +
+          (estimateCostUsd({ provider: 'anthropic', model, feature: 'web_search', units: webSearches }) ?? 0),
       });
     }
   });
@@ -786,6 +796,7 @@ export function registerJarvisRoutes(app, { authenticateToken, pool, dataDir, po
     if (!isJarvisConfigured()) return postReply('Jarvis není nastavený (chybí ANTHROPIC_API_KEY).');
     if (!withinHourlyLimit(Number(user.id))) return postReply(`Limit ${HOURLY_LIMIT} zpráv za hodinu je vyčerpaný. Zkuste to později.`);
     const text = question.replace(JARVIS_MENTION, ' ').trim() || 'Co potřebuješ vědět?';
+    const { model: roomModel } = resolveModel({ requested: 'auto', question: text, hasAttachments: false });
     const userMessage = {
       role: 'user',
       content: [
@@ -815,6 +826,7 @@ export function registerJarvisRoutes(app, { authenticateToken, pool, dataDir, po
     let answer = '';
     try {
       const result = await runJarvisTurn({
+        model: roomModel,
         history: [userMessage],
         toolContext,
         emit: noop,
@@ -824,9 +836,9 @@ export function registerJarvisRoutes(app, { authenticateToken, pool, dataDir, po
           return Promise.resolve();
         },
       });
-      recordAiUsage({ provider: 'anthropic', model: JARVIS_MODEL, feature: 'jarvis', userId: Number(user.id), ...result.usage });
+      recordAiUsage({ provider: 'anthropic', model: roomModel, feature: 'jarvis', userId: Number(user.id), ...result.usage });
       if (result.usage.webSearches) {
-        recordAiUsage({ provider: 'anthropic', model: JARVIS_MODEL, feature: 'web_search', userId: Number(user.id), units: result.usage.webSearches });
+        recordAiUsage({ provider: 'anthropic', model: roomModel, feature: 'web_search', userId: Number(user.id), units: result.usage.webSearches });
       }
     } catch (error) {
       console.error('Jarvis room answer failed:', error);

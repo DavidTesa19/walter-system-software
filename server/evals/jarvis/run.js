@@ -65,6 +65,8 @@ const options = {
   judgeModel: option('judge-model', 'claude-sonnet-5-5'),
   port: Number(option('port', '3099')),
   keepData: flag('keep-data'),
+  // opus | sonnet | haiku to test one model; unset is the panel's automatic choice.
+  model: option('model', 'auto'),
 };
 if (!/^(baseline|v\d+)$/.test(options.variant)) {
   console.error('--variant must be "baseline" or v1, v2, … (the report builder reads only those names).');
@@ -194,7 +196,7 @@ async function askJarvis(token, testCase) {
     const response = await fetch(`${base}/api/jarvis/chat`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
-      body: JSON.stringify({ message: testCase.question, context: testCase.context ?? {} }),
+      body: JSON.stringify({ message: testCase.question, context: testCase.context ?? {}, model: options.model }),
       signal: abort.signal,
     });
     if (!response.ok) throw Object.assign(new Error(`chat: HTTP ${response.status} ${await response.text()}`), { harness: true });

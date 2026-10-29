@@ -36,6 +36,9 @@ import type { JarvisFocus } from './jarvisFocus';
 import { isConversationEnd, isLowQualityMicrophone, unlockAudio } from './voice';
 import { buildTranscriptionHints } from './transcriptionHints';
 import { VoiceAvatar } from './VoiceAvatar';
+import { MODEL_CHOICES, modelLabel, readModelChoice, writeModelChoice } from './models';
+import type { ModelChoice } from './models';
+import type { AnswerRouting } from './jarvisApi';
 import type { HintSource } from './transcriptionHints';
 import './JarvisPanel.css';
 
@@ -94,6 +97,8 @@ interface Turn {
   question: TranscriptItem & { type: 'question' };
   steps: Array<TranscriptItem & ({ type: 'tool' } | { type: 'note' })>;
   answer: string | null;
+  answerModel: string | null;
+  answerRouting: AnswerRouting | null;
   notices: string[];
   actions: JarvisOpenAction[];
   proposals: JarvisProposal[];
@@ -108,13 +113,19 @@ function groupTurns(items: TranscriptItem[]): Turn[] {
   const turns: Turn[] = [];
   for (const item of items) {
     if (item.type === 'question') {
-      turns.push({ question: item, steps: [], answer: null, notices: [], actions: [], proposals: [], calendar: [], emails: [], documents: [], sources: [] });
+      turns.push({
+        question: item, steps: [], answer: null, answerModel: null, answerRouting: null, notices: [], actions: [], proposals: [], calendar: [], emails: [], documents: [], sources: [],
+      });
       continue;
     }
     const turn = turns[turns.length - 1];
     if (!turn) continue;
     if (item.type === 'tool' || item.type === 'note') turn.steps.push(item);
-    else if (item.type === 'answer') turn.answer = turn.answer ? `${turn.answer}\n\n${item.text}` : item.text;
+    else if (item.type === 'answer') {
+      turn.answer = turn.answer ? `${turn.answer}\n\n${item.text}` : item.text;
+      if (item.model) turn.answerModel = item.model;
+      if (item.routing) turn.answerRouting = item.routing;
+    }
     else if (item.type === 'notice') turn.notices.push(item.text);
     else if (item.type === 'action') turn.actions.push(item.action);
     else if (item.type === 'proposal') turn.proposals.push(item.proposal);
@@ -1150,6 +1161,12 @@ export default function JarvisPanel({ open, onOpen, onClose, viewLabel, launcher
   // A spoken question goes off as soon as it has been transcribed.
   const [voiceSettings, setVoiceSettings] = useState<VoiceSettings>(loadVoiceSettings);
   const [showVoiceSettings, setShowVoiceSettings] = useState(false);
+  // Which model answers: the panel's choice, 'auto' by default (server/jarvis/models.js).
+  const [modelChoice, setModelChoice] = useState<ModelChoice>(readModelChoice);
+  const chooseModel = (value: ModelChoice) => {
+    setModelChoice(value);
+    writeModelChoice(value);
+  };
   // Read after an answer has been spoken, when the latest settings count.
   const voiceSettingsRef = useRef(voiceSettings);
   voiceSettingsRef.current = voiceSettings;
@@ -1466,6 +1483,7 @@ export default function JarvisPanel({ open, onOpen, onClose, viewLabel, launcher
         {
           message,
           conversationId,
+          model: modelChoice,
           ...(sending.length ? { attachments: sending.map((attachment) => attachment.id as string) } : {}),
           context: {
             view: viewLabel,
@@ -1714,6 +1732,19 @@ export default function JarvisPanel({ open, onOpen, onClose, viewLabel, launcher
           <span>{subtitle}</span>
         </div>
         <div className="jarvis-header-actions">
+          <select
+            className="jarvis-model-select"
+            value={modelChoice}
+            onChange={(event) => chooseModel(event.target.value as ModelChoice)}
+            title={MODEL_CHOICES.find((choice) => choice.value === modelChoice)?.hint}
+            aria-label="Model, který odpovídá"
+          >
+            {MODEL_CHOICES.map((choice) => (
+              <option key={choice.value} value={choice.value} title={choice.hint}>
+                {choice.label}
+              </option>
+            ))}
+          </select>
           <button
             type="button"
             className={`jarvis-icon-button jarvis-bell${showAttention ? ' jarvis-icon-button--on' : ''}`}
@@ -1869,6 +1900,13 @@ export default function JarvisPanel({ open, onOpen, onClose, viewLabel, launcher
             {turn.answer && (
               <div className="jarvis-answer">
                 <MarkdownMessage content={turn.answer} />
+              </div>
+            )}
+            {turn.answer && turn.answerModel && (
+              <div className="jarvis-answer-model">
+                {modelLabel(turn.answerModel)}
+                {turn.answerRouting &&
+                  (turn.answerRouting.mode === 'manual' ? ' · vybráno ručně' : ` · automaticky: ${turn.answerRouting.reason ?? ''}`)}
               </div>
             )}
             {turn.answer && voice.canSpeak && (

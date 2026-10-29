@@ -8,7 +8,8 @@
 
 import Anthropic from '@anthropic-ai/sdk';
 import { SYSTEM_PROMPT } from './prompt.js';
-import { TOOL_DEFINITIONS, WEB_TOOL_NAMES, runTool, toolLabel } from './tools.js';
+import { TOOL_DEFINITIONS, WEB_TOOL_NAMES, runTool, toolDefinitionsFor, toolLabel } from './tools.js';
+import { profileFor } from './models.js';
 
 export const JARVIS_MODEL = process.env.JARVIS_MODEL || 'claude-opus-5-5';
 const JARVIS_EFFORT = process.env.JARVIS_EFFORT || 'medium';
@@ -28,16 +29,15 @@ const ANSWER_NUDGE =
 
 // server-side-fallback: if the model's safety classifiers decline a request
 // (a false positive, in a CRM), Anthropic re-runs it on its recommended
-// fallback model instead of returning a refusal.
+// fallback model instead of returning a refusal. Not on Haiku (models.js).
 // thinking-binding-controls: with drop_block, an earlier thinking block whose
 // prefix no longer matches (a deploy changed the prompt or tools mid-
 // conversation) is dropped instead of failing the request.
 // context-management + compact: long conversations, below.
-const BETAS = [
-  'server-side-fallback-2026-07-01',
+const betasFor = ({ fallbacks, contextManagement }) => [
+  ...(fallbacks ? ['server-side-fallback-2026-07-01'] : []),
   'thinking-binding-controls-2026-08-01',
-  'context-management-2025-06-27',
-  'compact-2026-01-12',
+  ...(contextManagement ? ['context-management-2025-06-27', 'compact-2026-01-12'] : []),
 ];
 
 const envNumber = (name, fallback) => (Number(process.env[name]) > 0 ? Number(process.env[name]) : fallback);
@@ -186,11 +186,14 @@ function friendlyError(error) {
  * emit        (event, data) => void — relays progress to the browser
  * onStep      (messages, transcript) => Promise — persists a completed step
  */
-export async function runJarvisTurn({ history, toolContext, emit, onStep, signal }) {
+export async function runJarvisTurn({ model = JARVIS_MODEL, routing = null, history, toolContext, emit, onStep, signal }) {
   const usage = zeroUsage();
   let messages = [...history];
   let jsonRetries = 0;
   let askedForAnswer = false;
+  // What differs between the models: web-search version, fallback, context management.
+  const profile = profileFor(model);
+  const tools = toolDefinitionsFor(profile.webVersion);
 
   for (let round = 0; round < MAX_TOOL_ROUNDS; round += 1) {
     if (signal.aborted) return { usage, stopReason: 'aborted' };
@@ -199,21 +202,21 @@ export async function runJarvisTurn({ history, toolContext, emit, onStep, signal
     try {
       const stream = anthropic().beta.messages.stream(
         {
-          model: JARVIS_MODEL,
+          model,
           max_tokens: MAX_TOKENS,
-          betas: BETAS,
-          fallbacks: 'default',
+          betas: betasFor(profile),
+          ...(profile.fallbacks ? { fallbacks: 'default' } : {}),
           thinking: {
             type: 'adaptive',
             display: 'summarized',
             block_binding: { prefix_mismatch_behavior: 'drop_block' },
           },
           output_config: { effort: JARVIS_EFFORT },
-          context_management: CONTEXT_MANAGEMENT,
+          ...(profile.contextManagement ? { context_management: CONTEXT_MANAGEMENT } : {}),
           // tools + system are the stable, cached prefix; top-level
           // cache_control caches the growing conversation after it.
           system: [{ type: 'text', text: SYSTEM_PROMPT, cache_control: { type: 'ephemeral' } }],
-          tools: TOOL_DEFINITIONS,
+          tools,
           cache_control: { type: 'ephemeral' },
           messages,
         },
@@ -320,7 +323,7 @@ export async function runJarvisTurn({ history, toolContext, emit, onStep, signal
       await onStep(assistant ? [assistant] : [], [
         ...compacted,
         ...web,
-        ...(answer ? [{ type: 'answer', text: answer, model: message.model }] : []),
+        ...(answer ? [{ type: 'answer', text: answer, model: message.model, ...(routing ? { routing } : {}) }] : []),
         ...(sources.length ? [{ type: 'sources', sources }] : []),
       ]);
       if (message.stop_reason === 'max_tokens') emit('notice', { text: 'Odpověď byla příliš dlouhá a je zkrácená.' });

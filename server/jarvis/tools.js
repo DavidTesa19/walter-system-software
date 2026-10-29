@@ -1385,18 +1385,28 @@ const WEB_TOOLS = [
   { type: 'web_fetch_20260209', name: 'web_fetch', max_uses: 5, max_content_tokens: 20000 },
 ];
 
-export const TOOL_DEFINITIONS = [
-  ...TOOLS.map((tool) => {
-    const { $schema, ...schema } = z.toJSONSchema(tool.input);
-    void $schema;
-    return {
-      name: tool.name,
-      description: tool.description,
-      input_schema: schema,
-      eager_input_streaming: true,
-    };
-  }),
-  ...WEB_TOOLS,
+// Haiku 5.5 takes the basic web tools (no dynamic filtering), see models.js.
+const BASIC_WEB_TOOLS = [
+  { type: 'web_search_20250305', name: 'web_search', max_uses: 5 },
+  { type: 'web_fetch_20250910', name: 'web_fetch', max_uses: 5 },
+];
+
+const LOCAL_TOOL_DEFINITIONS = TOOLS.map((tool) => {
+  const { $schema, ...schema } = z.toJSONSchema(tool.input);
+  void $schema;
+  return {
+    name: tool.name,
+    description: tool.description,
+    input_schema: schema,
+    eager_input_streaming: true,
+  };
+});
+
+export const TOOL_DEFINITIONS = [...LOCAL_TOOL_DEFINITIONS, ...WEB_TOOLS];
+
+export const toolDefinitionsFor = (webVersion) => [
+  ...LOCAL_TOOL_DEFINITIONS,
+  ...(webVersion === 'basic' ? BASIC_WEB_TOOLS : WEB_TOOLS),
 ];
 
 export const toolLabel = (name, input) => {

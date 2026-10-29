@@ -1821,3 +1821,23 @@ button.jarvis-attention-item:hover {
 .jarvis-document-info .jarvis-document-saved {
   color: #16a34a;
 }
+
+/* Which model answered (under each answer), and the model picker in the header. */
+.jarvis-answer-model {
+  margin-top: 4px;
+  color: var(--jarvis-muted);
+  font-size: 0.72rem;
+}
+
+.jarvis-model-select {
+  max-width: 128px;
+  height: 32px;
+  padding: 0 6px;
+  border: 1px solid var(--jarvis-border, rgba(127, 127, 127, 0.3));
+  border-radius: 9px;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  font-size: 0.75rem;
+  cursor: pointer;
+}

@@ -1,5 +1,6 @@
 import { API_BASE, apiDelete, apiGet, apiPost, apiUpload } from '../utils/api';
 import type { TranscriptionHints } from './transcriptionHints';
+import type { ModelChoice } from './models';
 
 export type JarvisSection = 'public' | 'projects' | 'growth';
 export type JarvisRole = 'client' | 'partner' | 'tiper';
@@ -136,9 +137,16 @@ export interface JarvisAttention {
   items: AttentionItem[];
 }
 
+// Why this model answered: chosen by the user, or matched to the question.
+export interface AnswerRouting {
+  mode: 'auto' | 'manual';
+  key?: string;
+  reason?: string;
+}
+
 export type TranscriptItem =
   | { type: 'question'; text: string; at?: string; voice?: boolean; attachments?: AttachmentSummary[] }
-  | { type: 'answer'; text: string; model?: string }
+  | { type: 'answer'; text: string; model?: string; routing?: AnswerRouting }
   | { type: 'note'; text: string }
   | { type: 'tool'; name: string; label: string; ok: boolean }
   | { type: 'notice'; text: string }
@@ -348,7 +356,7 @@ export const jarvisApi = {
   // reply. Resolves when the reply ends; rejects with the server's message on
   // an HTTP error. Abort the signal to stop Jarvis.
   async chat(
-    body: { message: string; conversationId?: string | null; context?: JarvisContext; attachments?: string[] },
+    body: { message: string; conversationId?: string | null; context?: JarvisContext; attachments?: string[]; model?: ModelChoice },
     onEvent: (event: JarvisEvent) => void,
     signal: AbortSignal
   ): Promise<void> {
