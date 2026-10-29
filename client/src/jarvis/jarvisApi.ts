@@ -72,6 +72,24 @@ export interface CalendarDecision {
 
 // An e-mail Jarvis drafted. It is never sent by Jarvis: the card lets the user
 // edit it, copy it or open it in their own mail program.
+// A file Jarvis made (create_document, export_records). The server renders it
+// again on every download; an export always has the current rows.
+export interface JarvisDocument {
+  id: string;
+  format: 'docx' | 'pdf' | 'xlsx';
+  title: string;
+  filename: string;
+  size?: number;
+  // Exports: how many records it had when made.
+  rows?: number;
+}
+
+// A web page an answer cites.
+export interface JarvisSource {
+  url: string;
+  title: string;
+}
+
 export interface JarvisEmailDraft {
   id: string;
   to: string[];
@@ -110,7 +128,9 @@ export type TranscriptItem =
   | ProposalDecision
   | { type: 'calendar'; card: JarvisCalendarCard }
   | CalendarDecision
-  | { type: 'email'; draft: JarvisEmailDraft };
+  | { type: 'email'; draft: JarvisEmailDraft }
+  | { type: 'document'; document: JarvisDocument }
+  | { type: 'sources'; sources: JarvisSource[] };
 
 export type AttachmentKind = 'image' | 'pdf' | 'text';
 
@@ -201,6 +221,8 @@ export type JarvisEvent =
   | { event: 'proposal'; data: JarvisProposal }
   | { event: 'calendar'; data: JarvisCalendarCard }
   | { event: 'email'; data: JarvisEmailDraft }
+  | { event: 'document'; data: JarvisDocument }
+  | { event: 'sources'; data: { sources: JarvisSource[] } }
   | { event: 'notice'; data: { text: string } }
   | { event: 'error'; data: { message: string } }
   | { event: 'done'; data: { stopReason: string } };
@@ -262,6 +284,15 @@ export const jarvisApi = {
       signal,
     });
     if (!response.ok) throw await failure(response, 'Odpověď se nepodařilo přečíst');
+    return response.blob();
+  },
+
+  // A file Jarvis made in a conversation.
+  async downloadDocument(conversationId: string, documentId: string): Promise<Blob> {
+    const response = await fetch(`${API_BASE}/api/jarvis/conversations/${conversationId}/documents/${documentId}`, {
+      headers: authHeaders(),
+    });
+    if (!response.ok) throw await failure(response, 'Soubor se nepodařilo stáhnout');
     return response.blob();
   },
 

@@ -45,7 +45,8 @@ import { recordAiUsage } from '../finance/usage.js';
 import { ProposalError, applyProposal, describeProposal } from './proposals.js';
 import { CalendarError, calendarOutcomes, cardState, decideCalendarCard } from './calendarActions.js';
 import { computeAttention, createAttentionCache } from './attention.js';
-import { loadRows } from './tools.js';
+import { exportSheets, loadRows } from './tools.js';
+import { DocumentError, renderDocument } from './documentMaker.js';
 
 const MAX_MESSAGE_LENGTH = 8000;
 const HOURLY_LIMIT = Number(process.env.JARVIS_HOURLY_LIMIT) > 0 ? Number(process.env.JARVIS_HOURLY_LIMIT) : 60;
@@ -322,10 +323,47 @@ export function registerJarvisRoutes(app, { authenticateToken, pool, dataDir, po
       if (!UUID_PATTERN.test(req.params.id)) return res.status(404).json({ error: 'Konverzace nenalezena.' });
       const conversation = await store.get(req.params.id, Number(req.user.id));
       if (!conversation) return res.status(404).json({ error: 'Konverzace nenalezena.' });
-      res.json({ id: conversation.id, title: conversation.title, transcript: conversation.transcript ?? [] });
+      // A document card without what it was made from (that stays on the server).
+      const transcript = (conversation.transcript ?? []).map((item) =>
+        item.type === 'document' ? { type: 'document', document: item.document } : item
+      );
+      res.json({ id: conversation.id, title: conversation.title, transcript });
     } catch (error) {
       console.error('Jarvis: loading a conversation failed:', error);
       res.status(500).json({ error: 'Nepodařilo se načíst konverzaci.' });
+    }
+  });
+
+  // A file Jarvis made in this conversation, rendered again from what was
+  // asked for. An export reads the rows now, as the downloading user (only
+  // the conversation's owner can reach it).
+  app.get('/api/jarvis/conversations/:id/documents/:docId', authenticateToken, async (req, res) => {
+    try {
+      if (!UUID_PATTERN.test(req.params.id)) return res.status(404).json({ error: 'Konverzace nenalezena.' });
+      const conversation = await store.get(req.params.id, Number(req.user.id));
+      const item = (conversation?.transcript ?? []).find((entry) => entry.type === 'document' && entry.document?.id === req.params.docId);
+      if (!item?.spec) return res.status(404).json({ error: 'Soubor nenalezen.' });
+      let spec = item.spec;
+      if (spec.kind === 'export') {
+        const ctx = {
+          api: createApiClient({ baseUrl, token: signAgentToken(req.user) }),
+          user: req.user,
+          sections: sectionsForScope(req.user.accessScope ?? req.user.access_scope),
+        };
+        spec = { format: 'xlsx', title: spec.query.title, sheets: await exportSheets(ctx, spec.query) };
+      }
+      const file = await renderDocument(spec);
+      res.setHeader('Content-Type', file.type);
+      // The plain name for old browsers, the real one (with diacritics) for the rest.
+      const ascii = file.filename.normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/[^\x20-\x7e]/g, '_').replace(/"/g, '');
+      res.setHeader('Content-Disposition', `attachment; filename="${ascii}"; filename*=UTF-8''${encodeURIComponent(file.filename)}`);
+      res.setHeader('Cache-Control', 'no-store');
+      res.end(file.buffer);
+    } catch (error) {
+      if (error instanceof DocumentError) return res.status(400).json({ error: error.message });
+      if (error?.status === 403) return res.status(403).json({ error: 'K těmto datům už nemáte přístup.' });
+      console.error('Jarvis: making a document failed:', error);
+      res.status(500).json({ error: 'Soubor se nepodařilo vytvořit.' });
     }
   });
 
@@ -583,6 +621,12 @@ export function registerJarvisRoutes(app, { authenticateToken, pool, dataDir, po
           pendingActions.push({ type: 'calendar', card });
           emit('calendar', card);
         },
+        // A file to download. `spec` (what it is made from) stays in the
+        // stored transcript for re-rendering; the browser gets the card.
+        emitDocument: (document, spec) => {
+          pendingActions.push({ type: 'document', document, spec });
+          emit('document', document);
+        },
       };
 
       const result = await runJarvisTurn({
@@ -606,6 +650,9 @@ export function registerJarvisRoutes(app, { authenticateToken, pool, dataDir, po
         usage: result.usage,
       });
       recordAiUsage({ provider: 'anthropic', model: JARVIS_MODEL, feature: 'jarvis', userId, ...result.usage });
+      if (result.usage.webSearches) {
+        recordAiUsage({ provider: 'anthropic', model: JARVIS_MODEL, feature: 'web_search', userId, units: result.usage.webSearches });
+      }
       console.log(
         `Jarvis turn: user ${userId}, ${result.stopReason}, tokens in ${result.usage.input} / out ${result.usage.output}` +
         ` / cache read ${result.usage.cacheRead} / cache write ${result.usage.cacheWrite}`

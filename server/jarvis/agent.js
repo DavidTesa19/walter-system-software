@@ -8,7 +8,7 @@
 
 import Anthropic from '@anthropic-ai/sdk';
 import { SYSTEM_PROMPT } from './prompt.js';
-import { TOOL_DEFINITIONS, runTool, toolLabel } from './tools.js';
+import { TOOL_DEFINITIONS, WEB_TOOL_NAMES, runTool, toolLabel } from './tools.js';
 
 export const JARVIS_MODEL = process.env.JARVIS_MODEL || 'claude-opus-5-5';
 const JARVIS_EFFORT = process.env.JARVIS_EFFORT || 'medium';
@@ -67,6 +67,8 @@ const KEEP_TOOL_RESULTS = [
   'calendar_update_event',
   'calendar_delete_event',
   'draft_email',
+  'create_document',
+  'export_records',
 ];
 const CONTEXT_MANAGEMENT = {
   edits: [
@@ -99,10 +101,10 @@ export function contentForHistory(content) {
   return content.filter((block, index) => index > lastFallback || block.type === 'text' || block.type === 'fallback');
 }
 
-const zeroUsage = () => ({ input: 0, output: 0, cacheRead: 0, cacheWrite: 0 });
+const zeroUsage = () => ({ input: 0, output: 0, cacheRead: 0, cacheWrite: 0, webSearches: 0 });
 
 // A compaction is billed on top of the reply: the top-level counts leave its
-// iteration out.
+// iteration out. Web searches are billed per search on top of their tokens.
 const addUsage = (total, usage) => {
   if (!usage) return;
   const compactions = (usage.iterations ?? []).filter((iteration) => iteration.type === 'compaction');
@@ -112,7 +114,46 @@ const addUsage = (total, usage) => {
     total.cacheRead += part.cache_read_input_tokens ?? 0;
     total.cacheWrite += part.cache_creation_input_tokens ?? 0;
   }
+  total.webSearches += usage.server_tool_use?.web_search_requests ?? 0;
 };
+
+// Web searches and page reads run on Anthropic's side, inside the reply; the
+// panel shows them as steps like Jarvis's own tools.
+const webLabel = (name, input) => {
+  if (name === 'web_search') return input?.query ? `Hledám na webu: „${String(input.query).slice(0, 60)}“` : 'Hledám na webu';
+  try {
+    return `Čtu stránku ${new URL(input?.url).hostname}`;
+  } catch {
+    return 'Čtu stránku';
+  }
+};
+const isWebResult = (block) => block.type === 'web_search_tool_result' || block.type === 'web_fetch_tool_result';
+const webResultOk = (block) => !String(block.content?.type ?? '').endsWith('error');
+
+// The web steps of one reply, for the stored transcript.
+function webSteps(content) {
+  const results = new Map(content.filter(isWebResult).map((block) => [block.tool_use_id, block]));
+  return content
+    .filter((block) => block.type === 'server_tool_use' && WEB_TOOL_NAMES.includes(block.name))
+    .map((block) => ({
+      type: 'tool',
+      name: block.name,
+      label: webLabel(block.name, block.input),
+      ok: results.has(block.id) ? webResultOk(results.get(block.id)) : true,
+    }));
+}
+
+// Pages the answer cites, once each, for a "Zdroje" list under it.
+function citedSources(content) {
+  const sources = new Map();
+  for (const block of content) {
+    if (block.type !== 'text') continue;
+    for (const citation of block.citations ?? []) {
+      if (citation.url && !sources.has(citation.url)) sources.set(citation.url, { url: citation.url, title: citation.title || citation.url });
+    }
+  }
+  return [...sources.values()].slice(0, 12);
+}
 
 // What context management did to this request, for the server log.
 function logContextEdits(message) {
@@ -182,15 +223,34 @@ export async function runJarvisTurn({ history, toolContext, emit, onStep, signal
       // A compaction is written before anything else and can take a while:
       // the panel shows it as a step.
       const compactionStep = { id: `compaction-${round}`, label: COMPACTION_LABEL };
+      // A web search's query arrives in pieces (or whole, when Claude's own
+      // filtering code calls it); its step is shown once the query is known.
+      const webCalls = new Map();
+      const showWebCall = (call) => emit('tool', { id: call.id, name: call.name, label: webLabel(call.name, call.input) });
       for await (const event of stream) {
         if (event.type === 'content_block_delta') {
           if (event.delta.type === 'text_delta') emit('text', { delta: event.delta.text });
           else if (event.delta.type === 'thinking_delta' && event.delta.thinking) emit('thinking', { delta: event.delta.thinking });
           else if (event.delta.type === 'compaction_delta') emit('tool_done', { id: compactionStep.id, ok: true });
-        } else if (event.type === 'content_block_start' && event.content_block.type === 'text') {
-          emit('text_start', {});
-        } else if (event.type === 'content_block_start' && event.content_block.type === 'compaction') {
-          emit('tool', { ...compactionStep, name: 'compaction' });
+          else if (event.delta.type === 'input_json_delta' && webCalls.has(event.index)) webCalls.get(event.index).json += event.delta.partial_json;
+        } else if (event.type === 'content_block_start') {
+          const block = event.content_block;
+          if (block.type === 'text') emit('text_start', {});
+          else if (block.type === 'compaction') emit('tool', { ...compactionStep, name: 'compaction' });
+          else if (block.type === 'server_tool_use' && WEB_TOOL_NAMES.includes(block.name)) {
+            const call = { id: block.id, name: block.name, input: block.input, json: '' };
+            if (call.input && Object.keys(call.input).length) showWebCall(call);
+            else webCalls.set(event.index, call);
+          } else if (isWebResult(block)) emit('tool_done', { id: block.tool_use_id, ok: webResultOk(block) });
+        } else if (event.type === 'content_block_stop' && webCalls.has(event.index)) {
+          const call = webCalls.get(event.index);
+          webCalls.delete(event.index);
+          try {
+            call.input = JSON.parse(call.json || '{}');
+          } catch {
+            call.input = {};
+          }
+          showWebCall(call);
         }
       }
       message = await stream.finalMessage();
@@ -225,6 +285,17 @@ export async function runJarvisTurn({ history, toolContext, emit, onStep, signal
     const content = contentForHistory(message.content);
     const toolUses = content.filter((block) => block.type === 'tool_use');
     const answer = content.filter((block) => block.type === 'text').map((block) => block.text).join('').trim();
+    const web = webSteps(content);
+
+    // A long web search paused on Anthropic's side: send the reply back as
+    // it is and the server carries on (no extra user message, by the API's
+    // rules).
+    if (message.stop_reason === 'pause_turn') {
+      const assistant = { role: 'assistant', content };
+      messages = [...messages, assistant];
+      await onStep([assistant], [...compacted, ...(answer ? [{ type: 'note', text: answer }] : []), ...web]);
+      continue;
+    }
 
     if (toolUses.length === 0 || message.stop_reason === 'max_tokens') {
       // A final answer (or one cut off by max_tokens — never run the tool
@@ -244,7 +315,14 @@ export async function runJarvisTurn({ history, toolContext, emit, onStep, signal
       // containing one, which would break every later question.
       const assistant = kept.length ? { role: 'assistant', content: kept } : null;
       if (assistant) messages = [...messages, assistant];
-      await onStep(assistant ? [assistant] : [], [...compacted, ...(answer ? [{ type: 'answer', text: answer, model: message.model }] : [])]);
+      const sources = citedSources(content);
+      if (sources.length) emit('sources', { sources });
+      await onStep(assistant ? [assistant] : [], [
+        ...compacted,
+        ...web,
+        ...(answer ? [{ type: 'answer', text: answer, model: message.model }] : []),
+        ...(sources.length ? [{ type: 'sources', sources }] : []),
+      ]);
       if (message.stop_reason === 'max_tokens') emit('notice', { text: 'Odpověď byla příliš dlouhá a je zkrácená.' });
       return { usage, stopReason: message.stop_reason };
     }
@@ -274,6 +352,7 @@ export async function runJarvisTurn({ history, toolContext, emit, onStep, signal
       [
         ...compacted,
         ...(answer ? [{ type: 'note', text: answer }] : []),
+        ...web,
         ...steps.map((step, index) => ({ type: 'tool', name: step.name, label: step.label, ok: !results[index].isError })),
       ]
     );

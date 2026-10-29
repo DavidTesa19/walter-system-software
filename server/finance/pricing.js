@@ -48,6 +48,7 @@ const TTS_CHARS_PER_MINUTE = 900;
 const STT_USD_PER_MINUTE = { 'gpt-transcribe': 0.0045, default: 0.006 };
 // Brave Search: $5 per 1 000 requests (with $5 of free credit a month).
 const BRAVE_USD_PER_SEARCH = 0.005;
+const ANTHROPIC_USD_PER_SEARCH = 0.01;
 // ElevenLabs bills text to speech by the character: $0.08 per 1 000 on its
 // full models, half that on the fast ones (API price list, 2026-10-28). A
 // subscription is the same price paid ahead.
@@ -74,6 +75,8 @@ const findPrice = (table, model) => {
  */
 export function estimateCostUsd({ provider, model, feature, input = 0, output = 0, cacheRead = 0, cacheWrite = 0, units = 0 }) {
   if (provider === 'brave') return units * BRAVE_USD_PER_SEARCH;
+  // Jarvis's web searches: $10 per 1 000 on top of their tokens.
+  if (provider === 'anthropic' && feature === 'web_search') return units * ANTHROPIC_USD_PER_SEARCH;
   if (provider === 'elevenlabs') {
     const price = findPrice(ELEVENLABS_USD_PER_1K_CHARS, model) ?? ELEVENLABS_USD_PER_1K_CHARS.default;
     return (units / 1000) * price;

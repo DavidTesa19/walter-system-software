@@ -9,7 +9,9 @@ import type {
   CalendarDecision,
   JarvisCalendarCard,
   ConversationSummary,
+  JarvisDocument,
   JarvisEmailDraft,
+  JarvisSource,
   JarvisAttention,
   JarvisEvent,
   JarvisOpenAction,
@@ -95,6 +97,8 @@ interface Turn {
   proposals: JarvisProposal[];
   calendar: JarvisCalendarCard[];
   emails: JarvisEmailDraft[];
+  documents: JarvisDocument[];
+  sources: JarvisSource[];
 }
 
 // The flat transcript, grouped into one block per question.
@@ -102,7 +106,7 @@ function groupTurns(items: TranscriptItem[]): Turn[] {
   const turns: Turn[] = [];
   for (const item of items) {
     if (item.type === 'question') {
-      turns.push({ question: item, steps: [], answer: null, notices: [], actions: [], proposals: [], calendar: [], emails: [] });
+      turns.push({ question: item, steps: [], answer: null, notices: [], actions: [], proposals: [], calendar: [], emails: [], documents: [], sources: [] });
       continue;
     }
     const turn = turns[turns.length - 1];
@@ -114,6 +118,8 @@ function groupTurns(items: TranscriptItem[]): Turn[] {
     else if (item.type === 'proposal') turn.proposals.push(item.proposal);
     else if (item.type === 'calendar') turn.calendar.push(item.card);
     else if (item.type === 'email') turn.emails.push(item.draft);
+    else if (item.type === 'document') turn.documents.push(item.document);
+    else if (item.type === 'sources') turn.sources.push(...item.sources);
   }
   return turns;
 }
@@ -125,6 +131,8 @@ interface LiveTurn {
   proposals: JarvisProposal[];
   calendar: JarvisCalendarCard[];
   emails: JarvisEmailDraft[];
+  documents: JarvisDocument[];
+  sources: JarvisSource[];
   steps: Array<{ id: string; label: string; done: boolean; ok: boolean }>;
   text: string;
   thinking: string;
@@ -308,6 +316,76 @@ const MAILTO_LIMIT = 1800;
 
 // An e-mail Jarvis drafted. Jarvis never sends it: the user edits it here and
 // sends it from their own mail program.
+const DOCUMENT_KINDS: Record<JarvisDocument['format'], { label: string; badge: string }> = {
+  docx: { label: 'Word', badge: 'DOC' },
+  pdf: { label: 'PDF', badge: 'PDF' },
+  xlsx: { label: 'Excel', badge: 'XLS' },
+};
+
+const rowCount = (rows: number) => `${rows} ${rows === 1 ? 'řádek' : rows >= 2 && rows <= 4 ? 'řádky' : 'řádků'}`;
+
+// A file Jarvis made, with a download button. The server renders it again on
+// every download (an export with the current rows).
+function DocumentCard({ file, conversationId }: { file: JarvisDocument; conversationId: string | null }) {
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const kind = DOCUMENT_KINDS[file.format] ?? DOCUMENT_KINDS.pdf;
+  const download = async () => {
+    if (!conversationId) return;
+    setBusy(true);
+    setError(null);
+    try {
+      const blob = await jarvisApi.downloadDocument(conversationId, file.id);
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = file.filename;
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      window.setTimeout(() => URL.revokeObjectURL(url), 10_000);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Soubor se nepodařilo stáhnout.');
+    } finally {
+      setBusy(false);
+    }
+  };
+  return (
+    <div className="jarvis-document">
+      <span className={`jarvis-document-badge jarvis-document-badge--${file.format}`} aria-hidden="true">
+        {kind.badge}
+      </span>
+      <div className="jarvis-document-info">
+        <strong title={file.filename}>{file.title}</strong>
+        <small>
+          {kind.label}
+          {file.rows ? ` · ${rowCount(file.rows)}` : ''}
+          {file.size ? ` · ${formatSize(file.size)}` : ''}
+        </small>
+        {error && <small className="jarvis-document-error">{error}</small>}
+      </div>
+      <button type="button" className="jarvis-chip-button" onClick={() => void download()} disabled={busy || !conversationId}>
+        {busy ? 'Připravuji…' : 'Stáhnout'}
+      </button>
+    </div>
+  );
+}
+
+// The web pages an answer cites.
+function Sources({ sources }: { sources: JarvisSource[] }) {
+  if (sources.length === 0) return null;
+  return (
+    <div className="jarvis-sources">
+      <span>Zdroje</span>
+      {sources.map((source) => (
+        <a key={source.url} href={source.url} target="_blank" rel="noopener noreferrer" title={source.url}>
+          {source.title}
+        </a>
+      ))}
+    </div>
+  );
+}
+
 function EmailCard({ draft, onOpenRecord }: { draft: JarvisEmailDraft; onOpenRecord: (action: JarvisOpenAction) => void }) {
   const [to, setTo] = useState(draft.to.join(', '));
   const [subject, setSubject] = useState(draft.subject);
@@ -1210,6 +1288,8 @@ export default function JarvisPanel({ open, onOpen, onClose, viewLabel, launcher
       proposals: [],
       calendar: [],
       emails: [],
+      documents: [],
+      sources: [],
       steps: [],
       text: '',
       thinking: '',
@@ -1264,6 +1344,12 @@ export default function JarvisPanel({ open, onOpen, onClose, viewLabel, launcher
           break;
         case 'email':
           setLive((turn) => (turn ? { ...turn, emails: [...turn.emails, event.data] } : turn));
+          break;
+        case 'document':
+          setLive((turn) => (turn ? { ...turn, documents: [...turn.documents, event.data] } : turn));
+          break;
+        case 'sources':
+          setLive((turn) => (turn ? { ...turn, sources: [...turn.sources, ...event.data.sources] } : turn));
           break;
         case 'notice':
           setLive((turn) => (turn ? { ...turn, notices: [...turn.notices, event.data.text] } : turn));
@@ -1630,7 +1716,7 @@ export default function JarvisPanel({ open, onOpen, onClose, viewLabel, launcher
           <div className="jarvis-welcome">
             <JarvisMark large />
             <div className="jarvis-welcome-title">Na co se chcete zeptat?</div>
-            <p>Hledám v klientech, partnerech, tipařích a zakázkách, kam máte přístup, ve vašem kalendáři, v nahraných dokumentech i v rejstříku firem ARES. Změny dat jen navrhuji – provedou se, až je potvrdíte; události v kalendáři umím přidat i přesunout (a vrátit zpět).</p>
+            <p>Hledám v klientech, partnerech, tipařích a zakázkách, kam máte přístup, ve vašem kalendáři, v nahraných dokumentech, v rejstříku firem ARES i na webu. Umím připravit soubor Word, PDF nebo Excel. Změny dat jen navrhuji – provedou se, až je potvrdíte; události v kalendáři umím přidat i přesunout (a vrátit zpět).</p>
             {voice.canListen && (
               <p className="jarvis-welcome-voice">
                 {Icon.micSmall} Ptát se můžete i hlasem: klikněte na mikrofon a mluvte, odpovím nahlas.
@@ -1683,6 +1769,8 @@ export default function JarvisPanel({ open, onOpen, onClose, viewLabel, launcher
             {renderProposals(turn.proposals, false)}
             {renderCalendar(turn.calendar, false)}
             {turn.emails.map((draft) => <EmailCard key={draft.id} draft={draft} onOpenRecord={openRecord} />)}
+            {turn.documents.map((file) => <DocumentCard key={file.id} file={file} conversationId={conversationId} />)}
+            <Sources sources={turn.sources} />
             {turn.notices.map((notice, noticeIndex) => (
               <div key={noticeIndex} className="jarvis-notice">{notice}</div>
             ))}
@@ -1727,6 +1815,8 @@ export default function JarvisPanel({ open, onOpen, onClose, viewLabel, launcher
             {renderProposals(live.proposals, true)}
             {renderCalendar(live.calendar, true)}
             {live.emails.map((draft) => <EmailCard key={draft.id} draft={draft} onOpenRecord={openRecord} />)}
+            {live.documents.map((file) => <DocumentCard key={file.id} file={file} conversationId={conversationId} />)}
+            <Sources sources={live.sources} />
             {live.notices.map((notice, noticeIndex) => (
               <div key={noticeIndex} className="jarvis-notice">{notice}</div>
             ))}

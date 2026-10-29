@@ -48,6 +48,7 @@ import {
   snapshot,
 } from './calendarActions.js';
 import { computeAttention } from './attention.js';
+import { DOCUMENT_FORMATS, DocumentError, fileName, renderDocument, tablesAsSheets } from './documentMaker.js';
 
 export class ToolError extends Error {}
 
@@ -197,6 +198,32 @@ function parseDate(value) {
   return Number.isNaN(parsed.getTime()) ? null : parsed;
 }
 
+// The records a list or export asks for: loaded, filtered and sorted.
+async function queryRecords(ctx, input) {
+  const teamById = await loadTeam(ctx);
+  let items = await loadRows(ctx, {
+    sections: allowedSections(ctx, input.sections),
+    roles: input.roles?.length ? input.roles : ROLES,
+    kinds: [input.kind],
+    statuses: input.statuses?.length ? input.statuses : ['accepted'],
+  });
+  for (const filter of input.filters ?? []) {
+    items = items.filter((item) => matchesFilter(item, filter, teamById));
+  }
+  if (input.sort) {
+    const direction = input.sort.direction === 'desc' ? -1 : 1;
+    items.sort((a, b) => {
+      const left = fieldValue(a, input.sort.field, teamById);
+      const right = fieldValue(b, input.sort.field, teamById);
+      const leftDate = parseDate(left);
+      const rightDate = parseDate(right);
+      if (leftDate && rightDate) return (leftDate - rightDate) * direction;
+      return String(left ?? '').localeCompare(String(right ?? ''), 'cs', { numeric: true }) * direction;
+    });
+  }
+  return { items, teamById };
+}
+
 function matchesFilter(item, filter, teamById) {
   const value = fieldValue(item, filter.field, teamById);
   switch (filter.op) {
@@ -250,6 +277,56 @@ const listInput = z.object({
   sort: z.object({ field: z.string(), direction: z.enum(['asc', 'desc']).optional() }).strict().optional(),
   group_by: z.string().optional().describe('Místo seznamu vrátit počty podle tohoto pole (např. field, region, assigned, state, role, section). Pole s více hodnotami se počítají za každou hodnotu.'),
   limit: z.number().int().min(1).max(100).optional().describe('Kolik záznamů vrátit, výchozí 25. Celkový počet se vrací vždy.'),
+}).strict();
+
+const createDocumentInput = z.object({
+  format: z
+    .enum(['docx', 'pdf', 'xlsx'])
+    .describe('docx = Word (text k úpravám), pdf = hotový dokument k tisku nebo odeslání, xlsx = Excel (tabulky a čísla).'),
+  title: z.string().min(1).max(150).describe('Nadpis dokumentu, zároveň název souboru.'),
+  content: z
+    .string()
+    .max(60000)
+    .optional()
+    .describe(
+      'Obsah v Markdownu: ## nadpisy, odstavce, odrážky, číslované seznamy, tabulky, **tučně**, *kurzíva*, odkazy. ' +
+        'Pro docx a pdf povinný. Nadpis ani dnešní datum neopakuj, doplní se samy.'
+    ),
+  sheets: z
+    .array(
+      z
+        .object({
+          name: z.string().max(60).describe('Název listu.'),
+          columns: z.array(z.string().max(120)).min(1).max(40).describe('Záhlaví sloupců.'),
+          rows: z
+            .array(z.array(z.union([z.string().max(4000), z.number(), z.boolean(), z.null()])).max(40))
+            .max(2000)
+            .describe('Řádky; hodnoty ve stejném pořadí jako sloupce. Čísla a částky jako čísla, ne text.'),
+        })
+        .strict()
+    )
+    .min(1)
+    .max(10)
+    .optional()
+    .describe('Jen pro xlsx: listy tabulky. Bez nich se z content vezmou jeho tabulky.'),
+}).strict();
+
+const exportInput = z.object({
+  title: z.string().min(1).max(120).describe('Název souboru a listu, např. „Partneři – Jihomoravský kraj“.'),
+  kind,
+  sections: z.array(section).optional().describe(`${SECTION_HELP}. Bez zadání všechny dostupné.`),
+  roles: z.array(role).optional().describe(`${ROLE_HELP}. Bez zadání všechny.`),
+  statuses: z.array(status).optional().describe('Výchozí: jen accepted (aktivní).'),
+  filters: z.array(filterInput).optional().describe('Všechny podmínky musí platit současně.'),
+  sort: z.object({ field: z.string(), direction: z.enum(['asc', 'desc']).optional() }).strict().optional(),
+  columns: z
+    .array(z.string())
+    .max(30)
+    .optional()
+    .describe(
+      'Sloupce (pole), např. entity_id, name, person, phone, email, website, ico, field, field_specialization, region, location, tier, ' +
+        'commission_id, subject, state, deadline, priority, commission_value, budget, assigned, section, role, status. Bez zadání rozumný výběr.'
+    ),
 }).strict();
 
 const recordInput = z.object({
@@ -550,16 +627,7 @@ export const TOOLS = [
       return `Počítám ${what} podle: ${by}`;
     },
     async run(input, ctx) {
-      const teamById = await loadTeam(ctx);
-      let items = await loadRows(ctx, {
-        sections: allowedSections(ctx, input.sections),
-        roles: input.roles?.length ? input.roles : ROLES,
-        kinds: [input.kind],
-        statuses: input.statuses?.length ? input.statuses : ['accepted'],
-      });
-      for (const filter of input.filters ?? []) {
-        items = items.filter((item) => matchesFilter(item, filter, teamById));
-      }
+      const { items, teamById } = await queryRecords(ctx, input);
 
       if (input.group_by) {
         const counts = new Map();
@@ -571,18 +639,6 @@ export const TOOLS = [
         }
         const groups = [...counts.entries()].sort((a, b) => b[1] - a[1]).slice(0, 60).map(([hodnota, pocet]) => ({ hodnota, pocet }));
         return { celkem: items.length, seskupeno_podle: input.group_by, skupiny: groups };
-      }
-
-      if (input.sort) {
-        const direction = input.sort.direction === 'desc' ? -1 : 1;
-        items.sort((a, b) => {
-          const left = fieldValue(a, input.sort.field, teamById);
-          const right = fieldValue(b, input.sort.field, teamById);
-          const leftDate = parseDate(left);
-          const rightDate = parseDate(right);
-          if (leftDate && rightDate) return (leftDate - rightDate) * direction;
-          return String(left ?? '').localeCompare(String(right ?? ''), 'cs', { numeric: true }) * direction;
-        });
       }
 
       const limit = input.limit ?? 25;
@@ -1178,6 +1234,50 @@ export const TOOLS = [
     },
   },
   {
+    name: 'create_document',
+    description:
+      'Vytvoří soubor Word (docx), PDF nebo Excel (xlsx) ke stažení: zprávu, shrnutí, nabídku, dopis, zápis, přehled nebo tabulku. ' +
+      'Uživatel ho dostane na kartě pod odpovědí s tlačítkem Stáhnout. Použij, když o dokument, soubor nebo export požádá, nebo když ' +
+      'je výsledek na soubor jasně vhodnější než text v chatu. Pro výpis záznamů z aplikace do Excelu použij export_records, ' +
+      'ať se řádky nemusí opisovat.',
+    input: createDocumentInput,
+    label: (input) => `Vytvářím ${DOCUMENT_FORMATS[input.format]?.label ?? 'dokument'} „${truncate(input.title, 40)}“`,
+    async run(input, ctx) {
+      if (input.format !== 'xlsx' && !input.content?.trim()) throw new ToolError('Pro Word a PDF chybí obsah (content).');
+      if (input.format === 'xlsx' && !input.sheets?.length && !tablesAsSheets(input.content ?? '', input.title).length) {
+        throw new ToolError('Pro Excel zadej sheets, nebo dej do content aspoň jednu tabulku.');
+      }
+      const spec = { kind: 'content', format: input.format, title: input.title, content: input.content, sheets: input.sheets };
+      let file;
+      try {
+        file = await renderDocument(spec);
+      } catch (error) {
+        if (error instanceof DocumentError) throw new ToolError(error.message);
+        throw error;
+      }
+      const document = { id: crypto.randomUUID(), format: input.format, title: input.title, filename: file.filename, size: file.buffer.length };
+      ctx.emitDocument(document, spec);
+      return { soubor: file.filename, stav: 'Soubor je na kartě pod odpovědí; uživatel si ho stáhne tlačítkem Stáhnout.' };
+    },
+  },
+  {
+    name: 'export_records',
+    description:
+      'Export subjektů nebo zakázek z aplikace do Excelu (xlsx) se stejnými filtry jako list_records, všechny odpovídající řádky. ' +
+      'Server řádky načte sám, ty je neopisuješ. Uživatel dostane kartu s tlačítkem Stáhnout; stažení vždy obsahuje aktuální data.',
+    input: exportInput,
+    label: () => 'Připravuji export do Excelu',
+    async run(input, ctx) {
+      const { items } = await queryRecords(ctx, input);
+      if (items.length === 0) return { radku: 0, stav: 'Filtrům neodpovídá žádný záznam, soubor jsem nevytvořil.' };
+      const columns = exportColumns(input);
+      const filename = fileName(input.title, 'xlsx');
+      const document = { id: crypto.randomUUID(), format: 'xlsx', title: input.title, filename, rows: items.length };
+      ctx.emitDocument(document, { kind: 'export', query: input });
+      return { soubor: filename, radku: items.length, sloupce: columns.map((field) => EXPORT_LABELS[field] ?? FIELD_LABELS[field] ?? field) };
+    },
+  },
+  {
     name: 'open_record',
     description:
       'Zobrazí uživateli tlačítko, které v aplikaci otevře profil subjektu nebo zakázky. ' +
@@ -1207,18 +1307,79 @@ export const TOOLS = [
 
 const TOOLS_BY_NAME = new Map(TOOLS.map((tool) => [tool.name, tool]));
 
+// ---------------------------------------------------------------------------
+// Exports to Excel (export_records): the rows are read again on every
+// download, as the user who downloads them.
+// ---------------------------------------------------------------------------
+
+const EXPORT_COLUMNS = {
+  subject: ['entity_id', 'name', 'person', 'phone', 'email', 'website', 'ico', 'field', 'field_specialization', 'region', 'location', 'tier', 'assigned', 'section', 'role', 'status'],
+  commission: ['commission_id', 'name', 'subject', 'state', 'deadline', 'priority', 'commission_value', 'budget', 'assigned', 'section', 'role', 'status'],
+};
+const EXPORT_LABELS = {
+  name: 'Název',
+  person: 'Kontaktní osoba',
+  subject: 'Subjekt',
+  assigned: 'Přiřazení',
+  section: 'Sekce',
+  role: 'Role',
+  status: 'Schválení',
+};
+
+const exportColumns = (query) => (query.columns?.length ? query.columns : EXPORT_COLUMNS[query.kind]);
+
+function exportValue(item, field, teamById) {
+  const { row } = item;
+  if (field === 'person') return personName(row) || null;
+  if (field === 'subject') return `${row.entity_code ?? ''} ${subjectName(row)}`.trim() || null;
+  if (field === 'status') return STATUS_LABELS[row.status] ?? row.status ?? null;
+  const value = fieldValue(item, field, teamById);
+  if (isEmptyValue(value)) return null;
+  // ISO dates as Czech ones (deadlines, created, updated).
+  if (/^\d{4}-\d{2}-\d{2}(T|$)/.test(String(value))) {
+    const date = new Date(String(value).length === 10 ? `${value}T12:00:00Z` : value);
+    if (!Number.isNaN(date.getTime())) return date.toLocaleDateString('cs-CZ', { timeZone: 'Europe/Prague' });
+  }
+  return typeof value === 'number' ? value : String(value);
+}
+
+/** The sheet for an export_records download, as `ctx`'s user sees the data now. */
+export async function exportSheets(ctx, query) {
+  const { items, teamById } = await queryRecords(ctx, query);
+  const columns = exportColumns(query);
+  return [
+    {
+      name: query.title,
+      columns: columns.map((field) => EXPORT_LABELS[field] ?? FIELD_LABELS[field] ?? field),
+      rows: items.map((item) => columns.map((field) => exportValue(item, field, teamById))),
+    },
+  ];
+}
+
 // The definitions sent to the API. Built once: the tool list is part of the
 // cached prompt prefix and must stay byte-identical between requests.
-export const TOOL_DEFINITIONS = TOOLS.map((tool) => {
-  const { $schema, ...schema } = z.toJSONSchema(tool.input);
-  void $schema;
-  return {
-    name: tool.name,
-    description: tool.description,
-    input_schema: schema,
-    eager_input_streaming: true,
-  };
-});
+// Web search and reading pages run on Anthropic's servers (Claude filters
+// the results itself before they reach the conversation). No user location:
+// the API does not support CZ; Jarvis searches in Czech instead.
+export const WEB_TOOL_NAMES = ['web_search', 'web_fetch'];
+const WEB_TOOLS = [
+  { type: 'web_search_20260209', name: 'web_search', max_uses: 5 },
+  { type: 'web_fetch_20260209', name: 'web_fetch', max_uses: 5, max_content_tokens: 20000 },
+];
+
+export const TOOL_DEFINITIONS = [
+  ...TOOLS.map((tool) => {
+    const { $schema, ...schema } = z.toJSONSchema(tool.input);
+    void $schema;
+    return {
+      name: tool.name,
+      description: tool.description,
+      input_schema: schema,
+      eager_input_streaming: true,
+    };
+  }),
+  ...WEB_TOOLS,
+];
 
 export const toolLabel = (name, input) => {
   const tool = TOOLS_BY_NAME.get(name);

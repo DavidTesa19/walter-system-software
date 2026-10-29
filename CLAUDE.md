@@ -471,6 +471,48 @@ inherited one falls back to the browser's serif. Needs `ANTHROPIC_API_KEY`;
   piece is one `/api/jarvis/speech` request. The mic level lives in a ref
   that `LevelMeter` reads on its own animation frame; putting it in React state
   re-renders the whole panel 20× a second.
+- **Files: Word, PDF, Excel** (`server/jarvis/documentMaker.js`).
+  - `create_document`: Jarvis writes Markdown (or Excel `sheets`), and
+    `renderDocument` lays it out.
+    - Word goes through `docx`, PDF through `pdfmake`, Excel through
+      `exceljs`; `marked` parses the Markdown.
+    - PDF uses pdfmake's bundled Roboto (every Czech letter). pdfmake may
+      read only its font folder and fetches no URLs.
+  - `export_records`: the same filters as `list_records` (`queryRecords`),
+    all matching rows, into Excel. The server reads the rows (Jarvis never
+    copies them) and re-reads them on every download, as the downloading
+    user (`exportSheets`).
+  - Nothing is stored. The transcript item `{ type: 'document', document,
+    spec }` keeps what the file is made from, and
+    `GET /api/jarvis/conversations/:id/documents/:docId` renders it again
+    (milliseconds). The conversation route strips `spec` before sending the
+    transcript to the panel.
+  - The panel shows a `DocumentCard` with "Stáhnout" (a blob download; the
+    file name comes from the card, since a cross-origin
+    `Content-Disposition` is not readable).
+  - Google Docs are not made: they would need Google OAuth or a Workspace
+    shared drive, which is the user's decision. Word and Excel files open in
+    Google Docs and Sheets once uploaded to Drive.
+  - The library versions are pinned (`--save-exact`) to releases at least
+    two weeks old.
+- **Web search** (`web_search_20260209`, `web_fetch_20260209`: Anthropic
+  server tools, appended to `TOOL_DEFINITIONS` as `WEB_TOOLS`).
+  - Claude filters the results in its own code sandbox, so the reply also
+    holds `code_execution` server blocks. All of it is stored and replayed
+    as is.
+  - `user_location` is not set: the API refuses country `CZ`. The prompt's
+    `<web>` rules make Jarvis search in Czech and end with a "Zdroje:" line.
+  - The stream handler shows `web_search` / `web_fetch` as steps once the
+    query is known (`webLabel`). It ticks them off on their
+    `*_tool_result` block and stores them with the turn (`webSteps`).
+  - Citations, when the API sends them, become a `sources` transcript item
+    and list. With dynamic filtering they are usually absent, so the
+    answer's own links are the sources.
+  - `stop_reason: 'pause_turn'` (a long server-side search) stores the reply
+    and sends it back unchanged, with no extra user message.
+  - Searches are counted from `usage.server_tool_use` and logged as
+    provider `anthropic`, feature `web_search` ($10 per 1,000 on top of the
+    tokens; a search turn is roughly 2–2.5 Kč with its ~20k result tokens).
 - **E-mail drafts** (`draft_email` in tools.js): Jarvis only drafts. The
   draft is a transcript item (`type: 'email'`) shown as an editable card
   (`EmailCard` in JarvisPanel.tsx) that opens it via `mailto:`, Gmail's or
