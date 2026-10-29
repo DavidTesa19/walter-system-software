@@ -504,6 +504,15 @@ inherited one falls back to the browser's serif. Needs `ANTHROPIC_API_KEY`;
   piece is one `/api/jarvis/speech` request. The mic level lives in a ref
   that `LevelMeter` reads on its own animation frame; putting it in React state
   re-renders the whole panel 20× a second.
+  - **Barge-in** (`interrupt` in voiceSettings, the "Když Jarvis mluví"
+    switch; `watchForSpeech` in voice.ts, used by useJarvisVoice): while
+    the server voice reads an answer, the mic is watched. A level above
+    `INTERRUPT_LEVEL` for `INTERRUPT_MS` stops the reading and opens the
+    next question. The browser's voice is not interrupted (its own output
+    would be heard). Threshold is fixed: a loud room can interrupt.
+  - **Live captions**: with the server voice, the browser recognizer runs
+    beside the recording and fills `voice.interim`; the server transcript
+    replaces it. No extra API cost.
 - **Files: Word, PDF, Excel** (`server/jarvis/documentMaker.js`).
   - `create_document`: Jarvis writes Markdown (or Excel `sheets`), and
     `renderDocument` lays it out.
