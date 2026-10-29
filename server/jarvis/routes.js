@@ -65,6 +65,8 @@ const uploadedFilename = (raw) => {
   const decoded = Buffer.from(name, 'latin1').toString('utf8');
   return (decoded.includes('\uFFFD') ? name : decoded).slice(-180);
 };
+// A team chat message that asks Jarvis something ("@Jarvis kolik…").
+export const JARVIS_MENTION = /(^|\s)@jarvis\b/i;
 const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 const zeroUsage = () => ({ input: 0, output: 0, cacheRead: 0, cacheWrite: 0 });
@@ -131,6 +133,9 @@ export function buildContextBlock(user, context, attachmentNames = [], proposalL
   ];
   if (context?.view) lines.push(`Obrazovka: ${cleanContextText(context.view)}`);
   if (context?.voice === true) lines.push('Režim: hlasový (uživatel otázku řekl nahlas a odpověď mu bude přečtena)');
+  if (context?.teamChat === true) {
+    lines.push('Režim: týmový chat. Odpověď uvidí celý tým v místnosti, proto odpovídáš jen z Veřejné sekce (kterou vidí každý) a jen čtením, bez návrhů, karet a souborů. Data z Neveřejné sekce ani Growth Clubu do odpovědi nedávej, i když by je uživatel v aplikaci otevřít mohl; řekni, že v místnosti na ně nedosáhneš a ať se zeptá ve svém panelu Jarvise.');
+  }
   if (attachmentNames.length) lines.push(`Přílohy této zprávy: ${attachmentNames.map((name) => cleanContextText(name, 120)).join(', ')}`);
   for (const line of proposalLines) lines.push(cleanContextText(line, 400));
   // The profile open in a grid, and the zakázka selected in it.
@@ -772,5 +777,62 @@ export function registerJarvisRoutes(app, { authenticateToken, pool, dataDir, po
     }
   });
 
-  return { store };
+  // @Jarvis in Týmový chat: one answer, posted to the room as "Jarvis". The
+  // room is read by the whole team, so the answer is limited to the public
+  // section (the standard access scope, enforced by the API too) and to the
+  // tools that neither write nor leave a card (runTool, TEAM_CHAT_BLOCKED_TOOLS).
+  const answerInRoom = async ({ question, user, postReply }) => {
+    const roomUser = { ...user, accessScope: 'standard' };
+    if (!isJarvisConfigured()) return postReply('Jarvis není nastavený (chybí ANTHROPIC_API_KEY).');
+    if (!withinHourlyLimit(Number(user.id))) return postReply(`Limit ${HOURLY_LIMIT} zpráv za hodinu je vyčerpaný. Zkuste to později.`);
+    const text = question.replace(JARVIS_MENTION, ' ').trim() || 'Co potřebuješ vědět?';
+    const userMessage = {
+      role: 'user',
+      content: [
+        { type: 'text', text: buildContextBlock(roomUser, { view: 'Týmový chat', teamChat: true }) },
+        { type: 'text', text },
+      ],
+    };
+    const api = createApiClient({
+      baseUrl,
+      token: signAgentToken(roomUser),
+      changesetId: `jarvis-room-${Date.now().toString(36)}`,
+      note: `Jarvis v týmovém chatu: ${truncate(text, 200)}`,
+    });
+    const noop = () => {};
+    const toolContext = {
+      api,
+      user: roomUser,
+      teamChat: true,
+      sections: sectionsForScope('standard'),
+      signal: new AbortController().signal,
+      emitAction: noop,
+      emitProposal: noop,
+      emitEmail: noop,
+      emitCalendar: noop,
+      emitDocument: noop,
+    };
+    let answer = '';
+    try {
+      const result = await runJarvisTurn({
+        history: [userMessage],
+        toolContext,
+        emit: noop,
+        signal: new AbortController().signal,
+        onStep: (_messages, transcript) => {
+          for (const item of transcript) if (item.type === 'answer') answer = item.text;
+          return Promise.resolve();
+        },
+      });
+      recordAiUsage({ provider: 'anthropic', model: JARVIS_MODEL, feature: 'jarvis', userId: Number(user.id), ...result.usage });
+      if (result.usage.webSearches) {
+        recordAiUsage({ provider: 'anthropic', model: JARVIS_MODEL, feature: 'web_search', userId: Number(user.id), units: result.usage.webSearches });
+      }
+    } catch (error) {
+      console.error('Jarvis room answer failed:', error);
+    }
+    await postReply(answer || 'Na to teď neumím odpovědět. Zkuste se zeptat jinak.');
+  };
+
+  return { store, answerInRoom };
 }

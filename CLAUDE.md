@@ -306,6 +306,15 @@ inherited one falls back to the browser's serif. Needs `ANTHROPIC_API_KEY`;
   `--only`, `--tags`, `--reps`, `--no-judge`, `--variant v1`). Real
   money: ~0.02–0.04 $ a case once the prompt is cached, about 2 $ a full
   run. Run it before changing the prompt, the tools or the model.
+- **@Jarvis in Týmový chat** (`answerInRoom` in jarvis/routes.js, called
+  from the message POST in both servers when the text matches
+  `JARVIS_MENTION`): one answer posted to the room as user `Jarvis`, with
+  no stored conversation. The room is read by the whole team, so the answer
+  runs with the standard scope (public section only, enforced by the API
+  too) and `teamChat` set in the tool context: `runTool` refuses the
+  writing and card-making tools (`TEAM_CHAT_BLOCKED_TOOLS`). The `<kontext>`
+  line "Režim: týmový chat" tells Jarvis why. Replies render as Markdown
+  (TeamChatView checks the username).
 - To try it locally, the JSON dev server works too (conversations go to
   `server/data/jarvis-conversations.json`). Live calls spend real Anthropic
   credits.

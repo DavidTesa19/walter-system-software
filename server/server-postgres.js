@@ -55,7 +55,7 @@ import {
 import { cascadesArchiveToSubject } from "./archive-cascade.js";
 import { reenterRequestContext, requestContextMiddleware } from "./safety/context.js";
 import { registerSafetyRoutes } from "./safety/routes.js";
-import { registerJarvisRoutes } from "./jarvis/routes.js";
+import { JARVIS_MENTION, registerJarvisRoutes } from "./jarvis/routes.js";
 import { registerAresRoutes } from "./ares.js";
 import { registerFinanceRoutes } from "./finance/routes.js";
 import { registerTaskRoutes } from "./tasks/routes.js";
@@ -1353,7 +1353,7 @@ registerSafetyRoutes(app, {
 // The IČO field checks numbers against the ARES business register.
 registerAresRoutes(app, { authenticateToken });
 
-registerJarvisRoutes(app, {
+const jarvisRooms = registerJarvisRoutes(app, {
   authenticateToken,
   pool: db.isPostgres() ? db.getPool() : null,
   dataDir: DATA_DIR,
@@ -6264,6 +6264,18 @@ app.post("/api/chat-rooms/:roomId/messages", authenticateToken, async (req, res)
       );
       
       const savedMessage = { ...result.rows[0], reactions: {} };
+      if (JARVIS_MENTION.test(content)) {
+        jarvisRooms.answerInRoom({
+          question: content,
+          user: req.user,
+          postReply: (text) =>
+            db.query(
+              `INSERT INTO chat_messages (room_id, content, username, user_id, reply_to_message_id)
+               VALUES ($1, $2, 'Jarvis', NULL, $3)`,
+              [roomId, text, result.rows[0].id]
+            ),
+        }).catch((error) => console.error("Jarvis room answer failed:", error));
+      }
       return res.status(201).json(savedMessage);
     }
     

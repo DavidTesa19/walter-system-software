@@ -4,6 +4,7 @@ import ActivityIndicator from '../activity/ActivityIndicator';
 import { useActivity } from '../activity/ActivityContext';
 import { TEAMCHAT_RECORD_SCOPE } from '../activity/activityKeys';
 import ThemeToggleButton from '../components/ThemeToggleButton';
+import MarkdownMessage from '../components/MarkdownMessage';
 import './TeamChatView.css';
 
 interface ChatRoom {
@@ -557,7 +558,9 @@ export default function TeamChatView() {
                                 <span className="reply-preview-text">{replyTarget.content.slice(0, 120)}{replyTarget.content.length > 120 ? '…' : ''}</span>
                               </button>
                             )}
-                            <p className="message-content">{msg.content}</p>
+                            {msg.username === 'Jarvis'
+                              ? <div className="message-content"><MarkdownMessage content={msg.content} /></div>
+                              : <p className="message-content">{msg.content}</p>}
                             <div className="message-reactions">
                               {reactionEntries.map(([emoji, userIds]) => {
                                 const reacted = userIds.includes(user?.id ?? -1);

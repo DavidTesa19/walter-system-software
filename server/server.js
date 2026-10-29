@@ -14,7 +14,7 @@ import AdmZip from "adm-zip";
 import * as entityCommissionJson from "./entity-commission-json.js";
 import { cascadesArchiveToSubject } from "./archive-cascade.js";
 import { registerSafetyRoutes } from "./safety/routes.js";
-import { registerJarvisRoutes } from "./jarvis/routes.js";
+import { JARVIS_MENTION, registerJarvisRoutes } from "./jarvis/routes.js";
 import { registerAresRoutes } from "./ares.js";
 import { registerFinanceRoutes } from "./finance/routes.js";
 import { registerTaskRoutes } from "./tasks/routes.js";
@@ -1649,7 +1649,7 @@ registerSafetyRoutes(app, { authenticateToken, requireRole, pool: null });
 // The IČO field checks numbers against the ARES business register.
 registerAresRoutes(app, { authenticateToken });
 
-registerJarvisRoutes(app, {
+const jarvisRooms = registerJarvisRoutes(app, {
   authenticateToken,
   pool: null,
   dataDir: DATA_DIR,
@@ -6724,6 +6724,27 @@ app.post("/api/chat-rooms/:roomId/messages", authenticateToken, (req, res) => {
   }
   
   if (!writeDb(db)) return res.status(500).json({ error: "Failed to save" });
+  if (JARVIS_MENTION.test(message.content)) {
+    jarvisRooms.answerInRoom({
+      question: message.content,
+      user: req.user,
+      postReply: async (text) => {
+        const dbData = readDb();
+        if (!dbData.chatMessages) dbData.chatMessages = [];
+        dbData.chatMessages.push({
+          id: `msg_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`,
+          roomId,
+          content: text,
+          username: "Jarvis",
+          userId: null,
+          replyToMessageId: message.id,
+          createdAt: new Date().toISOString(),
+          reactions: {}
+        });
+        writeDb(dbData);
+      },
+    }).catch((error) => console.error("Jarvis room answer failed:", error));
+  }
   res.status(201).json(message);
 });
 

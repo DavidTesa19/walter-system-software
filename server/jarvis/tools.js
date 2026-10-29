@@ -1411,9 +1411,26 @@ export const toolLabel = (name, input) => {
 
 // Run one tool call. Never throws: failures go back to the model as an error
 // result it can react to.
+// Tools that write, or leave a card for the user to click. The team chat is
+// read by everyone in the room, so Jarvis answers there with these left out.
+const TEAM_CHAT_BLOCKED_TOOLS = new Set([
+  'propose_update',
+  'propose_note',
+  'calendar_add_event',
+  'calendar_update_event',
+  'calendar_delete_event',
+  'draft_email',
+  'create_document',
+  'export_records',
+  'open_record',
+]);
+
 export async function runTool(name, rawInput, ctx) {
   const tool = TOOLS_BY_NAME.get(name);
   if (!tool) return { isError: true, content: `Neznámý nástroj ${name}.` };
+  if (ctx?.teamChat && TEAM_CHAT_BLOCKED_TOOLS.has(name)) {
+    return { isError: true, content: 'V týmovém chatu tento nástroj není k dispozici. Odpověz jen z dat, která lze přečíst.' };
+  }
   const parsed = tool.input.safeParse(rawInput);
   if (!parsed.success) {
     return {
