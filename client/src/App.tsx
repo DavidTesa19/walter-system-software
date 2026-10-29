@@ -41,6 +41,7 @@ const AnalyticsView = lazy(() => import('./views/AnalyticsView'));
 const AdminUsersView = lazy(() => import('./views/AdminUsersView'));
 const SafetyView = lazy(() => import('./views/SafetyView'));
 const FinanceView = lazy(() => import('./views/FinanceView'));
+const DataQualityView = lazy(() => import('./views/DataQualityView'));
 const TasksView = lazy(() => import('./views/TasksView'));
 const BugReportsView = lazy(() => import('./views/BugReportsView'));
 const ProjectsSectionView = lazy(() => import('./views/ProjectsSectionView'));
@@ -98,6 +99,7 @@ const VIEW_LABELS: Record<AppView, string> = {
   teamchat: 'Týmový chat',
   analytics: 'Analytika',
   finance: 'Finance',
+  data_quality: 'Kvalita dat',
   admin_users: 'Správa uživatelů',
   safety: 'Bezpečnost a zálohy',
   tasks: 'Úkoly',
@@ -678,6 +680,8 @@ const AppContent: React.FC = () => {
                   return <AnalyticsView />;
               case 'finance':
                 return <FinanceView />;
+              case 'data_quality':
+                return <DataQualityView onOpenRecord={handleJarvisOpenRecord} />;
               case 'admin_users':
                 return <AdminUsersView />;
               case 'safety':

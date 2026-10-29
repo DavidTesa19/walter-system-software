@@ -267,6 +267,22 @@ CZK conversion uses ČNB's daily fixing (`rates.js`, fixed fallback). To test
 a connector locally, pass its token as an env var to a wrapper around
 `server.js` — never write tokens into tracked files.
 
+## Kvalita dat (Analýza › Kvalita dat)
+
+`DataQualityView.tsx` + `client/src/dataQuality/dataQuality.ts` (pure
+`analyse()`): loads every subject and zakázka of the sections the user can
+open through the normal section APIs (so both servers, and each section's
+own access rule) and lists, with a button that opens each record
+(`handleJarvisOpenRecord` in App): possible duplicates within one section
+and role (IČO, phone's last 9 digits, e-mail, company name without its
+legal form; the same subject in another role or section is a link, not a
+duplicate), invalid IČO, no name, old placeholder values ("Nová
+Společnost", zero phone), no contact, approval pending over 14 days, and
+open zakázky that are overdue, unassigned or active without a deadline.
+Archived records are skipped. Admins and managers only (not in the
+salesman/viewer list). A new view also needs its id in
+`utils/navigationState.ts`, or a reload falls back to the default screen.
+
 ## Úkoly and Hlášení chyb (`server/tasks/`, `server/bugs/`)
 
 Úkoly is the team's simple to-do list, separate from Budoucí funkce (product

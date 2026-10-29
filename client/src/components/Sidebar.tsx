@@ -171,6 +171,12 @@ const Icons = {
       <path d="M22 12A10 10 0 0 0 12 2v10z" />
     </svg>
   ),
+  DataQuality: () => (
+    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M9 11l3 3L22 4" />
+      <path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11" />
+    </svg>
+  ),
   Finance: () => (
     <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
       <rect x="2" y="5" width="20" height="14" rx="2" />
@@ -293,7 +299,7 @@ const Sidebar: React.FC<SidebarProps> = ({
       { id: 'calendar', views: ['calendar'] },
       { id: 'teamchat', views: ['teamchat'] },
       { id: 'tasks', views: ['tasks'] },
-      { id: 'analysis', views: ['analytics', 'finance'] },
+      { id: 'analysis', views: ['analytics', 'finance', 'data_quality'] },
       { id: 'other', views: ['future', 'bugs', 'chatbot', 'palettes', 'admin_users', 'safety'] }
     ];
 
@@ -514,7 +520,8 @@ const Sidebar: React.FC<SidebarProps> = ({
       icon: <Icons.Analysis />,
       items: [
         { id: 'analytics', label: 'Analytika', icon: <Icons.Analytics /> },
-        { id: 'finance', label: 'Finance', icon: <Icons.Finance /> }
+        { id: 'finance', label: 'Finance', icon: <Icons.Finance /> },
+        { id: 'data_quality', label: 'Kvalita dat', icon: <Icons.DataQuality /> }
       ]
     },
     {

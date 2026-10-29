@@ -28,6 +28,7 @@ const VALID_APP_VIEWS: AppView[] = [
   "admin_users",
   "safety",
   "finance",
+  "data_quality",
   "tasks",
   "bugs"
 ];
