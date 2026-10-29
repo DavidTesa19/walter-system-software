@@ -15,6 +15,7 @@ import type {
   JarvisOpenAction,
   JarvisStatus,
   JarvisProposal,
+  JarvisVoiceEngine,
   JarvisVoiceOption,
   ProposalDecision,
   TranscriptItem,
@@ -636,14 +637,20 @@ const VOICE_GROUPS: Array<{ gender: JarvisVoiceOption['gender']; title: string }
   { gender: 'neutral', title: 'Neutrální' },
 ];
 
-// The engine and voice in use: the user's choice, or the server's default
-// when the choice is not on offer (any more).
+const providerOf = (engine: JarvisVoiceEngine) => engine.provider ?? 'openai';
+
+// The engine and voice in use: the user's choice, or the defaults when the
+// choice is not on offer (any more). `providers` are the ones with an engine
+// here; `providerEngines` the engines of the one in use.
 function chosenVoice(settings: VoiceSettings, status: JarvisStatus | null) {
   const engines = status?.voice ? status.engines ?? [] : [];
   const engine = engines.find((item) => item.id === settings.engine) ?? engines.find((item) => item.id === status?.defaultEngine) ?? engines[0];
+  const provider = engine ? providerOf(engine) : null;
+  const providers = (status?.voice ? status.providers ?? [] : []).filter((item) => engines.some((other) => providerOf(other) === item.id));
+  const providerEngines = engines.filter((item) => providerOf(item) === provider);
   const voices = engine?.voices ?? [];
-  const selected = voices.some((voice) => voice.id === settings.voice) ? settings.voice : status?.defaultVoice ?? null;
-  return { engines, engine, voices, selected };
+  const selected = voices.some((voice) => voice.id === settings.voice) ? settings.voice : engine?.defaultVoice ?? status?.defaultVoice ?? null;
+  return { engines, engine, provider, providers, providerEngines, voices, selected };
 }
 
 // How Jarvis sounds and when a spoken question goes off. Kept per browser.
@@ -660,8 +667,8 @@ function VoiceSettingsPanel({
   status: JarvisStatus | null;
   onChange: (patch: Partial<VoiceSettings>) => void;
   previewing: boolean;
-  // `voice`: a voice just picked, heard before the choice is saved.
-  onPreview: (voice?: string) => void;
+  // A voice just picked (and its engine), heard before the choice is saved.
+  onPreview: (choice?: { voice: string; engine?: string }) => void;
   onStopPreview: () => void;
   lastRecording: LastRecording | null;
 }) {
@@ -681,14 +688,50 @@ function VoiceSettingsPanel({
     audio.onended = () => setPlayingRecording(false);
     audio.play().then(() => setPlayingRecording(true), () => setPlayingRecording(false));
   };
-  const { engines, engine, voices, selected } = chosenVoice(settings, status);
+  const { engines, engine, provider, providers, providerEngines, voices, selected } = chosenVoice(settings, status);
+  // Each provider has its own voices: switching remembers the engine and
+  // voice left behind and brings back the ones last used with the other.
+  const switchProvider = (id: string) => {
+    if (id === provider) return;
+    const remembered = settings.byProvider[id];
+    const target = engines.filter((item) => providerOf(item) === id);
+    const next = target.find((item) => item.id === remembered?.engine) ?? target[0];
+    onChange({
+      engine: next?.id ?? null,
+      voice: remembered?.voice ?? null,
+      byProvider: {
+        ...settings.byProvider,
+        ...(provider ? { [provider]: { engine: engine?.id ?? null, voice: selected } } : {}),
+      },
+    });
+  };
+  const providerInfo = providers.find((item) => item.id === provider);
   return (
     <div className="jarvis-voice-settings">
-      {engines.length > 1 && (
+      {providers.length > 1 && (
+        <section>
+          <h4>Hlasy od</h4>
+          <div className="jarvis-chip-row">
+            {providers.map((item) => (
+              <button
+                key={item.id}
+                type="button"
+                className={`jarvis-choice${item.id === provider ? ' jarvis-choice--on' : ''}`}
+                aria-pressed={item.id === provider}
+                onClick={() => switchProvider(item.id)}
+              >
+                {item.label}
+              </button>
+            ))}
+          </div>
+          {providerInfo && <p className="jarvis-voice-hint">{providerInfo.description}</p>}
+        </section>
+      )}
+      {providerEngines.length > 1 && (
         <section>
           <h4>Druh hlasu</h4>
           <div className="jarvis-chip-row">
-            {engines.map((item) => (
+            {providerEngines.map((item) => (
               <button
                 key={item.id}
                 type="button"
@@ -722,7 +765,7 @@ function VoiceSettingsPanel({
                       title={`Vybrat hlas ${voice.label} a poslechnout si ho`}
                       onClick={() => {
                         onChange({ voice: voice.id });
-                        onPreview(voice.id);
+                        onPreview({ voice: voice.id, engine: engine?.id });
                       }}
                     >
                       <VoiceAvatar voice={voice.id} size={44} />
@@ -754,6 +797,9 @@ function VoiceSettingsPanel({
             </button>
           ))}
         </div>
+        {provider === 'elevenlabs' && (
+          <p className="jarvis-voice-hint">ElevenLabs mluví nejvýš 1,2× rychleji, takže 1,5× u něj znamená 1,2×.</p>
+        )}
         <button type="button" className="jarvis-chip-button jarvis-voice-preview" onClick={previewing ? onStopPreview : () => onPreview()}>
           {previewing ? Icon.stop : Icon.speakerSmall} {previewing ? 'Zastavit ukázku' : 'Poslechnout ukázku'}
         </button>
@@ -1535,7 +1581,7 @@ export default function JarvisPanel({ open, onOpen, onClose, viewLabel, launcher
           status={status}
           onChange={changeVoiceSettings}
           previewing={voice.speakingKey === 'preview'}
-          onPreview={(voiceId) => void voice.speak(VOICE_SAMPLE, 'preview', { voice: voiceId })}
+          onPreview={(choice) => void voice.speak(VOICE_SAMPLE, 'preview', choice ?? {})}
           onStopPreview={stopSpeaking}
           lastRecording={voice.lastRecording}
         />

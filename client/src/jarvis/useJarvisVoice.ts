@@ -136,20 +136,26 @@ export function useJarvisVoice(
   // Reads an answer aloud; `key` names it, so its button can show "stop".
   // If the server's voice fails, the browser's takes over for this answer.
   // Resolves true when it was read to the end, false when it was stopped.
-  // `voice` reads in that voice instead of the chosen one (a sample of a voice
-  // just picked, before the new choice has reached the settings).
+  // `voice` and `engine` read in that voice and engine instead of the chosen
+  // ones (a sample of a voice just picked, before the new choice has reached
+  // the settings).
   const speak = useCallback(
-    async (markdown: string, key: string, { voice }: { voice?: string } = {}): Promise<boolean> => {
+    async (markdown: string, key: string, { voice, engine }: { voice?: string; engine?: string } = {}): Promise<boolean> => {
       stopSpeaking();
       const text = toSpeechText(markdown);
       if (!text) return false;
       const token = speakTokenRef.current;
       setSpeakingKey(key);
-      const server = voice
-        ? createServerSpeaker((piece, signal) =>
-            jarvisApi.speech(piece, signal, { engine: settingsRef.current.engine, voice, speed: settingsRef.current.speed })
-          )
-        : serverSpeaker;
+      const server =
+        voice || engine
+          ? createServerSpeaker((piece, signal) =>
+              jarvisApi.speech(piece, signal, {
+                engine: engine ?? settingsRef.current.engine,
+                voice: voice ?? settingsRef.current.voice,
+                speed: settingsRef.current.speed,
+              })
+            )
+          : serverSpeaker;
       const speakers = (useServer ? [server, browserSpeaker] : [browserSpeaker]).filter((item): item is Speaker => item !== null);
       let unread = text;
       for (const speaker of speakers) {

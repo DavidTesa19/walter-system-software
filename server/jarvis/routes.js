@@ -20,11 +20,12 @@ import { createFileConversationStore, createPgConversationStore } from './store.
 import {
   MAX_AUDIO_BYTES,
   MAX_SPEECH_CHARS,
-  TTS_ENGINE,
-  TTS_ENGINES,
   TTS_SPEED,
   TTS_SPEEDS,
   TTS_VOICE,
+  availableEngines,
+  availableProviders,
+  defaultEngine,
   isVoiceConfigured,
   synthesize,
   readTranscriptionHints,
@@ -206,8 +207,9 @@ export function registerJarvisRoutes(app, { authenticateToken, pool, dataDir, po
   });
 
   // `voice` says whether the server can listen and speak; without it the
-  // browser uses its own (lower quality) speech engines. `voices` are the
-  // ones a user can pick, with the default voice and speed.
+  // browser uses its own (lower quality) speech engines. `providers` and
+  // their `engines` (each with its voices) are what a user can pick, with
+  // the default engine, voice and speed. ElevenLabs only with its key.
   app.get('/api/jarvis/status', authenticateToken, (_req, res) => {
     const voice = isVoiceConfigured();
     res.json({
@@ -215,7 +217,14 @@ export function registerJarvisRoutes(app, { authenticateToken, pool, dataDir, po
       model: JARVIS_MODEL,
       voice,
       ...(voice
-        ? { engines: TTS_ENGINES, defaultEngine: TTS_ENGINE, defaultVoice: TTS_VOICE, speeds: TTS_SPEEDS, defaultSpeed: TTS_SPEED }
+        ? {
+            providers: availableProviders(),
+            engines: availableEngines(),
+            defaultEngine: defaultEngine(),
+            defaultVoice: TTS_VOICE,
+            speeds: TTS_SPEEDS,
+            defaultSpeed: TTS_SPEED,
+          }
         : {}),
     });
   });

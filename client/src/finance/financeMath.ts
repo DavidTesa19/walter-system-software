@@ -22,8 +22,12 @@ export const STATUS_LABELS: Record<ExpenseStatus, string> = {
   cancelled: 'Zrušené',
 };
 
-/** Where a measured cost comes from: a provider's bills, or Brave's counter. */
-export type Source = CostSource | 'brave';
+/**
+ * Where a measured cost comes from: a provider's bills, Brave's counter, or
+ * (ElevenLabs) only the app's own usage log.
+ */
+export type Source = CostSource | 'brave' | 'elevenlabs';
+const hasNoBills = (source: Source): source is 'brave' | 'elevenlabs' => source === 'brave' || source === 'elevenlabs';
 
 export const SOURCE_LABELS: Record<Source, string> = {
   anthropic: 'Anthropic',
@@ -32,16 +36,18 @@ export const SOURCE_LABELS: Record<Source, string> = {
   cloudflare: 'Cloudflare',
   google: 'Google Cloud',
   brave: 'Brave Search',
+  elevenlabs: 'ElevenLabs',
 };
 
 export const PROVIDER_LABELS: Record<Provider, string> = {
   anthropic: 'Anthropic',
   openai: 'OpenAI',
   brave: 'Brave Search',
+  elevenlabs: 'ElevenLabs',
 };
 
 // Stacking order in the AI chart, bottom up; also the series colour order.
-export const CHART_PROVIDERS: Provider[] = ['anthropic', 'openai', 'brave'];
+export const CHART_PROVIDERS: Provider[] = ['anthropic', 'openai', 'brave', 'elevenlabs'];
 
 export const FEATURE_LABELS: Record<string, string> = {
   jarvis: 'Jarvis',
@@ -141,7 +147,7 @@ export function measuredByMonth(overview: FinanceOverview): MeasuredMonths {
   };
   for (const row of overview.providerCosts) add(row.month, row.provider, toCzk(row.amount, row.currency, rates), true);
   for (const row of overview.usage.rows) {
-    if (row.provider !== 'brave' && isBillingConnected(overview, row.provider)) continue;
+    if (!hasNoBills(row.provider) && isBillingConnected(overview, row.provider)) continue;
     add(row.month, row.provider, toCzk(row.costUsd, 'USD', rates), false);
   }
   return months;
@@ -191,7 +197,7 @@ export function monthlyFigure(
   const source = measuredSource(expense);
   const previousMonth = shiftMonth(currentMonth(), -1);
 
-  if (source && source !== 'brave') {
+  if (source && !hasNoBills(source)) {
     const provider = overview.providers[source];
     if (isBillingConnected(overview, source)) {
       const owner = claimed.get(source);

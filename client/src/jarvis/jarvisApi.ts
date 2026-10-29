@@ -158,9 +158,20 @@ export interface JarvisVoiceOption {
 
 export interface JarvisVoiceEngine {
   id: string;
+  // 'openai' or 'elevenlabs': the voice menu groups the engines by it (a
+  // server from before the providers sends none, which means OpenAI).
+  provider?: string;
   label: string;
   description: string;
   voices: JarvisVoiceOption[];
+  // The voice this engine reads in until the user picks one.
+  defaultVoice?: string;
+}
+
+export interface JarvisVoiceProvider {
+  id: string;
+  label: string;
+  description: string;
 }
 
 export interface JarvisStatus {
@@ -169,6 +180,8 @@ export interface JarvisStatus {
   // The server can transcribe and speak (OpenAI); otherwise the browser's own
   // speech engines are used.
   voice?: boolean;
+  // Who reads answers aloud (ElevenLabs only when the server has its key).
+  providers?: JarvisVoiceProvider[];
   engines?: JarvisVoiceEngine[];
   defaultEngine?: string;
   defaultVoice?: string;

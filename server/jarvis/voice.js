@@ -3,16 +3,22 @@
 // OPENAI_API_KEY the AI Asistent screen uses. Without that key the browser
 // falls back to its own speech engines, so nothing here is required.
 //
-// Two engines read answers aloud, both voice models asked to read the text
-// word for word. What they actually said comes back as a transcript; a piece
-// one did not read verbatim (or failed on) is read by the other.
-// - "realtime" (default): gpt-realtime-2.1-mini over the Realtime API, OpenAI's
-//   successor to its TTS models. On 2026-10-28 it finished a first sentence in
-//   ~1.5 s against gpt-audio's ~2.6 s, sounded about the same and costs about
-//   a quarter (~$0.027 a minute).
-// - "conversational": gpt-audio-1.5 through chat completions, the engine
-//   Jarvis used before (~$0.1 a minute).
-// The plain TTS model (gpt-4o-mini-tts) is gone: it shuts down on 6 Jan 2027.
+// Answers are read by one of two providers, each with its own voices (and
+// faces in the panel):
+// - OpenAI, two engines, both voice models asked to read the text word for
+//   word. What they actually said comes back as a transcript; a piece one did
+//   not read verbatim (or failed on) is read by the other.
+//   - "realtime" (default): gpt-realtime-2.1-mini over the Realtime API,
+//     OpenAI's successor to its TTS models. On 2026-10-28 it finished a first
+//     sentence in ~1.5 s against gpt-audio's ~2.6 s, sounded about the same
+//     and costs about a quarter (~$0.027 a minute).
+//   - "conversational": gpt-audio-1.5 through chat completions, the engine
+//     Jarvis used before (~$0.1 a minute).
+//   The plain TTS model (gpt-4o-mini-tts) is gone: it shuts down on 6 Jan 2027.
+// - ElevenLabs ("elevenlabs", only with ELEVENLABS_API_KEY): native Czech
+//   voices from its voice library, a plain TTS model that reads exactly the
+//   text it gets (~$0.036 a minute on eleven_v4_turbo). A piece it fails on is
+//   read by OpenAI in a voice of the same gender.
 
 import OpenAI, { toFile } from 'openai';
 import WebSocket from 'ws';
@@ -40,23 +46,66 @@ const VOICE_IDS = new Set(TTS_VOICES.map((voice) => voice.id));
 // A voice no longer offered (an older choice) reads in the default one.
 export const TTS_VOICE = VOICE_IDS.has(process.env.JARVIS_TTS_VOICE) ? process.env.JARVIS_TTS_VOICE : 'cedar';
 
+export const ELEVENLABS_MODEL = process.env.ELEVENLABS_MODEL || 'eleven_v4_turbo';
+// Native Czech voices from ElevenLabs' library, chosen on 2026-10-28: the
+// most used Czech voices (standard or Prague accent) and every male voice
+// tagged "deep" read the same answer, and a listening judge compared each
+// pair in both orders. These won; Ondřej is the deep one (median pitch
+// 122 Hz against Cedar's 153 Hz). `voiceId` is ElevenLabs' id. A library
+// voice its owner withdraws stops working, and OpenAI reads instead.
+const ELEVENLABS_VOICES = [
+  { id: 'anet', label: 'Anet', gender: 'female', voiceId: 'MpbYQvoTmXjHkaxtLiSh' },
+  { id: 'jana', label: 'Jana', gender: 'female', voiceId: 'bF7C2fCv7Zf30iT84wZ1' },
+  { id: 'denisa', label: 'Denisa', gender: 'female', voiceId: 'OAAjJsQDvpg3sVjiLgyl' },
+  { id: 'oliver', label: 'Oliver', gender: 'male', voiceId: 'daJ4gHLkIVFskWuoLuDX' },
+  { id: 'jan', label: 'Jan', gender: 'male', voiceId: 'KIDKfqJyZ6ASuyzsKfh5' },
+  { id: 'ondrej', label: 'Ondřej', gender: 'male', voiceId: 'nCmK9bolkZa2wzrAjnEe' },
+];
+const ELEVENLABS_VOICE_IDS = Object.fromEntries(ELEVENLABS_VOICES.map((voice) => [voice.id, voice.voiceId]));
+const publicVoices = (voices) => voices.map(({ id, label, gender }) => ({ id, label, gender }));
+
+export const TTS_PROVIDERS = [
+  { id: 'openai', label: 'OpenAI', description: 'Hlasy od OpenAI. Česky mluví plynule, ale s lehkým cizím přízvukem.' },
+  { id: 'elevenlabs', label: 'ElevenLabs', description: 'Rodilé české hlasy. Asi 0,8 Kč za minutu.' },
+];
+
+// `provider` groups the engines in the panel; `defaultVoice` is the one a
+// user gets on switching to the engine before picking any.
 export const TTS_ENGINES = [
   {
     id: 'realtime',
+    provider: 'openai',
     label: 'Rychlý',
     description: 'Začne mluvit nejdřív a je nejlevnější, asi 0,6 Kč za minutu.',
     voices: TTS_VOICES,
+    defaultVoice: TTS_VOICE,
   },
   {
     id: 'conversational',
+    provider: 'openai',
     label: 'Původní',
     description: 'Hlas, kterým Jarvis mluvil dosud. Zní podobně, ale začne mluvit o chvilku později a stojí asi 2 Kč za minutu.',
     voices: TTS_VOICES,
+    defaultVoice: TTS_VOICE,
+  },
+  {
+    id: 'elevenlabs',
+    provider: 'elevenlabs',
+    label: 'ElevenLabs',
+    description: '',
+    voices: publicVoices(ELEVENLABS_VOICES),
+    defaultVoice: 'oliver',
   },
 ];
 const ENGINE_IDS = new Set(TTS_ENGINES.map((engine) => engine.id));
+export const isElevenLabsConfigured = () => Boolean(process.env.ELEVENLABS_API_KEY);
+// The engines and providers this server can use right now.
+export const availableEngines = () => TTS_ENGINES.filter((engine) => engine.provider !== 'elevenlabs' || isElevenLabsConfigured());
+export const availableProviders = () => TTS_PROVIDERS.filter((provider) => availableEngines().some((engine) => engine.provider === provider.id));
 // An engine no longer offered ("classic", stored by older panels) reads in the default.
 export const TTS_ENGINE = ENGINE_IDS.has(process.env.JARVIS_TTS_ENGINE) ? process.env.JARVIS_TTS_ENGINE : 'realtime';
+// JARVIS_TTS_ENGINE=elevenlabs without the key reads with OpenAI.
+export const defaultEngine = () => (availableEngines().some((engine) => engine.id === TTS_ENGINE) ? TTS_ENGINE : 'realtime');
 // How fast the voice talks, 1 = the model's own pace (which reads Czech
 // rather slowly). The panel lets each user pick their own.
 export const TTS_SPEEDS = [1, 1.15, 1.3, 1.5];
@@ -370,28 +419,105 @@ async function synthesizeConversational(text, signal, userId, voice, speed) {
   return { audio: Buffer.from(audio.data, 'base64'), contentType: 'audio/mpeg' };
 }
 
-const ENGINES = { realtime: synthesizeRealtime, conversational: synthesizeConversational };
+// ElevenLabs' speed setting only goes from 0.7 to 1.2, so the panel's four
+// steps map onto its range.
+const ELEVENLABS_SPEED = { 1: 1, 1.15: 1.1, 1.3: 1.15, 1.5: 1.2 };
+// The plan caps requests at once (Starter 3, Creator 5, Pro 10) and refuses
+// the rest. The panel asks for up to three pieces of an answer at a time, so
+// pieces over the cap wait here for a free slot instead of failing over to
+// another voice. Railway runs one instance, so an in-process queue is enough.
+const ELEVENLABS_CONCURRENCY = Number(process.env.ELEVENLABS_CONCURRENCY) > 0 ? Number(process.env.ELEVENLABS_CONCURRENCY) : 3;
+let elevenLabsActive = 0;
+const elevenLabsWaiting = [];
+
+function takeElevenLabsSlot(signal) {
+  if (elevenLabsActive < ELEVENLABS_CONCURRENCY) {
+    elevenLabsActive += 1;
+    return Promise.resolve();
+  }
+  return new Promise((resolve, reject) => {
+    const entry = {};
+    const onAbort = () => {
+      const index = elevenLabsWaiting.indexOf(entry);
+      if (index >= 0) elevenLabsWaiting.splice(index, 1);
+      reject(signal.reason ?? new Error('aborted'));
+    };
+    entry.resolve = () => {
+      signal?.removeEventListener('abort', onAbort);
+      resolve();
+    };
+    elevenLabsWaiting.push(entry);
+    signal?.addEventListener('abort', onAbort, { once: true });
+  });
+}
+
+// A finished request hands its slot straight to the next one waiting.
+function freeElevenLabsSlot() {
+  const next = elevenLabsWaiting.shift();
+  if (next) next.resolve();
+  else elevenLabsActive -= 1;
+}
+
+async function synthesizeElevenLabs(text, signal, userId, voice, speed) {
+  await takeElevenLabsSlot(signal);
+  try {
+    const response = await fetch(
+      `https://api.elevenlabs.io/v1/text-to-speech/${ELEVENLABS_VOICE_IDS[voice]}/stream?output_format=mp3_44100_128`,
+      {
+        method: 'POST',
+        headers: { 'xi-api-key': process.env.ELEVENLABS_API_KEY, 'Content-Type': 'application/json', Accept: 'audio/mpeg' },
+        body: JSON.stringify({
+          text,
+          model_id: ELEVENLABS_MODEL,
+          language_code: 'cs',
+          voice_settings: { speed: ELEVENLABS_SPEED[speed] ?? ELEVENLABS_SPEED[TTS_SPEED] },
+        }),
+        signal,
+      }
+    );
+    if (!response.ok) throw new Error(`ElevenLabs ${response.status}: ${(await response.text()).slice(0, 160)}`);
+    const audio = Buffer.from(await response.arrayBuffer());
+    // Billed by the character.
+    recordAiUsage({ provider: 'elevenlabs', model: ELEVENLABS_MODEL, feature: 'voice_tts', userId, units: text.length });
+    return { audio, contentType: 'audio/mpeg' };
+  } finally {
+    freeElevenLabsSlot();
+  }
+}
+
+const ENGINES = { realtime: synthesizeRealtime, conversational: synthesizeConversational, elevenlabs: synthesizeElevenLabs };
+
+// The OpenAI voice that stands in for an ElevenLabs one: the first of the
+// same gender.
+const standInVoice = (voice) => {
+  const gender = ELEVENLABS_VOICES.find((item) => item.id === voice)?.gender;
+  return TTS_VOICES.find((item) => item.gender === gender)?.id ?? TTS_VOICE;
+};
 
 /**
  * Speech for one piece of an answer: `{ audio, contentType }` (WAV from the
- * realtime engine, MP3 from gpt-audio). `engine`, `voice` and `speed` are the
- * user's choices from the panel (unknown values fall back to the defaults).
- * When the chosen engine fails or does not read the piece verbatim, the other
- * one reads it; when both fail, the browser's own voice takes over.
+ * realtime engine, MP3 from gpt-audio and ElevenLabs). `engine`, `voice` and
+ * `speed` are the user's choices from the panel (unknown values fall back to
+ * the defaults). When the chosen engine fails, or an OpenAI one does not read
+ * the piece verbatim, the other OpenAI engines read it (for ElevenLabs, in a
+ * voice of the same gender); when all fail, the browser's own voice takes over.
  */
 export async function synthesize(text, signal, userId = null, { voice, speed, engine } = {}) {
+  const engines = availableEngines();
+  const chosen = engines.find((item) => item.id === engine) ?? engines.find((item) => item.id === TTS_ENGINE) ?? engines[0];
   const pace = TTS_SPEEDS.includes(Number(speed)) ? Number(speed) : TTS_SPEED;
-  const chosen = ENGINE_IDS.has(engine) ? engine : TTS_ENGINE;
-  const speaker = VOICE_IDS.has(voice) ? voice : TTS_VOICE;
+  const speaker = chosen.voices.some((item) => item.id === voice) ? voice : chosen.defaultVoice;
   const spoken = spellCodes(text);
+  const order = [chosen, ...engines.filter((item) => item.provider === 'openai' && item !== chosen)];
   let failure = null;
-  for (const id of [chosen, ...[...ENGINE_IDS].filter((other) => other !== chosen)]) {
+  for (const item of order) {
+    const itemVoice = item.provider === chosen.provider ? speaker : standInVoice(speaker);
     try {
-      return await ENGINES[id](spoken, signal, userId, speaker, pace);
+      return await ENGINES[item.id](spoken, signal, userId, itemVoice, pace);
     } catch (error) {
       if (signal?.aborted) throw error;
       failure = error;
-      console.warn(`Jarvis voice: the ${id} reading failed:`, String(error?.message ?? error).slice(0, 160));
+      console.warn(`Jarvis voice: the ${item.id} reading failed:`, String(error?.message ?? error).slice(0, 160));
     }
   }
   throw failure;

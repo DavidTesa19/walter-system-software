@@ -3,10 +3,11 @@
 export type SendMode = 'auto' | 'manual';
 
 export interface VoiceSettings {
-  // 'realtime' (fast) or 'conversational' (gpt-audio, the earlier one); null
-  // or an engine no longer offered = the server's default.
+  // 'realtime' (fast), 'conversational' (gpt-audio, the earlier one) or
+  // 'elevenlabs'; null or an engine no longer offered = the server's default.
   engine: string | null;
-  // A server voice id (Marin, Cedar, …); null = the server's default.
+  // A voice id of that engine (Marin, Cedar, …, Ondřej); null = the engine's
+  // default.
   voice: string | null;
   // 1 = the voice's own pace.
   speed: number;
@@ -18,6 +19,14 @@ export interface VoiceSettings {
   // After reading the answer to a spoken question, listen again for the next
   // one, like a phone call.
   conversation: boolean;
+  // The engine and voice last used with each provider (OpenAI, ElevenLabs),
+  // so switching back to one brings them back.
+  byProvider: Record<string, ProviderChoice>;
+}
+
+export interface ProviderChoice {
+  engine: string | null;
+  voice: string | null;
 }
 
 export const SPEED_OPTIONS = [1, 1.15, 1.3, 1.5];
@@ -36,7 +45,22 @@ export const DEFAULT_VOICE_SETTINGS: VoiceSettings = {
   sendMode: 'auto',
   pauseMs: 2500,
   conversation: true,
+  byProvider: {},
 };
+
+const textOrNull = (value: unknown) => (typeof value === 'string' ? value : null);
+
+function readByProvider(value: unknown): Record<string, ProviderChoice> {
+  if (!value || typeof value !== 'object') return {};
+  return Object.fromEntries(
+    Object.entries(value as Record<string, unknown>)
+      .filter(([, choice]) => choice && typeof choice === 'object')
+      .map(([provider, choice]) => {
+        const { engine, voice } = choice as Record<string, unknown>;
+        return [provider, { engine: textOrNull(engine), voice: textOrNull(voice) }];
+      })
+  );
+}
 
 const STORAGE_KEY = 'walterJarvisVoiceSettings';
 
@@ -51,6 +75,7 @@ export function loadVoiceSettings(): VoiceSettings {
       sendMode: stored.sendMode === 'manual' ? 'manual' : 'auto',
       pauseMs: PAUSE_OPTIONS.some((option) => option.ms === stored.pauseMs) ? Number(stored.pauseMs) : DEFAULT_VOICE_SETTINGS.pauseMs,
       conversation: stored.conversation !== false,
+      byProvider: readByProvider(stored.byProvider),
     };
   } catch {
     return DEFAULT_VOICE_SETTINGS;

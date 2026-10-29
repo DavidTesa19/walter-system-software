@@ -49,7 +49,7 @@ export function recordBraveQuota(headers) {
 const count = (value) => (Number.isFinite(Number(value)) && Number(value) > 0 ? Math.round(Number(value)) : 0);
 
 /**
- * provider   'anthropic' | 'openai' | 'brave'
+ * provider   'anthropic' | 'openai' | 'brave' | 'elevenlabs'
  * feature    'jarvis' | 'jarvis_ocr' | 'chat' | 'voice_stt' | 'voice_tts' | 'web_search'
  * input/output/cacheRead/cacheWrite  token counts (input excludes cached tokens)
  * units      characters (read-aloud), seconds (transcription without tokens)

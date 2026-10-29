@@ -121,6 +121,22 @@ export const CATALOG = [
     pricingUrl: 'https://developers.openai.com/api/docs/pricing',
   },
   {
+    key: 'elevenlabs',
+    name: 'ElevenLabs',
+    vendor: 'ElevenLabs',
+    category: 'ai',
+    billingCycle: 'monthly',
+    amount: 6,
+    currency: 'USD',
+    description:
+      'Tarif Starter $6 měsíčně (první měsíc $1), v ceně zhruba 30–40 tisíc znaků; Creator $22 (víc souběžných požadavků). ' +
+      'Nad tarif $0,04 za 1 000 znaků (eleven_v4_turbo), plné modely $0,08.',
+    usedFor: 'Hlas Jarvise: rodilé české hlasy pro předčítání odpovědí (volba ElevenLabs v nastavení hlasu).',
+    envKeys: [{ name: 'ELEVENLABS_API_KEY' }],
+    dashboardUrl: 'https://elevenlabs.io/app/subscription',
+    pricingUrl: 'https://elevenlabs.io/pricing/api',
+  },
+  {
     key: 'brave-search',
     name: 'Brave Search API',
     vendor: 'Brave',

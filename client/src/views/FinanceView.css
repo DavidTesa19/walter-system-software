@@ -409,6 +409,7 @@
 .finance-swatch--anthropic { background: var(--finance-series-1); }
 .finance-swatch--openai { background: var(--finance-series-2); }
 .finance-swatch--brave { background: var(--finance-series-3); }
+.finance-swatch--elevenlabs { background: var(--finance-series-4); }
 
 .finance-chart-frame {
   position: relative;
@@ -440,6 +441,7 @@
 .finance-mark--anthropic { fill: var(--finance-series-1); }
 .finance-mark--openai { fill: var(--finance-series-2); }
 .finance-mark--brave { fill: var(--finance-series-3); }
+.finance-mark--elevenlabs { fill: var(--finance-series-4); }
 
 .finance-hit {
   fill: transparent;

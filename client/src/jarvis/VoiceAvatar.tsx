@@ -1,9 +1,9 @@
 import { useId } from 'react';
 import type { ReactNode } from 'react';
 
-// A face for each of Jarvis's voices (server/jarvis/voice.js TTS_VOICES), so
-// picking one feels like picking someone. Drawn here rather than loaded:
-// six small SVGs, no image files, no licences.
+// A face for each of Jarvis's voices (server/jarvis/voice.js: TTS_VOICES for
+// OpenAI, ELEVENLABS_VOICES), so picking one feels like picking someone.
+// Drawn here rather than loaded: small SVGs, no image files, no licences.
 
 interface Look {
   background: string;
@@ -109,6 +109,106 @@ const LOOKS: Record<string, Look> = {
       </g>
     ),
     front: <path d="M21.3 25.8C20.8 18.2 25.4 14.2 32 14.2S43.4 18 42.7 25.8C41.8 22 40 20.2 37.2 19.4L35.6 21C32 20.4 27.2 20.6 24.4 22 22.8 22.8 21.8 24.2 21.3 25.8Z" />,
+  },
+
+  // ElevenLabs' native Czech voices.
+  // Light brown hair in a high ponytail with a red hair tie.
+  anet: {
+    background: '#99f6e4',
+    skin: '#f6d3b8',
+    shade: '#e0b08f',
+    hair: '#9a6a3b',
+    shirt: '#ea580c',
+    back: <path d="M38 14C45 8.6 52.6 12.6 50.6 21 49.6 26 46.8 30 44.2 33.4 45.4 27 44.4 21.2 40 18Z" />,
+    front: (
+      <>
+        <path d="M21.2 26C20.8 17.6 25.8 13.8 32 13.8S43.2 17.6 42.8 26C40.6 21.4 36.6 19.2 31.6 19.6 27.4 20 23.4 22.4 21.2 26Z" />
+        <circle cx="41.6" cy="15.6" r="1.5" fill="#e11d48" />
+      </>
+    ),
+  },
+  // Wavy shoulder-length golden hair, side parting, a thin necklace.
+  jana: {
+    background: '#fed7aa',
+    skin: '#f1c4a0',
+    shade: '#d9a27e',
+    hair: '#b7791f',
+    shirt: '#0f766e',
+    back: <path d="M19.5 30C18.5 17 24.5 12.6 32 12.6S45.5 17 44.5 30C45.5 36 46.5 41 44 45 41 44 40 41 41.5 38H22.5C24 41 23 44 20 45 17.5 41 18.5 36 19.5 30Z" />,
+    front: (
+      <>
+        <path d="M21.3 27C20.6 18 25.4 14 31 13.8 35.4 13.6 40.4 15.2 42.4 19.6 43.2 21.6 43.2 24.4 42.7 27 41.4 23 39.2 20.8 36.4 20 33.2 22.4 27.4 24 21.3 27Z" />
+        <path d="M27.6 47.4Q32 50.6 36.4 47.4" fill="none" stroke="#f5c542" strokeWidth="0.8" />
+      </>
+    ),
+  },
+  // Black pixie cut, silver studs.
+  denisa: {
+    background: '#f5d0fe',
+    skin: '#c58c6d',
+    shade: '#a8714f',
+    hair: '#1f1b18',
+    shirt: '#0e7490',
+    front: (
+      <>
+        <path d="M21 26.5C20.4 17.4 25.6 13.4 32.2 13.4 39.4 13.4 44 17.8 43 25.8 42.4 23 41.2 21.4 39.4 20.6 35.4 22.6 29 22.4 24.6 21.4 22.6 22.4 21.6 24.2 21 26.5Z" />
+        <circle cx="21.3" cy="33.4" r="0.9" fill="#e5e7eb" />
+        <circle cx="42.7" cy="33.4" r="0.9" fill="#e5e7eb" />
+      </>
+    ),
+  },
+  // Short dark curls and light stubble.
+  oliver: {
+    background: '#d9f99d',
+    skin: '#eab894',
+    shade: '#cf9a74',
+    hair: '#3b2a1e',
+    shirt: '#1d4ed8',
+    extra: (
+      <path d="M22 31C22.8 38.4 27 42 32 42S41.2 38.4 42 31C40.6 35 37 37.2 32 37.2S23.4 35 22 31Z" fill="#3b2a1e" opacity="0.22" />
+    ),
+    front: (
+      <>
+        <path d="M21.4 25C21.4 19 25.6 16 32 16S42.6 19 42.6 25C40.6 22.4 36.6 21 32 21S23.4 22.4 21.4 25Z" />
+        <circle cx="24" cy="20" r="3.2" />
+        <circle cx="27.5" cy="16.8" r="3.4" />
+        <circle cx="32" cy="15.4" r="3.6" />
+        <circle cx="36.5" cy="16.8" r="3.4" />
+        <circle cx="40" cy="20" r="3.2" />
+      </>
+    ),
+  },
+  // Neat brown side parting and rectangular glasses.
+  jan: {
+    background: '#a5f3fc',
+    skin: '#f3caa8',
+    shade: '#dba987',
+    hair: '#7c4a2a',
+    shirt: '#b45309',
+    extra: (
+      <g fill="none" stroke="#3f2a1f" strokeWidth="1">
+        <rect x="24.6" y="27.4" width="6.6" height="4.6" rx="1.4" />
+        <rect x="32.8" y="27.4" width="6.6" height="4.6" rx="1.4" />
+        <path d="M31.2 29.2H32.8M24.6 28.6L21.8 28M39.4 28.6L42.2 28" />
+      </g>
+    ),
+    front: <path d="M21.3 26C20.8 18 25.6 14 32.2 14 38.6 14 43.4 17.8 42.7 26 41.4 22.6 38.8 20.8 35.2 20.2L33.4 18.6 32.6 20.2C29 20.4 25.8 21.6 23.8 23.2 22.6 24 21.8 25 21.3 26Z" />,
+  },
+  // The deep voice: a buzz cut and a short dark beard.
+  ondrej: {
+    background: '#e7e5e4',
+    skin: '#d6a07c',
+    shade: '#b9825f',
+    hair: '#3a312b',
+    shirt: '#292524',
+    mouth: '#f1d0bb',
+    extra: (
+      <path
+        d="M22.2 31.5C22.8 38.8 27 42.4 32 42.4S41.2 38.8 41.8 31.5C40.6 35.4 38.6 37.4 36.4 37.6 35 37.7 33.6 36.6 32 36.6S29 37.7 27.6 37.6C25.4 37.4 23.4 35.4 22.2 31.5Z"
+        fill="#2b2420"
+      />
+    ),
+    front: <path d="M21.4 25C21 17.8 25.8 14.4 32 14.4S43 17.8 42.6 25C40.4 21 36.6 19.4 32 19.4S23.6 21 21.4 25Z" />,
   },
 };
 

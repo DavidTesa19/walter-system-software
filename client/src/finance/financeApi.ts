@@ -6,7 +6,7 @@ export type Currency = 'CZK' | 'USD' | 'EUR';
 /** A provider whose real bills the server reads (server/finance/providers.js). */
 export type CostSource = 'anthropic' | 'openai' | 'railway' | 'cloudflare' | 'google';
 /** A provider in the app's own AI usage log. */
-export type Provider = 'anthropic' | 'openai' | 'brave';
+export type Provider = 'anthropic' | 'openai' | 'brave' | 'elevenlabs';
 export type UsageFeature = 'jarvis' | 'jarvis_ocr' | 'chat' | 'voice_stt' | 'voice_tts' | 'web_search';
 
 export interface Expense {

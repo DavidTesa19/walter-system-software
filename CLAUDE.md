@@ -182,9 +182,12 @@ Data (`server/finance/store.js`, Postgres or `server/data/finance.json`):
   expiry from public RDAP (`checks.js`; `rdap.nic.cz` for .cz). The screen
   warns when a domain is within 30 days of expiry or already expired.
 - **`finance_ai_usage`** — one row per AI call, priced by `pricing.js`. **Every
-  new call to Anthropic, OpenAI or Brave must call `recordAiUsage`**
+  new call to Anthropic, OpenAI, Brave or ElevenLabs must call `recordAiUsage`**
   (`finance/usage.js`; fire-and-forget, never throws). It breaks costs down per
   feature; once a provider is connected its bill replaces the estimate.
+  ElevenLabs (Jarvis's native Czech voices) logs here too, by the
+  character; it has no bill connector, so its chart bars are always the
+  log's estimate (`hasNoBills` in financeMath.ts).
 
 - **History** (tab Historie, `server/finance/history.js`, `HistoryTab.tsx`):
   every payment month by month from **09/2025** (`HISTORY_START`). Three
@@ -387,6 +390,27 @@ inherited one falls back to the browser's serif. Needs `ANTHROPIC_API_KEY`;
     they sometimes came out as "K zero jedna dva".
   - The faithfulness check ignores digits, digit names and letter names,
     since the transcript writes them either way.
+  - **ElevenLabs** (`elevenlabs`, a third engine and its own provider, only
+    when `ELEVENLABS_API_KEY` is set; `ELEVENLABS_MODEL` default
+    `eleven_v4_turbo`, $0.04 per 1,000 characters). These are native Czech
+    library voices (`ELEVENLABS_VOICES`, picked 2026-10-28 by pairwise
+    listening; Ondřej is the deep one).
+    - It is a plain TTS model, so there is no verbatim check.
+    - If a reading fails, OpenAI reads in the first OpenAI voice of the same
+      gender (`standInVoice`).
+    - Speeds map onto its 0.7–1.2 range (`ELEVENLABS_SPEED`).
+    - The plan caps requests at once (Starter 3), so pieces queue in-process
+      up to `ELEVENLABS_CONCURRENCY` (default 3) instead of failing over.
+    - Usage is logged as provider `elevenlabs`, priced per character
+      (pricing.js), and shown in the finance chart. The catalog line is the
+      plan fee.
+    - A library voice its owner withdraws fails, and the OpenAI fallback
+      covers it.
+  - The status route sends `providers` and the `engines` available (each
+    with `provider` and `defaultVoice`). The voice menu shows "Hlasy od"
+    (OpenAI / ElevenLabs) and the provider's engines and voices.
+    `voiceSettings.byProvider` remembers the engine and voice last used with
+    each provider. Previews pass `{ voice, engine }` to `speak`.
 
   Other env:
   `JARVIS_TTS_ENGINE`, `JARVIS_STT_MODEL` (gpt-transcribe; gpt-4o-transcribe
@@ -417,9 +441,8 @@ inherited one falls back to the browser's serif. Needs `ANTHROPIC_API_KEY`;
   `VoiceAvatar.tsx` (a new voice needs one, or it gets a grey silhouette).
   Picking one plays a sample in it (`speak(..., { voice })`); the chosen
   face replaces the menu button's icon. An older stored choice no longer on
-  offer reads in the default voice. Native
-  Czech quality would need a different provider (e.g. ElevenLabs); that is a
-  new paid service and the user's decision. Spoken questions go off after
+  offer reads in the default voice. The ElevenLabs voices have their own
+  faces in the same file. Spoken questions go off after
   a chosen pause (default 2.5 s — a breath is shorter) or, in manual mode,
   only on the send button; the browser recognizer runs continuously so the
   same pause applies to it. Without the key the browser's own engines stand in (Chrome on Windows
