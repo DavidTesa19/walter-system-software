@@ -82,6 +82,25 @@ export interface JarvisDocument {
   size?: number;
   // Exports: how many records it had when made.
   rows?: number;
+  // The subject the file is about, if Jarvis named one: the card offers to
+  // file it under that subject's documents.
+  related?: JarvisDocumentSubject;
+}
+
+export interface JarvisDocumentSubject {
+  section: JarvisSection;
+  role: JarvisRole;
+  id: number;
+  label: string;
+}
+
+// A file filed under a subject's documents from its card.
+export interface JarvisDocumentSaved {
+  type: 'document_saved';
+  documentId: string;
+  subject: JarvisDocumentSubject;
+  storedId: number | null;
+  at: string;
 }
 
 // A web page an answer cites.
@@ -130,6 +149,7 @@ export type TranscriptItem =
   | CalendarDecision
   | { type: 'email'; draft: JarvisEmailDraft }
   | { type: 'document'; document: JarvisDocument }
+  | JarvisDocumentSaved
   | { type: 'sources'; sources: JarvisSource[] };
 
 export type AttachmentKind = 'image' | 'pdf' | 'text';
@@ -295,6 +315,11 @@ export const jarvisApi = {
     if (!response.ok) throw await failure(response, 'Soubor se nepodařilo stáhnout');
     return response.blob();
   },
+
+  // Files a document from a card under a subject's documents (the card's own
+  // subject unless another is named).
+  saveDocument: (conversationId: string, documentId: string, subject?: Omit<JarvisDocumentSubject, 'label'>) =>
+    apiPost<JarvisDocumentSaved>(`/api/jarvis/conversations/${conversationId}/documents/${documentId}/save`, subject ? { subject } : {}),
 
   attention: (fresh = false) => apiGet<JarvisAttention>(`/api/jarvis/attention${fresh ? '?fresh=1' : ''}`),
 

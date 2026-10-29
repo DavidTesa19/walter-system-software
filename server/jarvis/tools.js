@@ -309,6 +309,11 @@ const createDocumentInput = z.object({
     .max(10)
     .optional()
     .describe('Jen pro xlsx: listy tabulky. Bez nich se z content vezmou jeho tabulky.'),
+  related: z
+    .object({ section, role, id: z.number().int().positive() })
+    .strict()
+    .optional()
+    .describe('Subjekt, kterého se dokument týká (z ref): karta pak nabídne uložit soubor do jeho dokumentů.'),
 }).strict();
 
 const exportInput = z.object({
@@ -1255,7 +1260,20 @@ export const TOOLS = [
         if (error instanceof DocumentError) throw new ToolError(error.message);
         throw error;
       }
-      const document = { id: crypto.randomUUID(), format: input.format, title: input.title, filename: file.filename, size: file.buffer.length };
+      let related;
+      if (input.related) {
+        assertSection(ctx, input.related.section);
+        const record = await ctx.api.get(`${entitiesPath(input.related.section, input.related.role)}/${input.related.id}`);
+        related = { ...input.related, label: truncate(`${record.entity_id ?? ''} · ${subjectName(record)}`, 120) };
+      }
+      const document = {
+        id: crypto.randomUUID(),
+        format: input.format,
+        title: input.title,
+        filename: file.filename,
+        size: file.buffer.length,
+        ...(related ? { related } : {}),
+      };
       ctx.emitDocument(document, spec);
       return { soubor: file.filename, stav: 'Soubor je na kartě pod odpovědí; uživatel si ho stáhne tlačítkem Stáhnout.' };
     },

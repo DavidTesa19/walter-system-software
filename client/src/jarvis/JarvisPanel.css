@@ -1810,3 +1810,14 @@ button.jarvis-attention-item:hover {
   white-space: nowrap;
   color: var(--jarvis-accent);
 }
+
+.jarvis-document-buttons {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  flex-shrink: 0;
+}
+
+.jarvis-document-info .jarvis-document-saved {
+  color: #16a34a;
+}

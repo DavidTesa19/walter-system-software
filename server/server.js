@@ -186,6 +186,16 @@ const upload = multer({
   limits: { fileSize: MAX_DOCUMENT_SIZE_BYTES }
 });
 
+// Busboy hands multer an uploaded file's name as latin1 while browsers send
+// UTF-8, so "Smlouva č. 2.pdf" arrived garbled. Re-decode a name that is all
+// latin1, unless that breaks it (names typed into forms are already fine).
+const uploadedFilename = (raw) => {
+  const name = String(raw ?? "");
+  if (/[^\u0000-\u00ff]/.test(name)) return name;
+  const decoded = Buffer.from(name, "latin1").toString("utf8");
+  return decoded.includes("\uFFFD") ? name : decoded;
+};
+
 const sanitizeFilename = (value) => {
   if (typeof value !== "string" || !value.trim()) {
     return "document";
@@ -2610,7 +2620,7 @@ app.post("/:entity/:id/documents", authenticateToken, upload.single("file"), (re
       entityId,
       itemKind: "file",
       parentId,
-      filename: sanitizeFilename(req.file.originalname),
+      filename: sanitizeFilename(uploadedFilename(req.file.originalname)),
       mimeType: req.file.mimetype || "application/octet-stream",
       sizeBytes: req.file.size,
       createdAt: new Date().toISOString(),

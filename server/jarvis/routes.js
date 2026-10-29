@@ -12,8 +12,11 @@ import {
   ROLE_LABELS,
   SECTIONS,
   SECTION_LABELS,
+  documentResource,
+  entitiesPath,
   recordRef,
   sectionsForScope,
+  subjectName,
   truncate,
 } from './catalog.js';
 import { createFileConversationStore, createPgConversationStore } from './store.js';
@@ -364,6 +367,63 @@ export function registerJarvisRoutes(app, { authenticateToken, pool, dataDir, po
       if (error?.status === 403) return res.status(403).json({ error: 'K těmto datům už nemáte přístup.' });
       console.error('Jarvis: making a document failed:', error);
       res.status(500).json({ error: 'Soubor se nepodařilo vytvořit.' });
+    }
+  });
+
+  // Files a Jarvis-made document under a subject's Dokumenty: the subject the
+  // card names, or the one the body names (the profile the user has open).
+  // Uploaded through the app's own documents route, as the user (tagged as
+  // Jarvis's work in the change log), so section access applies.
+  app.post('/api/jarvis/conversations/:id/documents/:docId/save', authenticateToken, async (req, res) => {
+    try {
+      if (!UUID_PATTERN.test(req.params.id)) return res.status(404).json({ error: 'Konverzace nenalezena.' });
+      const userId = Number(req.user.id);
+      const conversation = await store.get(req.params.id, userId);
+      const item = (conversation?.transcript ?? []).find((entry) => entry.type === 'document' && entry.document?.id === req.params.docId);
+      if (!item?.spec) return res.status(404).json({ error: 'Soubor nenalezen.' });
+      const asked = req.body?.subject ?? item.document.related;
+      const section = asked?.section;
+      const role = asked?.role;
+      const id = Number(asked?.id);
+      if (!SECTIONS.includes(section) || !ROLES.includes(role) || !Number.isInteger(id) || id <= 0) {
+        return res.status(400).json({ error: 'Není jasné, ke kterému subjektu soubor uložit.' });
+      }
+      if (!sectionsForScope(req.user.accessScope ?? req.user.access_scope).includes(section)) {
+        return res.status(403).json({ error: `Do sekce ${SECTION_LABELS[section]} nemáte přístup.` });
+      }
+      const api = createApiClient({
+        baseUrl,
+        token: signAgentToken(req.user),
+        changesetId: `jarvis-${req.params.id.slice(0, 8)}-${Date.now().toString(36)}`,
+        note: `Jarvis: uložen soubor ${truncate(item.document.filename, 120)}`,
+      });
+      const record = await api.get(`${entitiesPath(section, role)}/${id}`);
+      let spec = item.spec;
+      if (spec.kind === 'export') {
+        const ctx = { api, user: req.user, sections: sectionsForScope(req.user.accessScope ?? req.user.access_scope) };
+        spec = { format: 'xlsx', title: spec.query.title, sheets: await exportSheets(ctx, spec.query) };
+      }
+      const file = await renderDocument(spec);
+      const created = await api.upload(`/${documentResource(section, role)}/${id}/documents`, {
+        buffer: file.buffer,
+        filename: file.filename,
+        contentType: file.type,
+      });
+      const saved = {
+        type: 'document_saved',
+        documentId: item.document.id,
+        subject: { section, role, id, label: truncate(`${record.entity_id ?? ''} · ${subjectName(record)}`, 120) },
+        storedId: created?.id ?? null,
+        at: new Date().toISOString(),
+      };
+      await store.append(conversation.id, userId, { messages: [], transcript: [saved], usage: zeroUsage() });
+      res.json(saved);
+    } catch (error) {
+      if (error instanceof DocumentError) return res.status(400).json({ error: error.message });
+      if (error?.status === 403) return res.status(403).json({ error: 'K tomuto subjektu nemůžete ukládat dokumenty.' });
+      if (error?.status === 404) return res.status(404).json({ error: 'Subjekt nenalezen.' });
+      console.error('Jarvis: saving a document to a subject failed:', error);
+      res.status(500).json({ error: 'Soubor se nepodařilo uložit.' });
     }
   });
 

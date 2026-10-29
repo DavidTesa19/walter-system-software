@@ -10,6 +10,8 @@ import type {
   JarvisCalendarCard,
   ConversationSummary,
   JarvisDocument,
+  JarvisDocumentSaved,
+  JarvisDocumentSubject,
   JarvisEmailDraft,
   JarvisSource,
   JarvisAttention,
@@ -325,10 +327,37 @@ const DOCUMENT_KINDS: Record<JarvisDocument['format'], { label: string; badge: s
 const rowCount = (rows: number) => `${rows} ${rows === 1 ? 'řádek' : rows >= 2 && rows <= 4 ? 'řádky' : 'řádků'}`;
 
 // A file Jarvis made, with a download button. The server renders it again on
-// every download (an export with the current rows).
-function DocumentCard({ file, conversationId }: { file: JarvisDocument; conversationId: string | null }) {
+// every download (an export with the current rows). `target` is where it can
+// be filed (the subject Jarvis named, or the profile open in the app);
+// `saved` says where it already was.
+function DocumentCard({
+  file,
+  conversationId,
+  target,
+  saved,
+  onSaved,
+}: {
+  file: JarvisDocument;
+  conversationId: string | null;
+  target: JarvisDocumentSubject | null;
+  saved: JarvisDocumentSaved | undefined;
+  onSaved: (item: JarvisDocumentSaved) => void;
+}) {
   const [busy, setBusy] = useState(false);
+  const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const save = async () => {
+    if (!conversationId || !target) return;
+    setSaving(true);
+    setError(null);
+    try {
+      onSaved(await jarvisApi.saveDocument(conversationId, file.id, { section: target.section, role: target.role, id: target.id }));
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Soubor se nepodařilo uložit.');
+    } finally {
+      setSaving(false);
+    }
+  };
   const kind = DOCUMENT_KINDS[file.format] ?? DOCUMENT_KINDS.pdf;
   const download = async () => {
     if (!conversationId) return;
@@ -362,11 +391,25 @@ function DocumentCard({ file, conversationId }: { file: JarvisDocument; conversa
           {file.rows ? ` · ${rowCount(file.rows)}` : ''}
           {file.size ? ` · ${formatSize(file.size)}` : ''}
         </small>
+        {saved && <small className="jarvis-document-saved">Uloženo v dokumentech {saved.subject.label}</small>}
         {error && <small className="jarvis-document-error">{error}</small>}
       </div>
-      <button type="button" className="jarvis-chip-button" onClick={() => void download()} disabled={busy || !conversationId}>
-        {busy ? 'Připravuji…' : 'Stáhnout'}
-      </button>
+      <div className="jarvis-document-buttons">
+        <button type="button" className="jarvis-chip-button" onClick={() => void download()} disabled={busy || !conversationId}>
+          {busy ? 'Připravuji…' : 'Stáhnout'}
+        </button>
+        {target && !saved && (
+          <button
+            type="button"
+            className="jarvis-chip-button"
+            onClick={() => void save()}
+            disabled={saving || !conversationId}
+            title={`Uložit do dokumentů ${target.label}`}
+          >
+            {saving ? 'Ukládám…' : 'Uložit k subjektu'}
+          </button>
+        )}
+      </div>
     </div>
   );
 }
@@ -705,6 +748,9 @@ function ReadAloudButton({ reading, onRead, onStop }: { reading: boolean; onRead
     </button>
   );
 }
+
+// Alt+M held at least this long is push-to-talk: letting go sends.
+const PUSH_TO_TALK_HOLD_MS = 400;
 
 const VOICE_SAMPLE =
   'Dobrý den, tady Jarvis. Takhle zním, když čtu odpovědi. Klient Software House má jednu aktivní zakázku s termínem do konce měsíce.';
@@ -1140,10 +1186,12 @@ export default function JarvisPanel({ open, onOpen, onClose, viewLabel, launcher
     if (open) setUnseen(false);
   }, [open]);
 
+  // Loaded with the app, not on first open: Alt+M needs to know whether the
+  // server can listen before the panel has ever been opened.
   useEffect(() => {
-    if (!open || status) return;
+    if (status) return;
     jarvisApi.status().then(setStatus).catch(() => setStatus({ available: false, model: '', voice: false }));
-  }, [open, status]);
+  }, [status]);
 
   // Reminders, checked when the app opens and every few minutes for the
   // launcher's number, and at once after a to-do changes.
@@ -1215,6 +1263,40 @@ export default function JarvisPanel({ open, onOpen, onClose, viewLabel, launcher
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
   }, [open, closePanel, listening, speaking, cancelListening, stopSpeaking]);
+
+  // Alt+M from anywhere: a tap starts listening (and opens the panel), a
+  // second tap sends; held down, it is push-to-talk and letting go sends.
+  // Pressed while Jarvis reads aloud, it cuts him off and listens.
+  const pushToTalkRef = useRef<{ pressedAt: number; started: boolean } | null>(null);
+  useEffect(() => {
+    if (!voice.canListen) return undefined;
+    const isShortcut = (event: KeyboardEvent) => event.altKey && !event.ctrlKey && !event.metaKey && event.code === 'KeyM';
+    const onDown = (event: KeyboardEvent) => {
+      if (!isShortcut(event)) return;
+      event.preventDefault();
+      if (event.repeat || busy || (status && !status.available)) return;
+      if (listening) {
+        pushToTalkRef.current = null;
+        voice.stopListening();
+        return;
+      }
+      if (!open) onOpen();
+      pushToTalkRef.current = { pressedAt: Date.now(), started: true };
+      void voice.startListening();
+    };
+    const onUp = (event: KeyboardEvent) => {
+      if (event.code !== 'KeyM' || !pushToTalkRef.current) return;
+      const { pressedAt } = pushToTalkRef.current;
+      pushToTalkRef.current = null;
+      if (Date.now() - pressedAt >= PUSH_TO_TALK_HOLD_MS) voice.stopListening();
+    };
+    window.addEventListener('keydown', onDown);
+    window.addEventListener('keyup', onUp);
+    return () => {
+      window.removeEventListener('keydown', onDown);
+      window.removeEventListener('keyup', onUp);
+    };
+  }, [voice, busy, status, listening, open, onOpen]);
 
   const toggleAttention = () => {
     setShowVoiceSettings(false);
@@ -1432,6 +1514,19 @@ export default function JarvisPanel({ open, onOpen, onClose, viewLabel, launcher
   };
 
   const turns = useMemo(() => groupTurns(transcript), [transcript]);
+  // Files already filed under a subject, by the card they came from.
+  const savedDocuments = useMemo(
+    () => new Map(transcript.flatMap((item) => (item.type === 'document_saved' ? [[item.documentId, item] as const] : []))),
+    [transcript]
+  );
+  const addSaved = useCallback((item: JarvisDocumentSaved) => setTranscript((items) => [...items, item]), []);
+  // Where a card's file can be filed: the subject Jarvis named, else the
+  // profile open in the app.
+  const documentTarget = (file: JarvisDocument): JarvisDocumentSubject | null =>
+    file.related ??
+    (focus
+      ? { section: focus.subject.section, role: focus.subject.role, id: focus.subject.id, label: focus.subject.label }
+      : null);
   hintSourceRef.current = {
     focus,
     answers: turns.flatMap((turn) => (turn.answer ? [turn.answer] : [])),
@@ -1719,7 +1814,7 @@ export default function JarvisPanel({ open, onOpen, onClose, viewLabel, launcher
             <p>Hledám v klientech, partnerech, tipařích a zakázkách, kam máte přístup, ve vašem kalendáři, v nahraných dokumentech, v rejstříku firem ARES i na webu. Umím připravit soubor Word, PDF nebo Excel. Změny dat jen navrhuji – provedou se, až je potvrdíte; události v kalendáři umím přidat i přesunout (a vrátit zpět).</p>
             {voice.canListen && (
               <p className="jarvis-welcome-voice">
-                {Icon.micSmall} Ptát se můžete i hlasem: klikněte na mikrofon a mluvte, odpovím nahlas.
+                {Icon.micSmall} Ptát se můžete i hlasem: klikněte na mikrofon nebo stiskněte Alt+M a mluvte, odpovím nahlas. Podržíte-li Alt+M, odešle se dotaz, až klávesu pustíte.
               </p>
             )}
             <div className="jarvis-suggestions">
@@ -1769,7 +1864,16 @@ export default function JarvisPanel({ open, onOpen, onClose, viewLabel, launcher
             {renderProposals(turn.proposals, false)}
             {renderCalendar(turn.calendar, false)}
             {turn.emails.map((draft) => <EmailCard key={draft.id} draft={draft} onOpenRecord={openRecord} />)}
-            {turn.documents.map((file) => <DocumentCard key={file.id} file={file} conversationId={conversationId} />)}
+            {turn.documents.map((file) => (
+              <DocumentCard
+                key={file.id}
+                file={file}
+                conversationId={conversationId}
+                target={documentTarget(file)}
+                saved={savedDocuments.get(file.id)}
+                onSaved={addSaved}
+              />
+            ))}
             <Sources sources={turn.sources} />
             {turn.notices.map((notice, noticeIndex) => (
               <div key={noticeIndex} className="jarvis-notice">{notice}</div>
@@ -1815,7 +1919,16 @@ export default function JarvisPanel({ open, onOpen, onClose, viewLabel, launcher
             {renderProposals(live.proposals, true)}
             {renderCalendar(live.calendar, true)}
             {live.emails.map((draft) => <EmailCard key={draft.id} draft={draft} onOpenRecord={openRecord} />)}
-            {live.documents.map((file) => <DocumentCard key={file.id} file={file} conversationId={conversationId} />)}
+            {live.documents.map((file) => (
+              <DocumentCard
+                key={file.id}
+                file={file}
+                conversationId={conversationId}
+                target={documentTarget(file)}
+                saved={savedDocuments.get(file.id)}
+                onSaved={addSaved}
+              />
+            ))}
             <Sources sources={live.sources} />
             {live.notices.map((notice, noticeIndex) => (
               <div key={noticeIndex} className="jarvis-notice">{notice}</div>
@@ -1997,7 +2110,7 @@ export default function JarvisPanel({ open, onOpen, onClose, viewLabel, launcher
               className="jarvis-mic"
               onClick={() => void voice.startListening()}
               disabled={busy || Boolean(unavailable)}
-              title="Zeptat se hlasem"
+              title="Zeptat se hlasem (Alt+M; podržením mluvíte, puštěním odešlete)"
               aria-label="Zeptat se hlasem"
             >
               {Icon.mic}
@@ -2009,7 +2122,7 @@ export default function JarvisPanel({ open, onOpen, onClose, viewLabel, launcher
               className="jarvis-send"
               onClick={voice.stopListening}
               disabled={voice.listen !== 'listening'}
-              title="Odeslat hned"
+              title="Odeslat hned (Alt+M)"
               aria-label="Odeslat hned"
             >
               {Icon.send}

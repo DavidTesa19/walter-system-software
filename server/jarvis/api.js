@@ -64,8 +64,29 @@ export function createApiClient({ baseUrl, token, changesetId, note }) {
     };
   }
 
+  // A file posted as multipart form data (a subject's documents route).
+  async function upload(path, { buffer, filename, contentType, fields = {} }) {
+    const form = new FormData();
+    for (const [key, value] of Object.entries(fields)) form.append(key, String(value));
+    form.append('file', new Blob([buffer], { type: contentType }), filename);
+    const response = await fetch(`${baseUrl}${path}`, {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${token}`,
+        ...(changesetId ? { 'X-Walter-Changeset': changesetId } : {}),
+        ...(note ? { 'X-Walter-Change-Note': encodeURIComponent(note).slice(0, 500) } : {}),
+      },
+      body: form,
+      signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS * 3),
+    });
+    const data = await response.json().catch(() => null);
+    if (!response.ok) throw new ApiError(response.status, data?.error || `HTTP ${response.status}`);
+    return data;
+  }
+
   return {
     getFile,
+    upload,
     get(path) {
       if (!cache.has(path)) {
         cache.set(path, request('GET', path).catch((error) => {
