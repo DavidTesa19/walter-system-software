@@ -115,7 +115,7 @@ const ProfilePanel: React.FC<ProfilePanelProps> = ({
       if (!onDeleteDocument) {
         return;
       }
-      const confirmed = window.confirm(`Opravdu chcete odstranit dokument \"${filename}\"? Tuto akci nelze vrátit.`);
+      const confirmed = window.confirm(`Opravdu chcete odstranit dokument "${filename}"? Tuto akci nelze vrátit.`);
       if (!confirmed) {
         return;
       }

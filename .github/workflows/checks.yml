@@ -1,7 +1,8 @@
 # Runs on every push and pull request. Needs no secrets: the server tests use
-# no API key and no database, and the client is only type-checked and built.
-# Lint is not run yet: the codebase has older lint errors, and a check that
-# always fails gets ignored.
+# no API key and no database, and the client is linted, type-checked and built.
+# Lint runs with two style rules off (explicit `any`, Fast Refresh exports):
+# the code has many of both, and a check that always fails gets ignored.
+# Everything else, the React hook rules included, must pass.
 name: Checks
 
 on:
@@ -41,6 +42,9 @@ jobs:
           cache: npm
           cache-dependency-path: client/package-lock.json
       - run: npm ci
+      - name: Lint (hook rules and the rest; not `any` or Fast Refresh exports)
+        run: |
+          npx eslint . --rule '@typescript-eslint/no-explicit-any: off' --rule 'react-refresh/only-export-components: off'
       - name: Type check
         run: npx tsc -b
       - name: Build

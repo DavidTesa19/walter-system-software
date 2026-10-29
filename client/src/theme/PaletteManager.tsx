@@ -143,7 +143,7 @@ const PaletteManager: React.FC = () => {
           setColorHistory(deduplicated.slice(0, COLOR_HISTORY_LIMIT));
         }
       }
-    } catch (err) {
+    } catch {
       // Ignore storage parsing issues to avoid blocking the editor.
     } finally {
       hasLoadedHistoryRef.current = true;
@@ -156,7 +156,7 @@ const PaletteManager: React.FC = () => {
     }
     try {
       window.localStorage.setItem(COLOR_HISTORY_STORAGE_KEY, JSON.stringify(colorHistory));
-    } catch (err) {
+    } catch {
       // Silent failure keeps the UI responsive even when storage is unavailable.
     }
   }, [colorHistory]);

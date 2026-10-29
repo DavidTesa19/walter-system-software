@@ -100,8 +100,10 @@ Grid changes are verifiable end to end; do it rather than guessing.
   section guards. Add a test there for any pure helper you touch.
 - `.github/workflows/checks.yml` runs on every push to main and every pull
   request: `npm ci`, `node --check` of both servers and `npm test` for the
-  server; `npm ci`, `tsc -b` and `vite build` for the client. Lint is not
-  in it yet (older lint errors would fail every run).
+  server; `npm ci`, ESLint, `tsc -b` and `vite build` for the client. ESLint
+  runs with `no-explicit-any` and `react-refresh/only-export-components` off
+  (55 and 11 older cases); every other rule must pass, the React hook rules
+  included (they caught ClockTimePicker's hooks after an early return).
 - The Jarvis test set (`server/evals/jarvis/`) is separate: it spends real
   money and is run by hand.
 

@@ -16,14 +16,17 @@ const parseTime = (timeStr: string) => {
   return { h: isNaN(h) ? 12 : h, m: isNaN(m) ? 0 : m };
 };
 
-export const ClockTimePicker: React.FC<ClockTimePickerProps> = ({
+// Closed, the picker renders nothing; opened, the dialog mounts afresh and
+// starts from the current value. (Its hooks used to follow an early return,
+// so opening it changed the number of hooks React saw.)
+export const ClockTimePicker: React.FC<ClockTimePickerProps> = (props) =>
+  props.isOpen ? <ClockTimePickerDialog {...props} /> : null;
+
+const ClockTimePickerDialog: React.FC<ClockTimePickerProps> = ({
   value,
   onChange,
   onClose,
-  isOpen,
 }) => {
-  if (!isOpen) return null;
-
   const initial = parseTime(value);
   const [hours, setHours] = useState(initial.h);
   const [minutes, setMinutes] = useState(initial.m);

@@ -395,11 +395,13 @@ const ChatbotView: React.FC = () => {
         try {
           const errJson = await response.json();
           serverError = errJson.details || errJson.message || errJson.error || serverError;
-        } catch (_) {
+        } catch {
           try {
             const errText = await response.text();
             if (errText) serverError = errText;
-          } catch {}
+          } catch {
+            // Neither JSON nor text: keep the generic message.
+          }
         }
         throw new Error(serverError);
       }

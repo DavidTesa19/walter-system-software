@@ -14,6 +14,7 @@ const MarkdownMessage: React.FC<MarkdownMessageProps> = ({ content }) => {
       remarkPlugins={[remarkGfm]}
       components={{
         code({ node, className, children, ...props }: any) {
+          void node; // react-markdown's syntax node: kept out of the DOM props
           const match = /language-(\w+)/.exec(className || '');
           const inline = !className;
           return !inline && match ? (

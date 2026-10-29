@@ -226,7 +226,7 @@ const FutureFunctionsGrid: React.FC = () => {
 
   const handleDeleteFunction = useCallback(
     async (func: FutureFunction) => {
-      const name = func?.name ? `\"${func.name}\"` : "tuto funkci";
+      const name = func?.name ? `"${func.name}"` : "tuto funkci";
 
       if (!confirm(`Opravdu chcete smazat ${name}?`)) {
         return;
