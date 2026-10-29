@@ -169,6 +169,10 @@ function logContextEdits(message) {
 
 function friendlyError(error) {
   if (error instanceof Anthropic.AuthenticationError) return 'Jarvis nemá platný klíč k Claude API (ANTHROPIC_API_KEY).';
+  // The account's prepaid credit ran out: no model answers until it is topped up.
+  if (/credit balance is too low/i.test(error?.message ?? '')) {
+    return 'Na účtu Anthropic došel kredit, Jarvis teď neodpoví. Administrátor ho musí dobít (console.anthropic.com › Billing).';
+  }
   // Attachments live 90 days; an older conversation that had one cannot go on.
   if ((error instanceof Anthropic.NotFoundError || error instanceof Anthropic.BadRequestError) && /file/i.test(error.message ?? '')) {
     return 'Některá příloha v této konverzaci už vypršela nebo byla smazána. Začněte prosím novou konverzaci.';

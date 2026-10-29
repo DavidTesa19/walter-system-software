@@ -6,7 +6,7 @@ import express from 'express';
 import multer from 'multer';
 import { createApiClient } from './api.js';
 import { JARVIS_MODEL, isJarvisConfigured, runJarvisTurn } from './agent.js';
-import { historyForModel, resolveModel } from './models.js';
+import { resolveModel } from './models.js';
 import {
   KINDS,
   ROLES,
@@ -612,7 +612,12 @@ export function registerJarvisRoutes(app, { authenticateToken, pool, dataDir, po
     // A message of attachments alone still needs a question.
     const question = text || (attachments.length === 1 ? 'Prohlédni si přílohu a řekni mi, co obsahuje.' : 'Prohlédni si přílohy a řekni mi, co obsahují.');
     // The panel's choice ('auto' or a model), else matched to the question.
-    const { model, routing } = resolveModel({ requested: req.body?.model, question, hasAttachments: attachments.length > 0 });
+    const { model, routing } = resolveModel({
+      requested: req.body?.model,
+      question,
+      hasAttachments: attachments.length > 0,
+      history: conversation?.messages ?? [],
+    });
 
     res.setHeader('Content-Type', 'text/event-stream; charset=utf-8');
     res.setHeader('Cache-Control', 'no-cache, no-transform');
@@ -721,12 +726,10 @@ export function registerJarvisRoutes(app, { authenticateToken, pool, dataDir, po
         routing,
         // An empty assistant message (stored by older versions when a reply
         // had no text) makes the API reject the whole history; skip it.
-        // A conversation carried on by another model drops the earlier model's thinking (models.js).
-        history: historyForModel(
-          [...(conversation?.messages ?? []).filter(isReplayable), userMessage],
-          model,
-          (conversation?.transcript ?? []).filter((item) => item.type === 'answer' && item.model).at(-1)?.model ?? null
-        ),
+        // Sent unchanged whichever model answers: the API itself drops thinking
+        // blocks the current model cannot read (unbilled), and keeps them for a
+        // later turn on a model that can. Stripping them here would be an edit.
+        history: [...(conversation?.messages ?? []).filter(isReplayable), userMessage],
         toolContext,
         emit,
         signal: abort.signal,

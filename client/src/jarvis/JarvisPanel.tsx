@@ -1906,7 +1906,9 @@ export default function JarvisPanel({ open, onOpen, onClose, viewLabel, launcher
               <div className="jarvis-answer-model">
                 {modelLabel(turn.answerModel)}
                 {turn.answerRouting &&
-                  (turn.answerRouting.mode === 'manual' ? ' · vybráno ručně' : ` · automaticky: ${turn.answerRouting.reason ?? ''}`)}
+                  (turn.answerRouting.mode === 'manual'
+                    ? ` · vybráno ručně${turn.answerRouting.reason ? `, ale ${turn.answerRouting.reason}` : ''}`
+                    : ` · automaticky: ${turn.answerRouting.reason ?? ''}`)}
               </div>
             )}
             {turn.answer && voice.canSpeak && (

@@ -323,14 +323,19 @@ inherited one falls back to the browser's serif. Needs `ANTHROPIC_API_KEY`;
   logged per call with the model that ran (finance). Per-model differences:
   `profileFor` (Haiku: no `fallbacks`, basic web tools `web_search_20250305`
   / `web_fetch_20250910`, no context management or compaction beta;
-  `toolDefinitionsFor` builds the tool list). Thinking blocks and
-  code-execution blocks are removed from the history sent when a
-  conversation continues on another model (`historyForModel`; stored history
-  is not edited). Quality check: `node evals/jarvis/run.js --model haiku
-  --variant v90` (variants v90/v91 are the Haiku/Sonnet runs; they are not
-  baseline). On the nine-case subset Haiku passed 7/9, Sonnet 8/9; Haiku's
-  misses were bare pointers to a button on list/deadline questions, so those
-  words are not in its rule.
+  `toolDefinitionsFor` builds the tool list). **The history goes to every
+  model unchanged**: the API drops thinking blocks the current model cannot
+  read (unbilled) and keeps them for a later turn on one that can; stripping
+  them in code is a history edit and can cause signature 400s. A
+  conversation holding a `compaction` block or code-execution blocks (from
+  the dynamic web tools) is never continued on Haiku: `resolveModel` moves
+  it to Sonnet and says so in `routing.reason`. Quality check:
+  `node evals/jarvis/run.js --model haiku --variant v90` (variants v90/v91
+  are the Haiku/Sonnet runs; they are not baseline). On the nine-case subset
+  Haiku passed 7/9, Sonnet 8/9; Haiku's misses were bare pointers to a
+  button on list/deadline questions, so list words (`NOT_SIMPLE`) keep a
+  question off Haiku. When the Anthropic account runs out of prepaid
+  credit, every model fails; `friendlyError` says so in the panel.
 - To try it locally, the JSON dev server works too (conversations go to
   `server/data/jarvis-conversations.json`). Live calls spend real Anthropic
   credits.
