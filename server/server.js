@@ -1,5 +1,6 @@
 import express from "express";
 import cors from "cors";
+import compression from "compression";
 import fs from "node:fs";
 import path from "node:path";
 import OpenAI from "openai";
@@ -1328,6 +1329,12 @@ app.use(
     credentials: false
   })
 );
+// Compress responses (JSON, text), never a stream: Server-Sent Events (Jarvis,
+// AI Asistent) must reach the browser as they are written, and the compressor
+// would hold them back until its buffer fills.
+app.use(compression({
+  filter: (req, res) => !String(res.getHeader("Content-Type") ?? "").includes("text/event-stream") && compression.filter(req, res),
+}));
 app.use(express.json());
 
 // Veřejné and Growth Club used to keep separate catalogs of custom obor and
