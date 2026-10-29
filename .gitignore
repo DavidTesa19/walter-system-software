@@ -25,3 +25,6 @@ data/
 *.njsproj
 *.sln
 *.sw?
+
+# Jarvis test set runs (server/evals/jarvis/run.js)
+.claude/hillclimb/

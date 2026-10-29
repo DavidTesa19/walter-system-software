@@ -294,6 +294,18 @@ inherited one falls back to the browser's serif. Needs `ANTHROPIC_API_KEY`;
   `JARVIS_COMPACT_AT=50000` (about half a dollar per run).
 - Tool inputs are validated with zod (`zod/v4`) before running; a tool failure
   goes back to the model as an `is_error` result, never as an exception.
+- **Test set** (`server/evals/jarvis/`): 38 typical Czech questions
+  (`cases.js`) against a made-up company (`fixture.js`, dates relative to
+  the run day, no real data). `node evals/jarvis/run.js` (from `server/`)
+  starts its own `server.js` on port 3099 with a temporary `DATA_DIR`
+  (server/data is never touched), asks every question as `eval.admin`,
+  and grades each answer: the runner's own checks (tools, cards, words in
+  the answer, data unchanged after a proposal) plus, for cases with a
+  `rubric`, a Sonnet 5.5 grader with structured output. Results go to
+  `.claude/hillclimb/jarvis/<variant>/` (gitignored, resumable;
+  `--only`, `--tags`, `--reps`, `--no-judge`, `--variant v1`). Real
+  money: ~0.02–0.04 $ a case once the prompt is cached, about 2 $ a full
+  run. Run it before changing the prompt, the tools or the model.
 - To try it locally, the JSON dev server works too (conversations go to
   `server/data/jarvis-conversations.json`). Live calls spend real Anthropic
   credits.
