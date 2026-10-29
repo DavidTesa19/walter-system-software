@@ -432,6 +432,58 @@ export function createBrowserSpeaker(): Speaker | null {
 
 // ---------- listening ----------
 
+// Barge-in: while Jarvis reads an answer, the microphone is watched, and speech
+// loud enough for long enough ends the reading. The browser's echo cancellation
+// keeps Jarvis's own voice out of the level, but the threshold is fixed, so a
+// loud room can interrupt too; the setting in the voice menu turns it off.
+const INTERRUPT_LEVEL = 0.12;
+const INTERRUPT_MS = 400;
+const INTERRUPT_POLL_MS = 60;
+
+export async function watchForSpeech(onSpeech: () => void): Promise<{ stop: () => void } | null> {
+  if (!navigator.mediaDevices?.getUserMedia) return null;
+  let stream: MediaStream;
+  try {
+    stream = await navigator.mediaDevices.getUserMedia({ audio: { echoCancellation: true, noiseSuppression: true } });
+  } catch {
+    return null;
+  }
+  const ctx = audioContext();
+  void ctx.resume();
+  const analyser = ctx.createAnalyser();
+  analyser.fftSize = 1024;
+  const input = ctx.createMediaStreamSource(stream);
+  input.connect(analyser);
+  const samples = new Float32Array(analyser.fftSize);
+  let loudSince: number | null = null;
+  let released = false;
+  let timer = 0;
+  const stop = () => {
+    if (released) return;
+    released = true;
+    window.clearInterval(timer);
+    input.disconnect();
+    stream.getTracks().forEach((track) => track.stop());
+  };
+  timer = window.setInterval(() => {
+    analyser.getFloatTimeDomainData(samples);
+    let sum = 0;
+    for (const sample of samples) sum += sample * sample;
+    const rms = Math.sqrt(sum / samples.length);
+    const now = Date.now();
+    if (rms < INTERRUPT_LEVEL) {
+      loudSince = null;
+      return;
+    }
+    loudSince ??= now;
+    if (now - loudSince >= INTERRUPT_MS) {
+      stop();
+      onSpeech();
+    }
+  }, INTERRUPT_POLL_MS);
+  return { stop };
+}
+
 export type RecordingEnd = 'stopped' | 'silence' | 'cancelled' | 'no-speech' | 'limit';
 
 export interface Recording {

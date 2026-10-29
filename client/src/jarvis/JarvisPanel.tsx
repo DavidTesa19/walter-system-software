@@ -1006,6 +1006,23 @@ function VoiceSettingsPanel({
           </span>
         </label>
       </section>
+      <section>
+        <h4>Když Jarvis mluví</h4>
+        <label className="jarvis-radio">
+          <input type="radio" name="jarvis-interrupt" checked={settings.interrupt} onChange={() => onChange({ interrupt: true })} />
+          <span>
+            <strong>Skočit mu do řeči</strong>
+            <small>Když promluvíte nahlas, Jarvis přestane číst a poslouchá vaši otázku. Platí pro hlas z aplikace, ne pro prohlížečový hlas.</small>
+          </span>
+        </label>
+        <label className="jarvis-radio">
+          <input type="radio" name="jarvis-interrupt" checked={!settings.interrupt} onChange={() => onChange({ interrupt: false })} />
+          <span>
+            <strong>Nechat ho dočíst</strong>
+            <small>Hlas se nepřerušuje; mikrofon se zapne až po odpovědi.</small>
+          </span>
+        </label>
+      </section>
     </div>
   );
 }

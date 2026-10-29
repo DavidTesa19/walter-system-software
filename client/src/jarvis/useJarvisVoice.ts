@@ -12,6 +12,7 @@ import {
   startRecording,
   toSpeechText,
   unlockAudio,
+  watchForSpeech,
 } from './voice';
 import type { TranscriptionHints } from './transcriptionHints';
 import type { BrowserListening, ListenOptions, Recording, Speaker } from './voice';
@@ -78,6 +79,9 @@ export function useJarvisVoice(
   const listenRef = useRef<ListenState>('idle');
   const recordingRef = useRef<Recording | null>(null);
   const browserRef = useRef<BrowserListening | null>(null);
+  // Live captions while the server records: the browser's recognizer, shown
+  // as it hears; the server's transcript replaces it when it comes.
+  const captionRef = useRef<BrowserListening | null>(null);
   const transcribeAbortRef = useRef<AbortController | null>(null);
   const cancelledRef = useRef(false);
   const onTranscriptRef = useRef(onTranscript);
@@ -277,9 +281,19 @@ export function useJarvisVoice(
     recordingRef.current = recording;
     if (cancelledRef.current) recording.cancel();
     else setListenState('listening');
+    if (!cancelledRef.current && canRecognizeInBrowser()) {
+      try {
+        captionRef.current = startBrowserRecognition(setInterim, () => undefined, { autoStop: false, silenceMs: 0 });
+      } catch {
+        captionRef.current = null;
+      }
+    }
 
     const { blob, end, device, avoided } = await recording.result;
     recordingRef.current = null;
+    captionRef.current?.cancel();
+    captionRef.current = null;
+    setInterim('');
     if (blob) {
       const url = URL.createObjectURL(blob);
       setLastRecording((previous) => {
@@ -321,8 +335,31 @@ export function useJarvisVoice(
     cancelledRef.current = true;
     recordingRef.current?.cancel();
     browserRef.current?.cancel();
+    captionRef.current?.cancel();
     transcribeAbortRef.current?.abort();
   }, []);
+
+  // Barge-in: while Jarvis reads an answer (server voice), speech stops the
+  // reading and opens the next question. The watch holds the microphone only
+  // for as long as there is something to read.
+  useEffect(() => {
+    if (speakingKey === null || !useServer || !settingsRef.current.interrupt) return undefined;
+    let active = true;
+    let watch: { stop: () => void } | null = null;
+    void watchForSpeech(() => {
+      if (!active) return;
+      active = false;
+      stopSpeaking();
+      void startListening();
+    }).then((value) => {
+      if (active) watch = value;
+      else value?.stop();
+    });
+    return () => {
+      active = false;
+      watch?.stop();
+    };
+  }, [speakingKey, useServer, startListening, stopSpeaking]);
 
   useEffect(() => {
     if (listen !== 'listening') return undefined;

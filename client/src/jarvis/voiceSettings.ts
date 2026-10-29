@@ -19,6 +19,9 @@ export interface VoiceSettings {
   // After reading the answer to a spoken question, listen again for the next
   // one, like a phone call.
   conversation: boolean;
+  // Speaking while Jarvis reads an answer stops the reading and asks the
+  // next question (server voice only).
+  interrupt: boolean;
   // The engine and voice last used with each provider (OpenAI, ElevenLabs),
   // so switching back to one brings them back.
   byProvider: Record<string, ProviderChoice>;
@@ -45,6 +48,7 @@ export const DEFAULT_VOICE_SETTINGS: VoiceSettings = {
   sendMode: 'auto',
   pauseMs: 2500,
   conversation: true,
+  interrupt: true,
   byProvider: {},
 };
 
@@ -75,6 +79,7 @@ export function loadVoiceSettings(): VoiceSettings {
       sendMode: stored.sendMode === 'manual' ? 'manual' : 'auto',
       pauseMs: PAUSE_OPTIONS.some((option) => option.ms === stored.pauseMs) ? Number(stored.pauseMs) : DEFAULT_VOICE_SETTINGS.pauseMs,
       conversation: stored.conversation !== false,
+      interrupt: stored.interrupt !== false,
       byProvider: readByProvider(stored.byProvider),
     };
   } catch {
