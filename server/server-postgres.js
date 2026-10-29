@@ -56,6 +56,7 @@ import { cascadesArchiveToSubject } from "./archive-cascade.js";
 import { reenterRequestContext, requestContextMiddleware } from "./safety/context.js";
 import { registerSafetyRoutes } from "./safety/routes.js";
 import { JARVIS_MENTION, registerJarvisRoutes } from "./jarvis/routes.js";
+import { createLoginGuard, lockedMessage } from "./login-guard.js";
 import { registerAresRoutes } from "./ares.js";
 import { registerFinanceRoutes } from "./finance/routes.js";
 import { registerTaskRoutes } from "./tasks/routes.js";
@@ -3666,22 +3667,32 @@ app.get("/debug-env", (req, res) => {
   });
 });
 
+const loginGuard = createLoginGuard();
+
 app.post("/auth/login", async (req, res) => {
   const { username, password } = req.body;
-  
+  const lockedMs = loginGuard.lockedFor(username);
+  if (lockedMs) {
+    res.setHeader("Retry-After", String(Math.ceil(lockedMs / 1000)));
+    return res.status(429).json({ error: lockedMessage(lockedMs) });
+  }
+
   try {
     const result = await db.query('SELECT * FROM users WHERE username = $1', [username]);
     const user = result.rows[0];
 
     if (!user) {
+      await loginGuard.recordFailure(username);
       return res.status(401).json({ error: "Invalid credentials" });
     }
 
     // Compare hashed password
     const validPassword = await bcrypt.compare(password, user.password_hash);
     if (!validPassword) {
+      await loginGuard.recordFailure(username);
       return res.status(401).json({ error: "Invalid credentials" });
     }
+    loginGuard.recordSuccess(username);
 
     // Generate Token
     const token = jwt.sign(

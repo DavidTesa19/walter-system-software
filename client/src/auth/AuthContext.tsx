@@ -112,7 +112,7 @@ export interface User {
 interface AuthContextType {
   user: User | null;
   isAuthenticated: boolean;
-  login: (username: string, password: string) => Promise<boolean>;
+  login: (username: string, password: string) => Promise<boolean | string>;
   logout: () => void;
   resetSessionTimer: () => void;
   hasRole: (allowedRoles: UserRole[]) => boolean;
@@ -170,7 +170,8 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
     }, duration);
   }, [clearSessionTimer, logout]);
 
-  const login = async (username: string, password: string): Promise<boolean> => {
+  // true when signed in; false for wrong credentials; a message to show otherwise.
+  const login = async (username: string, password: string): Promise<boolean | string> => {
     try {
       const response = await fetch(`${API_BASE}/auth/login`, {
         method: 'POST',
@@ -198,6 +199,11 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
         trackEvent('login_success');
         startActiveTimeTracking();
         return true;
+      }
+      // Too many wrong passwords: the server says how long the account waits.
+      if (response.status === 429) {
+        const data = await response.json().catch(() => null);
+        return typeof data?.error === 'string' ? data.error : 'Příliš mnoho pokusů o přihlášení. Zkuste to později.';
       }
       return false;
     } catch (error) {

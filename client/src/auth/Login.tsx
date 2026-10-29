@@ -22,11 +22,11 @@ const Login: React.FC = () => {
     setIsLoading(true);
     setError('');
 
-    const success = await login(username, password);
-    
-    if (!success) {
+    const result = await login(username, password);
+
+    if (result !== true) {
       trackPublicEvent('login_failure');
-      setError('Neplatné přihlašovací údaje. Zkuste to prosím znovu.');
+      setError(typeof result === 'string' ? result : 'Neplatné přihlašovací údaje. Zkuste to prosím znovu.');
       setPassword('');
     }
     
