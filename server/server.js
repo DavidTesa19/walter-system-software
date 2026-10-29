@@ -1335,6 +1335,16 @@ app.use(
 app.use(compression({
   filter: (req, res) => !String(res.getHeader("Content-Type") ?? "").includes("text/event-stream") && compression.filter(req, res),
 }));
+// Security headers on every response. The API serves no pages, so no CSP;
+// nothing frames its responses (document previews use blob URLs, Office and
+// Google viewers fetch the file themselves). HSTS only over HTTPS (Railway).
+app.use((req, res, next) => {
+  res.setHeader("X-Content-Type-Options", "nosniff");
+  res.setHeader("Referrer-Policy", "strict-origin-when-cross-origin");
+  res.setHeader("X-Frame-Options", "DENY");
+  if (req.headers["x-forwarded-proto"] === "https") res.setHeader("Strict-Transport-Security", "max-age=15552000");
+  next();
+});
 app.use(express.json());
 
 // Veřejné and Growth Club used to keep separate catalogs of custom obor and
