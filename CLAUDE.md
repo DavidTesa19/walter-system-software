@@ -92,6 +92,19 @@ Grid changes are verifiable end to end; do it rather than guessing.
 5. `server.js` has no hot reload — restart it after server edits, or new columns
    are silently dropped by stale field whitelists.
 
+## Tests and automatic checks
+
+- `npm test` in `server/` runs `server/tests/*.test.js` with Node's own test
+  runner (Node 22; no API key, no database, ~2 s): model routing, Prague
+  time, fuzzy search, the usage view, the login guard and both servers'
+  section guards. Add a test there for any pure helper you touch.
+- `.github/workflows/checks.yml` runs on every push to main and every pull
+  request: `npm ci`, `node --check` of both servers and `npm test` for the
+  server; `npm ci`, `tsc -b` and `vite build` for the client. Lint is not
+  in it yet (older lint errors would fail every run).
+- The Jarvis test set (`server/evals/jarvis/`) is separate: it spends real
+  money and is run by hand.
+
 ## Change log, backups and safety guards (`server/safety/`)
 
 Overview and operator docs: `SAFETY_AND_BACKUPS.md`. The rules that are easy to

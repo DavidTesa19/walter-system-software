@@ -1,0 +1,47 @@
+# Runs on every push and pull request. Needs no secrets: the server tests use
+# no API key and no database, and the client is only type-checked and built.
+# Lint is not run yet: the codebase has older lint errors, and a check that
+# always fails gets ignored.
+name: Checks
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  server:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: server
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: server/package-lock.json
+      - run: npm ci
+      - name: Both servers parse
+        run: node --check server.js && node --check server-postgres.js
+      - name: Tests (Jarvis helpers, model routing, login guard, section guards)
+        run: npm test
+
+  client:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: client
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: client/package-lock.json
+      - run: npm ci
+      - name: Type check
+        run: npx tsc -b
+      - name: Build
+        run: npx vite build
