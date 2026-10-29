@@ -9,6 +9,7 @@
   "scripts": {
     "start": "node server-postgres.js",
     "dev": "node server.js",
+    "test": "node --test \"tests/*.test.js\"",
     "dev:postgres": "node server-postgres.js",
     "migrate": "node migrate-to-postgres.js",
     "sync": "node sync-from-production.js"
