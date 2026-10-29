@@ -134,6 +134,25 @@ real `server-postgres.js` against it, start it from a wrapper that sets
 first, so `server/.env` is never loaded. A throwaway S3 is easy to mock with a
 small HTTP server (path-style PUT/GET/HEAD/DELETE and `list-type=2`).
 
+## Section access (scopes)
+
+A user's `access_scope` (`all`, `standard` = Veřejné, `projects` =
+Neveřejné, `growth` = Growth Club) is enforced by `app.use` guards near the
+top of both servers (`requireAccessScope`, plus `rejectViewerWrites`):
+`/api/{client,partner,tiper}-{entities,commissions}`, `/clients|partners|tipers`,
+`/api/projects`, `/api/growth`, `/project-*`, `/growth-*` (their documents,
+folders and notes), and `/documents/:id/*` by the document's own subject
+(`documentScopes`; Budoucí funkce documents are open to everyone).
+
+- **Write a guard's regex with a lookahead: `/^\/api\/projects(?=\/|$)/`.**
+  Express 4 skips an `app.use` layer whose matched path is not followed by
+  `/` or the end of the URL. The old `(\/|$)` consumed the slash, so until
+  2026-10-29 every guard ran only for the bare prefix and no section was
+  enforced below it (`/api/projects/client-entities` was open to a Veřejné
+  user). Check a new guard with a limited-scope user, not an admin.
+- The client hides other sections (`isViewAllowedForScope`); the deal-link
+  picker loads every section and skips the ones that answer 403.
+
 ## IČO (company registration number)
 
 Every subject (client / partner / tipař, all three sections) has an `ico`
@@ -361,8 +380,8 @@ inherited one falls back to the browser's serif. Needs `ANTHROPIC_API_KEY`;
   goes into the conversation (it is re-sent every turn). PDFs via `unpdf`,
   .docx/.xlsx/.pptx by unzipping with adm-zip, scans and photos transcribed
   once by Claude (`JARVIS_OCR_MODEL`, default the Jarvis model). The tool only
-  reads a document listed under a subject the user can open: the
-  `/documents/:id/download` route itself does not check sections.
+  reads a document listed under a subject the user can open, and the
+  document routes check the section as well (`documentScopes`, below).
 - **Attachments** (`server/jarvis/attachments.js`, `POST /api/jarvis/attachments`):
   files attached to a message go to the Anthropic **Files API** (90-day
   expiry) and the stored message holds only a `file_id` block — never the

@@ -304,18 +304,47 @@ const requireFieldOptionScopeAccess = (req, res, scope, { write = false } = {}) 
 };
 
 [
-  /^\/partners(\/|$)/,
-  /^\/clients(\/|$)/,
-  /^\/tipers(\/|$)/,
-  /^\/api\/partner-(entities|commissions)(\/|$)/,
-  /^\/api\/client-(entities|commissions)(\/|$)/,
-  /^\/api\/tiper-(entities|commissions)(\/|$)/,
+  /^\/partners(?=\/|$)/,
+  /^\/clients(?=\/|$)/,
+  /^\/tipers(?=\/|$)/,
+  /^\/api\/partner-(entities|commissions)(?=\/|$)/,
+  /^\/api\/client-(entities|commissions)(?=\/|$)/,
+  /^\/api\/tiper-(entities|commissions)(?=\/|$)/,
 ].forEach((pathPattern) => {
   app.use(pathPattern, authenticateToken, requireAccessScope('all', 'standard'), rejectViewerWrites);
 });
 
-app.use(/^\/api\/projects(\/|$)/, authenticateToken, requireAccessScope('all', 'projects'), rejectViewerWrites);
-app.use(/^\/api\/growth(\/|$)/, authenticateToken, requireAccessScope('all', 'growth'), rejectViewerWrites);
+app.use(/^\/api\/projects(?=\/|$)/, authenticateToken, requireAccessScope('all', 'projects'), rejectViewerWrites);
+app.use(/^\/api\/growth(?=\/|$)/, authenticateToken, requireAccessScope('all', 'growth'), rejectViewerWrites);
+
+// The Neveřejné and Growth Club subjects' own routes (documents, folders,
+// notes) follow the same scope rule as their sections' API.
+app.use(/^\/project-(clients|partners|tipers)(?=\/|$)/, authenticateToken, requireAccessScope('all', 'projects'), rejectViewerWrites);
+app.use(/^\/growth-(clients|partners|tipers)(?=\/|$)/, authenticateToken, requireAccessScope('all', 'growth'), rejectViewerWrites);
+
+// A document belongs to one subject: opening, changing or sharing it by its id
+// needs the same section access as the subject itself (Budoucí funkce: anyone).
+// The public viewing link (/documents/public/:token) is not matched.
+const documentScopes = (entityType = "") => {
+  if (entityType === "future-functions") return null;
+  if (entityType.startsWith("project-")) return ["all", "projects"];
+  if (entityType.startsWith("growth-")) return ["all", "growth"];
+  return ["all", "standard"];
+};
+app.use(/^\/documents\/\d+(?=\/|$)/, authenticateToken, async (req, res, next) => {
+  if (req.method === "OPTIONS") return next();
+  try {
+    const id = Number(/^\/documents\/(\d+)/.exec(req.originalUrl)?.[1]);
+    const doc = db.isPostgres() ? await db.getDocumentById(id) : findDocumentInStore(readDb(), id);
+    const allowed = doc ? documentScopes(doc.entityType ?? doc.entity_type) : null;
+    if (allowed && !allowed.includes(normalizeAccessScope(req.user.accessScope ?? req.user.access_scope))) {
+      return res.status(403).json({ error: "Insufficient scope permissions" });
+    }
+    next();
+  } catch (error) {
+    next(error);
+  }
+});
 
 // File-based storage (development mode)
 const DATA_DIR = process.env.DATA_DIR || path.resolve(process.cwd(), "data");
