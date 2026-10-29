@@ -204,7 +204,19 @@ Data (`server/finance/store.js`, Postgres or `server/data/finance.json`):
   `HISTORY_START` moves — reads bills back to that date (`historyFrom` in its
   sync state).
 
-The telemetry tables (`finance_ai_usage`, `finance_provider_costs`,
+- **Jarvis tab** (`JarvisUsageTab.tsx`, `GET /api/finance/jarvis?days=7|30|90`,
+  `jarvis-usage.js`): `finance_ai_turns` keeps one row per Jarvis question
+  (`recordJarvisTurn`, written in the chat route's `finally`): the question
+  (300 chars), time to the first word and to the end, tools, how it ended
+  (`turnStatus`: ok, stopped, empty, truncated, error, refusal, tool_limit)
+  and its estimated cost. With `finance_ai_usage` per user and feature it
+  shows cost per person, the most expensive and slowest questions and the
+  failed ones. Admins see other people's questions here. A stopped answer
+  has no usage (the stream ended before its totals), so it costs 0 here.
+  Roles are checked case-sensitively (`requireRole('admin')`): a local test
+  user made with role `Admin` gets 403 on every Finance route.
+
+The telemetry tables (`finance_ai_usage`, `finance_ai_turns`, `finance_provider_costs`,
 `finance_state`) are in `AUDIT_EXCLUDED_TABLES`; `finance_expenses` and
 `finance_payments` are logged.
 CZK conversion uses ČNB's daily fixing (`rates.js`, fixed fallback). To test

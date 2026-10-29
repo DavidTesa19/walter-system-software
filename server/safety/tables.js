@@ -32,10 +32,11 @@ export const AUDIT_EXCLUDED_TABLES = new Set([
   // Jarvis chat history: private per user, and every turn rewrites a large
   // JSON document. It is in the backups.
   'jarvis_conversations',
-  // Finance telemetry: one row per AI call, the providers' bills copied from
+  // Finance telemetry: one row per AI call and per Jarvis question, the providers' bills copied from
   // their billing APIs (rewritten on every sync) and the connectors' cached
   // state. The cost list itself, finance_expenses, is logged.
   'finance_ai_usage',
+  'finance_ai_turns',
   'finance_provider_costs',
   'finance_state',
   // Screenshot bytes attached to bug reports: the trigger would copy every

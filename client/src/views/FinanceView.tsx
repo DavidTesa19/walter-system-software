@@ -4,6 +4,7 @@ import type { Expense, ExpenseInput, FinanceOverview } from '../finance/financeA
 import ConnectionsTab from '../finance/ConnectionsTab';
 import ExpenseModal from '../finance/ExpenseModal';
 import HistoryTab from '../finance/HistoryTab';
+import JarvisUsageTab from '../finance/JarvisUsageTab';
 import { AiCostChart, CategoryBars } from '../finance/FinanceCharts';
 import type { AiMonth } from '../finance/FinanceCharts';
 import {
@@ -33,7 +34,7 @@ import {
 import type { MeasuredMonths } from '../finance/financeMath';
 import './FinanceView.css';
 
-type FinanceTab = 'overview' | 'history' | 'costs' | 'connections' | 'ai' | 'keys';
+type FinanceTab = 'overview' | 'history' | 'costs' | 'connections' | 'ai' | 'jarvis' | 'keys';
 
 const TABS: Array<{ id: FinanceTab; label: string }> = [
   { id: 'overview', label: 'Přehled' },
@@ -41,6 +42,7 @@ const TABS: Array<{ id: FinanceTab; label: string }> = [
   { id: 'costs', label: 'Náklady' },
   { id: 'connections', label: 'Napojení' },
   { id: 'ai', label: 'AI spotřeba' },
+  { id: 'jarvis', label: 'Jarvis' },
   { id: 'keys', label: 'Klíče a služby' },
 ];
 
@@ -290,6 +292,7 @@ export default function FinanceView() {
             )}
             {tab === 'connections' && <ConnectionsTab overview={overview} measured={model.measured} />}
             {tab === 'ai' && <AiTab overview={overview} model={model} />}
+            {tab === 'jarvis' && <JarvisUsageTab overview={overview} />}
             {tab === 'keys' && <KeysTab overview={overview} />}
           </div>
 

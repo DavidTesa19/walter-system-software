@@ -20,7 +20,8 @@ import { env } from './http.js';
 import { BILLING_PROVIDERS, ProviderCostError, fetchProviderCosts, isProviderConfigured } from './providers.js';
 import { getRates } from './rates.js';
 import { createFileFinanceStore, createPgFinanceStore } from './store.js';
-import { setStateSink, setUsageSink } from './usage.js';
+import { USAGE_DAYS, summarizeJarvisUsage } from './jarvis-usage.js';
+import { setStateSink, setTurnSink, setUsageSink } from './usage.js';
 
 const HISTORY_MONTHS = 12;
 // Bills are re-read when the screen opens and the last read is older than
@@ -118,6 +119,7 @@ export function registerFinanceRoutes(app, { authenticateToken, requireRole, poo
   const store = pool ? createPgFinanceStore(pool) : createFileFinanceStore(dataDir);
   setUsageSink((entry) => store.recordUsage(entry));
   setStateSink((key, value) => store.setState(key, value));
+  setTurnSink((turn) => store.recordTurn(turn));
 
   // Reads in progress, so two open screens do not fetch the same thing twice.
   const running = new Map();
@@ -245,6 +247,13 @@ export function registerFinanceRoutes(app, { authenticateToken, requireRole, poo
 
   app.get('/api/finance/overview', ...guard, wrap('Finanční přehled se nepodařilo načíst.', async (_req, res) => {
     res.json(await overview());
+  }));
+
+  // Jarvis usage over the last 7, 30 or 90 days (AI spotřeba › Jarvis).
+  app.get('/api/finance/jarvis', ...guard, wrap('Využití Jarvise se nepodařilo načíst.', async (req, res) => {
+    const days = USAGE_DAYS.includes(Number(req.query.days)) ? Number(req.query.days) : 30;
+    const since = new Date(Date.now() - days * 86400 * 1000);
+    res.json(summarizeJarvisUsage(await store.aiActivity(since), days));
   }));
 
   app.post('/api/finance/sync', ...guard, wrap('Náklady od poskytovatelů se nepodařilo načíst.', async (_req, res) => {

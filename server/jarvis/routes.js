@@ -44,7 +44,8 @@ import {
   deleteFiles,
   prepareAttachment,
 } from './attachments.js';
-import { recordAiUsage } from '../finance/usage.js';
+import { estimateCostUsd } from '../finance/pricing.js';
+import { recordAiUsage, recordJarvisTurn } from '../finance/usage.js';
 import { ProposalError, applyProposal, describeProposal } from './proposals.js';
 import { CalendarError, calendarOutcomes, cardState, decideCalendarCard } from './calendarActions.js';
 import { computeAttention, createAttentionCache } from './attention.js';
@@ -74,6 +75,16 @@ const PROPOSAL_STATUS_TEXT = {
   stale: 'neprovedeno – záznam se mezitím změnil',
   failed: 'provedení selhalo',
 };
+
+// How a question ended, for the usage view: 'ok' is an answer the user got
+// (cut short by max_tokens is 'truncated'); 'stopped' is the user's own stop.
+export function turnStatus(stopReason, answered) {
+  if (!stopReason) return 'error';
+  if (stopReason === 'aborted') return 'stopped';
+  if (stopReason === 'end_turn') return answered ? 'ok' : 'empty';
+  if (stopReason === 'max_tokens') return 'truncated';
+  return stopReason; // error, refusal, tool_limit
+}
 
 // What became of Jarvis's proposed changes since the user's last message,
 // and which still wait for a decision — so its next answer knows.
@@ -601,7 +612,14 @@ export function registerJarvisRoutes(app, { authenticateToken, pool, dataDir, po
     res.setHeader('X-Accel-Buffering', 'no');
     res.flushHeaders?.();
 
+    // What the admins' usage view keeps about this question (finance_ai_turns).
+    const startedAt = Date.now();
+    const turnLog = { firstTextMs: null, tools: [], failedTools: 0, error: null, answered: false };
     const emit = (event, data) => {
+      if (event === 'text' && turnLog.firstTextMs === null) turnLog.firstTextMs = Date.now() - startedAt;
+      else if (event === 'tool' && data?.name && data.name !== 'compaction') turnLog.tools.push(data.name);
+      else if (event === 'tool_done' && data?.ok === false) turnLog.failedTools += 1;
+      else if (event === 'error') turnLog.error = data?.message ?? null;
       if (!res.writableEnded) res.write(`event: ${event}\ndata: ${JSON.stringify(data)}\n\n`);
     };
 
@@ -611,6 +629,7 @@ export function registerJarvisRoutes(app, { authenticateToken, pool, dataDir, po
     });
 
     let conversationId = conversation?.id ?? null;
+    let result = null;
     try {
       if (!conversation) {
         conversationId = crypto.randomUUID();
@@ -689,19 +708,21 @@ export function registerJarvisRoutes(app, { authenticateToken, pool, dataDir, po
         },
       };
 
-      const result = await runJarvisTurn({
+      result = await runJarvisTurn({
         // An empty assistant message (stored by older versions when a reply
         // had no text) makes the API reject the whole history; skip it.
         history: [...(conversation?.messages ?? []).filter(isReplayable), userMessage],
         toolContext,
         emit,
         signal: abort.signal,
-        onStep: (messages, transcript) =>
-          store.append(conversationId, userId, {
+        onStep: (messages, transcript) => {
+          if (transcript.some((item) => item.type === 'answer')) turnLog.answered = true;
+          return store.append(conversationId, userId, {
             messages,
             transcript: [...transcript, ...pendingActions.splice(0)],
             usage: zeroUsage(),
-          }),
+          });
+        },
       });
 
       await store.append(conversationId, userId, {
@@ -721,9 +742,33 @@ export function registerJarvisRoutes(app, { authenticateToken, pool, dataDir, po
     } catch (error) {
       console.error('Jarvis turn failed:', error);
       emit('error', { message: 'Jarvis narazil na chybu a odpověď nedokončil.' });
+      turnLog.error = truncate(String(error?.message ?? error), 300);
     } finally {
       if (conversationId) running.delete(conversationId);
       if (!res.writableEnded) res.end();
+      const usage = result?.usage ?? zeroUsage();
+      const webSearches = usage.webSearches ?? 0;
+      recordJarvisTurn({
+        userId,
+        conversationId,
+        question: truncate(text || attachments.map((attachment) => attachment.name).join(', '), 300),
+        voice: req.body?.context?.voice === true,
+        status: turnStatus(result?.stopReason, turnLog.answered),
+        stopReason: result?.stopReason ?? null,
+        error: turnLog.error,
+        durationMs: Date.now() - startedAt,
+        firstTextMs: turnLog.firstTextMs,
+        tools: turnLog.tools,
+        failedTools: turnLog.failedTools,
+        input: usage.input,
+        output: usage.output,
+        cacheRead: usage.cacheRead,
+        cacheWrite: usage.cacheWrite,
+        webSearches,
+        costUsd:
+          (estimateCostUsd({ provider: 'anthropic', model: JARVIS_MODEL, feature: 'jarvis', ...usage }) ?? 0) +
+          (estimateCostUsd({ provider: 'anthropic', model: JARVIS_MODEL, feature: 'web_search', units: webSearches }) ?? 0),
+      });
     }
   });
 

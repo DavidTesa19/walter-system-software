@@ -10,10 +10,16 @@ import { estimateCostUsd } from './pricing.js';
 
 let sink = null;
 let stateSink = null;
+let turnSink = null;
 
 /** Called once by registerFinanceRoutes with the store's recordUsage. */
 export function setUsageSink(fn) {
   sink = fn;
+}
+
+/** Called once by registerFinanceRoutes with the store's recordTurn. */
+export function setTurnSink(fn) {
+  turnSink = fn;
 }
 
 /** Called once by registerFinanceRoutes with the store's setState. */
@@ -72,6 +78,16 @@ export function recordAiUsage({ provider, model = null, feature, userId = null, 
   Promise.resolve()
     .then(() => sink(entry))
     .catch((error) => console.error('AI usage not recorded:', error.message));
+}
+
+// One Jarvis question: who asked, how long the answer took, which tools it
+// used, how it ended and what it cost. The admins' usage view reads these;
+// the per-call log above stays the source of the cost totals.
+export function recordJarvisTurn(turn) {
+  if (!turnSink) return;
+  Promise.resolve()
+    .then(() => turnSink(turn))
+    .catch((error) => console.error('Jarvis turn not recorded:', error.message));
 }
 
 // OpenAI chat usage counts cached tokens inside prompt_tokens; the log keeps

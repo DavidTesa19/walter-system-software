@@ -192,8 +192,56 @@ export interface PaymentInput {
   note: string | null;
 }
 
+export type JarvisTurnStatus = 'ok' | 'stopped' | 'empty' | 'truncated' | 'error' | 'refusal' | 'tool_limit';
+
+export interface JarvisTurn {
+  at: string;
+  userId: number | null;
+  conversationId: string | null;
+  question: string;
+  voice: boolean;
+  status: JarvisTurnStatus;
+  error: string | null;
+  durationMs: number;
+  firstTextMs: number | null;
+  tools: string[];
+  failedTools: number;
+  costUsd: number;
+}
+
+export interface JarvisUsage {
+  days: number;
+  totals: {
+    questions: number;
+    voiceQuestions: number;
+    failed: number;
+    stopped: number;
+    jarvisCostUsd: number;
+    aiCostUsd: number;
+    averageCostUsd: number;
+    medianMs: number | null;
+    p90Ms: number | null;
+    medianFirstTextMs: number | null;
+  };
+  byUser: Array<{
+    userId: number | null;
+    questions: number;
+    voiceQuestions: number;
+    failed: number;
+    averageMs: number | null;
+    features: Record<string, number>;
+    costUsd: number;
+  }>;
+  byFeature: Array<{ feature: string; calls: number; costUsd: number }>;
+  tools: Array<{ name: string; uses: number }>;
+  expensive: JarvisTurn[];
+  slowest: JarvisTurn[];
+  failures: JarvisTurn[];
+}
+
 export const financeApi = {
   overview: () => apiGet<FinanceOverview>('/api/finance/overview'),
+  jarvisUsage: (days: number) => apiGet<JarvisUsage>(`/api/finance/jarvis?days=${days}`),
   sync: () => apiPost<FinanceOverview>('/api/finance/sync', {}),
   importCatalog: (keys?: string[]) => apiPost<{ added: number }>('/api/finance/import-catalog', keys ? { keys } : {}),
   createExpense: (input: ExpenseInput) => apiPost<Expense>('/api/finance/expenses', input),

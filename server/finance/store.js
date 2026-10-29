@@ -9,6 +9,8 @@
 //                           payments and the months filled in from fixed
 //                           costs (origin 'recurring'); provider bills are
 //                           not copied here, the history reads them directly
+//   finance_ai_turns        one row per Jarvis question: time to answer,
+//                           tools, outcome, cost (the admins' usage view)
 //   finance_state           small cached documents: each connector's last
 //                           sync, Railway's open billing period, the Brave
 //                           quota, the Brevo plan, domain expiry dates
@@ -61,6 +63,30 @@ export async function installFinanceSchema(client) {
   `);
   await client.query(`CREATE INDEX IF NOT EXISTS idx_finance_ai_usage_created ON finance_ai_usage (created_at)`);
   await client.query(`
+    CREATE TABLE IF NOT EXISTS finance_ai_turns (
+      id BIGSERIAL PRIMARY KEY,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+      user_id INTEGER,
+      conversation_id TEXT,
+      question TEXT,
+      voice BOOLEAN NOT NULL DEFAULT false,
+      status TEXT NOT NULL,
+      stop_reason TEXT,
+      error TEXT,
+      duration_ms INTEGER NOT NULL DEFAULT 0,
+      first_text_ms INTEGER,
+      tools JSONB NOT NULL DEFAULT '[]'::jsonb,
+      failed_tools INTEGER NOT NULL DEFAULT 0,
+      input_tokens BIGINT NOT NULL DEFAULT 0,
+      output_tokens BIGINT NOT NULL DEFAULT 0,
+      cache_read_tokens BIGINT NOT NULL DEFAULT 0,
+      cache_write_tokens BIGINT NOT NULL DEFAULT 0,
+      web_searches INTEGER NOT NULL DEFAULT 0,
+      cost_usd NUMERIC(16, 6)
+    )
+  `);
+  await client.query(`CREATE INDEX IF NOT EXISTS idx_finance_ai_turns_created ON finance_ai_turns (created_at)`);
+  await client.query(`
     CREATE TABLE IF NOT EXISTS finance_provider_costs (
       provider TEXT NOT NULL,
       day DATE NOT NULL,
@@ -111,6 +137,9 @@ export async function installFinanceSchema(client) {
     )
   `);
 }
+
+// The usage view reads at most this many questions (90 days of a busy team).
+const TURN_LIMIT = 20000;
 
 // API field <-> column. Dates travel as 'YYYY-MM-DD' strings both ways.
 const EXPENSE_COLUMNS = {
@@ -291,6 +320,65 @@ export function createPgFinanceStore(pool) {
           costUsd: row.cost_usd,
           unpriced: row.unpriced,
         })),
+      };
+    },
+
+    async recordTurn(turn) {
+      await pool.query(
+        `INSERT INTO finance_ai_turns
+           (user_id, conversation_id, question, voice, status, stop_reason, error, duration_ms, first_text_ms, tools,
+            failed_tools, input_tokens, output_tokens, cache_read_tokens, cache_write_tokens, web_searches, cost_usd)
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17)`,
+        [turn.userId, turn.conversationId, turn.question, turn.voice, turn.status, turn.stopReason, turn.error,
+          turn.durationMs, turn.firstTextMs, JSON.stringify(turn.tools), turn.failedTools, turn.input, turn.output,
+          turn.cacheRead, turn.cacheWrite, turn.webSearches, turn.costUsd]
+      );
+    },
+
+    // The Jarvis questions since a date, newest first, and every AI call's
+    // cost per user and feature over the same days.
+    async aiActivity(since) {
+      const [turns, usage] = await Promise.all([
+        pool.query(
+          `SELECT created_at, user_id, conversation_id, question, voice, status, stop_reason, error, duration_ms,
+                  first_text_ms, tools, failed_tools, input_tokens, output_tokens, cache_read_tokens,
+                  cache_write_tokens, web_searches, cost_usd::float8 AS cost_usd
+             FROM finance_ai_turns
+            WHERE created_at >= $1
+            ORDER BY created_at DESC
+            LIMIT ${TURN_LIMIT}`,
+          [since]
+        ),
+        pool.query(
+          `SELECT user_id, feature, COUNT(*)::int AS calls, COALESCE(SUM(cost_usd), 0)::float8 AS cost_usd
+             FROM finance_ai_usage
+            WHERE created_at >= $1
+            GROUP BY 1, 2`,
+          [since]
+        ),
+      ]);
+      return {
+        turns: turns.rows.map((row) => ({
+          at: row.created_at,
+          userId: row.user_id,
+          conversationId: row.conversation_id,
+          question: row.question,
+          voice: row.voice,
+          status: row.status,
+          stopReason: row.stop_reason,
+          error: row.error,
+          durationMs: row.duration_ms,
+          firstTextMs: row.first_text_ms,
+          tools: row.tools ?? [],
+          failedTools: row.failed_tools,
+          input: Number(row.input_tokens),
+          output: Number(row.output_tokens),
+          cacheRead: Number(row.cache_read_tokens),
+          cacheWrite: Number(row.cache_write_tokens),
+          webSearches: row.web_searches,
+          costUsd: row.cost_usd,
+        })),
+        usage: usage.rows.map((row) => ({ userId: row.user_id, feature: row.feature, calls: row.calls, costUsd: row.cost_usd })),
       };
     },
 
@@ -549,6 +637,26 @@ export function createFileFinanceStore(dataDir) {
         firstLoggedAt: usage[0]?.createdAt ?? null,
         rows: [...groups.values()].sort((a, b) => a.month.localeCompare(b.month)),
       };
+    },
+
+    async recordTurn(turn) {
+      const data = read();
+      data.turns = [...(data.turns ?? []), { ...turn, at: new Date().toISOString() }].slice(-TURN_LIMIT);
+      write(data);
+    },
+
+    async aiActivity(since) {
+      const data = read();
+      const recent = (row) => new Date(row.at ?? row.createdAt) >= since;
+      const usage = new Map();
+      for (const row of data.usage.filter(recent)) {
+        const key = `${row.userId}|${row.feature}`;
+        const group = usage.get(key) ?? { userId: row.userId, feature: row.feature, calls: 0, costUsd: 0 };
+        group.calls += 1;
+        group.costUsd += row.costUsd ?? 0;
+        usage.set(key, group);
+      }
+      return { turns: (data.turns ?? []).filter(recent).reverse(), usage: [...usage.values()] };
     },
 
     async saveProviderCosts(provider, fromDay, toDay, rows) {
