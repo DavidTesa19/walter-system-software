@@ -45,6 +45,8 @@ jobs:
       - name: Lint (hook rules and the rest; not `any` or Fast Refresh exports)
         run: |
           npx eslint . --rule '@typescript-eslint/no-explicit-any: off' --rule 'react-refresh/only-export-components: off'
+      - name: Fonts (sans-serif only; the page font is in src/styles/global.css)
+        run: npm run check:fonts
       - name: Type check
         run: npx tsc -b
       - name: Build

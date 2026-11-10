@@ -36,6 +36,35 @@ Enterprise is a drop-in on top of what is already here (add the package,
 register the modules, set a licence key) — not a migration — so the switch is
 cheap if the user wants it.
 
+## New UI: fonts and look (read before adding any screen, dialog or form)
+
+The user has had to ask, again and again, for new UI to be changed from the
+browser's serif to a modern sans-serif. It must look right the first time.
+
+- **The page font is set once, in `client/src/styles/global.css`** (imported
+  first in main.tsx): body, headings and form controls take the active
+  palette's `--font-body` / `--font-heading`, with a sans-serif stack behind
+  it. New UI inherits it: set no `font-family` at all, or use
+  `var(--font-body)` / `var(--font-heading)`. Never name a serif font.
+  (Before 2026-11-10 nothing set a page font, which is why every new piece
+  came up in Times New Roman.)
+- **`npm run check:fonts`** (in CI) fails on a stylesheet that names a font
+  stack not ending in sans-serif / monospace.
+- **The palette fonts are self-hosted** (`@fontsource/*`, pinned): theme/
+  fontLoader.ts loads only the families the active palette uses. A font
+  added to `FONT_SUGGESTIONS` (PaletteManager.tsx) and `FONT_CHOICES`
+  (server/palettes/aiPalette.js) needs its package and a loader there.
+  `src/index.css` and `App.css` are dead files, never imported.
+- **Look**: colours from the palette variables (`--color-primary`,
+  `--color-surface`, `--color-border`, `--color-text`, `--color-text-muted`),
+  rounded corners (8–14 px), the app's own buttons rather than bare browser
+  controls (a file input is hidden behind a styled label), and no layout
+  that leaves big empty gaps: in a column flex container a `flex-basis` is
+  a height.
+- **Check it before calling it done**: open the new UI in the preview and
+  confirm `getComputedStyle(el).fontFamily` of its text, inputs and buttons
+  is the palette font, take a screenshot, and check dark mode and phone width.
+
 ## Grid layout gotchas
 
 These are load-bearing and easy to reintroduce:
@@ -465,8 +494,7 @@ the browser as Server-Sent Events from `POST /api/jarvis/chat`. The panel opens
 from a floating launcher in the bottom-right corner or Alt+J; the launcher sits
 above the footer, or above the message box on Týmový chat / AI Asistent, whose
 send buttons are in that corner (`launcherPlacement` in App.tsx). Jarvis's CSS
-names its own sans-serif font — nothing above it sets a body font, so an
-inherited one falls back to the browser's serif. Needs `ANTHROPIC_API_KEY`;
+names its own sans-serif font (`--jarvis-font`). Needs `ANTHROPIC_API_KEY`;
 `JARVIS_HOURLY_LIMIT` caps turns per user (default 60).
 
 - **Tools never touch the database.** They call this server's own HTTP API

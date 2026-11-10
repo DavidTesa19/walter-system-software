@@ -1,4 +1,6 @@
 import ReactDOM from "react-dom/client";
+// The page font and other base rules, before any component's own styles.
+import "./styles/global.css";
 import App from "./App.tsx";
 // Catches the browser's install prompt before the app (and its sidebar) is up.
 import "./components/InstallAppButton";

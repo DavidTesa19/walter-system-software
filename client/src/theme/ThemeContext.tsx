@@ -9,6 +9,7 @@ import React, {
 import { colord, extend, type Colord } from 'colord';
 import mixPlugin from 'colord/plugins/mix';
 import { useAuth } from '../auth/AuthContext';
+import { ensureFonts } from './fontLoader';
 
 extend([mixPlugin]);
 
@@ -320,6 +321,8 @@ const applyPaletteToDocument = (mode: Theme, palette?: ColorPalette | null) => {
   const resolvedTypography = palette?.typography ?? FALLBACK_TYPOGRAPHY[mode];
   const variables = computeCssVariables(resolvedColors, mode, resolvedTypography);
   const root = document.documentElement;
+  // The palette's fonts are files of our own, loaded once it uses them.
+  ensureFonts([resolvedTypography.heading, resolvedTypography.subheading, resolvedTypography.body]);
 
   root.setAttribute('data-theme', mode);
   root.style.setProperty('color-scheme', mode);

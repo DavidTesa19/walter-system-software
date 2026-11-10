@@ -847,12 +847,16 @@
   display: flex;
   flex-direction: column;
   gap: 4px;
-  flex: 1 1 240px;
   font-size: 0.85rem;
   font-weight: 600;
 }
 
-.ai-palette__field--narrow {
+/* Side by side only in the row; in the box's column a flex-basis would be a height. */
+.ai-palette__row .ai-palette__field {
+  flex: 1 1 240px;
+}
+
+.ai-palette__row .ai-palette__field--narrow {
   flex: 0 0 140px;
 }
 
@@ -885,13 +889,41 @@
   padding: 4px;
 }
 
+/* The file input itself is hidden; its label is the button. */
 .ai-palette__file input {
-  font-size: 0.85rem;
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  opacity: 0;
+  pointer-events: none;
 }
 
-.ai-palette__file span {
-  display: block;
-  font-size: 0.8rem;
+.ai-palette__file {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 7px 14px;
+  border-radius: 10px;
+  border: 1px dashed var(--color-border, #cbd5e1);
+  background: var(--color-surface, #ffffff);
+  color: var(--color-text, #0f172a);
+  font-size: 0.85rem;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.ai-palette__file:hover {
+  border-color: var(--color-primary, #2563eb);
+  color: var(--color-primary, #2563eb);
+}
+
+.ai-palette__file:focus-within {
+  outline: 2px solid var(--color-primary, #2563eb);
+  outline-offset: 2px;
+}
+
+.ai-palette__file small {
+  font-weight: 400;
   color: var(--color-text-muted, #64748b);
 }
 

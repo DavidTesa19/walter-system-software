@@ -157,7 +157,7 @@ export default function AiPaletteBox({ defaultMode, disabled, onProposal }: AiPa
               onChange={(event) => setLogo(event.target.files?.[0] ?? null)}
               disabled={busy}
             />
-            <span>Přidat logo (nepovinné)</span>
+            <span aria-hidden="true">🖼</span> Přidat logo <small>(nepovinné, PNG, JPG, SVG…)</small>
           </label>
         )}
       </div>

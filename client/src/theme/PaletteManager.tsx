@@ -10,6 +10,7 @@ import {
   type Theme
 } from './ThemeContext';
 import AiPaletteBox, { type AiPaletteProposal } from './AiPaletteBox';
+import { ensureFonts } from './fontLoader';
 import './PaletteManager.css';
 
 type PaletteDraft = {
@@ -147,6 +148,11 @@ const PaletteManager: React.FC = () => {
     }));
     setAiNotes(prev => ({ ...prev, [mode]: { note: proposal.note, warnings: proposal.warnings ?? [] } }));
   };
+
+  // The font picker shows each font in itself, so this screen loads them all.
+  useEffect(() => {
+    ensureFonts(FONT_SUGGESTIONS);
+  }, []);
 
   useEffect(() => {
     if (typeof window === 'undefined') {
