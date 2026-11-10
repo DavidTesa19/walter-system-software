@@ -99,6 +99,7 @@ export const SECTION_LABELS: Record<string, string> = {
   future: 'Budoucí funkce',
   analytics: 'Analytika',
   finance: 'Finance',
+  help: 'Nápověda',
 };
 
 // ---- Per-Section Time Tracking ----

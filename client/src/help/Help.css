@@ -1,0 +1,243 @@
+/* The "?" panel and the Nápověda page. */
+
+.help-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 1200;
+  display: flex;
+  align-items: flex-start;
+  justify-content: center;
+  padding: 6vh 16px 16px;
+  background: rgba(15, 23, 42, 0.45);
+  overflow-y: auto;
+}
+
+.help-panel {
+  width: min(640px, 100%);
+  max-height: 88vh;
+  display: flex;
+  flex-direction: column;
+  border-radius: 16px;
+  border: 1px solid var(--color-border, rgba(15, 23, 42, 0.14));
+  background: var(--color-surface, #ffffff);
+  color: var(--color-text, #0f172a);
+  box-shadow: 0 30px 60px -20px rgba(15, 23, 42, 0.5);
+  font-family: var(--font-body, "Sora", "Inter", "Segoe UI", system-ui, sans-serif);
+  outline: none;
+}
+
+.help-panel-header,
+.help-panel-footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 14px 18px;
+}
+
+.help-panel-header {
+  border-bottom: 1px solid var(--color-border, rgba(15, 23, 42, 0.1));
+}
+
+.help-panel-header h2 {
+  margin: 0;
+  font-size: 1.05rem;
+  font-family: var(--font-heading, inherit);
+}
+
+.help-panel-footer {
+  justify-content: flex-end;
+  border-top: 1px solid var(--color-border, rgba(15, 23, 42, 0.1));
+}
+
+.help-panel-footer:empty {
+  display: none;
+}
+
+.help-panel-body {
+  padding: 4px 18px 14px;
+  overflow-y: auto;
+}
+
+.help-close {
+  border: none;
+  background: transparent;
+  color: var(--color-text-muted, #64748b);
+  font-size: 1.5rem;
+  line-height: 1;
+  cursor: pointer;
+  padding: 2px 6px;
+  border-radius: 8px;
+}
+
+.help-close:hover {
+  color: var(--color-text, #0f172a);
+  background: color-mix(in srgb, var(--color-primary, #2563eb) 10%, transparent);
+}
+
+.help-all {
+  border: 1px solid var(--color-primary, #2563eb);
+  background: var(--color-primary, #2563eb);
+  color: #fff;
+  border-radius: 10px;
+  padding: 7px 14px;
+  font: inherit;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.help-topic {
+  margin-top: 14px;
+}
+
+.help-topic-title {
+  margin: 0 0 4px;
+  font-size: 0.98rem;
+  font-family: var(--font-heading, inherit);
+}
+
+.help-topic-summary {
+  margin: 0 0 6px;
+  color: var(--color-text, #0f172a);
+  line-height: 1.5;
+}
+
+.help-topic-points {
+  margin: 0;
+  padding-left: 1.2rem;
+  color: var(--color-text-muted, #475569);
+  line-height: 1.5;
+}
+
+.help-topic-points li + li {
+  margin-top: 3px;
+}
+
+.help-shortcuts {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.9rem;
+}
+
+.help-shortcuts th,
+.help-shortcuts td {
+  padding: 6px 8px 6px 0;
+  text-align: left;
+  vertical-align: top;
+  border-bottom: 1px solid color-mix(in srgb, var(--color-border, rgba(15, 23, 42, 0.12)) 70%, transparent);
+}
+
+.help-shortcuts th {
+  white-space: nowrap;
+  font-weight: 500;
+  width: 1%;
+}
+
+.help-shortcuts--compact {
+  font-size: 0.85rem;
+}
+
+.help-where,
+.help-or {
+  color: var(--color-text-muted, #64748b);
+}
+
+.help-panel kbd,
+.help-page kbd {
+  display: inline-block;
+  min-width: 1.4em;
+  padding: 1px 6px;
+  border-radius: 6px;
+  border: 1px solid var(--color-border, rgba(15, 23, 42, 0.2));
+  border-bottom-width: 2px;
+  background: color-mix(in srgb, var(--color-surface, #ffffff) 85%, var(--color-text, #0f172a) 5%);
+  font: 600 0.8rem/1.4 ui-monospace, "Cascadia Code", Consolas, monospace;
+  text-align: center;
+}
+
+/* The Nápověda page */
+
+.help-page {
+  max-width: 820px;
+  margin: 0 auto;
+  padding: 24px 20px 48px;
+  color: var(--color-text, #0f172a);
+  font-family: var(--font-body, "Sora", "Inter", "Segoe UI", system-ui, sans-serif);
+}
+
+.help-page-header h1 {
+  margin: 0 0 6px;
+  font-family: var(--font-heading, inherit);
+}
+
+.help-page-header p {
+  margin: 0 0 14px;
+  color: var(--color-text-muted, #475569);
+  line-height: 1.5;
+}
+
+.help-filter {
+  width: 100%;
+  box-sizing: border-box;
+  padding: 9px 12px;
+  border-radius: 10px;
+  border: 1px solid var(--color-border, rgba(15, 23, 42, 0.18));
+  background: var(--color-surface, #ffffff);
+  color: var(--color-text, #0f172a);
+  font: inherit;
+}
+
+.help-toc {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin: 16px 0 4px;
+}
+
+.help-toc a {
+  padding: 4px 10px;
+  border-radius: 999px;
+  border: 1px solid var(--color-border, rgba(15, 23, 42, 0.15));
+  color: var(--color-primary, #2563eb);
+  text-decoration: none;
+  font-size: 0.85rem;
+}
+
+.help-toc a:hover {
+  background: color-mix(in srgb, var(--color-primary, #2563eb) 10%, transparent);
+}
+
+.help-page .help-topic {
+  margin-top: 22px;
+  scroll-margin-top: 40px;
+}
+
+.help-page .help-topic-title {
+  font-size: 1.15rem;
+}
+
+.help-empty {
+  margin-top: 20px;
+  color: var(--color-text-muted, #64748b);
+}
+
+@media (max-width: 768px) {
+  .help-backdrop {
+    padding: 0;
+  }
+
+  .help-panel {
+    width: 100%;
+    max-height: 100dvh;
+    height: 100dvh;
+    border-radius: 0;
+  }
+
+  .help-shortcuts th {
+    white-space: normal;
+  }
+
+  .help-page {
+    padding: 12px 12px 32px;
+  }
+}

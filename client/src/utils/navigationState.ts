@@ -30,7 +30,8 @@ const VALID_APP_VIEWS: AppView[] = [
   "finance",
   "data_quality",
   "tasks",
-  "bugs"
+  "bugs",
+  "help"
 ];
 
 type FutureFunctionsViewMode = "active" | "archive";

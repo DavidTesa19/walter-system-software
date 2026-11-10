@@ -171,6 +171,18 @@ Grid changes are verifiable end to end; do it rather than guessing.
 5. `server.js` has no hot reload — restart it after server edits, or new columns
    are silently dropped by stale field whitelists.
 
+## Help: the "?" panel and Ostatní › Nápověda
+
+`client/src/help/helpContent.ts` holds every keyboard shortcut (`SHORTCUTS`)
+and a short Czech guide per screen (`HELP_TOPICS`, keyed by the views it
+covers). The "?" key or the "?" button (FloatingTools) opens `HelpPanel` with
+the current screen's guide, Jarvis and the shortcuts; `HelpView` lists every
+guide the user's role and sections allow. **A new shortcut or screen goes into
+helpContent.ts too**, or the help silently goes out of date. A new view also
+needs its id in `navigationState.ts`, `VIEW_LABELS` (App.tsx), the sidebar
+group's `views` and, if salesmen and viewers may open it,
+`SALESMAN_VIEWER_ALLOWED_VIEWS` (AuthContext).
+
 ## Loading speed: what each screen fetches
 
 Measured 2026-11-10: opening the app fired ~65 full-table requests, and

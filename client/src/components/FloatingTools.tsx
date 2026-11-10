@@ -1,6 +1,7 @@
-// The two floating buttons in the top-right corner: Úkoly, which opens into a
-// small task window (and folds back into the button), and the bug button,
-// which opens the "Nahlásit chybu" dialog from any screen.
+// The floating buttons in the top-right corner: "?" (help for this screen,
+// also the ? key), the bug button, which opens the "Nahlásit chybu" dialog
+// from any screen, and Úkoly, which opens into a small task window (and folds
+// back into the button).
 //
 // They sit below the profile panel and other right-hand overlays (z-index
 // 1000), so an open panel covers them instead of the other way round.
@@ -8,6 +9,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useAuth } from '../auth/AuthContext';
 import BugReportDialog from '../bugs/BugReportDialog';
+import HelpPanel from '../help/HelpPanel';
 import TaskQuickAdd from '../tasks/TaskQuickAdd';
 import TaskRow from '../tasks/TaskRow';
 import type { Task, TaskScope, TeamUser } from '../tasks/tasksApi';
@@ -38,6 +40,7 @@ const FloatingTools: React.FC<FloatingToolsProps> = ({ viewId, viewLabel, onNavi
   const { user } = useAuth();
   const [open, setOpen] = useState(readOpen);
   const [reporting, setReporting] = useState(false);
+  const [helpOpen, setHelpOpen] = useState(false);
   const [tab, setTab] = useState<'mine' | 'team'>(() => (readTaskScope(WIDGET_SCOPE_KEY) === 'team' ? 'team' : 'mine'));
   const [users, setUsers] = useState<TeamUser[]>([]);
   const [showLater, setShowLater] = useState(false);
@@ -84,6 +87,19 @@ const FloatingTools: React.FC<FloatingToolsProps> = ({ viewId, viewLabel, onNavi
     return { todo, later, doneToday };
   }, [current.tasks, today]);
 
+  // "?" (outside a text field) opens the help for this screen.
+  useEffect(() => {
+    const onKey = (event: KeyboardEvent) => {
+      if (event.key !== '?' || event.ctrlKey || event.metaKey || event.altKey || event.defaultPrevented) return;
+      const target = event.target as HTMLElement | null;
+      if (target && (target.isContentEditable || /^(input|textarea|select)$/i.test(target.tagName))) return;
+      event.preventDefault();
+      setHelpOpen((value) => !value);
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, []);
+
   // Alt+T opens and folds the task window.
   useEffect(() => {
     const onKey = (event: KeyboardEvent) => {
@@ -111,6 +127,16 @@ const FloatingTools: React.FC<FloatingToolsProps> = ({ viewId, viewLabel, onNavi
   return (
     <>
       <div className="floating-tools">
+        <button
+          type="button"
+          className="floating-tool floating-tool--help"
+          onClick={() => setHelpOpen(true)}
+          title="Nápověda (?)"
+          aria-label="Nápověda"
+        >
+          ?
+        </button>
+
         <button
           type="button"
           className="floating-tool floating-tool--bug"
@@ -222,6 +248,17 @@ const FloatingTools: React.FC<FloatingToolsProps> = ({ viewId, viewLabel, onNavi
 
       {reporting && (
         <BugReportDialog viewId={viewId} viewLabel={viewLabel} onClose={() => setReporting(false)} onShowReports={() => onNavigate('bugs')} />
+      )}
+      {helpOpen && (
+        <HelpPanel
+          view={viewId}
+          viewLabel={viewLabel}
+          onClose={() => setHelpOpen(false)}
+          onOpenAll={() => {
+            setHelpOpen(false);
+            onNavigate('help');
+          }}
+        />
       )}
     </>
   );

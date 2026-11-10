@@ -36,6 +36,7 @@ const GeneralSectionView = lazy(() => import('./views/GeneralSectionView'));
 const FutureFunctionsView = lazy(() => import('./views/FutureFunctionsView'));
 const ChatbotView = lazy(() => import('./views/ChatbotView'));
 const TeamChatView = lazy(() => import('./views/TeamChatView'));
+const HelpView = lazy(() => import('./views/HelpView'));
 const FullCalendarView = lazy(() => import('./views/FullCalendarView'));
 const AnalyticsView = lazy(() => import('./views/AnalyticsView'));
 const AdminUsersView = lazy(() => import('./views/AdminUsersView'));
@@ -104,6 +105,7 @@ const VIEW_LABELS: Record<AppView, string> = {
   safety: 'Bezpečnost a zálohy',
   tasks: 'Úkoly',
   bugs: 'Hlášení chyb',
+  help: 'Nápověda',
   entities_active: 'Aktuální subjekty',
   entities_pending: 'Subjekty ke schválení',
   entities_archived: 'Archiv subjektů',
@@ -730,6 +732,8 @@ const AppContent: React.FC = () => {
                 return <TasksView />;
               case 'bugs':
                 return <BugReportsView />;
+              case 'help':
+                return <HelpView />;
               case 'entities_active':
               case 'entities_pending':
               case 'entities_archived':

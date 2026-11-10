@@ -256,3 +256,14 @@
   box-sizing: border-box;
   padding-top: 48px;
 }
+
+.floating-tool--help {
+  padding: 0;
+  font-weight: 700;
+  font-size: 1rem;
+  color: var(--color-text-muted, #64748b);
+}
+
+.floating-tool--help:hover {
+  color: var(--color-primary, #2563eb);
+}
