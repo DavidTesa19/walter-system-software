@@ -19,6 +19,7 @@ import type {
   JarvisOpenAction,
   JarvisStatus,
   JarvisProposal,
+  JarvisProposalChange,
   JarvisVoiceEngine,
   JarvisVoiceOption,
   ProposalDecision,
@@ -183,6 +184,36 @@ const DECISION_TEXT: Record<ProposalDecision['status'], string> = {
   failed: 'Nepodařilo se provést',
 };
 
+const PROPOSAL_BADGE: Record<JarvisProposal['type'], string> = {
+  update: 'Návrh změny',
+  note: 'Nová poznámka',
+  create_subject: 'Nový záznam',
+  create_commission: 'Nová zakázka',
+};
+
+// Rows of a proposal card: "old → new" for a change, just the value for a
+// new record (it has no "old").
+function ProposalRows({ rows }: { rows: JarvisProposalChange[] }) {
+  return (
+    <dl className="jarvis-proposal-changes">
+      {rows.map((change) => (
+        <div key={change.field} className="jarvis-proposal-change">
+          <dt>{change.label}</dt>
+          <dd>
+            {change.fromText !== '' && (
+              <>
+                <span className="jarvis-proposal-from">{change.fromText}</span>
+                <span className="jarvis-proposal-arrow" aria-label="změnit na">→</span>
+              </>
+            )}
+            <span className="jarvis-proposal-to">{change.toText}</span>
+          </dd>
+        </div>
+      ))}
+    </dl>
+  );
+}
+
 // A change Jarvis proposes: what it would change, and the user's decision.
 function ProposalCard({
   proposal,
@@ -190,42 +221,61 @@ function ProposalCard({
   deciding,
   disabled,
   onDecide,
+  onOpenRecord,
 }: {
   proposal: JarvisProposal;
   decision?: ProposalDecision;
   deciding: boolean;
   disabled: boolean;
   onDecide: (decision: 'apply' | 'reject') => void;
+  onOpenRecord: (action: JarvisOpenAction) => void;
 }) {
   const state = decision?.status ?? 'pending';
+  const created = decision?.status === 'applied' ? decision.created : undefined;
+  const openCreated = () => {
+    if (!created) return;
+    onOpenRecord({
+      type: 'open_record',
+      section: created.section,
+      role: created.role,
+      kind: created.kind,
+      id: created.id,
+      entityId: created.kind === 'subject' ? created.id : (proposal.recordId ?? created.id),
+      status: proposal.payload?.entity?.status ?? proposal.payload?.status ?? 'accepted',
+      label: created.code,
+    });
+  };
   return (
     <div className={`jarvis-proposal jarvis-proposal--${state}`}>
       <div className="jarvis-proposal-head">
-        <span className="jarvis-proposal-badge">{proposal.type === 'note' ? 'Nová poznámka' : 'Návrh změny'}</span>
+        <span className="jarvis-proposal-badge">{PROPOSAL_BADGE[proposal.type] ?? 'Návrh'}</span>
         <strong>{proposal.label}</strong>
         <small>{proposal.where}</small>
       </div>
-      {proposal.changes && proposal.changes.length > 0 && (
-        <dl className="jarvis-proposal-changes">
-          {proposal.changes.map((change) => (
-            <div key={change.field} className="jarvis-proposal-change">
-              <dt>{change.label}</dt>
-              <dd>
-                <span className="jarvis-proposal-from">{change.fromText}</span>
-                <span className="jarvis-proposal-arrow" aria-label="změnit na">→</span>
-                <span className="jarvis-proposal-to">{change.toText}</span>
-              </dd>
-            </div>
-          ))}
-        </dl>
+      {proposal.changes && proposal.changes.length > 0 && <ProposalRows rows={proposal.changes} />}
+      {proposal.commissionChanges && proposal.commissionChanges.length > 0 && (
+        <>
+          <div className="jarvis-proposal-subhead">První zakázka</div>
+          <ProposalRows rows={proposal.commissionChanges} />
+        </>
+      )}
+      {proposal.warnings && proposal.warnings.length > 0 && !decision && (
+        <ul className="jarvis-proposal-warnings">
+          {proposal.warnings.map((warning) => <li key={warning}>{warning}</li>)}
+        </ul>
       )}
       {proposal.note && <p className="jarvis-proposal-note">{proposal.note}</p>}
       {proposal.reason && <p className="jarvis-proposal-reason">{proposal.reason}</p>}
       {decision ? (
         <div className={`jarvis-proposal-status jarvis-proposal-status--${decision.status}`}>
           {decision.status === 'applied' ? '✓ ' : ''}
-          {DECISION_TEXT[decision.status]}
+          {created ? `Vytvořeno: ${created.code}` : DECISION_TEXT[decision.status]}
           {decision.error && decision.status !== 'rejected' ? `: ${decision.error}` : ''}
+          {created && (
+            <button type="button" className="jarvis-action jarvis-proposal-open" onClick={openCreated}>
+              Otevřít
+            </button>
+          )}
         </div>
       ) : (
         <div className="jarvis-proposal-buttons">
@@ -1741,6 +1791,7 @@ export default function JarvisPanel({ open, onOpen, onClose, viewLabel, launcher
             deciding={deciding.has(proposal.id)}
             disabled={live || busy}
             onDecide={(decision) => void decideProposal(proposal.id, decision)}
+            onOpenRecord={openRecord}
           />
         ))}
         {!live && open.length > 1 && (

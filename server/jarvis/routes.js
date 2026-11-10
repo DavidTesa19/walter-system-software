@@ -119,7 +119,10 @@ export function proposalOutcomes(transcript = []) {
     decided.add(item.id);
     const proposal = proposals.get(item.id);
     if (index > lastQuestion && proposal) {
-      lines.push(`Návrh ${describeProposal(proposal)}: ${PROPOSAL_STATUS_TEXT[item.status] ?? item.status}${item.error ? ` (${item.error})` : ''}`);
+      const made = item.created
+        ? ` – vytvořeno ${item.created.code} (ref ${recordRef(item.created)})`
+        : '';
+      lines.push(`Návrh ${describeProposal(proposal)}: ${PROPOSAL_STATUS_TEXT[item.status] ?? item.status}${made}${item.error ? ` (${item.error})` : ''}`);
     }
   });
   const pending = [...proposals.values()].filter((proposal) => !decided.has(proposal.id));
@@ -506,6 +509,7 @@ export function registerJarvisRoutes(app, { authenticateToken, pool, dataDir, po
     try {
       let status = 'rejected';
       let error;
+      let created;
       if (decision === 'apply') {
         if (req.user.role === 'viewer') {
           status = 'failed';
@@ -518,7 +522,7 @@ export function registerJarvisRoutes(app, { authenticateToken, pool, dataDir, po
             note: `Jarvis, potvrzeno uživatelem: ${truncate(describeProposal(proposal), 300)}`,
           });
           try {
-            await applyProposal(proposal, api);
+            created = (await applyProposal(proposal, api))?.created;
             status = 'applied';
           } catch (applyError) {
             if (applyError instanceof ProposalError) {
@@ -532,7 +536,14 @@ export function registerJarvisRoutes(app, { authenticateToken, pool, dataDir, po
           }
         }
       }
-      const item = { type: 'proposal_status', id: proposal.id, status, ...(error ? { error } : {}), at: new Date().toISOString() };
+      const item = {
+        type: 'proposal_status',
+        id: proposal.id,
+        status,
+        ...(error ? { error } : {}),
+        ...(created ? { created } : {}),
+        at: new Date().toISOString(),
+      };
       await store.append(conversation.id, userId, { messages: [], transcript: [item], usage: zeroUsage() });
       res.json(item);
     } catch (error) {

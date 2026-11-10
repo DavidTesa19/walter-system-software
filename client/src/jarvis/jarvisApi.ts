@@ -27,14 +27,20 @@ export interface JarvisProposalChange {
 
 export interface JarvisProposal {
   id: string;
-  type: 'update' | 'note';
+  type: 'update' | 'note' | 'create_subject' | 'create_commission';
   kind: JarvisKind;
   section: JarvisSection;
   role: JarvisRole;
-  recordId: number;
+  /** The record changed; for a new zakázka its subject; null for a new subject. */
+  recordId: number | null;
   label: string;
   where: string;
   changes?: JarvisProposalChange[];
+  /** A new subject's first zakázka. */
+  commissionChanges?: JarvisProposalChange[];
+  /** Similar records that already exist. */
+  warnings?: string[];
+  payload?: { status?: string; entity?: { status?: string } };
   note?: string;
   reason?: string;
 }
@@ -46,6 +52,8 @@ export interface ProposalDecision {
   id: string;
   status: ProposalStatus;
   error?: string;
+  /** What a confirmed create made. */
+  created?: { kind: JarvisKind; section: JarvisSection; role: JarvisRole; id: number; code: string };
   at: string;
 }
 

@@ -76,7 +76,40 @@ export const COMMISSION_FIELDS = {
   notes: { label: 'Poznámky', parse: text(4000) },
 };
 
-export const PROPOSAL_LIMITS = { states: WORKFLOW_STATES, priorities: PRIORITIES, tiers: TIERS };
+// The Kraj values the app offers (REGION_OPTIONS in client/src/usersGrid/
+// regions.ts); keep the two lists the same.
+const REGIONS = [
+  'Celá ČR', 'Praha', 'Středočeský kraj', 'Jihočeský kraj', 'Plzeňský kraj', 'Karlovarský kraj', 'Ústecký kraj',
+  'Liberecký kraj', 'Královéhradecký kraj', 'Pardubický kraj', 'Vysočina', 'Jihomoravský kraj', 'Olomoucký kraj',
+  'Zlínský kraj', 'Moravskoslezský kraj', 'Zahraničí',
+];
+const REGION_ALIASES = { 'hlavní město praha': 'Praha', 'kraj vysočina': 'Vysočina' };
+const region = (raw) => pickFrom(REGIONS)(REGION_ALIASES[String(raw).trim().toLowerCase()] ?? raw);
+
+// What a new subject may be created with: the field, its column in the
+// create payload (the same one the app's create form sends), label and check.
+// Společnost, Kraj and Lokalita go in as the flat columns; the profile's
+// trees are derived from them on read (client/src/usersGrid/hierarchy.ts).
+export const CREATE_SUBJECT_FIELDS = {
+  name: { column: 'first_name', label: 'Jméno', parse: text(200) },
+  company: { column: 'company_name', label: 'Společnost', parse: text(200) },
+  ico: { column: 'ico', label: 'IČO', parse: ico },
+  phone: { column: 'phone', label: 'Telefon', parse: multiValue },
+  email: { column: 'email', label: 'E-mail', parse: multiValue },
+  website: { column: 'website', label: 'Web', parse: multiValue },
+  tier: { column: 'tier', label: 'Úroveň', parse: pickFrom(TIERS) },
+  region: { column: 'region', label: 'Kraj', parse: region },
+  location: { column: 'location', label: 'Lokalita', parse: text(300) },
+  info: { column: 'info', label: 'Popis / Poznámky', parse: text(4000) },
+};
+
+export const CREATE_COMMISSION_FIELDS = {
+  position: { column: 'position', label: 'Zakázka', parse: text(200) },
+  service_position: { column: 'service_position', label: 'Typ služby', parse: text(200) },
+  ...Object.fromEntries(Object.entries(COMMISSION_FIELDS).map(([field, spec]) => [field, { column: field, ...spec }])),
+};
+
+export const PROPOSAL_LIMITS = { states: WORKFLOW_STATES, priorities: PRIORITIES, tiers: TIERS, regions: REGIONS };
 
 // A stored value as people read it: dates without time, lists joined.
 const display = (field, raw) => {
@@ -156,17 +189,159 @@ export function buildNoteProposal({ section, role, record, content, reason, labe
   };
 }
 
+// Values for a new record, checked: the payload columns, and card rows with
+// no "from" (there is nothing before).
+const parseNew = (specs, values, what) => {
+  const payload = {};
+  const rows = [];
+  for (const [field, raw] of Object.entries(values ?? {})) {
+    if (raw === undefined || raw === null || raw === '' || (Array.isArray(raw) && raw.length === 0)) continue;
+    const spec = specs[field];
+    if (!spec) throw new ProposalError(`Pole ${field} u ${what} zadat nelze. Lze: ${Object.keys(specs).join(', ')}.`);
+    let value;
+    try {
+      value = spec.parse(raw);
+    } catch (error) {
+      throw new ProposalError(`${spec.label}: ${error.message}`);
+    }
+    if (value === null || value === '') continue;
+    payload[spec.column] = value;
+    rows.push({ field, label: spec.label, fromText: '', toText: display(field, value) });
+  }
+  return { payload, rows };
+};
+
+const STATUS_LABELS = { accepted: 'Aktivní', pending: 'Ke schválení' };
+
+const settingsRows = ({ status, assignee }) => [
+  { field: 'status', label: 'Zařadit do', fromText: '', toText: STATUS_LABELS[status] },
+  ...(assignee ? [{ field: 'assigned', label: 'Přiřazeno', fromText: '', toText: assignee.name }] : []),
+];
+
+/**
+ * A new subject (klient / partner / tipař), optionally with its first
+ * zakázka. `duplicates` are similar records already in that list; they are
+ * shown on the card so the user does not create a second copy by accident.
+ */
+export function buildCreateSubjectProposal({ section, role, subject, commission, status = 'accepted', assignee, duplicates = [], reason }) {
+  const entity = parseNew(CREATE_SUBJECT_FIELDS, subject, 'subjektu');
+  if (!entity.payload.first_name && !entity.payload.company_name) {
+    throw new ProposalError('Nový subjekt potřebuje aspoň jméno nebo společnost.');
+  }
+  if (entity.payload.location && !entity.payload.region) {
+    throw new ProposalError('Lokalita patří pod kraj: zadej i Kraj.');
+  }
+  const assigned = assignee ? [assignee.id] : [];
+  const first = commission && Object.values(commission).some((value) => value !== undefined && value !== null && value !== '')
+    ? parseNew(CREATE_COMMISSION_FIELDS, commission, 'zakázky')
+    : null;
+  if (first && !first.payload.position) throw new ProposalError('Zakázka potřebuje název (position).');
+
+  const label = [entity.payload.company_name, entity.payload.first_name].filter(Boolean).join(' · ');
+  return {
+    id: crypto.randomUUID(),
+    type: 'create_subject',
+    kind: 'subject',
+    section,
+    role,
+    recordId: null,
+    label,
+    where: `Nový ${ROLE_LABELS[role].toLowerCase()} · ${SECTION_LABELS[section]}`,
+    changes: [...entity.rows, ...settingsRows({ status, assignee })],
+    ...(first ? { commissionChanges: first.rows } : {}),
+    payload: {
+      entity: { ...entity.payload, status, assigned_user_ids: assigned },
+      ...(first ? { commission: { ...first.payload, status, assigned_user_ids: assigned } } : {}),
+    },
+    ...(duplicates.length ? { warnings: duplicates.map((duplicate) => `Podobný záznam už existuje: ${duplicate}`) } : {}),
+    reason: reason ? String(reason).slice(0, 300) : undefined,
+    createdAt: new Date().toISOString(),
+  };
+}
+
+/** A new zakázka for an existing subject (`record`, read fresh). */
+export function buildCreateCommissionProposal({ section, role, record, commission, status = 'accepted', assignee, reason, label }) {
+  const parsed = parseNew(CREATE_COMMISSION_FIELDS, commission, 'zakázky');
+  if (!parsed.payload.position) throw new ProposalError('Zakázka potřebuje název (position).');
+  return {
+    id: crypto.randomUUID(),
+    type: 'create_commission',
+    kind: 'commission',
+    section,
+    role,
+    recordId: Number(record.id),
+    label: `Nová zakázka: ${parsed.payload.position}`,
+    where: `${label} · ${SECTION_LABELS[section]}`,
+    changes: [...parsed.rows, ...settingsRows({ status, assignee })],
+    payload: {
+      ...parsed.payload,
+      entity_id: Number(record.id),
+      status,
+      assigned_user_ids: assignee ? [assignee.id] : [],
+    },
+    reason: reason ? String(reason).slice(0, 300) : undefined,
+    createdAt: new Date().toISOString(),
+  };
+}
+
 // A one-line description, for the change log and for Jarvis's next turn.
-export const describeProposal = (proposal) =>
-  proposal.type === 'note'
-    ? `${proposal.label}: nová poznámka`
-    : `${proposal.label}: ${proposal.changes.map((change) => `${change.label} ${change.fromText} → ${change.toText}`).join(', ')}`;
+export const describeProposal = (proposal) => {
+  if (proposal.type === 'note') return `${proposal.label}: nová poznámka`;
+  if (proposal.type === 'create_subject') {
+    return `nový ${ROLE_LABELS[proposal.role].toLowerCase()} ${proposal.label} (${SECTION_LABELS[proposal.section]})${proposal.payload?.commission ? ` se zakázkou ${proposal.payload.commission.position}` : ''}`;
+  }
+  if (proposal.type === 'create_commission') return `${proposal.label} (${proposal.where})`;
+  return `${proposal.label}: ${proposal.changes.map((change) => `${change.label} ${change.fromText} → ${change.toText}`).join(', ')}`;
+};
+
+const createdSubject = (proposal, entity, commission) => ({
+  kind: 'subject',
+  section: proposal.section,
+  role: proposal.role,
+  id: Number(entity.id),
+  code: [entity.entity_id, commission?.commission_id].filter(Boolean).join(' / '),
+});
+
+async function applyCreate(proposal, api) {
+  const base = entitiesPath(proposal.section, proposal.role);
+  if (proposal.type === 'create_subject') {
+    if (proposal.payload.commission) {
+      const response = await api.request('POST', `${base}/with-commission`, proposal.payload);
+      return { created: createdSubject(proposal, response.entity, response.commission) };
+    }
+    const entity = await api.request('POST', base, proposal.payload.entity);
+    return { created: createdSubject(proposal, entity, null) };
+  }
+  // A zakázka: its subject must still be there.
+  try {
+    await api.request('GET', `${base}/${proposal.recordId}`);
+  } catch (error) {
+    if (error?.status === 404) throw new ProposalError('Subjekt mezitím někdo smazal, zakázku jsem nevytvořil.');
+    throw error;
+  }
+  const path = commissionsPath(proposal.section, proposal.role);
+  const response = await api.request('POST', path, proposal.payload);
+  const commission = response?.commission_id ? response : await api.request('GET', `${path}/${response.id}`);
+  return {
+    created: {
+      kind: 'commission',
+      section: proposal.section,
+      role: proposal.role,
+      id: Number(commission.id),
+      code: commission.commission_id,
+    },
+  };
+}
 
 /**
  * Apply a confirmed proposal through the app's API. Throws ProposalError when
- * the record has changed since (nothing is written then).
+ * the record has changed since (nothing is written then). A create returns
+ * `{ created: { kind, section, role, id, code } }`.
  */
 export async function applyProposal(proposal, api) {
+  if (proposal.type === 'create_subject' || proposal.type === 'create_commission') {
+    return applyCreate(proposal, api);
+  }
   if (proposal.type === 'note') {
     await api.request('POST', `/${documentResource(proposal.section, proposal.role)}/${proposal.recordId}/notes`, { content: proposal.note });
     return;

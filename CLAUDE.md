@@ -584,6 +584,22 @@ inherited one falls back to the browser's serif. Needs `ANTHROPIC_API_KEY`;
   `proposalOutcomes` in the `<kontext>` block. Only fields in
   `SUBJECT_FIELDS` / `COMMISSION_FIELDS` can be changed — names, companies,
   obor and places are trees the profile panel edits; viewers cannot propose.
+- **New records with approval** (`propose_create_subject`,
+  `propose_create_commission`): the same card, with the values and no
+  "from"; a subject may carry its first zakázka (`commissionChanges`).
+  Confirming posts exactly what the app's create form posts
+  (`…-entities`, `…-entities/with-commission`, `…-commissions` with
+  `entity_id`), so Společnost, Kraj and Lokalita go in as the flat columns
+  and the profile derives its trees from them. Kraj must be one of the
+  app's values (`REGIONS` in proposals.js = `REGION_OPTIONS` in
+  regions.ts). The new record is filed under Aktivní (or Ke schválení) and
+  assigned to the asker unless `assign_to_me: false`. Before the card,
+  `findSimilarSubjects` looks for the same IČO, company (legal form
+  ignored) or name with phone in that list and puts them on the card as
+  warnings. The decision item carries `created` (code and id): the card
+  shows "Vytvořeno: K045 / K045-001" with "Otevřít", and the next turn's
+  `<kontext>` gets the new ref. A new zakázka checks its subject still
+  exists. Obor and Zaměření are not set by Jarvis.
 - **Answers written before a tool call vanish on Opus 5.5**: text between tool
   calls comes back as a thinking-block progress note, so "answer, then
   open_record" ends the turn with nothing to show. The prompt asks for the

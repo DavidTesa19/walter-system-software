@@ -34,7 +34,14 @@ import {
 import { matchRecord, recordWords } from './fuzzy.js';
 import { DocumentTextError, MAX_DOCUMENT_BYTES, documentText } from './documents.js';
 import { AresError, isValidIco, lookupByIco, normalizeIco, searchByName } from '../ares.js';
-import { PROPOSAL_LIMITS, ProposalError, buildNoteProposal, buildUpdateProposal } from './proposals.js';
+import {
+  PROPOSAL_LIMITS,
+  ProposalError,
+  buildCreateCommissionProposal,
+  buildCreateSubjectProposal,
+  buildNoteProposal,
+  buildUpdateProposal,
+} from './proposals.js';
 import { DATE_ONLY, DAY_MS, eventEndLabel, formatPrague, parseDay, parseEventTime, pragueMidnight, pragueParts } from './time.js';
 import {
   CALENDAR_LIMITS,
@@ -435,6 +442,100 @@ async function loadForProposal(ctx, { section: sectionId, role: roleId, kind: ki
 }
 
 const PENDING_NOTE = 'Čeká na potvrzení: uživatel vidí kartu s tlačítky Potvrdit a Zamítnout. Zatím se nic nezměnilo – netvrď, že je změna provedena.';
+
+const newCommissionInput = z
+  .object({
+    position: z.string().max(200).optional().describe('Název zakázky (povinný).'),
+    service_position: z.string().max(200).optional().describe('Typ služby.'),
+    state: changeValue.describe(`Stav – ${PROPOSAL_LIMITS.states.join(', ')}.`),
+    priority: changeValue.describe(`Priorita – ${PROPOSAL_LIMITS.priorities.join(', ')}.`),
+    deadline: changeValue.describe('Termín, 2026-11-30 nebo 30.11.2026.'),
+    budget: changeValue.describe('Rozpočet.'),
+    commission_value: changeValue.describe('Provize.'),
+    notes: changeValue.describe('Poznámky k zakázce.'),
+  })
+  .strict();
+
+const createSettings = {
+  status: z.enum(['accepted', 'pending']).optional().describe('accepted = mezi aktivní (výchozí), pending = Ke schválení.'),
+  assign_to_me: z.boolean().optional().describe('Přiřadit přihlášenému uživateli (výchozí ano).'),
+  reason: z.string().max(300).optional().describe('Krátce proč / odkud údaje jsou (např. „podle ARES“) – uvidí to na kartě.'),
+};
+
+const createSubjectInput = z.object({
+  section,
+  role,
+  subject: z
+    .object({
+      name: z.string().max(200).optional().describe('Jméno kontaktní osoby.'),
+      company: z.string().max(200).optional().describe('Název společnosti.'),
+      ico: z.string().max(20).optional().describe('IČO (8 číslic).'),
+      phone: multiChangeValue,
+      email: multiChangeValue,
+      website: multiChangeValue,
+      tier: changeValue.describe(`Úroveň – ${PROPOSAL_LIMITS.tiers.join(', ')}.`),
+      region: changeValue.describe(`Kraj – ${PROPOSAL_LIMITS.regions.join(', ')}.`),
+      location: changeValue.describe('Lokalita: adresa nebo město (jen spolu s krajem).'),
+      info: changeValue.describe('Popis / Poznámky.'),
+    })
+    .strict()
+    .describe('Aspoň jméno nebo společnost.'),
+  commission: newCommissionInput.optional().describe('První zakázka subjektu, když o ni uživatel žádá.'),
+  ...createSettings,
+}).strict();
+
+const createCommissionInput = z.object({
+  section,
+  role,
+  id: z.number().int().positive().describe('Interní id subjektu, ke kterému zakázka patří (poslední část ref).'),
+  commission: newCommissionInput,
+  ...createSettings,
+}).strict();
+
+// Subjects in the same list that look like the new one: same IČO, the same
+// company, or the same person with the same phone. A hint for the card, not
+// a block (two branches of one firm are legitimate).
+const COMPANY_KEY = (value) =>
+  String(value ?? '')
+    .normalize('NFD')
+    .replace(/[̀-ͯ]/g, '')
+    .toLowerCase()
+    .replace(/\b(s\.?\s?r\.?\s?o\.?|a\.?\s?s\.?|spol\.?|v\.?\s?o\.?\s?s\.?|k\.?\s?s\.?|z\.?\s?s\.?)\b/g, '')
+    .replace(/[^a-z0-9]/g, '');
+const PHONE_KEY = (value) => String(value ?? '').replace(/\D/g, '').slice(-9);
+
+async function findSimilarSubjects(ctx, sectionId, roleId, entity) {
+  let rows;
+  try {
+    rows = await ctx.api.request('GET', entitiesPath(sectionId, roleId));
+  } catch {
+    return [];
+  }
+  const company = COMPANY_KEY(entity.company_name);
+  const person = COMPANY_KEY(entity.first_name);
+  const phones = new Set((unpackValue(entity.phone) ? [].concat(unpackValue(entity.phone)) : []).map(PHONE_KEY).filter((key) => key.length >= 9));
+  const hits = [];
+  for (const row of Array.isArray(rows) ? rows : []) {
+    if (row.status === 'archived') continue;
+    const reasons = [];
+    if (entity.ico && row.ico && String(row.ico) === String(entity.ico)) reasons.push('stejné IČO');
+    if (company && COMPANY_KEY(row.company_name) === company) reasons.push('stejná společnost');
+    const rowPhones = [].concat(unpackValue(row.phone) ?? []).map(PHONE_KEY);
+    if (person && COMPANY_KEY(row.first_name) === person && rowPhones.some((key) => phones.has(key))) reasons.push('stejné jméno a telefon');
+    if (reasons.length) hits.push(`${row.entity_id} · ${subjectName(row)} (${reasons.join(', ')})`);
+    if (hits.length >= 3) break;
+  }
+  return hits;
+}
+
+const assigneeFor = (ctx, input) =>
+  input.assign_to_me === false || !ctx.user?.id ? null : { id: ctx.user.id, name: ctx.user.username ? `vám (${ctx.user.username})` : 'vám' };
+
+const countCreate = (ctx) => {
+  if (ctx.user.role === 'viewer') throw new ToolError('Uživatel má jen přístup ke čtení – záznamy navrhovat nelze.');
+  ctx.proposalCount = (ctx.proposalCount ?? 0) + 1;
+  if (ctx.proposalCount > 10) throw new ToolError('V jedné odpovědi lze navrhnout nejvýš 10 změn. Navrhni zbytek v další odpovědi.');
+};
 
 const dayInput = z.string().max(20);
 const timeInput = z.string().max(5);
@@ -1035,6 +1136,83 @@ export const TOOLS = [
     },
   },
   {
+    name: 'propose_create_subject',
+    description:
+      'Navrhne nový subjekt (klienta, partnera nebo tipaře) v jedné sekci, případně rovnou s první zakázkou. NIC NEZAPISUJE: ' +
+      'uživatel uvidí kartu s údaji a záznam vznikne, až klikne na Potvrdit. Použij, když o to uživatel žádá („založ klienta…“, ' +
+      '„přidej partnera z vizitky“). Nejdřív subjekt vyhledej (search), ať nevzniká dvakrát; má-li firma IČO, ověř ho v ARES ' +
+      '(company_registry) a vezmi odtud přesný název a sídlo. Podobné existující záznamy ukáže karta i výsledek – řekni je uživateli. ' +
+      'Nevymýšlej údaje, které uživatel neřekl a nejsou v ARES. Obor a Zaměření nezadáváš; doplní je uživatel v profilu.',
+    input: createSubjectInput,
+    label: (input) => `Připravuji nový subjekt „${truncate(input.subject.company || input.subject.name || '', 40)}“`,
+    async run(input, ctx) {
+      countCreate(ctx);
+      assertSection(ctx, input.section);
+      let proposal;
+      try {
+        proposal = buildCreateSubjectProposal({
+          section: input.section,
+          role: input.role,
+          subject: input.subject,
+          commission: input.commission,
+          status: input.status,
+          assignee: assigneeFor(ctx, input),
+          reason: input.reason,
+        });
+      } catch (error) {
+        if (error instanceof ProposalError) throw new ToolError(error.message);
+        throw error;
+      }
+      const similar = await findSimilarSubjects(ctx, input.section, input.role, proposal.payload.entity);
+      if (similar.length) proposal.warnings = similar.map((hit) => `Podobný záznam už existuje: ${hit}`);
+      ctx.emitProposal(proposal);
+      return {
+        navrh: proposal.id,
+        novy_zaznam: proposal.label,
+        udaje: [...proposal.changes, ...(proposal.commissionChanges ?? [])].map((row) => `${row.label}: ${row.toText}`),
+        ...(similar.length ? { podobne_existujici: similar, upozorneni: 'Upozorni uživatele, že podobný záznam už existuje.' } : {}),
+        stav: PENDING_NOTE,
+      };
+    },
+  },
+  {
+    name: 'propose_create_commission',
+    description:
+      'Navrhne novou zakázku k existujícímu subjektu. NIC NEZAPISUJE: zakázka vznikne, až uživatel klikne na Potvrdit. ' +
+      'Subjekt nejdřív najdi (search / get_subject) a použij jeho ref. Název zakázky (position) je povinný.',
+    input: createCommissionInput,
+    label: (input) => `Připravuji novou zakázku „${truncate(input.commission.position ?? '', 40)}“`,
+    async run(input, ctx) {
+      countCreate(ctx);
+      const { record, label } = await loadForProposal(ctx, { ...input, kind: 'subject' });
+      // loadForProposal counted it too.
+      ctx.proposalCount -= 1;
+      let proposal;
+      try {
+        proposal = buildCreateCommissionProposal({
+          section: input.section,
+          role: input.role,
+          record,
+          commission: input.commission,
+          status: input.status,
+          assignee: assigneeFor(ctx, input),
+          reason: input.reason,
+          label,
+        });
+      } catch (error) {
+        if (error instanceof ProposalError) throw new ToolError(error.message);
+        throw error;
+      }
+      ctx.emitProposal(proposal);
+      return {
+        navrh: proposal.id,
+        subjekt: label,
+        udaje: proposal.changes.map((row) => `${row.label}: ${row.toText}`),
+        stav: PENDING_NOTE,
+      };
+    },
+  },
+  {
     name: 'calendar_add_event',
     description:
       'Přidá událost do kalendáře přihlášeného uživatele (jen do jeho vlastního). Provede se hned; uživatel ji může vrátit ' +
@@ -1426,6 +1604,8 @@ export const toolLabel = (name, input) => {
 const TEAM_CHAT_BLOCKED_TOOLS = new Set([
   'propose_update',
   'propose_note',
+  'propose_create_subject',
+  'propose_create_commission',
   'calendar_add_event',
   'calendar_update_event',
   'calendar_delete_event',

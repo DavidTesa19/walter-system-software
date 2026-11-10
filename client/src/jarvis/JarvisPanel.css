@@ -1931,3 +1931,27 @@ button.jarvis-attention-item:hover {
     justify-content: space-between;
   }
 }
+
+/* New-record proposals: the first zakázka, similar records, and opening
+   what was created. */
+.jarvis-proposal-subhead {
+  margin-top: 2px;
+  font-size: 0.74rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--jarvis-muted);
+}
+
+.jarvis-proposal-warnings {
+  margin: 0;
+  padding: 6px 8px 6px 22px;
+  border-radius: 8px;
+  background: color-mix(in srgb, #d97706 10%, transparent);
+  color: #b45309;
+  font-size: 0.78rem;
+}
+
+.jarvis-proposal-open {
+  margin-left: 10px;
+}
