@@ -836,3 +836,51 @@
     animation: none;
   }
 }
+
+/* ---------- Phones (up to 768px) ----------
+   The grid screens keep their table (it scrolls sideways, as on a narrow
+   desktop window); around it, less padding, no title (the top bar names the
+   screen) and tab rows that scroll within themselves instead of widening the
+   page. */
+@media (max-width: 768px) {
+  .page-container {
+    padding: 0.5rem 0.5rem 0.25rem;
+  }
+
+  .header-section {
+    flex-wrap: wrap;
+    justify-content: flex-start;
+    gap: 0.5rem;
+    margin-bottom: 0.5rem;
+  }
+
+  .page-title {
+    display: none;
+  }
+
+  .header-tabs-group {
+    flex: 1 1 100%;
+    min-width: 0;
+  }
+
+  .navigation-tabs {
+    min-width: 0;
+    max-width: 100%;
+    overflow-x: auto;
+    scrollbar-width: none;
+  }
+
+  .navigation-tabs::-webkit-scrollbar {
+    display: none;
+  }
+
+  .nav-tab {
+    padding: 0.4rem 0.7rem;
+    font-size: 0.85rem;
+  }
+
+  .header-actions {
+    flex: 1 1 100%;
+    justify-content: flex-end;
+  }
+}

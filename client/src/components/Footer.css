@@ -110,3 +110,11 @@
     align-self: center;
   }
 }
+
+/* Phones: no footer bar (its desktop quick links stay off the small screen);
+   the theme switch is in the sidebar drawer instead. */
+@media (max-width: 768px) {
+  .app-footer {
+    display: none;
+  }
+}

@@ -267,6 +267,8 @@ const AppContent: React.FC = () => {
   const [viewMode, setViewMode] = useState<AppView>(() => getStoredAppView('active'));
   const [gridSearchTarget, setGridSearchTarget] = useState<GridSearchNavigationTarget | null>(null);
   const [jarvisOpen, setJarvisOpen] = useState(false);
+  // Phones: the sidebar is a drawer behind the top bar's menu button.
+  const [menuOpen, setMenuOpen] = useState(false);
   const openJarvis = useCallback(() => setJarvisOpen(true), []);
   const closeJarvis = useCallback(() => setJarvisOpen(false), []);
 
@@ -616,6 +618,25 @@ const AppContent: React.FC = () => {
     });
   }, [isViewAllowed]);
 
+  // Picking a screen or a search result closes the phone drawer.
+  const navigateFromMenu = useCallback((view: AppView) => {
+    setMenuOpen(false);
+    handleViewChange(view);
+  }, [handleViewChange]);
+  const searchFromMenu = useCallback((result: GlobalSearchResult, options?: { openProfile?: boolean }) => {
+    setMenuOpen(false);
+    handleSearchNavigate(result, options);
+  }, [handleSearchNavigate]);
+
+  useEffect(() => {
+    if (!menuOpen) return undefined;
+    const onKey = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') setMenuOpen(false);
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [menuOpen]);
+
   if (!isAuthenticated) {
     return <Login />;
   }
@@ -652,11 +673,30 @@ const AppContent: React.FC = () => {
     <ActivityProvider userId={user?.id} username={user?.username} accessScope={accessScope} isAdmin={isAdmin} activeView={effectiveView}>
       <SubjectNavigationProvider value={handleSubjectNavigate}>
       <div style={{ display: 'flex' }}>
+        {/* Phones only (Sidebar.css): the menu button and the screen's name. */}
+        <header className="mobile-topbar">
+          <button
+            type="button"
+            className="mobile-topbar-menu"
+            aria-label="Otevřít menu"
+            aria-expanded={menuOpen}
+            onClick={() => setMenuOpen(true)}
+          >
+            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" aria-hidden="true">
+              <line x1="3" y1="6" x2="21" y2="6" />
+              <line x1="3" y1="12" x2="21" y2="12" />
+              <line x1="3" y1="18" x2="21" y2="18" />
+            </svg>
+          </button>
+          <span className="mobile-topbar-title">{VIEW_LABELS[effectiveView]}</span>
+        </header>
+        {menuOpen && <div className="mobile-backdrop" onClick={() => setMenuOpen(false)} aria-hidden="true" />}
         <Sidebar
           activeView={effectiveView}
-          onViewChange={handleViewChange}
+          onViewChange={navigateFromMenu}
           onGlobalSearch={runGlobalSearch}
-          onSearchNavigate={handleSearchNavigate}
+          onSearchNavigate={searchFromMenu}
+          mobileOpen={menuOpen}
         />
         <div className={mainContentClassName}>
           <Suspense fallback={<div className="view-loading" aria-busy="true">Načítám…</div>}>

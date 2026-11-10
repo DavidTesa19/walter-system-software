@@ -640,7 +640,8 @@ const FullCalendarView: React.FC = () => {
       <FullCalendar
         ref={calendarRef}
         plugins={[dayGridPlugin, timeGridPlugin, listPlugin, interactionPlugin, multiMonthPlugin, rrulePlugin]}
-        initialView="dayGridMonth"
+        // A month grid has no room for event titles on a phone: start on the list there.
+        initialView={window.matchMedia('(max-width: 768px)').matches ? 'listWeek' : 'dayGridMonth'}
         headerToolbar={{
           left: 'prev,today,next',
           center: 'title',

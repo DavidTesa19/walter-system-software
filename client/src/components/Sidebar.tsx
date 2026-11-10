@@ -8,6 +8,8 @@ import { trackEvent } from '../utils/analytics';
 import type { AppView } from '../types/appView';
 import type { GlobalSearchResult } from '../types/globalSearch';
 import WssLogo from '../assets/WssLogo';
+import ThemeToggleButton from './ThemeToggleButton';
+import InstallAppButton from './InstallAppButton';
 import './Sidebar.css';
 
 interface SidebarProps {
@@ -15,6 +17,8 @@ interface SidebarProps {
   onViewChange: (view: AppView) => void;
   onGlobalSearch: (query: string) => Promise<GlobalSearchResult[]>;
   onSearchNavigate: (result: GlobalSearchResult, options?: { openProfile?: boolean }) => void;
+  /** Phones: the sidebar is a drawer, open when this is true (App.tsx). */
+  mobileOpen?: boolean;
 }
 
 type SidebarGroupItem = {
@@ -200,10 +204,8 @@ const Icons = {
   ),
   Bug: () => (
     <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-      <path d="M8 2l1.88 1.88M14.12 3.88L16 2" />
-      <path d="M9 7.13v-1a3.003 3.003 0 1 1 6 0v1" />
-      <path d="M12 20c-3.3 0-6-2.7-6-6v-3a4 4 0 0 1 4-4h4a4 4 0 0 1 4 4v3c0 3.3-2.7 6-6 6Z" />
-      <path d="M12 20v-9M6.53 9C4.6 8.8 3 7.1 3 5M6 13H2M3 21c0-2.1 1.7-3.9 3.8-4M20.97 5c0 2.1-1.6 3.8-3.5 4M22 13h-4M17.2 17c2.1.1 3.8 1.9 3.8 4" />
+      <path d="M4 15s1-1 4-1 5 2 8 2 4-1 4-1V3s-1 1-4 1-5-2-8-2-4 1-4 1z" />
+      <line x1="4" y1="22" x2="4" y2="15" />
     </svg>
   ),
   Safety: () => (
@@ -228,7 +230,8 @@ const Sidebar: React.FC<SidebarProps> = ({
   activeView,
   onViewChange,
   onGlobalSearch,
-  onSearchNavigate
+  onSearchNavigate,
+  mobileOpen = false
 }) => {
   const { user, logout } = useAuth();
   const { getViewCount, markCollectionsSeen } = useActivity();
@@ -589,7 +592,7 @@ const Sidebar: React.FC<SidebarProps> = ({
   const globalConfirmKeys = visibleSidebarGroups.flatMap(getGroupConfirmKeys);
 
   return (
-    <div className="sidebar">
+    <div className={`sidebar${mobileOpen ? ' sidebar--open' : ''}`}>
       <div className="sidebar-header">
         <WssLogo className="sidebar-brand-logo" />
       </div>
@@ -951,6 +954,9 @@ ${meta}`;
       </nav>
       
       <div className="sidebar-footer">
+        <InstallAppButton />
+        {/* Phones have no footer bar: the theme switch lives here instead. */}
+        <ThemeToggleButton variant="footer" className="sidebar-mobile-theme" />
         {user && (
           <div className="user-info">
             <span className="user-name">{user.username}</span>

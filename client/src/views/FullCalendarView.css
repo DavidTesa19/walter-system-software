@@ -282,3 +282,28 @@
   0%   { background-position: 200% center; }
   100% { background-position: -200% center; }
 }
+
+/* Phones: the toolbar (Dnes, the month, five view buttons) wraps, the view
+   buttons on a line of their own, instead of being cut off at the right. */
+@media (max-width: 768px) {
+  .fc-wrapper .fc .fc-toolbar.fc-header-toolbar {
+    flex-wrap: wrap;
+    justify-content: space-between;
+    row-gap: 8px;
+  }
+
+  .fc-wrapper .fc .fc-toolbar-chunk:last-child {
+    display: flex;
+    flex: 1 1 100%;
+    justify-content: center;
+  }
+
+  .fc-wrapper .fc .fc-toolbar-title {
+    font-size: 1.1rem;
+  }
+
+  .fc-wrapper .fc .fc-button {
+    padding: 0.3em 0.55em;
+    font-size: 0.85rem;
+  }
+}

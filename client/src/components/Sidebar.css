@@ -586,3 +586,120 @@
   color: var(--color-text-muted, #64748b);
   font-size: 0.9rem;
 }
+
+/* ---------- Phones (up to 768px) ----------
+   The sidebar becomes a drawer that slides in over the content from the top
+   bar's menu button (App.tsx), and the content takes the whole width. Heights
+   use dvh, the height actually visible under a phone's address bar. */
+.mobile-topbar,
+.mobile-backdrop,
+.sidebar-mobile-theme {
+  display: none;
+}
+
+@media (max-width: 768px) {
+  :root {
+    --mobile-topbar-height: 52px;
+    --app-footer-height: 0px;
+  }
+
+  /* No global stylesheet resets the browser's 8px body margin; on a phone it
+     would show as a frame around every screen. */
+  body {
+    margin: 0;
+  }
+
+  .mobile-topbar {
+    position: fixed;
+    inset: 0 0 auto 0;
+    z-index: 900;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    height: var(--mobile-topbar-height);
+    padding: 0 8px;
+    box-sizing: border-box;
+    background: var(--color-surface);
+    border-bottom: 1px solid var(--color-border);
+    color: var(--color-text);
+  }
+
+  .mobile-topbar-menu {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 40px;
+    height: 40px;
+    border: none;
+    border-radius: 10px;
+    background: transparent;
+    color: inherit;
+    cursor: pointer;
+  }
+
+  .mobile-topbar-menu:active {
+    background: var(--color-surface-alt);
+  }
+
+  /* Room on the right for the floating Úkoly and bug buttons. */
+  .mobile-topbar-title {
+    flex: 1;
+    min-width: 0;
+    padding-right: 104px;
+    overflow: hidden;
+    font-family: var(--font-heading, var(--font-body, "Inter", system-ui, sans-serif));
+    font-size: 1rem;
+    font-weight: 600;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .sidebar {
+    width: min(84vw, 300px);
+    height: 100dvh;
+    z-index: 1001;
+    transform: translateX(-105%);
+    transition: transform 0.2s ease;
+  }
+
+  .sidebar.sidebar--open {
+    transform: none;
+  }
+
+  .mobile-backdrop {
+    position: fixed;
+    inset: 0;
+    z-index: 1000;
+    display: block;
+    background: rgba(15, 23, 42, 0.45);
+  }
+
+  .sidebar-mobile-theme {
+    display: inline-flex;
+    margin-bottom: 0.5rem;
+  }
+
+  .main-content,
+  .main-content--fullscreen {
+    margin-left: 0;
+    margin-top: var(--mobile-topbar-height);
+    width: 100%;
+    min-height: calc(100dvh - var(--mobile-topbar-height) - var(--app-footer-height));
+    height: calc(100dvh - var(--mobile-topbar-height) - var(--app-footer-height));
+    max-height: calc(100dvh - var(--mobile-topbar-height) - var(--app-footer-height));
+  }
+}
+
+/* "Nainstalovat aplikaci" / "Přidat na plochu" (InstallAppButton.tsx). */
+.install-app-button {
+  margin-bottom: 0.5rem;
+  border-color: var(--color-border);
+  color: var(--color-primary);
+}
+
+.install-app-help {
+  margin: 0 0 0.5rem;
+  color: var(--color-text-muted);
+  font-size: 0.8rem;
+  line-height: 1.4;
+}

@@ -14,11 +14,11 @@ const Footer: React.FC = () => {
     const element = footerRef.current;
     if (!element) return;
 
+    // On phones the footer is hidden (Footer.css) and measures 0: that is the
+    // room to leave too, not a reading to skip.
     const publishHeight = () => {
       const height = element.getBoundingClientRect().height;
-      if (height > 0) {
-        document.documentElement.style.setProperty('--app-footer-height', `${Math.round(height)}px`);
-      }
+      document.documentElement.style.setProperty('--app-footer-height', `${Math.round(height)}px`);
     };
 
     publishHeight();

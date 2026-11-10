@@ -1908,3 +1908,26 @@ button.jarvis-attention-item:hover {
   font-size: 0.75rem;
   cursor: pointer;
 }
+
+/* Phones: the panel fills the screen, so the header's buttons take a row of
+   their own under the title (side by side they left the title no room), and
+   the height follows the visible screen so the message box stays above the
+   keyboard and the browser's bars. */
+@media (max-width: 768px) {
+  .jarvis-panel {
+    bottom: auto;
+    height: 100dvh;
+    border-left: none;
+  }
+
+  .jarvis-header {
+    flex-wrap: wrap;
+    row-gap: 8px;
+    padding: 10px 12px;
+  }
+
+  .jarvis-header-actions {
+    flex: 1 1 100%;
+    justify-content: space-between;
+  }
+}

@@ -107,3 +107,10 @@
     min-width: auto;
   }
 }
+/* Phones: the status tabs keep clear of the screen edge (UsersGrid.css makes
+   them scroll within themselves). */
+@media (max-width: 768px) {
+  .projects-section-view__mode-bar {
+    padding: 0.5rem 0.5rem 0;
+  }
+}
