@@ -58,6 +58,7 @@ import { reenterRequestContext, requestContextMiddleware } from "./safety/contex
 import { registerSafetyRoutes } from "./safety/routes.js";
 import { JARVIS_MENTION, registerJarvisRoutes } from "./jarvis/routes.js";
 import { createLoginGuard, lockedMessage } from "./login-guard.js";
+import { activityListFields } from "./list-fields.js";
 import { registerAresRoutes } from "./ares.js";
 import { registerFinanceRoutes } from "./finance/routes.js";
 import { registerTaskRoutes } from "./tasks/routes.js";
@@ -1358,7 +1359,11 @@ app.use(
         callback(null, true); // Allow all origins for now
       }
     },
-    credentials: false
+    credentials: false,
+    // The app and the API are on different hosts, so every request with a
+    // token is preceded by an OPTIONS preflight: one extra round trip each.
+    // The browser may reuse the answer for 2 hours (Chrome's maximum).
+    maxAge: 7200,
   })
 );
 // Compress responses (JSON, text), never a stream: Server-Sent Events (Jarvis,
@@ -1367,6 +1372,9 @@ app.use(
 app.use(compression({
   filter: (req, res) => !String(res.getHeader("Content-Type") ?? "").includes("text/event-stream") && compression.filter(req, res),
 }));
+// ?fields=activity on a subject/zakázka list: only the change-bubble fields
+// (list-fields.js). The route and its section guard run as usual.
+app.use(activityListFields);
 // Security headers on every response. The API serves no pages, so no CSP;
 // nothing frames its responses (document previews use blob URLs, Office and
 // Google viewers fetch the file themselves). HSTS only over HTTPS (Railway).

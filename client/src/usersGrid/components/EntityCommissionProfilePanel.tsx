@@ -161,6 +161,10 @@ export interface DealSlotView {
   addLabel: string;
   members: DealMemberView[];
   options: DealSubjectOption[];
+  /** Not fetched yet: the picker loads them when it is first opened. */
+  optionsLoading: boolean;
+  /** Asks for the options; called when the picker opens. */
+  onOpenPicker: () => void;
   busy: boolean;
   onAttach: (namespace: LinkableNamespace, entityId: number) => void;
 }
@@ -1078,6 +1082,7 @@ const DealLinkSlotRow: React.FC<{ slot: DealSlotView }> = ({ slot }) => {
   const openPicker = () => {
     const rect = addButtonRef.current?.getBoundingClientRect();
     if (!rect) return;
+    slot.onOpenPicker();
     setPickerAnchor({ top: rect.top, bottom: rect.bottom, left: rect.left, width: rect.width });
   };
 
@@ -1092,7 +1097,7 @@ const DealLinkSlotRow: React.FC<{ slot: DealSlotView }> = ({ slot }) => {
           ref={addButtonRef}
           type="button"
           className={`ec-deal-slot-add ${pickerAnchor ? 'is-open' : ''}`}
-          disabled={slot.busy || slot.options.length === 0}
+          disabled={slot.busy}
           onClick={() => (pickerAnchor ? setPickerAnchor(null) : openPicker())}
         >
           + Připojit {slot.addLabel}
@@ -1103,6 +1108,7 @@ const DealLinkSlotRow: React.FC<{ slot: DealSlotView }> = ({ slot }) => {
             anchorEl={addButtonRef.current}
             typeLabel={slot.addLabel}
             options={slot.options}
+            loading={slot.optionsLoading}
             onSelect={(option) => {
               setPickerAnchor(null);
               slot.onAttach(option.namespace, option.id);

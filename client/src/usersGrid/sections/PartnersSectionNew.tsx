@@ -768,11 +768,13 @@ const PartnersSectionNew: React.FC<SectionProps> = ({ viewMode, isActive, system
         return;
       }
 
+      // A lookup, not allEntities.find() per row: that was rows × subjects.
+      const entityById = new Map(allEntities.map((item) => [item.id, item] as const));
       const entityIdsWithCommission = new Set<number>(normalizedCommissions.map((commission) => commission.partner_entity_id));
 
       const commissionRows: PartnerGridRow[] = normalizedCommissions.map((commission, index) => {
         const rawCommission = (Array.isArray(commissionsData) ? commissionsData : [])[index];
-        const entity = allEntities.find((item) => item.id === commission.partner_entity_id) || derivePartnerEntityFromCommission(rawCommission);
+        const entity = entityById.get(commission.partner_entity_id) || derivePartnerEntityFromCommission(rawCommission);
         return {
           ...commission,
           entityOnly: false,

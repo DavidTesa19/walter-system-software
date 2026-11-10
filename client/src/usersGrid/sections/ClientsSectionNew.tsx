@@ -824,11 +824,13 @@ const ClientsSectionNew: React.FC<SectionProps> = ({
       }
 
       // Build grid data - each row is a commission with entity info
+      // A lookup, not allEntities.find() per row: that was rows × subjects.
+      const entityById = new Map(allEntities.map((item) => [item.id, item] as const));
       const entityIdsWithCommission = new Set<number>(commissionsList.map((commission) => commission.client_entity_id));
 
       const commissionRows: ClientGridRow[] = commissionsList.map((commission, index) => {
         const rawCommission = (Array.isArray(commissionsData) ? commissionsData : [])[index];
-        const entity = allEntities.find((e) => e.id === commission.client_entity_id) || deriveClientEntityFromCommission(rawCommission);
+        const entity = entityById.get(commission.client_entity_id) || deriveClientEntityFromCommission(rawCommission);
         return {
           ...commission,
           entityOnly: false,

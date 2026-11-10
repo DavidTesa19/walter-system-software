@@ -23,6 +23,8 @@ interface DealSubjectPickerProps {
   // Lower-cased slot label for placeholders, e.g. "partner".
   typeLabel: string;
   options: DealSubjectOption[];
+  // The options are fetched when the picker first opens.
+  loading?: boolean;
   // The whole option, not just its id: ids repeat across sections, so the caller
   // needs the namespace to know which subject was actually picked.
   onSelect: (option: DealSubjectOption) => void;
@@ -251,6 +253,7 @@ const DealSubjectPicker: React.FC<DealSubjectPickerProps> = ({
   anchorEl,
   typeLabel,
   options,
+  loading = false,
   onSelect,
   onClose,
 }) => {
@@ -514,7 +517,7 @@ const DealSubjectPicker: React.FC<DealSubjectPickerProps> = ({
         >
           {filtered.length === 0 ? (
             <div className="dsp-empty">
-              {options.length === 0 ? "Žádné subjekty k propojení." : "Žádné výsledky."}
+              {loading ? "Načítám subjekty…" : options.length === 0 ? "Žádné subjekty k propojení." : "Žádné výsledky."}
             </div>
           ) : (
             filtered.map((option, index) => {

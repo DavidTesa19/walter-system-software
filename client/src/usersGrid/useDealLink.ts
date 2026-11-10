@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   DEAL_TYPES,
   DEAL_TYPE_AS_LABELS,
@@ -45,34 +45,33 @@ export const useDealLink = ({
   const [status, setStatus] = useState<DealStatus | null>(null);
   const [busyType, setBusyType] = useState<DealType | null>(null);
   const [optionsByType, setOptionsByType] = useState<Partial<Record<DealType, DealSubjectOption[]>>>({});
+  const requestedTypes = useRef(new Set<DealType>());
 
-  // Load the selectable subjects for every type, from every section — a
-  // participant can be picked out of any of the three, and a second client can
-  // be joined to a client's own commission.
+  // The selectable subjects of a type, from every section (a participant can
+  // be picked out of any of the three), loaded the first time that type's
+  // picker opens. It used to load all three types — nine full subject lists —
+  // whenever a table opened, picker used or not.
   useEffect(() => {
-    if (!linkableNamespace) {
-      setOptionsByType({});
-      return;
-    }
-    let cancelled = false;
-    Promise.all(
-      DEAL_TYPES.map((type) =>
-        fetchSubjectOptionsAcrossSections(type)
-          .then((options) => [type, options] as const)
-          .catch((error) => {
-            console.error(`Error loading ${type} subjects for deal link:`, error);
-            return [type, [] as DealSubjectOption[]] as const;
-          })
-      )
-    ).then((pairs) => {
-      if (!cancelled) {
-        setOptionsByType(Object.fromEntries(pairs) as Partial<Record<DealType, DealSubjectOption[]>>);
-      }
-    });
-    return () => {
-      cancelled = true;
-    };
+    requestedTypes.current = new Set();
+    setOptionsByType({});
   }, [linkableNamespace]);
+
+  const loadOptions = useCallback((type: DealType) => {
+    if (requestedTypes.current.has(type)) return;
+    requestedTypes.current.add(type);
+    const requestedFor = requestedTypes.current;
+    fetchSubjectOptionsAcrossSections(type)
+      .catch((error) => {
+        console.error(`Error loading ${type} subjects for deal link:`, error);
+        return [] as DealSubjectOption[];
+      })
+      .then((options) => {
+        // Dropped when the section changed meanwhile.
+        if (requestedTypes.current === requestedFor) {
+          setOptionsByType((current) => ({ ...current, [type]: options }));
+        }
+      });
+  }, []);
 
   // Load the deal status for the selected commission.
   useEffect(() => {
@@ -192,6 +191,8 @@ export const useDealLink = ({
         self: isOwnType,
         members,
         options: (optionsByType[type] ?? []).filter((option) => !attached.has(option.key)),
+        optionsLoading: !optionsByType[type],
+        onOpenPicker: () => loadOptions(type),
         busy: busyType === type,
         onAttach: (targetNamespace: LinkableNamespace, entityId: number) =>
           handleAttach(type, targetNamespace, entityId),
@@ -199,5 +200,5 @@ export const useDealLink = ({
     });
 
     return { slots };
-  }, [linkableNamespace, selectedCommissionId, status, ownType, optionsByType, busyType, handleAttach, handleDetach]);
+  }, [linkableNamespace, selectedCommissionId, status, ownType, optionsByType, busyType, handleAttach, handleDetach, loadOptions]);
 };

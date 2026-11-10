@@ -75,6 +75,7 @@ interface ActivityContextValue {
 const ActivityContext = createContext<ActivityContextValue | undefined>(undefined);
 
 const STORAGE_VERSION = 1;
+const REFRESH_MS = 60_000;
 const STANDARD_TABLES: ActivityTable[] = ["clients", "partners", "tipers"];
 const VIEW_STATUS: Record<GridView, string> = {
   active: "accepted",
@@ -127,32 +128,56 @@ const persistState = (userId: number | undefined, state: StoredActivityState) =>
   }
 };
 
-const queueTableCollections = (
+const GRID_VIEWS: GridView[] = ["active", "pending", "archived"];
+
+// One table of one section (say Neveřejné partner subjects): one request for
+// all three grid views, split here by each row's status. `?fields=activity`
+// makes the server send only id, status, times and actors (server/
+// list-fields.js) — the counts need nothing else, and this runs every minute
+// for every list the user can open. A server without it sends whole rows,
+// which work the same.
+const queueTable = (
   tasks: Array<Promise<void>>,
   entries: RawActivityEntry[],
-  view: AppView,
-  gridView: GridView,
   system: ActivitySystem,
+  namespacePrefix: string | null,
   kind: "subjects" | "commissions",
   table: ActivityTable,
-  endpoint: string,
 ) => {
-  const collectionKey = kind === "subjects"
-    ? buildSubjectsCollectionKey(system, gridView, table)
-    : buildCommissionsCollectionKey(system, gridView, table);
+  const prefix = namespacePrefix ? `/api/${namespacePrefix}` : "/api";
+  // Always the modern `-commissions` endpoint — never the legacy
+  // `/clients|partners|tipers` table. That one carries no created_at/updated_at,
+  // so every row it returns reads as permanently "seen".
+  const endpoint = `${prefix}/${table.slice(0, -1)}-${kind === "subjects" ? "entities" : "commissions"}?fields=activity`;
   // Item scope intentionally excludes gridView: an entity/commission keeps its seen
   // state as it moves between active/pending/archived.
   const scope = kind === "subjects"
     ? buildSubjectsRecordScope(system, table)
     : buildCommissionsRecordScope(system, table);
 
+  const viewFor = (gridView: GridView): AppView => {
+    if (kind === "subjects") {
+      return (namespacePrefix ? `${namespacePrefix}_subjects_${gridView}` : `entities_${gridView}`) as AppView;
+    }
+    return (namespacePrefix ? `${namespacePrefix}_${gridView}` : gridView) as AppView;
+  };
+
   tasks.push(
     apiGet<Record<string, unknown>[]>(endpoint)
-      .then((payload) => {
-        entries.push({ scope, collectionKey, view, rows: Array.isArray(payload) ? payload : [] });
-      })
-      .catch(() => {
-        entries.push({ scope, collectionKey, view, rows: [] });
+      .then((payload) => (Array.isArray(payload) ? payload : []))
+      .catch(() => [] as Array<Record<string, unknown>>)
+      .then((rows) => {
+        for (const gridView of GRID_VIEWS) {
+          const status = VIEW_STATUS[gridView];
+          entries.push({
+            scope,
+            collectionKey: kind === "subjects"
+              ? buildSubjectsCollectionKey(system, gridView, table)
+              : buildCommissionsCollectionKey(system, gridView, table),
+            view: viewFor(gridView),
+            rows: rows.filter((row) => row.status === status),
+          });
+        }
       })
   );
 };
@@ -225,7 +250,7 @@ interface ActivityProviderProps {
 export const ActivityProvider: React.FC<ActivityProviderProps> = ({ userId, username, accessScope, isAdmin, activeView, children }) => {
   const [activityState, setActivityState] = useState<StoredActivityState>(() => readStoredState(userId));
   const [rawEntries, setRawEntries] = useState<RawActivityEntry[]>([]);
-  const [teamchatCounts, setTeamchatCounts] = useState<ActivitySnapshot>({ viewCounts: {}, collectionCounts: {} });
+  const [chatRooms, setChatRooms] = useState<Array<Record<string, unknown>>>([]);
 
   useEffect(() => {
     setActivityState(readStoredState(userId));
@@ -318,10 +343,14 @@ export const ActivityProvider: React.FC<ActivityProviderProps> = ({ userId, user
     markViewSeen(activeView);
   }, [activeView, markViewSeen, userId]);
 
+  // Stable on purpose: it used to depend on the seen-state, which changes on
+  // every screen the user opens (markViewSeen), so each click in the menu
+  // re-downloaded every list of every section. Counting against the seen-state
+  // happens in `snapshot` below, from the rows fetched here.
   const refresh = useCallback(async () => {
     if (!userId) {
       setRawEntries([]);
-      setTeamchatCounts({ viewCounts: {}, collectionCounts: {} });
+      setChatRooms([]);
       return;
     }
 
@@ -329,50 +358,9 @@ export const ActivityProvider: React.FC<ActivityProviderProps> = ({ userId, user
     const tasks: Array<Promise<void>> = [];
 
     const queueDomain = (system: ActivitySystem, namespacePrefix: string | null) => {
-      const prefix = namespacePrefix ? `/api/${namespacePrefix}` : "/api";
-      ([
-        ["entities_active", "active", "subjects"],
-        ["entities_pending", "pending", "subjects"],
-        ["entities_archived", "archived", "subjects"],
-      ] as const).forEach(([view, gridView]) => {
-        STANDARD_TABLES.forEach((table) => {
-          queueTableCollections(
-            tasks,
-            entries,
-            (namespacePrefix ? (`${namespacePrefix}_${view.replace("entities_", "subjects_")}` as AppView) : (view as AppView)),
-            gridView as GridView,
-            system,
-            "subjects",
-            table,
-            `${prefix}/${table.slice(0, -1)}-entities?status=${VIEW_STATUS[gridView as GridView]}`
-          );
-        });
-      });
-
-      ([
-        [namespacePrefix ? `${namespacePrefix}_active` : "active", "active"],
-        [namespacePrefix ? `${namespacePrefix}_pending` : "pending", "pending"],
-        [namespacePrefix ? `${namespacePrefix}_archived` : "archived", "archived"],
-      ] as const).forEach(([view, gridView]) => {
-        STANDARD_TABLES.forEach((table) => {
-          // Always the modern `-commissions` endpoint — never the legacy
-          // `/clients|partners|tipers` table. That one carries no
-          // created_at/updated_at, so every row it returns reads as
-          // permanently "seen" and the standard system's commission bubbles
-          // (nav-tab counts, sidebar counts, "Potvrdit vše") stayed stuck at
-          // zero everywhere, not just on the pending/archived tabs.
-          const endpointBase = `${prefix}/${table.slice(0, -1)}-commissions`;
-          queueTableCollections(
-            tasks,
-            entries,
-            view as AppView,
-            gridView as GridView,
-            system,
-            "commissions",
-            table,
-            `${endpointBase}?status=${VIEW_STATUS[gridView as GridView]}`
-          );
-        });
+      STANDARD_TABLES.forEach((table) => {
+        queueTable(tasks, entries, system, namespacePrefix, "subjects", table);
+        queueTable(tasks, entries, system, namespacePrefix, "commissions", table);
       });
     };
 
@@ -401,19 +389,13 @@ export const ActivityProvider: React.FC<ActivityProviderProps> = ({ userId, user
         .catch(() => {})
     );
 
-    const nextTeamchatCounts: ActivitySnapshot = { viewCounts: {}, collectionCounts: {} };
+    let rooms: Array<Record<string, unknown>> = [];
     tasks.push(
       apiGet<Record<string, unknown>[]>(`/api/chat-rooms?includeUnread=true&userId=${userId}`)
         .then((payload) => {
-          const rooms = Array.isArray(payload) ? payload : [];
-          const collectionSeenAt = activityState.collections[TEAMCHAT_COLLECTION_KEY] ?? activityState.baselineAt;
-          const viewSeenAt = activityState.views.teamchat ?? activityState.baselineAt;
-          nextTeamchatCounts.collectionCounts[TEAMCHAT_COLLECTION_KEY] = countChangedRooms(rooms, collectionSeenAt, username);
-          nextTeamchatCounts.viewCounts.teamchat = countChangedRooms(rooms, viewSeenAt, username);
+          rooms = Array.isArray(payload) ? payload : [];
         })
-        .catch(() => {
-          nextTeamchatCounts.collectionCounts[TEAMCHAT_COLLECTION_KEY] = 0;
-        })
+        .catch(() => {})
     );
 
     if (isAdmin) {
@@ -429,17 +411,30 @@ export const ActivityProvider: React.FC<ActivityProviderProps> = ({ userId, user
 
     await Promise.all(tasks);
     setRawEntries(entries);
-    setTeamchatCounts(nextTeamchatCounts);
-  }, [accessScope, activityState.baselineAt, activityState.collections, activityState.views, isAdmin, userId, username]);
+    setChatRooms(rooms);
+  }, [accessScope, isAdmin, userId]);
 
+  // Every minute while the app is on screen. A hidden tab (another tab, a
+  // minimised window, the phone app in the background) does not poll; it
+  // catches up as soon as it is shown again.
   useEffect(() => {
-    void refresh();
-    const intervalId = window.setInterval(() => {
+    let lastRun = 0;
+    const run = () => {
+      lastRun = Date.now();
       void refresh();
-    }, 60000);
+    };
+    run();
+    const intervalId = window.setInterval(() => {
+      if (document.visibilityState === "visible") run();
+    }, REFRESH_MS);
+    const onVisible = () => {
+      if (document.visibilityState === "visible" && Date.now() - lastRun >= REFRESH_MS) run();
+    };
+    document.addEventListener("visibilitychange", onVisible);
 
     return () => {
       window.clearInterval(intervalId);
+      document.removeEventListener("visibilitychange", onVisible);
     };
   }, [refresh]);
 
@@ -451,8 +446,16 @@ export const ActivityProvider: React.FC<ActivityProviderProps> = ({ userId, user
       return { viewCounts: {}, collectionCounts: {} };
     }
 
-    const viewCounts: Partial<Record<AppView, number>> = { ...teamchatCounts.viewCounts };
-    const collectionCounts: Record<string, number> = { ...teamchatCounts.collectionCounts };
+    const viewCounts: Partial<Record<AppView, number>> = {
+      teamchat: countChangedRooms(chatRooms, activityState.views.teamchat ?? activityState.baselineAt, username),
+    };
+    const collectionCounts: Record<string, number> = {
+      [TEAMCHAT_COLLECTION_KEY]: countChangedRooms(
+        chatRooms,
+        activityState.collections[TEAMCHAT_COLLECTION_KEY] ?? activityState.baselineAt,
+        username,
+      ),
+    };
 
     for (const entry of rawEntries) {
       const count = countUnseenByScope(entry.rows, entry.scope, activityState.items, activityState.baselineAt, userId);
@@ -465,7 +468,7 @@ export const ActivityProvider: React.FC<ActivityProviderProps> = ({ userId, user
     }
 
     return { viewCounts, collectionCounts };
-  }, [rawEntries, teamchatCounts, activityState.items, activityState.baselineAt, userId]);
+  }, [rawEntries, chatRooms, activityState.items, activityState.baselineAt, activityState.views, activityState.collections, userId, username]);
 
   const value = useMemo<ActivityContextValue>(() => ({
     currentUserId: userId,

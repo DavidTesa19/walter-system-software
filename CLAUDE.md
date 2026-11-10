@@ -171,6 +171,31 @@ Grid changes are verifiable end to end; do it rather than guessing.
 5. `server.js` has no hot reload — restart it after server edits, or new columns
    are silently dropped by stale field whitelists.
 
+## Loading speed: what each screen fetches
+
+Measured 2026-11-10: opening the app fired ~65 full-table requests, and
+every click in the menu fired 57 of them again. What keeps it down now:
+
+- **The change bubbles** (`ActivityContext.tsx`) poll one list per table and
+  section (18) with **`?fields=activity`**. The server
+  (`list-fields.js`, a response filter on the existing list routes, so the
+  section guards still apply) then sends only id, status, times and actors;
+  the rows are split by status in the browser. Polling stops while the tab
+  is hidden.
+- **`refresh` in ActivityContext must stay stable** (deps: scope, admin,
+  user). Anything that reads the seen-state belongs in the `snapshot` memo;
+  a dependency on the seen-state re-runs the polling effect on every screen
+  change.
+- **Lists of every section load on demand**: the deal-link picker
+  (`useDealLink`) and the subject-role picker (`useSubjectRoles`) fetch
+  their nine subject lists when the picker opens, never when a table does.
+- Row building in the sections looks subjects up in a `Map`, not
+  `allEntities.find()` per row.
+- CORS preflights are cached for 2 h (`maxAge: 7200`): the app and API are on
+  different hosts, so without it every request costs two round trips.
+- To measure, wrap `window.fetch` in the preview page and count requests per
+  action; the resource-timing buffer fills with Vite's module files first.
+
 ## Tests and automatic checks
 
 - `npm test` in `server/` runs `server/tests/*.test.js` with Node's own test
