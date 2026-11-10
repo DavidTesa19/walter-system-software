@@ -695,6 +695,9 @@
   margin-bottom: 0.5rem;
   border-color: var(--color-border);
   color: var(--color-primary);
+  /* Some of these are links (to /stahnout). */
+  text-decoration: none;
+  box-sizing: border-box;
 }
 
 .install-app-help {

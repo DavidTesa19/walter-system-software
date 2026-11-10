@@ -1,8 +1,8 @@
-// "Nainstalovat aplikaci": puts Walter System on the phone's home screen (or in
-// the computer's apps), where it opens on its own without the browser's bars.
-// Chrome and Edge hand over their own install prompt; Safari on an iPhone has
-// none, so there the button explains the two taps. Hidden once the app runs
-// installed.
+// Getting Walter System as an app, from the sidebar. Android links to /stahnout
+// (the .apk built from android/); an iPhone gets the two Safari taps explained;
+// a computer gets the browser's own install prompt where Chrome/Edge offer one,
+// plus "Aplikace do telefonu" (the download page with a QR code). Hidden once
+// the app runs installed (the Android app reports standalone too).
 
 import { useEffect, useState } from 'react';
 
@@ -31,6 +31,8 @@ const isInstalled = () =>
 const isIos = () =>
   /iphone|ipad|ipod/i.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
 
+const isAndroid = () => /android/i.test(navigator.userAgent);
+
 export default function InstallAppButton() {
   const [prompt, setPrompt] = useState<InstallPromptEvent | null>(deferredPrompt);
   const [installed, setInstalled] = useState(isInstalled);
@@ -53,22 +55,13 @@ export default function InstallAppButton() {
 
   if (installed) return null;
 
-  if (prompt) {
+  // Android gets the real app (an .apk from /stahnout) rather than the
+  // browser's shortcut install.
+  if (isAndroid()) {
     return (
-      <button
-        type="button"
-        className="sidebar-button install-app-button"
-        onClick={async () => {
-          await prompt.prompt();
-          const choice = await prompt.userChoice;
-          // A prompt can be shown only once; the browser offers a new one later.
-          deferredPrompt = null;
-          setPrompt(null);
-          if (choice.outcome === 'accepted') setInstalled(true);
-        }}
-      >
-        Nainstalovat aplikaci
-      </button>
+      <a className="sidebar-button install-app-button" href="/stahnout">
+        Stáhnout aplikaci
+      </a>
     );
   }
 
@@ -92,5 +85,29 @@ export default function InstallAppButton() {
     );
   }
 
-  return null;
+  // A computer: its own install (Chrome/Edge), and the download page with a
+  // QR code for getting the app onto a phone.
+  return (
+    <>
+      {prompt && (
+        <button
+          type="button"
+          className="sidebar-button install-app-button"
+          onClick={async () => {
+            await prompt.prompt();
+            const choice = await prompt.userChoice;
+            // A prompt can be shown only once; the browser offers a new one later.
+            deferredPrompt = null;
+            setPrompt(null);
+            if (choice.outcome === 'accepted') setInstalled(true);
+          }}
+        >
+          Nainstalovat aplikaci
+        </button>
+      )}
+      <a className="sidebar-button install-app-button" href="/stahnout" target="_blank" rel="noopener">
+        Aplikace do telefonu
+      </a>
+    </>
+  );
 }

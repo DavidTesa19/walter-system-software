@@ -99,6 +99,33 @@ Phones get the same app: no separate code and no app store. Below 768 px
   install prompt; on an iPhone the button explains Share › Add to Home Screen.
   There is no service worker, so the installed app needs a connection, like
   the web one.
+- **Android app** (`android/`, a Trusted Web Activity made with Bubblewrap,
+  package `cz.waltersystem.app`): a 1 MB .apk that opens
+  https://app.waltersystem.cz full screen in the phone's Chrome. Downloaded
+  from **`/stahnout`** (`client/public/stahnout.html`, Czech, with a QR code
+  for computers). The sidebar links there on Android ("Stáhnout aplikaci")
+  and on a computer ("Aplikace do telefonu").
+  - Website changes need no new build: the app shows the live site. Rebuild
+    (`bash android/build-apk.sh`) only for the app itself (name, icon,
+    colours), after raising `appVersionCode` in `twa-manifest.json` and
+    `app/build.gradle`.
+  - **The signing key lives in `android/signing/` (git-ignored, with its
+    password in README-KEEP-SAFE.txt).** Lose it and no update installs
+    over the existing app. `/.well-known/assetlinks.json` names its SHA-256
+    fingerprint; without a match the app shows an address bar.
+  - Needs JDK 17 (`C:\Program Files\Microsoft\jdk-17…`, not the default
+    Java 8), the Android SDK and build-tools 35. minSdk is 24 (Android 7),
+    what androidbrowserhelper requires.
+  - iPhone has no equivalent without an Apple Developer account ($99/year,
+    TestFlight or App Store); until then, Safari's Add to Home Screen.
+- **The frontend's static server** is `npx serve dist` (railway.json),
+  configured by `client/public/serve.json`. Not `serve -s`: that puts its
+  own catch-all rewrite first, and serve-handler applies rewrites in a
+  chain, so `/stahnout` → `/stahnout.html` → `index.html`. The catch-all is
+  `/:path([^.]+)` instead: it skips paths with a dot (files) and must not
+  contain `*` (serve-handler turns the first `*` into `(.*)`). A missing
+  asset is now a 404 rather than index.html. `serve` reads serve.json only
+  at startup.
 - To test, `resize_window` the preview to the `mobile` preset and measure with
   JS (bounding rects, `scrollWidth`, the grid API). The pane is often hidden or
   narrow: set an explicit 1280×800 size to check desktop, not the `desktop`

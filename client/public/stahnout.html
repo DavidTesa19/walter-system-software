@@ -1,0 +1,97 @@
+<!doctype html>
+<html lang="cs">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<meta name="theme-color" content="#7C3AED" />
+<meta name="robots" content="noindex" />
+<link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+<link rel="apple-touch-icon" sizes="180x180" href="/apple-touch-icon.png" />
+<link rel="manifest" href="/site.webmanifest" />
+<title>Stáhnout Walter System</title>
+<style>
+  :root { --bg:#f6f4fb; --card:#fff; --text:#1f1235; --muted:#5f5873; --line:#e6e1f2; --accent:#7C3AED; --accent-text:#fff; }
+  @media (prefers-color-scheme: dark) { :root { --bg:#14111c; --card:#1e1a29; --text:#f1eefa; --muted:#a9a2bd; --line:#2f2940; --accent:#8b5cf6; } }
+  * { box-sizing: border-box; }
+  body { margin:0; background:var(--bg); color:var(--text); font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; line-height:1.5; }
+  main { max-width: 760px; margin: 0 auto; padding: 32px 16px 48px; }
+  header { display:flex; align-items:center; gap:14px; margin-bottom: 24px; }
+  header img { width:56px; height:56px; border-radius:14px; }
+  h1 { font-size: 1.6rem; margin:0; }
+  header p { margin:2px 0 0; color:var(--muted); }
+  .grid { display:grid; gap:16px; grid-template-columns: 1fr 1fr; }
+  @media (max-width: 640px) { .grid { grid-template-columns: 1fr; } }
+  section { background:var(--card); border:1px solid var(--line); border-radius:16px; padding:20px; }
+  section.here { border-color: var(--accent); box-shadow: 0 0 0 2px color-mix(in srgb, var(--accent) 25%, transparent); }
+  h2 { margin:0 0 4px; font-size:1.15rem; }
+  .tag { display:none; font-size:.75rem; font-weight:600; color:var(--accent); text-transform:uppercase; letter-spacing:.04em; }
+  section.here .tag { display:block; }
+  ol { padding-left: 1.2rem; margin: 12px 0 0; }
+  li { margin-bottom: 6px; }
+  .button { display:inline-block; margin-top:12px; background:var(--accent); color:var(--accent-text); text-decoration:none; font-weight:600; padding:12px 18px; border-radius:10px; }
+  .small { color:var(--muted); font-size:.875rem; }
+  .qr { display:flex; gap:16px; align-items:center; margin-top:16px; }
+  .qr svg { width:140px; height:140px; flex:none; border-radius:8px; }
+  .open { display:block; text-align:center; margin-top:24px; color:var(--accent); font-weight:600; }
+</style>
+</head>
+<body>
+<main>
+  <header>
+    <img src="/android-chrome-192x192.png" alt="" />
+    <div>
+      <h1>Walter System do telefonu</h1>
+      <p>Aplikace se otevře na celé obrazovce a sama se aktualizuje.</p>
+    </div>
+  </header>
+
+  <div class="grid">
+    <section id="android">
+      <span class="tag">Váš telefon</span>
+      <h2>Android</h2>
+      <a class="button" href="/download/walter-system.apk" download>Stáhnout aplikaci (1 MB)</a>
+      <ol>
+        <li>Klepněte na <strong>Stáhnout aplikaci</strong> a stažený soubor otevřete.</li>
+        <li>Telefon se poprvé zeptá, zda smí instalovat aplikace z tohoto zdroje. Povolte to (aplikace není z Google Play, proto to upozornění).</li>
+        <li>Klepněte na <strong>Instalovat</strong>. Ikona Walter System se objeví mezi aplikacemi.</li>
+      </ol>
+      <p class="small">Potřebuje Android 7 nebo novější a prohlížeč Chrome v telefonu.</p>
+    </section>
+
+    <section id="iphone">
+      <span class="tag">Váš telefon</span>
+      <h2>iPhone</h2>
+      <ol>
+        <li>Otevřete <strong>app.waltersystem.cz</strong> v <strong>Safari</strong> (v Chrome to na iPhonu nejde).</li>
+        <li>Dole klepněte na <strong>Sdílet</strong> (čtverec se šipkou).</li>
+        <li>Vyberte <strong>Přidat na plochu</strong> a potvrďte <strong>Přidat</strong>.</li>
+      </ol>
+      <p class="small">Apple neumožňuje stáhnout aplikaci odkazem; takto se na ploše objeví ikona, která funguje stejně.</p>
+    </section>
+  </div>
+
+  <section id="computer" style="margin-top:16px">
+    <h2>Jste u počítače?</h2>
+    <div class="qr">
+      <svg role="img" aria-label="QR kód: app.waltersystem.cz/stahnout" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 31 31" shape-rendering="crispEdges"><path fill="#ffffff" d="M0 0h31v31H0z"/><path stroke="#1f1235" d="M1 1.5h7m2 0h1m1 0h3m1 0h1m2 0h3m1 0h7M1 2.5h1m5 0h1m2 0h1m3 0h3m6 0h1m5 0h1M1 3.5h1m1 0h3m1 0h1m1 0h1m4 0h1m1 0h2m3 0h1m1 0h1m1 0h3m1 0h1M1 4.5h1m1 0h3m1 0h1m1 0h5m1 0h4m2 0h1m1 0h1m1 0h3m1 0h1M1 5.5h1m1 0h3m1 0h1m1 0h2m6 0h5m1 0h1m1 0h3m1 0h1M1 6.5h1m5 0h1m1 0h3m4 0h2m3 0h1m1 0h1m5 0h1M1 7.5h7m1 0h1m1 0h1m1 0h1m1 0h1m1 0h1m1 0h1m1 0h1m1 0h7M9 8.5h1m1 0h1m3 0h3m2 0h1M1 9.5h1m1 0h5m2 0h3m3 0h4m1 0h1m1 0h5M2 10.5h2m1 0h1m3 0h3m2 0h2m1 0h5m1 0h3m3 0h1M3 11.5h2m2 0h1m1 0h3m2 0h5m2 0h1M1 12.5h1m1 0h4m1 0h1m1 0h1m1 0h3m2 0h1m1 0h1m3 0h2m1 0h1m1 0h1M1 13.5h1m1 0h1m1 0h3m1 0h2m4 0h1m2 0h1m1 0h2m4 0h2M2 14.5h1m2 0h2m4 0h2m4 0h1m1 0h5m1 0h1m3 0h1M5 15.5h9m2 0h1m1 0h2m1 0h2m2 0h3M2 16.5h2m2 0h1m1 0h1m1 0h2m3 0h1m1 0h1m2 0h1m4 0h1m2 0h1M1 17.5h1m1 0h5m1 0h1m2 0h2m4 0h1m2 0h1m2 0h1m1 0h2M1 18.5h5m2 0h1m1 0h1m2 0h3m1 0h2m1 0h6m1 0h1m1 0h1M1 19.5h1m3 0h1m1 0h2m2 0h1m2 0h3m1 0h2m3 0h1m1 0h1m1 0h1M1 20.5h1m1 0h1m1 0h1m3 0h1m1 0h4m1 0h1m2 0h2m1 0h1m2 0h1m2 0h1M1 21.5h1m3 0h4m1 0h1m2 0h1m1 0h1m2 0h2m1 0h5m1 0h3M9 22.5h1m1 0h2m4 0h5m3 0h5M1 23.5h7m2 0h2m4 0h3m1 0h2m1 0h1m1 0h3M1 24.5h1m5 0h1m1 0h1m1 0h1m3 0h2m3 0h2m3 0h1m2 0h1M1 25.5h1m1 0h3m1 0h1m1 0h2m1 0h2m2 0h1m1 0h1m2 0h5m1 0h1M1 26.5h1m1 0h3m1 0h1m1 0h1m2 0h4m1 0h1m2 0h1m3 0h1m1 0h4M1 27.5h1m1 0h3m1 0h1m1 0h3m1 0h4m1 0h3m2 0h6M1 28.5h1m5 0h1m3 0h1m2 0h1m1 0h2m3 0h1m2 0h3m1 0h1M1 29.5h7m1 0h1m2 0h1m1 0h5m1 0h1m1 0h1m2 0h1m1 0h1"/></svg>
+
+      <p>Naskenujte kód fotoaparátem telefonu, otevře se tato stránka. Nebo v telefonu zadejte <strong>app.waltersystem.cz/stahnout</strong>.</p>
+    </div>
+  </section>
+
+  <a class="open" href="/">Pokračovat do Walter System v prohlížeči →</a>
+</main>
+<script>
+  // Highlights the section for the phone this page is open on.
+  var ua = navigator.userAgent;
+  var ios = /iphone|ipad|ipod/i.test(ua) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+  var android = /android/i.test(ua);
+  var here = android ? 'android' : ios ? 'iphone' : null;
+  if (here) {
+    document.getElementById(here).classList.add('here');
+    document.getElementById('computer').style.display = 'none';
+    if (ios) document.querySelector('.grid').insertBefore(document.getElementById('iphone'), document.getElementById('android'));
+  }
+</script>
+</body>
+</html>

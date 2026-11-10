@@ -1,0 +1,12 @@
+[
+  {
+    "relation": ["delegate_permission/common.handle_all_urls"],
+    "target": {
+      "namespace": "android_app",
+      "package_name": "cz.waltersystem.app",
+      "sha256_cert_fingerprints": [
+        "96:F6:50:D5:DD:F2:BA:3C:D7:94:86:9C:7D:E3:7A:D1:76:C2:59:0C:28:EC:C7:EB:0B:E9:AB:71:D1:AC:D1:63"
+      ]
+    }
+  }
+]
