@@ -427,7 +427,7 @@ const buildEntityData = (entity: ClientEntity | null, assignmentOptions: Array<s
           placeholder: "Název společnosti",
         },
         { key: "tier", label: "Úroveň", value: entity.tier, type: "select", options: [...TIER_VALUES] },
-        { key: "ico", label: "IČO", value: entity.ico ?? null, type: "ico", placeholder: "8 číslic" },
+        { key: "ico", label: "IČO", value: entity.ico ?? null, type: "ico", placeholder: "8 číslic", hierarchySource: entity },
         { key: "service", label: "Požadovaná služba", value: entity.service, type: "text" },
         { key: "budget", label: "Rozpočet subjektu", value: entity.budget, type: "text" },
         { key: "assigned_user_ids", label: "Přiřazení uživatelé", value: toAssignmentDraftValue(entity.assigned_user_ids), type: "multi-select", options: assignmentOptions },

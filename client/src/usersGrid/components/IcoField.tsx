@@ -1,7 +1,67 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { aresUrl, checkIco, isValidIco, lookupAresCompany } from '../ico';
 import type { AresCompany } from '../ico';
+import { applyAresFill, planAresFill, type AresFillChange, type AresFillSource } from '../aresFill';
 import './IcoField.css';
+
+/** "Doplnit z ARES" in the profile: the subject's current values and the save. */
+export interface AresFillConfig {
+  source: AresFillSource | null | undefined;
+  onApply: (updates: Record<string, string | null>) => void;
+}
+
+// The changes ARES would make, each with a tick box: filling an empty field is
+// ticked, anything that replaces or adds to what is there is not.
+function AresFillPanel({ company, fill, onDone }: { company: AresCompany; fill: AresFillConfig; onDone: () => void }) {
+  const plan = useMemo(() => planAresFill(company, fill.source), [company, fill.source]);
+  const [selected, setSelected] = useState<Set<AresFillChange['id']>>(
+    () => new Set(plan.changes.filter((change) => change.preselected).map((change) => change.id)),
+  );
+
+  const toggle = (id: AresFillChange['id']) =>
+    setSelected((current) => {
+      const next = new Set(current);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+
+  const apply = () => {
+    if (!fill.source) return;
+    const updates = applyAresFill(plan, selected, fill.source);
+    if (updates) fill.onApply(updates);
+    onDone();
+  };
+
+  if (plan.changes.length === 0) {
+    return <div className="ico-fill ico-fill--done">Společnost i sídlo už odpovídají ARES.</div>;
+  }
+
+  return (
+    <div className="ico-fill" role="group" aria-label="Doplnit z ARES">
+      {plan.changes.map((change) => (
+        <label key={change.id} className="ico-fill-row">
+          <input type="checkbox" checked={selected.has(change.id)} onChange={() => toggle(change.id)} />
+          <span className="ico-fill-text">
+            <span className="ico-fill-label">
+              {change.label} <span className="ico-fill-action">({change.action})</span>
+            </span>
+            {change.from && <span className="ico-fill-from">{change.from}</span>}
+            <span className="ico-fill-to">{change.to}</span>
+          </span>
+        </label>
+      ))}
+      <div className="ico-fill-actions">
+        <button type="button" className="ico-fill-button ico-fill-button--primary" disabled={selected.size === 0} onClick={apply}>
+          Uložit vybrané
+        </button>
+        <button type="button" className="ico-fill-button" onClick={onDone}>
+          Zrušit
+        </button>
+      </div>
+    </div>
+  );
+}
 
 // The IČO field of a subject's profile (and of the create form): edited like
 // the panel's other text fields, but only a valid IČO is saved, and under the
@@ -20,8 +80,13 @@ type Lookup =
   | { state: 'found'; company: AresCompany }
   | { state: 'error'; message: string };
 
-function AresCard({ ico }: { ico: string }) {
+function AresCard({ ico, fill }: { ico: string; fill?: AresFillConfig }) {
   const [lookup, setLookup] = useState<Lookup>({ state: 'loading' });
+  const [filling, setFilling] = useState(false);
+  const hasChanges = useMemo(
+    () => Boolean(fill && lookup.state === 'found' && planAresFill(lookup.company, fill.source).changes.length > 0),
+    [fill, lookup],
+  );
 
   useEffect(() => {
     let current = true;
@@ -59,9 +124,17 @@ function AresCard({ ico }: { ico: string }) {
           .filter(Boolean)
           .join(' · ')}
       </div>
-      <a className="ico-ares-link" href={company.odkaz || aresUrl(ico)} target="_blank" rel="noreferrer">
-        Podle ARES ↗
-      </a>
+      <div className="ico-ares-foot">
+        <a className="ico-ares-link" href={company.odkaz || aresUrl(ico)} target="_blank" rel="noreferrer">
+          Podle ARES ↗
+        </a>
+        {fill && hasChanges && !filling && (
+          <button type="button" className="ico-fill-open" onClick={() => setFilling(true)}>
+            Doplnit z ARES
+          </button>
+        )}
+      </div>
+      {fill && filling && <AresFillPanel company={company} fill={fill} onDone={() => setFilling(false)} />}
     </div>
   );
 }
@@ -98,9 +171,11 @@ interface IcoFieldProps {
   value: string | null;
   placeholder?: string;
   onSave: (value: string | null) => void;
+  /** The profile's "Doplnit z ARES" (not in the create form). */
+  fill?: AresFillConfig;
 }
 
-export default function IcoField({ value, placeholder, onSave }: IcoFieldProps) {
+export default function IcoField({ value, placeholder, onSave, fill }: IcoFieldProps) {
   const [editing, setEditing] = useState(false);
   const [draft, setDraft] = useState(value ?? '');
   const [error, setError] = useState<string | null>(null);
@@ -173,7 +248,7 @@ export default function IcoField({ value, placeholder, onSave }: IcoFieldProps) 
         </div>
       )}
       {error && editing && <div className="ico-field-error" role="alert">{error}</div>}
-      {!editing && stored && <AresCard ico={stored} />}
+      {!editing && stored && <AresCard ico={stored} fill={fill} />}
     </div>
   );
 }

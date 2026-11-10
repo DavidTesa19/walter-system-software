@@ -406,7 +406,7 @@ const buildEntityData = (entity: PartnerEntity | null, assignmentOptions: Array<
           placeholder: "Název společnosti",
         },
         { key: "tier", label: "Úroveň", value: entity.tier, type: "select", options: [...TIER_VALUES] },
-        { key: "ico", label: "IČO", value: entity.ico ?? null, type: "ico", placeholder: "8 číslic" },
+        { key: "ico", label: "IČO", value: entity.ico ?? null, type: "ico", placeholder: "8 číslic", hierarchySource: entity },
         { key: "assigned_user_ids", label: "Přiřazení uživatelé", value: toAssignmentDraftValue(entity.assigned_user_ids), type: "multi-select", options: assignmentOptions }
       ]
     },

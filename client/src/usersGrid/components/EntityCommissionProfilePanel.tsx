@@ -830,13 +830,16 @@ const EditableFieldCell: React.FC<EditableFieldCellProps> = ({ field, onSave, fi
     );
   }
 
-  // IČO saves only a valid number and shows what ARES says about it.
+  // IČO saves only a valid number and shows what ARES says about it; with the
+  // subject as its source it also offers "Doplnit z ARES" (Společnost, Kraj /
+  // Lokalita), saved like a tree edit.
   if (field.type === 'ico') {
     return (
       <IcoField
         value={typeof field.value === 'string' && field.value ? field.value : null}
         placeholder={field.placeholder}
         onSave={(nextValue) => onSave(field.key, nextValue)}
+        fill={field.hierarchySource ? { source: field.hierarchySource, onApply: (updates) => onSave(updates) } : undefined}
       />
     );
   }

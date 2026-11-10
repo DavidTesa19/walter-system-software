@@ -99,3 +99,86 @@
 .ico-ares a:hover {
   text-decoration: underline;
 }
+
+/* "Doplnit z ARES": the button under the card and the list of changes. */
+.ico-ares-foot {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+}
+
+.ico-fill-open,
+.ico-fill-button {
+  border: 1px solid var(--color-border, rgba(100, 116, 139, 0.3));
+  background: var(--color-surface, #ffffff);
+  color: var(--color-primary, #6366f1);
+  border-radius: 6px;
+  padding: 0.25rem 0.6rem;
+  font: inherit;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.ico-fill-button--primary {
+  background: var(--color-primary, #6366f1);
+  border-color: var(--color-primary, #6366f1);
+  color: #fff;
+}
+
+.ico-fill-button:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+
+.ico-fill {
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+  margin-top: 0.35rem;
+  padding-top: 0.4rem;
+  border-top: 1px solid var(--color-border, rgba(100, 116, 139, 0.18));
+}
+
+.ico-fill--done {
+  color: var(--color-text-muted, #64748b);
+  font-style: italic;
+}
+
+.ico-fill-row {
+  display: flex;
+  gap: 0.45rem;
+  align-items: flex-start;
+  cursor: pointer;
+}
+
+.ico-fill-row input {
+  margin-top: 0.15rem;
+}
+
+.ico-fill-text {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.ico-fill-label {
+  font-weight: 600;
+}
+
+.ico-fill-action {
+  font-weight: 400;
+  color: var(--color-text-muted, #64748b);
+}
+
+.ico-fill-from {
+  color: var(--color-text-muted, #64748b);
+  text-decoration: line-through;
+}
+
+.ico-fill-actions {
+  display: flex;
+  gap: 0.4rem;
+}
