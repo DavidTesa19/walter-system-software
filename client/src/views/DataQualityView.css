@@ -181,3 +181,13 @@
     padding: 20px 16px;
   }
 }
+
+/* Doplnit z ARES (bulk) */
+.dq-ares .dq-section-head {
+  justify-content: space-between;
+}
+
+.dq-ares-not_found .dq-muted,
+.dq-ares-failed .dq-muted {
+  color: #b45309;
+}

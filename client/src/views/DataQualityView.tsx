@@ -1,5 +1,6 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { canAccessGrowthSystem, canAccessProjectsSystem, canAccessStandardSystem, useAuth } from '../auth/AuthContext';
+import { aresCandidates, runAresBulk, type AresBulkResult, type AresCandidate } from '../dataQuality/aresBulk';
 import { analyse, ROLE_LABELS, SECTION_LABELS } from '../dataQuality/dataQuality';
 import type { Check, RecordRef, Role, Section, SectionData, Severity } from '../dataQuality/dataQuality';
 import type { JarvisOpenAction } from '../jarvis/jarvisApi';
@@ -13,6 +14,10 @@ const COLLAPSED = 12;
 const SEVERITY_LABELS: Record<Severity, string> = { error: 'Chyba', warning: 'Ke kontrole', info: 'Upozornění' };
 
 const prefix = (section: Section) => (section === 'public' ? '/api' : `/api/${section}`);
+
+// 1 subjekt, 2–4 subjekty, 5+ subjektů.
+const subjectCount = (count: number) =>
+  `${count} ${count === 1 ? 'subjekt' : count >= 2 && count <= 4 ? 'subjekty' : 'subjektů'}`;
 
 type Row = Record<string, unknown>;
 
@@ -47,19 +52,44 @@ export default function DataQualityView({ onOpenRecord }: { onOpenRecord: (actio
   }, [accessScope]);
 
   const [checks, setChecks] = useState<Check[] | null>(null);
+  const [candidates, setCandidates] = useState<AresCandidate[]>([]);
   const [failed, setFailed] = useState<string[]>([]);
   const [loading, setLoading] = useState(true);
   const [expanded, setExpanded] = useState<Set<string>>(new Set());
   const [checkedAt, setCheckedAt] = useState<Date | null>(null);
+  const [bulk, setBulk] = useState<{ running: boolean; done: number; total: number; results: AresBulkResult[] } | null>(null);
+  const stopRef = useRef<AbortController | null>(null);
+  const canWrite = user?.role !== 'viewer';
 
   const load = useCallback(async () => {
     setLoading(true);
     const result = await loadSections(sections);
     setChecks(analyse(result.data));
+    setCandidates(aresCandidates(result.data));
     setFailed(result.failed);
     setCheckedAt(new Date());
     setLoading(false);
   }, [sections]);
+
+  const runBulk = async () => {
+    if (candidates.length === 0) return;
+    const ok = window.confirm(
+      `Doplnit podle ARES ${subjectCount(candidates.length)}? Vyplní se jen prázdná Společnost a Kraj / Lokalita ` +
+        '(a výchozí „Nová Společnost“); nic vyplněného se nepřepíše. Každou změnu uvidíte v historii změn.',
+    );
+    if (!ok) return;
+    const controller = new AbortController();
+    stopRef.current = controller;
+    setBulk({ running: true, done: 0, total: candidates.length, results: [] });
+    await runAresBulk(candidates, {
+      signal: controller.signal,
+      onProgress: (done, result) =>
+        setBulk((current) => (current ? { ...current, done, results: [...current.results, result] } : current)),
+    });
+    setBulk((current) => (current ? { ...current, running: false } : current));
+    stopRef.current = null;
+    void load();
+  };
 
   useEffect(() => {
     void load();
@@ -88,6 +118,53 @@ export default function DataQualityView({ onOpenRecord }: { onOpenRecord: (actio
 
       {failed.length > 0 && (
         <div className="dq-callout">Nepodařilo se načíst: {failed.join(', ')}. Tyto části v přehledu chybí.</div>
+      )}
+
+      {canWrite && (candidates.length > 0 || bulk) && (
+        <section className="dq-section dq-ares">
+          <div className="dq-section-head">
+            <h2>Doplnit z ARES</h2>
+            {!bulk?.running && candidates.length > 0 && (
+              <button type="button" className="dq-button" onClick={() => void runBulk()} disabled={loading}>
+                Doplnit z ARES ({candidates.length})
+              </button>
+            )}
+            {bulk?.running && (
+              <button type="button" className="dq-button" onClick={() => stopRef.current?.abort()}>
+                Zastavit
+              </button>
+            )}
+          </div>
+          {!bulk && (
+            <p className="dq-muted">
+              {subjectCount(candidates.length)} {candidates.length === 1 ? 'má' : candidates.length < 5 ? 'mají' : 'má'} platné IČO, ale chybí{' '}
+              {candidates.length === 1 ? 'mu' : 'jim'} společnost nebo kraj. ARES je doplní: název firmy a sídlo jako Kraj / Lokalita.
+              Vyplněné údaje zůstanou, jak jsou.
+            </p>
+          )}
+          {bulk && (
+            <>
+              <p className="dq-muted">
+                {bulk.running ? `Doplňuji ${bulk.done} / ${bulk.total}…` : `Hotovo: ${bulk.results.filter((r) => r.outcome === 'filled').length} doplněno z ${bulk.results.length}.`}
+              </p>
+              <ul className="dq-list">
+                {bulk.results.map((result) => (
+                  <li key={`${result.ref.section}-${result.ref.role}-${result.ref.id}`} className={`dq-item dq-ares-${result.outcome}`}>
+                    <div className="dq-records">
+                      <button type="button" className="dq-record" onClick={() => open(result.ref)} title="Otevřít v profilu">
+                        {result.ref.label}
+                      </button>
+                    </div>
+                    <span className="dq-muted">
+                      {result.outcome === 'filled' ? '✓ ' : ''}
+                      {result.detail}
+                    </span>
+                  </li>
+                ))}
+              </ul>
+            </>
+          )}
+        </section>
       )}
 
       {checks && (
