@@ -38,6 +38,7 @@ import useFieldOptions from "../hooks/useFieldOptions";
 import useFieldSpecializationOptions from "../hooks/useFieldSpecializationOptions";
 import useProfileDocuments from "../hooks/useProfileDocuments";
 import useGridColumnLayout from "../hooks/useGridColumnLayout";
+import { usePhoneColumns } from "../hooks/usePhoneColumns";
 import useGridRowFocus from "../hooks/useGridRowFocus";
 import useProfileNotes from "../hooks/useProfileNotes";
 import { ApproveRestoreCellRenderer, DeleteArchiveCellRenderer, ArchiveCellRenderer } from "../cells/RowActionCellRenderers";
@@ -2463,6 +2464,7 @@ const TipersSectionNew: React.FC<SectionProps> = ({
 
     return cols;
   }, [assignableUsers, fieldOptionChoices, fieldOptionsArray, groupedFieldOptionChoices, handleFieldFilterChange, handleOpenFieldEditor, handleOpenRegionEditor, handleRegionFilterChange, handleStateFilterChange, onStatusCellClicked, projectStatusOptions, readOnly, systemNamespace, viewMode]);
+  const gridColumnDefs = usePhoneColumns(columnDefs);
 
   const isExternalFilterPresent = useCallback(() => {
     return activeStateFiltersRef.current.size < WORKFLOW_STATUS_VALUES.length ||
@@ -2553,7 +2555,7 @@ const TipersSectionNew: React.FC<SectionProps> = ({
             ref={gridRef}
             rowData={gridData}
             getRowId={(params) => params.data.rowKey ?? String(params.data.id)}
-            columnDefs={columnDefs}
+            columnDefs={gridColumnDefs}
             rowClassRules={rowClassRules}
             onGridReady={handleGridReady}
             onGridColumnsChanged={handleGridColumnsChanged}

@@ -71,6 +71,39 @@ These are load-bearing and easy to reintroduce:
   An inline object literal is a new identity on every render, which makes the
   grid redo column work it did not need to.
 
+## Phone layout and the installable app
+
+Phones get the same app: no separate code and no app store. Below 768 px
+(`PHONE_QUERY`) the layout switches:
+
+- **The sidebar becomes a drawer.** A fixed top bar (`.mobile-topbar` in
+  App.tsx, `--mobile-topbar-height`) holds ☰ and the current screen's name.
+  The drawer closes on navigation, a backdrop tap and Escape. The footer is
+  hidden and publishes `--app-footer-height: 0`.
+- **Heights use `dvh`, not `vh`.** A phone's `vh` includes the browser bars,
+  so a `100vh` screen hides its bottom edge. index.css/App.css are never
+  imported: phone-wide rules live in Sidebar.css (`body { margin: 0 }` among
+  them).
+- **Grids** (`usePhoneColumns`, `usersGrid/hooks/usePhoneColumns.ts`): the
+  row-button columns (approve, delete, archive) are unpinned and locked to the
+  right end of the row. Pinned, they took half of a 342 px grid. The change dot
+  and the profile button stay pinned. On a computer the hook returns the defs
+  unchanged (same identity). A new pinned action column belongs in
+  `ROW_BUTTON_COLUMNS`.
+- **Calendar** opens in the list week view on a phone. **Jarvis** and the
+  profile panel are full screen.
+- **Installable**: `site.webmanifest` (`display: standalone`) and the Apple meta
+  tags in index.html. `InstallAppButton` in the sidebar footer catches
+  `beforeinstallprompt` when its module loads (main.tsx imports it, since the
+  browser fires it once, often on the login screen). Chrome/Edge get a real
+  install prompt; on an iPhone the button explains Share › Add to Home Screen.
+  There is no service worker, so the installed app needs a connection, like
+  the web one.
+- To test, `resize_window` the preview to the `mobile` preset and measure with
+  JS (bounding rects, `scrollWidth`, the grid API). The pane is often hidden or
+  narrow: set an explicit 1280×800 size to check desktop, not the `desktop`
+  preset.
+
 ## Verifying grid changes locally
 
 Grid changes are verifiable end to end; do it rather than guessing.
