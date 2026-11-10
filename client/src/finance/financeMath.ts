@@ -56,6 +56,7 @@ export const FEATURE_LABELS: Record<string, string> = {
   voice_stt: 'Hlas – přepis dotazu',
   voice_tts: 'Hlas – předčítání',
   web_search: 'Vyhledávání na webu',
+  palette_ai: 'Motivy – AI návrh',
 };
 
 export type CostStatus = 'connected' | 'fixed' | 'unconfirmed' | 'error';

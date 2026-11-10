@@ -9,6 +9,7 @@ import {
   type PaletteInput,
   type Theme
 } from './ThemeContext';
+import AiPaletteBox, { type AiPaletteProposal } from './AiPaletteBox';
 import './PaletteManager.css';
 
 type PaletteDraft = {
@@ -109,6 +110,7 @@ const createTemplateDraft = (
 
 const PaletteManager: React.FC = () => {
   const {
+    theme,
     palettes,
     isLoadingPalettes,
     error,
@@ -123,7 +125,28 @@ const PaletteManager: React.FC = () => {
   const [isSaving, setIsSaving] = useState(false);
   const [formError, setFormError] = useState<string | null>(null);
   const [colorHistory, setColorHistory] = useState<string[]>([]);
+  const [aiNotes, setAiNotes] = useState<Record<Theme, { note: string; warnings: string[] } | null>>({ light: null, dark: null });
   const hasLoadedHistoryRef = useRef(false);
+
+  // An AI proposal opens as the new palette of its mode, ready to edit.
+  const handleAiProposal = (proposal: AiPaletteProposal) => {
+    const mode = proposal.mode;
+    setFormError(null);
+    setEditingDraft(null);
+    setDrafts(prev => ({
+      ...prev,
+      [mode]: {
+        name: proposal.name,
+        mode,
+        colors: Object.fromEntries(
+          COLOR_FIELDS.map(field => [field.key, normalizeColorValue(proposal.colors[field.key])])
+        ) as unknown as PaletteColors,
+        typography: { ...proposal.typography },
+        is_active: false
+      }
+    }));
+    setAiNotes(prev => ({ ...prev, [mode]: { note: proposal.note, warnings: proposal.warnings ?? [] } }));
+  };
 
   useEffect(() => {
     if (typeof window === 'undefined') {
@@ -192,6 +215,7 @@ const PaletteManager: React.FC = () => {
   const handleStartCreate = (mode: Theme) => {
     setFormError(null);
     setEditingDraft(null);
+    setAiNotes(prev => ({ ...prev, [mode]: null }));
     setDrafts(prev => ({
       ...prev,
   [mode]: createTemplateDraft(mode, getBaseValues(mode))
@@ -200,6 +224,7 @@ const PaletteManager: React.FC = () => {
 
   const handleCancelCreate = (mode: Theme) => {
     setDrafts(prev => ({ ...prev, [mode]: null }));
+    setAiNotes(prev => ({ ...prev, [mode]: null }));
   };
 
   const handleDraftChange = (mode: Theme, updater: (current: PaletteDraft) => PaletteDraft) => {
@@ -242,6 +267,7 @@ const PaletteManager: React.FC = () => {
       };
       const created = await createPalette(payload);
       setDrafts(prev => ({ ...prev, [mode]: null }));
+      setAiNotes(prev => ({ ...prev, [mode]: null }));
       if (created.mode === mode && created.is_active) {
         // active palette already applied in context
       }
@@ -333,6 +359,8 @@ const PaletteManager: React.FC = () => {
         </div>
       )}
 
+      <AiPaletteBox defaultMode={theme} disabled={isSaving} onProposal={handleAiProposal} />
+
       <div className="palette-manager__columns">
         {(['light', 'dark'] as Theme[]).map(mode => {
           const modePalettes = palettesByMode[mode];
@@ -353,6 +381,17 @@ const PaletteManager: React.FC = () => {
                   + Přidat paletu
                 </button>
               </div>
+
+              {draft && aiNotes[mode] ? (
+                <div className="ai-palette__note">
+                  <strong>Návrh AI:</strong> {aiNotes[mode]!.note}
+                  {aiNotes[mode]!.warnings.length > 0 && (
+                    <ul className="ai-palette__warnings">
+                      {aiNotes[mode]!.warnings.map(warning => <li key={warning}>{warning}</li>)}
+                    </ul>
+                  )}
+                </div>
+              ) : null}
 
               {draft ? (
                 <PaletteForm

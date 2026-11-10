@@ -171,6 +171,22 @@ Grid changes are verifiable end to end; do it rather than guessing.
 5. `server.js` has no hot reload — restart it after server edits, or new columns
    are silently dropped by stale field whitelists.
 
+## Motivy › AI návrh (`server/palettes/aiPalette.js`, `AiPaletteBox.tsx`)
+
+`POST /api/palettes/ai` (multipart: `description`, `website`, `mode`, optional
+`logo`) asks Claude (`PALETTE_AI_MODEL`, default Sonnet 5.5) for 7 colours
+and 3 fonts as structured output; nothing is saved, the screen opens the
+proposal as a new palette draft. The fonts are an enum of `FONT_CHOICES`,
+which must match `FONT_SUGGESTIONS` in PaletteManager.tsx. A web address is
+read by Anthropic's `web_fetch` tool, never by this server (no SSRF). It
+returns page text, not styles, so a website gives brand colours from
+Claude's knowledge; a logo is the accurate input (the browser redraws it as
+a PNG of at most 800 px, SVG included). `checkProposal` checks WCAG contrast
+and the mode; a failing proposal gets one retry with the problems listed,
+and what remains is shown as warnings. 20 proposals per user per hour
+(`PALETTE_AI_HOURLY_LIMIT`), logged as feature `palette_ai`. Measured
+2026-11-10: 5–10 s and about a cent per proposal.
+
 ## Help: the "?" panel and Ostatní › Nápověda
 
 `client/src/help/helpContent.ts` holds every keyboard shortcut (`SHORTCUTS`)

@@ -84,7 +84,7 @@ const count = (value) => (Number.isFinite(Number(value)) && Number(value) > 0 ? 
 
 /**
  * provider   'anthropic' | 'openai' | 'brave' | 'elevenlabs'
- * feature    'jarvis' | 'jarvis_ocr' | 'chat' | 'voice_stt' | 'voice_tts' | 'web_search'
+ * feature    'jarvis' | 'jarvis_ocr' | 'chat' | 'voice_stt' | 'voice_tts' | 'web_search' | 'palette_ai'
  * input/output/cacheRead/cacheWrite  token counts (input excludes cached tokens)
  * units      characters (read-aloud), seconds (transcription without tokens)
  *            or requests (web search)

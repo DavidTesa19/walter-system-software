@@ -60,6 +60,7 @@ import { JARVIS_MENTION, registerJarvisRoutes } from "./jarvis/routes.js";
 import { createLoginGuard, lockedMessage } from "./login-guard.js";
 import { activityListFields } from "./list-fields.js";
 import { registerAresRoutes } from "./ares.js";
+import { registerPaletteAiRoutes } from "./palettes/aiPalette.js";
 import { registerFinanceRoutes } from "./finance/routes.js";
 import { registerTaskRoutes } from "./tasks/routes.js";
 import { registerBugReportRoutes } from "./bugs/routes.js";
@@ -1407,6 +1408,7 @@ registerSafetyRoutes(app, {
 // the change log and the agent brakes recognise its requests.
 // The IČO field checks numbers against the ARES business register.
 registerAresRoutes(app, { authenticateToken });
+registerPaletteAiRoutes(app, { authenticateToken });
 
 const jarvisRooms = registerJarvisRoutes(app, {
   authenticateToken,
