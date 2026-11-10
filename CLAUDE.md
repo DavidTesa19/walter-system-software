@@ -99,23 +99,42 @@ Phones get the same app: no separate code and no app store. Below 768 px
   install prompt; on an iPhone the button explains Share › Add to Home Screen.
   There is no service worker, so the installed app needs a connection, like
   the web one.
-- **Android app** (`android/`, a Trusted Web Activity made with Bubblewrap,
-  package `cz.waltersystem.app`): a 1 MB .apk that opens
-  https://app.waltersystem.cz full screen in the phone's Chrome. Downloaded
-  from **`/stahnout`** (`client/public/stahnout.html`, Czech, with a QR code
-  for computers). The sidebar links there on Android ("Stáhnout aplikaci")
-  and on a computer ("Aplikace do telefonu").
-  - Website changes need no new build: the app shows the live site. Rebuild
-    (`bash android/build-apk.sh`) only for the app itself (name, icon,
-    colours), after raising `appVersionCode` in `twa-manifest.json` and
+- **Android app** (`android/`, package `cz.waltersystem.app`): a 2 MB .apk,
+  one activity (`MainActivity.java`) showing https://app.waltersystem.cz in
+  Android's built-in System WebView. No browser is needed and there is never
+  an address bar. Downloaded from **`/stahnout`**
+  (`client/public/stahnout.html`, Czech, with a QR code for computers). The
+  sidebar links there on Android ("Stáhnout aplikaci") and on a computer
+  ("Aplikace do telefonu"); inside the app it is hidden (`isAndroidApp`:
+  the user agent ends in `WalterSystemApp/<version>`).
+  - Version 1 (2026-11-10) was a Trusted Web Activity, which shows the site
+    in the phone's Chrome and fell back to an address bar on the user's
+    phone. Version 2 replaced it in place (same package and key, higher
+    versionCode). `/.well-known/assetlinks.json` only mattered for v1.
+  - A WebView gives a site none of a browser's extras, so MainActivity adds
+    them: the microphone (page request granted after Android's
+    RECORD_AUDIO, own site only), `<input type=file>` (Android's picker),
+    links off the site and popups (mailto:, Gmail/Outlook compose, the web:
+    the app that handles them), insets (edge to edge; the page is padded
+    clear of bars, notch and keyboard), the back button, an offline page.
+  - **Files made in the page** (blob: downloads, `window.open(blob)`
+    previews) go through `client/src/nativeBridge.ts`: it exists only when
+    the app's `WalterAndroid` channel does (`addWebMessageListener`, allowed
+    for our origin only), sends the file as base64, and the app saves it to
+    Downloads and opens it. It delays `URL.revokeObjectURL`, since the
+    download code revokes right after `click()`. Being on the web side, a fix
+    there needs no new .apk.
+  - Since Android 13 a WebView reports `prefers-color-scheme` from the app
+    theme, hence the separate `values-night` theme.
+  - Website changes need no new build. Rebuild (`bash android/build-apk.sh`)
+    only for the app itself, after raising `versionCode` in
     `app/build.gradle`.
   - **The signing key lives in `android/signing/` (git-ignored, with its
     password in README-KEEP-SAFE.txt).** Lose it and no update installs
-    over the existing app. `/.well-known/assetlinks.json` names its SHA-256
-    fingerprint; without a match the app shows an address bar.
+    over the existing app.
   - Needs JDK 17 (`C:\Program Files\Microsoft\jdk-17…`, not the default
-    Java 8), the Android SDK and build-tools 35. minSdk is 24 (Android 7),
-    what androidbrowserhelper requires.
+    Java 8), the Android SDK and build-tools 35. minSdk 24 (Android 7).
+    There is no emulator on this machine: the app is tested on a real phone.
   - iPhone has no equivalent without an Apple Developer account ($99/year,
     TestFlight or App Store); until then, Safari's Add to Home Screen.
 - **The frontend's static server** is `npx serve dist` (railway.json),

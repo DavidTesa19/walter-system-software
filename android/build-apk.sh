@@ -2,15 +2,15 @@
 # Builds and signs the Android app and puts it where the website serves it
 # (client/public/download/walter-system.apk, linked from /stahnout).
 #
-# The app only shows https://app.waltersystem.cz, so a website change never
-# needs a new build. Rebuild only when the app itself changes (name, icon,
-# colours): raise appVersionCode in twa-manifest.json and app/build.gradle
+# The app only shows https://app.waltersystem.cz in Android's built-in WebView,
+# so a website change never needs a new build (that includes the file bridge,
+# client/src/nativeBridge.ts). Rebuild only when the app itself changes
+# (MainActivity.java, icon, permissions): raise versionCode in app/build.gradle
 # first, or phones refuse to install it over the old one.
 #
 # Needs: JDK 17, the Android SDK (build-tools 35), and the signing key in
 # android/signing/ (git-ignored; see README-KEEP-SAFE.txt there). A build
-# signed with any other key will not install over the existing app, and
-# /.well-known/assetlinks.json names this key's fingerprint.
+# signed with any other key will not install over the existing app.
 set -euo pipefail
 cd "$(dirname "$0")"
 

@@ -5,6 +5,7 @@
 // the app runs installed (the Android app reports standalone too).
 
 import { useEffect, useState } from 'react';
+import { isAndroidApp } from '../nativeBridge';
 
 interface InstallPromptEvent extends Event {
   prompt: () => Promise<void>;
@@ -24,6 +25,7 @@ if (typeof window !== 'undefined') {
 }
 
 const isInstalled = () =>
+  isAndroidApp() ||
   window.matchMedia('(display-mode: standalone)').matches ||
   (navigator as Navigator & { standalone?: boolean }).standalone === true;
 

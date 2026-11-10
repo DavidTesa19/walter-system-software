@@ -2,6 +2,8 @@ import ReactDOM from "react-dom/client";
 import App from "./App.tsx";
 // Catches the browser's install prompt before the app (and its sidebar) is up.
 import "./components/InstallAppButton";
+// Inside the Android app: hands files made in the page to the app.
+import "./nativeBridge";
 
 document.documentElement.dataset.appBuild = "2026-05-04-doc-explorer";
 
