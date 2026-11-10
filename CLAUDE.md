@@ -113,7 +113,11 @@ Phones get the same app: no separate code and no app store. Below 768 px
     versionCode). `/.well-known/assetlinks.json` only mattered for v1.
   - A WebView gives a site none of a browser's extras, so MainActivity adds
     them: the microphone (page request granted after Android's
-    RECORD_AUDIO, own site only), `<input type=file>` (Android's picker),
+    RECORD_AUDIO, own site only), `<input type=file>` (Android's picker;
+    an image input also offers the camera, and `capture` goes straight to
+    it, since a WebView ignores `capture`: v2.1, versionCode 3; the camera
+    app writes to a cache file through the FileProvider, no CAMERA
+    permission),
     links off the site and popups (mailto:, Gmail/Outlook compose, the web:
     the app that handles them), insets (edge to edge; the page is padded
     clear of bars, notch and keyboard), the back button, an offline page.
@@ -415,6 +419,16 @@ Archived records are skipped. Admins and managers only (not in the
 salesman/viewer list). A new view also needs its id in
 `utils/navigationState.ts`, or a reload falls back to the default screen.
 
+**Doplnit z ARES for many subjects** (`dataQuality/aresBulk.ts`): subjects
+with a valid IČO but no real company or no Kraj / Lokalita at all are
+filled one by one (after a confirm) through the section's own PUT, with only
+the changes the profile's ARES button pre-ticks (`planAresFill`): empty
+fields and the "Nová Společnost" / "Nová Lokalita" defaults, never an
+overwrite. The candidate rule must match the fill rule — a subject the fill
+would leave alone (a Lokalita without a Kraj) is not listed, or it stays on
+the list forever. API rows call the company column `company_name`;
+`fillSourceOf` maps it to the trees' `company`.
+
 ## Úkoly and Hlášení chyb (`server/tasks/`, `server/bugs/`)
 
 Úkoly is the team's simple to-do list, separate from Budoucí funkce (product
@@ -599,7 +613,13 @@ inherited one falls back to the browser's serif. Needs `ANTHROPIC_API_KEY`;
   warnings. The decision item carries `created` (code and id): the card
   shows "Vytvořeno: K045 / K045-001" with "Otevřít", and the next turn's
   `<kontext>` gets the new ref. A new zakázka checks its subject still
-  exists. Obor and Zaměření are not set by Jarvis.
+  exists. Obor and Zaměření are not set by Jarvis. **Business cards**: the
+  panel's "Vizitka → nový kontakt" suggestion opens the camera
+  (`capture="environment"`; a file picker on a computer), attaches the
+  photo and leaves `CARD_PROMPT` in the box to adjust role and section
+  before sending; the tool description tells Jarvis to copy only what is
+  on the card. Tested 2026-11-10 on a drawn card: every field read, Kraj
+  derived from the city.
 - **Answers written before a tool call vanish on Opus 5.5**: text between tool
   calls comes back as a thinking-block progress note, so "answer, then
   open_record" ends the turn with nothing to show. The prompt asks for the

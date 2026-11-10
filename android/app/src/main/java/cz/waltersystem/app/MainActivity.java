@@ -80,6 +80,8 @@ public class MainActivity extends ComponentActivity {
 
     private WebView webView;
     private ValueCallback<Uri[]> pendingFileCallback;
+    /** Where the camera, if chosen, writes the photo. */
+    private File pendingPhoto;
     private PermissionRequest pendingPermission;
     private ActivityResultLauncher<Intent> fileChooser;
     private ActivityResultLauncher<String> micPermission;
@@ -200,14 +202,35 @@ public class MainActivity extends ComponentActivity {
                                              FileChooserParams params) {
                 if (pendingFileCallback != null) pendingFileCallback.onReceiveValue(null);
                 pendingFileCallback = callback;
+                pendingPhoto = null;
                 Intent intent = params.createIntent();
                 if (params.getMode() == FileChooserParams.MODE_OPEN_MULTIPLE) {
                     intent.putExtra(Intent.EXTRA_ALLOW_MULTIPLE, true);
                 }
+                // An image input also offers the camera (a WebView ignores
+                // `capture`); with `capture` set it goes straight to it.
+                Intent camera = acceptsImages(params) ? cameraIntent() : null;
+                Intent chosen = intent;
+                if (camera != null) {
+                    chosen = params.isCaptureEnabled()
+                            ? camera
+                            : Intent.createChooser(intent, null)
+                                    .putExtra(Intent.EXTRA_INITIAL_INTENTS, new Intent[]{camera});
+                }
                 try {
-                    fileChooser.launch(intent);
+                    fileChooser.launch(chosen);
                     return true;
                 } catch (ActivityNotFoundException e) {
+                    // No camera app: the plain picker instead.
+                    pendingPhoto = null;
+                    if (chosen != intent) {
+                        try {
+                            fileChooser.launch(intent);
+                            return true;
+                        } catch (ActivityNotFoundException ignored) {
+                            // Fall through: nothing can pick a file.
+                        }
+                    }
                     pendingFileCallback = null;
                     return false;
                 }
@@ -345,20 +368,65 @@ public class MainActivity extends ComponentActivity {
 
     private void deliverFiles(int resultCode, Intent data) {
         ValueCallback<Uri[]> callback = pendingFileCallback;
+        File photo = pendingPhoto;
         pendingFileCallback = null;
+        pendingPhoto = null;
         if (callback == null) return;
-        if (resultCode != RESULT_OK || data == null) {
+        if (resultCode != RESULT_OK) {
             callback.onReceiveValue(null);
             return;
         }
         List<Uri> uris = new ArrayList<>();
-        ClipData clip = data.getClipData();
+        ClipData clip = data == null ? null : data.getClipData();
         if (clip != null) {
-            for (int i = 0; i < clip.getItemCount(); i++) uris.add(clip.getItemAt(i).getUri());
-        } else if (data.getData() != null) {
+            for (int i = 0; i < clip.getItemCount(); i++) {
+                Uri uri = clip.getItemAt(i).getUri();
+                if (uri != null && !isPhotoUri(uri, photo)) uris.add(uri);
+            }
+        } else if (data != null && data.getData() != null && !isPhotoUri(data.getData(), photo)) {
             uris.add(data.getData());
         }
+        // The camera writes to the file it was given and returns no data.
+        if (uris.isEmpty() && photo != null && photo.length() > 0) {
+            uris.add(FileProvider.getUriForFile(this, getPackageName() + ".files", photo));
+        }
         callback.onReceiveValue(uris.isEmpty() ? null : uris.toArray(new Uri[0]));
+    }
+
+    // Our own photo URI (some camera apps echo it back as data).
+    private boolean isPhotoUri(Uri uri, File photo) {
+        return photo != null && uri.equals(FileProvider.getUriForFile(this, getPackageName() + ".files", photo));
+    }
+
+    private static boolean acceptsImages(WebChromeClient.FileChooserParams params) {
+        String[] types = params.getAcceptTypes();
+        if (types == null || types.length == 0) return true;
+        for (String type : types) {
+            String value = type == null ? "" : type.trim().toLowerCase();
+            if (value.isEmpty() || value.startsWith("image/") || value.equals("*/*")
+                    || value.endsWith(".jpg") || value.endsWith(".jpeg") || value.endsWith(".png")) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    /** The phone's camera app, writing to a file in our cache; null if there is none. */
+    private Intent cameraIntent() {
+        try {
+            File dir = new File(getCacheDir(), "camera");
+            if (!dir.isDirectory() && !dir.mkdirs()) return null;
+            File photo = new File(dir, "foto-" + System.currentTimeMillis() + ".jpg");
+            Uri uri = FileProvider.getUriForFile(this, getPackageName() + ".files", photo);
+            Intent intent = new Intent(MediaStore.ACTION_IMAGE_CAPTURE);
+            intent.putExtra(MediaStore.EXTRA_OUTPUT, uri);
+            intent.setClipData(ClipData.newRawUri("", uri));
+            intent.addFlags(Intent.FLAG_GRANT_WRITE_URI_PERMISSION | Intent.FLAG_GRANT_READ_URI_PERMISSION);
+            pendingPhoto = photo;
+            return intent;
+        } catch (RuntimeException e) {
+            return null;
+        }
     }
 
     // ---- Files from the page (the bridge) -----------------------------------

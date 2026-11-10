@@ -2,5 +2,6 @@
 <!-- Files the app hands to another app to open (a PDF viewer, Word...). -->
 <paths>
     <cache-path name="opened" path="opened/" />
+    <cache-path name="camera" path="camera/" />
     <external-files-path name="downloads" path="Download/" />
 </paths>

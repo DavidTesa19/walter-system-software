@@ -1142,7 +1142,9 @@ export const TOOLS = [
       'uživatel uvidí kartu s údaji a záznam vznikne, až klikne na Potvrdit. Použij, když o to uživatel žádá („založ klienta…“, ' +
       '„přidej partnera z vizitky“). Nejdřív subjekt vyhledej (search), ať nevzniká dvakrát; má-li firma IČO, ověř ho v ARES ' +
       '(company_registry) a vezmi odtud přesný název a sídlo. Podobné existující záznamy ukáže karta i výsledek – řekni je uživateli. ' +
-      'Nevymýšlej údaje, které uživatel neřekl a nejsou v ARES. Obor a Zaměření nezadáváš; doplní je uživatel v profilu.',
+      'Nevymýšlej údaje, které uživatel neřekl a nejsou v ARES. Obor a Zaměření nezadáváš; doplní je uživatel v profilu. ' +
+      'Z fotky vizitky přepiš přesně, co na ní je (jméno, firma, telefony, e-maily, web, adresa jako Lokalita s krajem); ' +
+      'co je nečitelné, vynech a řekni to, nehádej.',
     input: createSubjectInput,
     label: (input) => `Připravuji nový subjekt „${truncate(input.subject.company || input.subject.name || '', 40)}“`,
     async run(input, ctx) {

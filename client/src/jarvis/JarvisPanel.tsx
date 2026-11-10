@@ -54,8 +54,16 @@ const BRIEFING_SUGGESTION = 'Ranní přehled';
 // caches them for five minutes).
 const ATTENTION_REFRESH_MS = 10 * 60 * 1000;
 
+// A photo of a business card becomes a new subject: the camera on a phone, a
+// file on a computer; the question is left in the box to adjust (role,
+// section) before sending.
+const CARD_SUGGESTION = 'Vizitka → nový kontakt';
+const CARD_PROMPT =
+  'Z vizitky na fotce založ nového klienta ve Veřejných. Údaje přepiš přesně z vizitky; má-li firma IČO nebo jasný název, ověř ji v ARES.';
+
 const SUGGESTIONS = [
   BRIEFING_SUGGESTION,
+  CARD_SUGGESTION,
   'Co mám tento týden?',
   'Co víme o klientovi …?',
   'Které zakázky nemají odpovědnou osobu?',
@@ -1231,6 +1239,7 @@ export default function JarvisPanel({ open, onOpen, onClose, viewLabel, launcher
   const [deciding, setDeciding] = useState<Set<string>>(() => new Set());
   const [dragging, setDragging] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const cardInputRef = useRef<HTMLInputElement>(null);
   const attachmentsRef = useRef<PendingAttachment[]>([]);
   attachmentsRef.current = attachments;
 
@@ -2015,6 +2024,8 @@ export default function JarvisPanel({ open, onOpen, onClose, viewLabel, launcher
                   onClick={() => {
                     if (suggestion === BRIEFING_SUGGESTION) {
                       void send(BRIEFING_PROMPT);
+                    } else if (suggestion === CARD_SUGGESTION) {
+                      cardInputRef.current?.click();
                     } else if (suggestion.includes('…')) {
                       setInput(suggestion.replace('…', ''));
                       inputRef.current?.focus();
@@ -2241,6 +2252,21 @@ export default function JarvisPanel({ open, onOpen, onClose, viewLabel, launcher
                 onChange={(event) => {
                   addFiles([...(event.target.files ?? [])]);
                   event.target.value = '';
+                }}
+              />
+              <input
+                ref={cardInputRef}
+                type="file"
+                accept="image/*"
+                capture="environment"
+                hidden
+                onChange={(event) => {
+                  const files = [...(event.target.files ?? [])];
+                  event.target.value = '';
+                  if (files.length === 0) return;
+                  addFiles(files.slice(0, 1));
+                  setInput(CARD_PROMPT);
+                  inputRef.current?.focus();
                 }}
               />
             </>
