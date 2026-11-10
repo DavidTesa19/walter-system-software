@@ -59,22 +59,35 @@ const sameText = (left: string, right: string) => {
   return key(left) === key(right);
 };
 
+// The old "new row" defaults count as empty: ARES replaces them outright.
+const PLACEHOLDER_COMPANY = /^nov[áa] spole[čc]nost$/i;
+const PLACEHOLDER_LOCATION = /^nov[áa] lokalita$/i;
+const isRealCompany = (name: string) => Boolean(name.trim()) && !PLACEHOLDER_COMPANY.test(name.trim());
+
 const planCompany = (company: AresCompany, source: AresFillSource): CompanyPlan | undefined => {
   const name = company.nazev?.trim();
   if (!name) return undefined;
   const nodes = readCompanyStructure(source);
-  const named = nodes.filter((node) => node.company.trim());
+  const named = nodes.filter((node) => isRealCompany(node.company));
   if (named.some((node) => sameText(node.company, name))) return undefined;
 
   if (named.length === 0) {
-    // Name the unnamed branch, so the obors already chosen stay with it.
-    const unnamed = nodes.findIndex((node) => !node.company.trim());
+    // Name the unnamed (or placeholder) branch, so the obors already chosen
+    // stay with it.
+    const unnamed = nodes.findIndex((node) => !isRealCompany(node.company));
     const next = unnamed >= 0
       ? nodes.map((node, index) => (index === unnamed ? { ...node, company: name } : node))
       : [...nodes, { company: name, fields: [] }];
     return {
       nodes: next,
-      change: { id: "company", label: "Společnost", from: "", to: name, preselected: true, action: "doplnit" },
+      change: {
+        id: "company",
+        label: "Společnost",
+        from: unnamed >= 0 ? nodes[unnamed].company.trim() : "",
+        to: name,
+        preselected: true,
+        action: "doplnit",
+      },
     };
   }
 
@@ -105,11 +118,18 @@ const planRegion = (company: AresCompany, source: AresFillSource): RegionPlan | 
   const kraj = matchRegionOption(company.kraj, "CZ");
   const address = company.sidlo?.trim() ?? "";
   if (!kraj) return undefined;
-  const nodes = readRegionStructure(source);
+  const current = readRegionStructure(source);
+  // Without the placeholder address, and without a branch that held only it.
+  const nodes = current
+    .map((node) => ({ ...node, locations: node.locations.filter((location) => !PLACEHOLDER_LOCATION.test(location.trim())) }))
+    .filter((node) => node.region.trim() || node.locations.length > 0);
   const label = "Kraj / Lokalita";
   const to = address ? `${kraj} – ${address}` : kraj;
   const describe = (list: RegionNode[]) =>
-    list.map((node) => (node.locations.length ? `${node.region} – ${node.locations.join(", ")}` : node.region)).join("; ");
+    list
+      .map((node) => [node.region.trim(), node.locations.join(", ")].filter(Boolean).join(" – "))
+      .filter(Boolean)
+      .join("; ");
 
   const existing = nodes.find((node) => node.region === kraj);
   if (existing) {
@@ -119,7 +139,7 @@ const planRegion = (company: AresCompany, source: AresFillSource): RegionPlan | 
       change: {
         id: "region",
         label,
-        from: describe(nodes),
+        from: describe(current),
         to,
         // An empty Kraj gets its address; next to other addresses it is added
         // only when asked for.
@@ -135,7 +155,7 @@ const planRegion = (company: AresCompany, source: AresFillSource): RegionPlan | 
     change: {
       id: "region",
       label,
-      from: describe(nodes),
+      from: describe(current),
       to,
       preselected: nodes.length === 0,
       action: nodes.length === 0 ? "doplnit" : "přidat",
