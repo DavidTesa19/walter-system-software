@@ -1,6 +1,6 @@
 import React, { useEffect, useRef } from 'react';
 import ThemeToggleButton from './ThemeToggleButton';
-import { THEME_SHORTCUT_LABEL } from '../theme/ThemeContext';
+import ZoomControl from '../zoom/ZoomControl';
 import './Footer.css';
 
 const Footer: React.FC = () => {
@@ -46,10 +46,8 @@ const Footer: React.FC = () => {
     <footer className="app-footer" ref={footerRef}>
       <div className="footer-toolbar">
         <div className="footer-theme-area">
+          {/* Its shortcut (Shift+T) is in the button's tooltip and the help. */}
           <ThemeToggleButton variant="footer" className="footer-theme-toggle" />
-          <span className="footer-theme-shortcut" aria-label={`Klávesová zkratka pro přepnutí motivu: ${THEME_SHORTCUT_LABEL}`}>
-            Zkratka <kbd>{THEME_SHORTCUT_LABEL}</kbd>
-          </span>
         </div>
         <div className="footer-links">
           <a href="https://zoom.us/join" target="_blank" rel="noopener noreferrer" className="footer-link">Zoom</a>
@@ -62,6 +60,7 @@ const Footer: React.FC = () => {
           <a href="https://trello.com/" target="_blank" rel="noopener noreferrer" className="footer-link">Trello</a>
           <a href="https://slack.com/signin" target="_blank" rel="noopener noreferrer" className="footer-link">Slack</a>
         </div>
+        <ZoomControl />
       </div>
     </footer>
   );

@@ -25,7 +25,7 @@
   display: flex;
   align-items: flex-start;
   justify-content: center;
-  padding: 6vh 16px 16px;
+  padding: calc(6vh / var(--app-zoom, 1)) 16px 16px;
   background: rgba(15, 23, 42, 0.42);
   backdrop-filter: blur(3px);
   overflow-y: auto;

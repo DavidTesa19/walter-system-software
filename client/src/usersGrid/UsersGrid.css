@@ -259,7 +259,7 @@
   padding: 1rem;
   box-shadow: var(--color-shadow-lg, var(--color-shadow-md));
   min-width: 420px;
-  max-width: min(90vw, 560px);
+  max-width: min(calc(90vw / var(--app-zoom, 1)), 560px);
   box-sizing: border-box;
 }
 

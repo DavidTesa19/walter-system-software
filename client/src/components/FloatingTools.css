@@ -88,7 +88,7 @@
 
 .tasks-widget {
   width: 340px;
-  max-height: min(560px, calc(100vh - 24px));
+  max-height: min(560px, calc(calc(100vh / var(--app-zoom, 1)) - 24px));
   display: flex;
   flex-direction: column;
   border: 1px solid var(--task-border);
@@ -107,7 +107,7 @@
 
 @media (max-width: 520px) {
   .tasks-widget {
-    width: calc(100vw - 80px);
+    width: calc(calc(100vw / var(--app-zoom, 1)) - 80px);
   }
 }
 

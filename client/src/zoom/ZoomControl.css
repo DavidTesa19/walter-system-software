@@ -1,0 +1,161 @@
+/* The zoom control in the footer. */
+
+.zoom-control {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 3px 4px;
+  border: 1px solid var(--color-border, rgba(15, 23, 42, 0.14));
+  border-radius: 10px;
+  background: var(--color-surface, #ffffff);
+  color: var(--color-text, #0f172a);
+  flex-shrink: 0;
+}
+
+.zoom-control__step {
+  width: 26px;
+  height: 26px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border: none;
+  border-radius: 7px;
+  background: transparent;
+  color: var(--color-text, #0f172a);
+  font-size: 1rem;
+  font-weight: 600;
+  line-height: 1;
+  cursor: pointer;
+}
+
+.zoom-control__step:hover:not(:disabled) {
+  background: color-mix(in srgb, var(--color-primary, #2563eb) 12%, transparent);
+  color: var(--color-primary, #2563eb);
+}
+
+.zoom-control__step:disabled {
+  opacity: 0.35;
+  cursor: default;
+}
+
+.zoom-control__slider {
+  --zoom-fill: 33%;
+  width: 96px;
+  height: 4px;
+  margin: 0 2px;
+  border-radius: 999px;
+  appearance: none;
+  background: linear-gradient(
+    to right,
+    var(--color-primary, #2563eb) 0,
+    var(--color-primary, #2563eb) var(--zoom-fill),
+    color-mix(in srgb, var(--color-text-muted, #64748b) 30%, transparent) var(--zoom-fill)
+  );
+  cursor: pointer;
+}
+
+.zoom-control__slider::-webkit-slider-thumb {
+  appearance: none;
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  background: var(--color-surface, #ffffff);
+  border: 2px solid var(--color-primary, #2563eb);
+  box-shadow: 0 1px 3px rgba(15, 23, 42, 0.25);
+}
+
+.zoom-control__slider::-moz-range-thumb {
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  background: var(--color-surface, #ffffff);
+  border: 2px solid var(--color-primary, #2563eb);
+}
+
+.zoom-control__slider:focus-visible {
+  outline: 2px solid var(--color-primary, #2563eb);
+  outline-offset: 4px;
+}
+
+.zoom-control__value {
+  min-width: 68px;
+  height: 26px;
+  padding: 0 8px;
+  border: none;
+  border-left: 1px solid var(--color-border, rgba(15, 23, 42, 0.14));
+  border-radius: 0 7px 7px 0;
+  background: transparent;
+  color: var(--color-text, #0f172a);
+  font-size: 0.82rem;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.zoom-control__value span {
+  font-size: 0.65rem;
+  color: var(--color-text-muted, #64748b);
+}
+
+.zoom-control__value:hover,
+.zoom-control__value.is-open {
+  color: var(--color-primary, #2563eb);
+}
+
+.zoom-control__menu {
+  position: absolute;
+  right: 0;
+  bottom: calc(100% + 8px);
+  min-width: 170px;
+  padding: 6px;
+  border: 1px solid var(--color-border, rgba(15, 23, 42, 0.14));
+  border-radius: 12px;
+  background: var(--color-surface, #ffffff);
+  box-shadow: 0 18px 40px -16px rgba(15, 23, 42, 0.45);
+  display: flex;
+  flex-direction: column;
+  z-index: 1000;
+}
+
+.zoom-control__option {
+  padding: 6px 10px;
+  border: none;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--color-text, #0f172a);
+  font-size: 0.85rem;
+  font-variant-numeric: tabular-nums;
+  text-align: left;
+  cursor: pointer;
+}
+
+.zoom-control__option:hover {
+  background: color-mix(in srgb, var(--color-primary, #2563eb) 10%, transparent);
+}
+
+.zoom-control__option.is-active {
+  color: var(--color-primary, #2563eb);
+  font-weight: 700;
+}
+
+.zoom-control__divider {
+  height: 1px;
+  margin: 4px 2px;
+  background: var(--color-border, rgba(15, 23, 42, 0.12));
+}
+
+.zoom-control__hint {
+  padding: 6px 10px 4px;
+  font-size: 0.72rem;
+  line-height: 1.6;
+  color: var(--color-text-muted, #64748b);
+}
+
+.zoom-control__hint kbd {
+  padding: 0 4px;
+  border: 1px solid var(--color-border, rgba(15, 23, 42, 0.2));
+  border-radius: 4px;
+  font-size: 0.7rem;
+}

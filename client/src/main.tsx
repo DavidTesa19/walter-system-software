@@ -2,6 +2,10 @@ import ReactDOM from "react-dom/client";
 // The page font and other base rules, before any component's own styles.
 import "./styles/global.css";
 import App from "./App.tsx";
+// The remembered zoom, applied before the first render, and its shortcuts.
+import { startAppZoom } from "./zoom/appZoom";
+
+startAppZoom();
 // Catches the browser's install prompt before the app (and its sidebar) is up.
 import "./components/InstallAppButton";
 // Inside the Android app: hands files made in the page to the app.

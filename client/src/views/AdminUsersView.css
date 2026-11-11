@@ -33,7 +33,7 @@
 
 .admin-users-header h1 {
   margin: 0;
-  font-size: clamp(2rem, 3vw, 3rem);
+  font-size: clamp(2rem, calc(3vw / var(--app-zoom, 1)), 3rem);
   line-height: 0.98;
   font-family: var(--font-subheading, "Sora", "Inter", "Segoe UI", sans-serif);
   font-weight: 800;

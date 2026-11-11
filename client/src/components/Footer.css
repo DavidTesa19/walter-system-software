@@ -28,25 +28,39 @@
   flex-shrink: 0;
 }
 
+/* One row that scrolls sideways when narrow: wrapping made the footer two to
+   twelve rows tall (at a high app zoom), eating the tables' height. */
 .footer-links {
   display: flex;
-  gap: 1rem;
-  flex-wrap: wrap;
-  justify-content: center;
+  gap: 0.4rem;
+  flex-wrap: nowrap;
+  justify-content: safe center;
   flex: 1;
+  min-width: 0;
+  overflow-x: auto;
+  scrollbar-width: none;
+  padding: 3px 2px;
+}
+
+.footer-links::-webkit-scrollbar {
+  display: none;
+}
+
+.footer-links .footer-link {
+  flex-shrink: 0;
 }
 
 .footer-link {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  padding: 0.5rem 1rem;
+  padding: 0.3rem 0.7rem;
   background: var(--color-surface-alt);
   border: 1px solid var(--color-border);
   border-radius: 0.5rem;
   color: var(--color-text-muted);
   text-decoration: none;
-  font-size: 0.85rem;
+  font-size: 0.8rem;
   font-weight: 600;
   font-family: var(--font-subheading);
   transition: all 0.2s ease;
@@ -96,18 +110,16 @@
     left: 240px; /* Match sidebar width on smaller screens */
   }
 
+  /* Two rows: the theme switch and zoom on top, the links (one scrolling
+     row) under them. */
   .footer-toolbar {
-    flex-direction: column;
-    align-items: stretch;
-  }
-
-  .footer-theme-area {
-    justify-content: center;
     flex-wrap: wrap;
+    row-gap: 0.5rem;
   }
 
-  .footer-theme-toggle {
-    align-self: center;
+  .footer-links {
+    order: 3;
+    flex-basis: 100%;
   }
 }
 

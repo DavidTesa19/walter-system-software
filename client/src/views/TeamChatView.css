@@ -1,7 +1,7 @@
 .team-chat-view {
   display: flex;
   flex: 1;
-  height: 100vh;
+  height: calc(100vh / var(--app-zoom, 1));
   width: 100%;
   background-color: var(--color-background);
   font-family: var(--font-body);

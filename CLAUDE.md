@@ -65,6 +65,34 @@ browser's serif to a modern sans-serif. It must look right the first time.
   confirm `getComputedStyle(el).fontFamily` of its text, inputs and buttons
   is the palette font, take a screenshot, and check dark mode and phone width.
 
+## App zoom (`client/src/zoom/`)
+
+The whole interface zooms from 50 % to 200 %: the footer's control (− /
+slider / + / percentage with presets), Ctrl/⌘ + = / − / 0 and Ctrl/⌘ + wheel
+(a trackpad pinch). They replace the browser's own zoom while the app is
+open. Remembered per device (`walterApp.zoom` in localStorage) and applied
+before the first render (`startAppZoom()` in main.tsx).
+
+- It is CSS `zoom` on `<html>` plus `--app-zoom`. **Viewport units are
+  zoomed too**, so every `100vh` / `100dvh` / `vw` is written as
+  `calc(100dvh / var(--app-zoom, 1))` (45 places, 2026-11-11). **A new
+  viewport unit must be written that way**, or that screen overflows the
+  window when zoomed.
+- **`coordinateShim.ts`**: under CSS zoom, `getBoundingClientRect`, mouse
+  `clientX/Y` and `innerWidth/innerHeight` report screen pixels, but a
+  `top: …px` written from them is zoomed again. Every popup placed next to
+  its anchor then opened off by the zoom factor: ours and ag-Grid's (a
+  status editor meant for (989, 243) opened at (1236, 303) at 125 %). The
+  shim makes those APIs answer in the zoomed page's own pixels (as browser
+  zoom does) and `elementFromPoint` take them; at 100 % it returns the
+  native values untouched.
+- `position: fixed` + `inset`/`right`/`bottom` need no change.
+- Media queries still see the real window width, so a zoomed small window
+  keeps the desktop layout.
+- In the hidden preview pane `requestAnimationFrame` never fires, so the
+  grid's header does not follow a programmatic scroll: a header/body
+  mismatch measured there is the test setup, not zoom (same at 100 %).
+
 ## Grid layout gotchas
 
 These are load-bearing and easy to reintroduce:
