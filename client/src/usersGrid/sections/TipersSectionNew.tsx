@@ -39,6 +39,7 @@ import useFieldSpecializationOptions from "../hooks/useFieldSpecializationOption
 import useProfileDocuments from "../hooks/useProfileDocuments";
 import useGridColumnLayout from "../hooks/useGridColumnLayout";
 import { usePhoneColumns } from "../hooks/usePhoneColumns";
+import { usePhoneCardGrid } from "../phone/usePhoneCardGrid";
 import useGridRowFocus from "../hooks/useGridRowFocus";
 import useProfileNotes from "../hooks/useProfileNotes";
 import { ApproveRestoreCellRenderer, DeleteArchiveCellRenderer, ArchiveCellRenderer } from "../cells/RowActionCellRenderers";
@@ -2467,6 +2468,8 @@ const TipersSectionNew: React.FC<SectionProps> = ({
     return cols;
   }, [assignableUsers, fieldOptionChoices, fieldOptionsArray, groupedFieldOptionChoices, handleFieldFilterChange, handleOpenFieldEditor, handleOpenRegionEditor, handleRegionFilterChange, handleStateFilterChange, onStatusCellClicked, projectStatusOptions, readOnly, systemNamespace, viewMode]);
   const gridColumnDefs = usePhoneColumns(columnDefs);
+  // On a phone, rows can be cards (phone/usePhoneCardGrid.ts).
+  const phoneCards = usePhoneCardGrid();
 
   const isExternalFilterPresent = useCallback(() => {
     return activeStateFiltersRef.current.size < WORKFLOW_STATUS_VALUES.length ||
@@ -2554,6 +2557,7 @@ const TipersSectionNew: React.FC<SectionProps> = ({
           className={`grid-wrapper ag-theme-quartz${useContentHeightLayout ? ' grid-wrapper--content-height' : ''}`}
         >
           <AgGridReact<TiperGridRow>
+            key={phoneCards.gridKey}
             ref={gridRef}
             rowData={gridData}
             getRowId={(params) => params.data.rowKey ?? String(params.data.id)}
@@ -2586,6 +2590,7 @@ const TipersSectionNew: React.FC<SectionProps> = ({
             suppressRowClickSelection={true}
             loading={isLoading}
             context={gridContext}
+            {...phoneCards.props}
             isExternalFilterPresent={isExternalFilterPresent}
             doesExternalFilterPass={doesExternalFilterPass}
           />

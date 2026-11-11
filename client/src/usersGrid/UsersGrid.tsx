@@ -1,3 +1,7 @@
+import { Building2, Lightbulb, UsersRound } from "lucide-react";
+import { BUTTON_ICON, TAB_ICON } from "../ui/icons";
+import { Plus, Redo2, Undo2 } from "lucide-react";
+import PhoneViewToggle from "./phone/PhoneViewToggle";
 import "ag-grid-community/styles/ag-theme-quartz.css";
 import "./UsersGrid.css";
 import React, { useCallback, useEffect, useRef, useState } from "react";
@@ -33,10 +37,10 @@ interface UsersGridProps {
   sectionToggle?: React.ReactNode;
 }
 
-const NAV_CONFIG: Record<TableType, { label: string; icon: string; addLabel: string }> = {
-  clients: { label: "Klienti", icon: "👥", addLabel: "Klienta" },
-  partners: { label: "Partneři", icon: "🏢", addLabel: "Partnera" },
-  tipers: { label: "Tipaři", icon: "💡", addLabel: "Tipaře" }
+const NAV_CONFIG: Record<TableType, { label: string; icon: React.ReactNode; addLabel: string }> = {
+  clients: { label: "Klienti", icon: <UsersRound {...TAB_ICON} />, addLabel: "Klienta" },
+  partners: { label: "Partneři", icon: <Building2 {...TAB_ICON} />, addLabel: "Partnera" },
+  tipers: { label: "Tipaři", icon: <Lightbulb {...TAB_ICON} />, addLabel: "Tipaře" }
 };
 
 const UsersGrid: React.FC<UsersGridProps> = ({
@@ -203,7 +207,7 @@ const UsersGrid: React.FC<UsersGridProps> = ({
           <div className="navigation-tabs">
           {(
             Object.entries(NAV_CONFIG) as Array<
-              [TableType, { label: string; icon: string; addLabel: string }]
+              [TableType, { label: string; icon: React.ReactNode; addLabel: string }]
             >
           ).map(([key, { label, icon }]) => (
             <button
@@ -212,7 +216,7 @@ const UsersGrid: React.FC<UsersGridProps> = ({
               className={`nav-tab ${activeTable === key ? "active" : ""}`}
             >
               <span className="nav-tab__content">
-                <span>{icon} {label}</span>
+                <span className="nav-tab__label">{icon}{label}</span>
                 <ActivityIndicator
                   count={getCollectionCount(buildCommissionsCollectionKey(getActivitySystem(systemNamespace), viewMode, key))}
                   muted={activeTable === key}
@@ -224,16 +228,14 @@ const UsersGrid: React.FC<UsersGridProps> = ({
           </div>
         </div>
         <div className="header-actions">
+          <PhoneViewToggle />
           <button
             className="undo-redo-btn"
             onClick={undo}
             disabled={!canUndo || isBusy}
             title="Zpět (Ctrl+Z)"
           >
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-              <path d="M3 10h10a5 5 0 0 1 0 10H9" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
-              <path d="M7 6l-4 4 4 4" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
-            </svg>
+            <Undo2 {...BUTTON_ICON} />
           </button>
           <button
             className="undo-redo-btn"
@@ -241,13 +243,11 @@ const UsersGrid: React.FC<UsersGridProps> = ({
             disabled={!canRedo || isBusy}
             title="Znovu (Ctrl+Y)"
           >
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-              <path d="M21 10H11a5 5 0 0 0 0 10h4" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
-              <path d="M17 6l4 4-4 4" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
-            </svg>
+            <Redo2 {...BUTTON_ICON} />
           </button>
           <button className="add-user-btn" onClick={handleAddClick} disabled={isAddDisabled || isReadOnly} style={isReadOnly ? { display: 'none' } : undefined}>
-            + Přidat {addLabel}
+            <Plus {...BUTTON_ICON} />
+            <span className="add-user-btn__label">Přidat {addLabel}</span>
           </button>
         </div>
       </div>

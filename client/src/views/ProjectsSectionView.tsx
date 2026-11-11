@@ -1,3 +1,5 @@
+import { Archive, ListChecks } from "lucide-react";
+import { TAB_ICON } from "../ui/icons";
 import React, { useCallback, useEffect, useMemo, useState } from "react";
 import EntitiesSystemView from "../entitiesSystem/EntitiesSystemView";
 import type { AppView, GridView } from "../types/appView";
@@ -285,7 +287,7 @@ const ProjectsSectionView: React.FC<ProjectsSectionViewProps> = ({
             onClick={handleShowActive}
           >
             <span className="nav-tab__content">
-              <span>📋 Aktivní</span>
+              <span className="nav-tab__label"><ListChecks {...TAB_ICON} />Aktivní</span>
               <ActivityIndicator count={activeModeCount} muted={currentGridView !== "archived"} title="Nepřečtené změny" />
             </span>
           </button>
@@ -295,7 +297,7 @@ const ProjectsSectionView: React.FC<ProjectsSectionViewProps> = ({
             onClick={handleShowArchive}
           >
             <span className="nav-tab__content">
-              <span>📦 Archiv</span>
+              <span className="nav-tab__label"><Archive {...TAB_ICON} />Archiv</span>
               <ActivityIndicator count={archivedModeCount} muted={currentGridView === "archived"} title="Nepřečtené změny" />
             </span>
           </button>

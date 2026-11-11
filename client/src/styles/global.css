@@ -14,6 +14,24 @@
 :root {
   --font-sans: 'Inter', system-ui, -apple-system, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
   --font-mono: ui-monospace, 'Cascadia Code', 'SF Mono', Consolas, 'Liberation Mono', monospace;
+
+  /* The UI's scale (2026-11-11, "clean & dense", like Linear / Attio):
+     compact controls, a small type scale, quiet radii and shadows. Colours
+     stay the palette's (--color-*, ThemeContext). Use these in new UI
+     rather than new one-off values. */
+  --ui-text-xs: 11.5px;
+  --ui-text-sm: 12.5px;
+  --ui-text-md: 13.5px;
+  --ui-text-lg: 15px;
+  --ui-text-xl: 18px;
+  --ui-control-h: 32px;
+  --ui-control-h-sm: 28px;
+  --ui-radius-sm: 6px;
+  --ui-radius-md: 8px;
+  --ui-radius-lg: 12px;
+  --ui-shadow-xs: 0 1px 2px rgba(15, 23, 42, 0.06);
+  --ui-shadow-pop: 0 12px 32px -12px rgba(15, 23, 42, 0.35), 0 2px 6px rgba(15, 23, 42, 0.06);
+  --ui-transition: 120ms ease;
 }
 
 html,

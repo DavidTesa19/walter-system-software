@@ -34,8 +34,8 @@
   justify-content: space-between;
   align-items: center;
   text-align: center;
-  margin-bottom: 0.6rem;
-  gap: 2rem;
+  margin-bottom: 0.5rem;
+  gap: 1rem;
 }
 
 /* Wraps the Growth Club <-> Veřejné toggle button next to the Klienti/Partneři/Tipaři tabs */
@@ -49,63 +49,74 @@
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 2.5rem;
-  height: 2.5rem;
+  width: var(--ui-control-h);
+  height: var(--ui-control-h);
   flex-shrink: 0;
   background: var(--color-surface);
-  color: var(--color-text);
+  color: var(--color-text-muted);
   border: 1px solid var(--color-border);
-  border-radius: 0.75rem;
+  border-radius: var(--ui-radius-md);
   cursor: pointer;
-  font-size: 1.2rem;
   line-height: 1;
-  transition: background-color 0.15s ease, border-color 0.15s ease;
+  transition: background-color var(--ui-transition), color var(--ui-transition);
 }
 
 .section-toggle-btn:hover {
-  background: var(--color-border);
+  background: var(--color-surface-hover);
+  color: var(--color-text);
 }
 
 /* Navigation tabs styles */
+/* Tabs: a quiet segmented control. The active tab is the surface colour
+   with a hairline shadow, not a filled accent pill. */
 .navigation-tabs {
   display: flex;
-  gap: 0.5rem;
-  background: var(--color-surface-alt);
-  padding: 0.2rem;
-  border-radius: 0.75rem;
-  box-shadow: var(--color-shadow-sm);
+  gap: 2px;
+  background: color-mix(in srgb, var(--color-text) 5%, var(--color-surface));
+  padding: 2px;
+  border-radius: var(--ui-radius-md);
   border: 1px solid var(--color-border);
 }
 
 .nav-tab {
   background: transparent;
-  border: none;
-  padding: 0.45rem 1.1rem;
-  border-radius: 6px;
+  border: 1px solid transparent;
+  height: calc(var(--ui-control-h) - 6px);
+  padding: 0 10px;
+  border-radius: var(--ui-radius-sm);
   cursor: pointer;
-  font-size: 0.9rem;
+  font-size: var(--ui-text-sm);
   font-weight: 500;
   color: var(--color-text-muted);
-  transition: all 0.2s;
+  transition: background-color var(--ui-transition), color var(--ui-transition);
   white-space: nowrap;
-  font-family: var(--font-subheading);
 }
 
 .nav-tab__content {
   display: inline-flex;
   align-items: center;
-  gap: 0.5rem;
+  gap: 6px;
+}
+
+.nav-tab__label {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
 }
 
 .nav-tab:hover {
-  background: var(--color-surface-hover);
   color: var(--color-text);
 }
 
 .nav-tab.active {
-  background: var(--color-primary);
-  color: var(--color-primary-contrast);
-  box-shadow: 0 2px 6px color-mix(in srgb, var(--color-primary) 25%, transparent);
+  background: var(--color-surface);
+  color: var(--color-text);
+  border-color: var(--color-border);
+  box-shadow: var(--ui-shadow-xs);
+}
+
+.nav-tab.active svg {
+  color: var(--color-primary);
 }
 
 /* Table section */
@@ -128,8 +139,9 @@
 
 .page-title {
   font-family: var(--font-heading);
-  font-weight: 700;
-  font-size: 1.5rem;
+  font-weight: 650;
+  font-size: var(--ui-text-xl);
+  letter-spacing: -0.01em;
   margin: 0;
   color: var(--color-text);
 }
@@ -144,18 +156,19 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  width: 2.25rem;
-  height: 2.25rem;
+  width: var(--ui-control-h);
+  height: var(--ui-control-h);
   background: var(--color-surface);
   border: 1px solid var(--color-border);
-  border-radius: 0.5rem;
+  border-radius: var(--ui-radius-md);
   cursor: pointer;
-  color: var(--color-text);
-  transition: background-color 0.15s ease, opacity 0.15s ease;
+  color: var(--color-text-muted);
+  transition: background-color var(--ui-transition), color var(--ui-transition), opacity var(--ui-transition);
 }
 
 .undo-redo-btn:hover:not(:disabled) {
-  background: var(--color-border);
+  background: var(--color-surface-hover);
+  color: var(--color-text);
 }
 
 .undo-redo-btn:disabled {
@@ -164,20 +177,25 @@
 }
 
 .add-user-btn {
-  background: var(--color-accent);
-  color: var(--color-accent-contrast);
-  border: none;
-  padding: 0.75rem 1.5rem;
-  border-radius: 0.75rem;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: var(--ui-control-h);
+  background: var(--color-primary);
+  color: var(--color-primary-contrast);
+  border: 1px solid transparent;
+  padding: 0 12px;
+  border-radius: var(--ui-radius-md);
   cursor: pointer;
-  font-size: 0.95rem;
+  font-size: var(--ui-text-sm);
   font-weight: 600;
-  transition: background-color 0.2s ease;
-  font-family: var(--font-subheading);
+  white-space: nowrap;
+  box-shadow: var(--ui-shadow-xs);
+  transition: background-color var(--ui-transition);
 }
 
 .add-user-btn:hover:not(:disabled) {
-  background: var(--color-accent-hover);
+  background: var(--color-primary-hover);
 }
 
 .add-user-btn:disabled {
@@ -403,9 +421,9 @@
   --walter-grid-scroll-spacer: 10px;
   background: var(--color-surface);
   border: 1px solid var(--color-border);
-  border-radius: 1rem;
-  padding: 0.5rem;
-  box-shadow: var(--color-shadow-md);
+  border-radius: var(--ui-radius-lg);
+  padding: 0;
+  box-shadow: var(--ui-shadow-xs);
   margin: 0;
   flex: 1;
   box-sizing: border-box;
@@ -426,11 +444,16 @@
   --ag-background-color: var(--color-surface);
   --ag-foreground-color: var(--color-text);
   --ag-border-color: var(--color-border);
-  --ag-header-background-color: var(--color-primary);
-  --ag-header-foreground-color: var(--color-primary-contrast);
-  --ag-odd-row-background-color: color-mix(in srgb, var(--color-surface-alt) 70%, var(--color-surface));
-  --ag-row-hover-color: color-mix(in srgb, var(--color-primary) 12%, var(--color-surface));
-  --ag-selected-row-background-color: color-mix(in srgb, var(--color-primary) 20%, var(--color-surface));
+  /* Neutral header and no zebra stripes: data first, the accent only for
+     what is hovered or selected. */
+  --ag-header-background-color: color-mix(in srgb, var(--color-text) 3%, var(--color-surface));
+  --ag-header-foreground-color: var(--color-text-muted);
+  --ag-header-column-resize-handle-color: var(--color-border);
+  --ag-odd-row-background-color: var(--color-surface);
+  --ag-row-border-color: color-mix(in srgb, var(--color-border) 70%, transparent);
+  --ag-wrapper-border-radius: 0;
+  --ag-row-hover-color: color-mix(in srgb, var(--color-primary) 6%, var(--color-surface));
+  --ag-selected-row-background-color: color-mix(in srgb, var(--color-primary) 12%, var(--color-surface));
   --ag-range-selection-border-color: var(--color-primary);
   --ag-input-focus-border-color: var(--color-primary);
   --ag-font-family: var(--font-body);
@@ -686,9 +709,11 @@
   color: var(--color-text-muted);
 }
 
-/* Make the grid headers a bit darker for contrast and center them */
+/* Grid header: neutral and quiet (Linear / Attio style). Labels are muted,
+   small and medium weight; a hairline under the header, none between
+   columns. Centred as before, so values stay under their headings. */
 .ag-header-cell-label {
-  color: var(--color-primary-contrast);
+  color: var(--color-text-muted);
   text-align: center;
   justify-content: center;
   display: flex;
@@ -701,58 +726,59 @@
 
 .ag-header-cell {
   text-align: center;
-  background: var(--color-primary) !important;
-  color: var(--color-primary-contrast) !important;
-  border-bottom: 2px solid var(--color-border-strong) !important;
+  background: transparent !important;
+  color: var(--color-text-muted) !important;
 }
 
 .ag-header-cell .ag-header-cell-label .ag-header-cell-text {
   text-align: center;
   width: 100%;
-  color: var(--color-primary-contrast) !important;
-  font-weight: 600; /* Make text slightly bolder */
+  color: var(--color-text-muted) !important;
+  font-weight: 500;
 }
 
-/* Additional header centering for AG Grid */
 .ag-theme-quartz .ag-header-cell-label {
   justify-content: center !important;
-  color: var(--color-primary-contrast) !important;
-  font-family: var(--font-subheading);
+  color: var(--color-text-muted) !important;
 }
 
 .ag-theme-quartz .ag-header-cell-text {
   text-align: center !important;
-  color: var(--color-primary-contrast) !important;
-  font-family: var(--font-subheading);
+  color: var(--color-text-muted) !important;
 }
 
-/* Override AG Grid's default header styles */
 .ag-theme-quartz .ag-header-cell {
-  background: var(--color-primary) !important;
-  border-right: 1px solid var(--color-border-strong) !important;
-  font-family: var(--font-subheading);
+  background: transparent !important;
+  border-right: none !important;
 }
 
-/* Header row background */
 .ag-theme-quartz .ag-header-row {
-  background: var(--color-primary-hover) !important;
+  background: transparent !important;
 }
 
-/* Remove default header background */
 .ag-theme-quartz .ag-header {
-  background: var(--color-primary) !important;
-  border-bottom: 2px solid var(--color-border-strong) !important;
+  background: color-mix(in srgb, var(--color-text) 3%, var(--color-surface)) !important;
+  border-bottom: 1px solid var(--color-border) !important;
+}
+
+.ag-theme-quartz .ag-header-cell:hover {
+  background: color-mix(in srgb, var(--color-text) 4%, transparent) !important;
 }
 
 .ag-theme-quartz {
   --ag-background-color: var(--color-surface);
   --ag-foreground-color: var(--color-text);
   --ag-border-color: var(--color-border);
-  --ag-header-background-color: var(--color-primary);
-  --ag-header-foreground-color: var(--color-primary-contrast);
-  --ag-odd-row-background-color: color-mix(in srgb, var(--color-surface-alt) 70%, var(--color-surface));
-  --ag-row-hover-color: color-mix(in srgb, var(--color-primary) 12%, var(--color-surface));
-  --ag-selected-row-background-color: color-mix(in srgb, var(--color-primary) 20%, var(--color-surface));
+  /* Neutral header and no zebra stripes: data first, the accent only for
+     what is hovered or selected. */
+  --ag-header-background-color: color-mix(in srgb, var(--color-text) 3%, var(--color-surface));
+  --ag-header-foreground-color: var(--color-text-muted);
+  --ag-header-column-resize-handle-color: var(--color-border);
+  --ag-odd-row-background-color: var(--color-surface);
+  --ag-row-border-color: color-mix(in srgb, var(--color-border) 70%, transparent);
+  --ag-wrapper-border-radius: 0;
+  --ag-row-hover-color: color-mix(in srgb, var(--color-primary) 6%, var(--color-surface));
+  --ag-selected-row-background-color: color-mix(in srgb, var(--color-primary) 12%, var(--color-surface));
   --ag-range-selection-border-color: var(--color-primary);
   --ag-input-focus-border-color: var(--color-primary);
   --ag-font-family: var(--font-body);
@@ -773,15 +799,16 @@
 }
 
 .grid-wrapper .ag-theme-quartz .ag-header-cell-text {
-  font-size: 0.7rem;
-  font-weight: 700;
+  font-size: var(--ui-text-xs);
+  font-weight: 500;
+  letter-spacing: 0.01em;
 }
 
 .grid-wrapper .ag-theme-quartz .ag-cell,
 .grid-wrapper .ag-theme-quartz .ag-floating-filter-input,
 .grid-wrapper .ag-theme-quartz .ag-input-field-input,
 .grid-wrapper .ag-theme-quartz .ag-picker-field-wrapper {
-  font-size: 0.74rem;
+  font-size: var(--ui-text-sm);
 }
 
 .grid-wrapper .ag-theme-quartz .ag-cell-wrapper,

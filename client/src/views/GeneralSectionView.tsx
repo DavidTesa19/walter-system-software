@@ -1,3 +1,5 @@
+import { Archive, Crown, Hourglass, ListChecks } from "lucide-react";
+import { TAB_ICON } from "../ui/icons";
 import React, { useCallback } from "react";
 import EntitiesSystemView from "../entitiesSystem/EntitiesSystemView";
 import UsersGrid from "../usersGrid/UsersGrid";
@@ -44,10 +46,10 @@ const getGridViewFromRoute = (kind: GeneralSectionKind, activeView: AppView): Gr
   return "active";
 };
 
-const MODE_TABS: Array<{ key: GridView; label: string; icon: string }> = [
-  { key: "active", label: "Aktivní", icon: "📋" },
-  { key: "pending", label: "Ke schválení", icon: "⏳" },
-  { key: "archived", label: "Archiv", icon: "📦" },
+const MODE_TABS: Array<{ key: GridView; label: string; icon: React.ReactNode }> = [
+  { key: "active", label: "Aktivní", icon: <ListChecks {...TAB_ICON} /> },
+  { key: "pending", label: "Ke schválení", icon: <Hourglass {...TAB_ICON} /> },
+  { key: "archived", label: "Archiv", icon: <Archive {...TAB_ICON} /> },
 ];
 
 const GeneralSectionView: React.FC<GeneralSectionViewProps> = ({
@@ -98,7 +100,7 @@ const GeneralSectionView: React.FC<GeneralSectionViewProps> = ({
       title="Přepnout na Growth Club, se stejným výběrem tabulky a filtru"
       aria-label="Přepnout na Growth Club"
     >
-      👑
+      <Crown {...TAB_ICON} />
     </button>
   ) : null;
 
@@ -114,7 +116,7 @@ const GeneralSectionView: React.FC<GeneralSectionViewProps> = ({
               onClick={() => handleSelect(key)}
             >
               <span className="nav-tab__content">
-                <span>{icon} {label}</span>
+                <span className="nav-tab__label">{icon}{label}</span>
                 <ActivityIndicator count={getModeCount(key)} muted={currentGridView === key} title="Nepřečtené změny" />
               </span>
             </button>
