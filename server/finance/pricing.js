@@ -73,7 +73,9 @@ const findPrice = (table, model) => {
  * Estimated cost in USD of one logged call, or null when the model is not in
  * the price list (the call is still counted; it just has no price).
  */
-export function estimateCostUsd({ provider, model, feature, input = 0, output = 0, cacheRead = 0, cacheWrite = 0, units = 0 }) {
+// cacheWrite1h: the part of cacheWrite stored with Anthropic's 1-hour TTL,
+// billed at 2x input instead of the 5-minute write price (1.25x).
+export function estimateCostUsd({ provider, model, feature, input = 0, output = 0, cacheRead = 0, cacheWrite = 0, cacheWrite1h = 0, units = 0 }) {
   if (provider === 'brave') return units * BRAVE_USD_PER_SEARCH;
   // Jarvis's web searches: $10 per 1 000 on top of their tokens.
   if (provider === 'anthropic' && feature === 'web_search') return units * ANTHROPIC_USD_PER_SEARCH;
@@ -91,10 +93,12 @@ export function estimateCostUsd({ provider, model, feature, input = 0, output = 
   const price = table ? findPrice(table, model) : null;
   if (!price) return null;
   const perToken = (rate) => (rate ?? 0) / 1_000_000;
+  const longWrites = Math.min(Math.max(cacheWrite1h, 0), cacheWrite);
   return (
     input * perToken(price.input) +
     output * perToken(price.output) +
     cacheRead * perToken(price.cacheRead) +
-    cacheWrite * perToken(price.cacheWrite ?? price.input)
+    (cacheWrite - longWrites) * perToken(price.cacheWrite ?? price.input) +
+    longWrites * perToken(price.input * 2)
   );
 }

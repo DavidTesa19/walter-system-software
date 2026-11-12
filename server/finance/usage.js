@@ -89,7 +89,7 @@ const count = (value) => (Number.isFinite(Number(value)) && Number(value) > 0 ? 
  * units      characters (read-aloud), seconds (transcription without tokens)
  *            or requests (web search)
  */
-export function recordAiUsage({ provider, model = null, feature, userId = null, input, output, cacheRead, cacheWrite, units }) {
+export function recordAiUsage({ provider, model = null, feature, userId = null, input, output, cacheRead, cacheWrite, cacheWrite1h, units }) {
   if (!sink) return;
   const entry = {
     provider,
@@ -102,7 +102,9 @@ export function recordAiUsage({ provider, model = null, feature, userId = null, 
     cacheWrite: count(cacheWrite),
     units: Number(units) > 0 ? Number(units) : 0,
   };
-  entry.costUsd = estimateCostUsd(entry);
+  // The 1-hour part of the writes changes only the price; the log keeps one
+  // write count.
+  entry.costUsd = estimateCostUsd({ ...entry, cacheWrite1h: count(cacheWrite1h) });
   Promise.resolve()
     .then(() => sink(entry))
     .catch((error) => console.error('AI usage not recorded:', error.message));

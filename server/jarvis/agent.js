@@ -102,7 +102,9 @@ export function contentForHistory(content) {
   return content.filter((block, index) => index > lastFallback || block.type === 'text' || block.type === 'fallback');
 }
 
-const zeroUsage = () => ({ input: 0, output: 0, cacheRead: 0, cacheWrite: 0, webSearches: 0 });
+// cacheWrite1h is the part of cacheWrite written with the 1-hour TTL (billed
+// at 2x input instead of 1.25x); pricing.js prices the two apart.
+const zeroUsage = () => ({ input: 0, output: 0, cacheRead: 0, cacheWrite: 0, cacheWrite1h: 0, webSearches: 0 });
 
 // A compaction is billed on top of the reply: the top-level counts leave its
 // iteration out. Web searches are billed per search on top of their tokens.
@@ -114,6 +116,7 @@ const addUsage = (total, usage) => {
     total.output += part.output_tokens ?? 0;
     total.cacheRead += part.cache_read_input_tokens ?? 0;
     total.cacheWrite += part.cache_creation_input_tokens ?? 0;
+    total.cacheWrite1h += part.cache_creation?.ephemeral_1h_input_tokens ?? 0;
   }
   total.webSearches += usage.server_tool_use?.web_search_requests ?? 0;
 };
@@ -218,9 +221,13 @@ export async function runJarvisTurn({ model = JARVIS_MODEL, routing = null, hist
           },
           output_config: { effort: JARVIS_EFFORT },
           ...(profile.contextManagement ? { context_management: CONTEXT_MANAGEMENT } : {}),
-          // tools + system are the stable, cached prefix; top-level
-          // cache_control caches the growing conversation after it.
-          system: [{ type: 'text', text: SYSTEM_PROMPT, cache_control: { type: 'ephemeral' } }],
+          // tools + system are the stable, cached prefix (~23k tokens, the
+          // same for every user), kept for an hour: the team's questions are
+          // often more than 5 minutes apart, and each miss re-writes it
+          // (~$0.12 on Opus) where a hit costs ~$0.005. Top-level
+          // cache_control caches the growing conversation after it, on the
+          // default 5 minutes (a 1-hour entry must come before 5-minute ones).
+          system: [{ type: 'text', text: SYSTEM_PROMPT, cache_control: { type: 'ephemeral', ttl: '1h' } }],
           tools,
           cache_control: { type: 'ephemeral' },
           messages,
