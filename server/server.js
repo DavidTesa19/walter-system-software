@@ -1932,19 +1932,34 @@ app.use(/^\/project-(clients|partners|tipers)(?=\/|$)/, authenticateToken, requi
 app.use(/^\/growth-(clients|partners|tipers)(?=\/|$)/, authenticateToken, requireAccessScope('all', 'growth'), rejectViewerWrites);
 
 // A document belongs to one subject: opening, changing or sharing it by its id
-// needs the same section access as the subject itself (Budoucí funkce: anyone).
-// The public viewing link (/documents/public/:token) is not matched.
+// needs the same section access as the subject itself (Budoucí funkce: anyone),
+// and a viewer may open it but not change it. The public viewing link
+// (/documents/public/:token) is not matched.
 const documentScopes = (entityType = "") => {
   if (entityType === "future-functions") return null;
   if (entityType.startsWith("project-")) return ["all", "projects"];
   if (entityType.startsWith("growth-")) return ["all", "growth"];
   return ["all", "standard"];
 };
-app.use(/^\/documents\/\d+(?=\/|$)/, authenticateToken, (req, res, next) => {
+app.use(/^\/documents\/\d+(?=\/|$)/, authenticateToken, rejectViewerWrites, (req, res, next) => {
   if (req.method === "OPTIONS") return next();
   const id = Number(/^\/documents\/(\d+)/.exec(req.originalUrl)?.[1]);
   const doc = findDocumentInStore(readDb(), id);
   const allowed = doc ? documentScopes(doc.entityType) : null;
+  if (allowed && !allowed.includes(normalizeAccessScope(req.user.accessScope ?? req.user.access_scope))) {
+    return res.status(403).json({ error: "Insufficient scope permissions" });
+  }
+  next();
+});
+
+// A note hangs off a subject just like a document, so editing or deleting it by
+// its id follows the same rule. DELETE /notes/:id has no author check, so
+// without this any signed-in user could delete any note in any section.
+app.use(/^\/notes\/\d+(?=\/|$)/, authenticateToken, rejectViewerWrites, (req, res, next) => {
+  if (req.method === "OPTIONS") return next();
+  const id = Number(/^\/notes\/(\d+)/.exec(req.originalUrl)?.[1]);
+  const note = (readDb().notes || []).find((item) => item.id === id);
+  const allowed = note ? documentScopes(note.entityType) : null;
   if (allowed && !allowed.includes(normalizeAccessScope(req.user.accessScope ?? req.user.access_scope))) {
     return res.status(403).json({ error: "Insufficient scope permissions" });
   }

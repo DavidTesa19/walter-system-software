@@ -321,8 +321,12 @@ Neveřejné, `growth` = Growth Club) is enforced by `app.use` guards near the
 top of both servers (`requireAccessScope`, plus `rejectViewerWrites`):
 `/api/{client,partner,tiper}-{entities,commissions}`, `/clients|partners|tipers`,
 `/api/projects`, `/api/growth`, `/project-*`, `/growth-*` (their documents,
-folders and notes), and `/documents/:id/*` by the document's own subject
-(`documentScopes`; Budoucí funkce documents are open to everyone).
+folders and notes), and `/documents/:id/*` and `/notes/:id` by the subject
+the item hangs off (`documentScopes`; Budoucí funkce items are open to
+everyone). Those two id guards need `rejectViewerWrites` too: without it,
+until 2026-11-11, viewers could rename, archive and delete documents, and
+any user could delete any note (DELETE has no author check).
+`tests/section-guards.test.js` checks both.
 
 - **Write a guard's regex with a lookahead: `/^\/api\/projects(?=\/|$)/`.**
   Express 4 skips an `app.use` layer whose matched path is not followed by
