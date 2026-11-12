@@ -33,6 +33,18 @@ const COLOR_FIELDS: Array<{ key: keyof PaletteColors; label: string; description
   { key: 'border', label: 'Rámečky', description: 'Čáry, orámování a oddělovače.' }
 ];
 
+// The edit form shows the colours in two groups: the three that set the
+// overall look first, larger and with what they are for; the details after.
+const COLOR_GROUPS: Array<{ title: string; hint: string; main: boolean; keys: Array<keyof PaletteColors> }> = [
+  { title: 'Hlavní barvy', hint: 'určují celkový vzhled', main: true, keys: ['primary', 'background', 'text'] },
+  { title: 'Doplňkové', hint: 'detaily', main: false, keys: ['accent', 'surface', 'muted', 'border'] },
+];
+const SHORT_DESCRIPTIONS: Partial<Record<keyof PaletteColors, string>> = {
+  primary: 'tlačítka a aktivní prvky',
+  background: 'pozadí stránky',
+  text: 'hlavní text',
+};
+
 const TEMPLATE_COLORS: Record<Theme, PaletteColors> = {
   light: {
     primary: 'hsl(221, 83%, 55%)',
@@ -654,6 +666,8 @@ const FontSelect: React.FC<FontSelectProps> = ({
           onChange={handleInputChange}
           placeholder={placeholder}
           className="palette-form__input font-select__input"
+          // The value is shown in the font it names: the sample, in place.
+          style={{ fontFamily: value || undefined }}
           spellCheck={false}
           disabled={disabled}
           aria-haspopup="listbox"
@@ -781,28 +795,38 @@ const PaletteForm: React.FC<PaletteFormProps> = ({
       />
 
       <div className="palette-form__colors">
-        <div className="palette-form__color-tabs" role="tablist">
-          {COLOR_FIELDS.map(field => {
-            const isActive = activeKey === field.key;
-            return (
-              <button
-                key={field.key}
-                type="button"
-                role="tab"
-                aria-selected={isActive}
-                className={`palette-form__color-tab ${isActive ? 'is-active' : ''}`}
-                title={field.description}
-                onClick={() => setActiveKey(field.key)}
-                disabled={disabled}
-              >
-                <span className="palette-form__color-dot" style={{ background: draft.colors[field.key] }} />
-                <span>
-                  <strong>{field.label}</strong>
-                  <small>{field.description}</small>
-                </span>
-              </button>
-            );
-          })}
+        <div className="palette-form__color-groups" role="tablist" aria-label="Barvy motivu">
+          {COLOR_GROUPS.map(group => (
+            <div key={group.title} className={`palette-form__color-group${group.main ? ' is-main' : ''}`}>
+              <div className="palette-form__group-title">
+                {group.title} <span>{group.hint}</span>
+              </div>
+              <div className="palette-form__color-tabs">
+                {group.keys.map(key => {
+                  const field = COLOR_FIELDS.find(item => item.key === key)!;
+                  const isActive = activeKey === key;
+                  return (
+                    <button
+                      key={key}
+                      type="button"
+                      role="tab"
+                      aria-selected={isActive}
+                      className={`palette-form__color-tab ${isActive ? 'is-active' : ''}`}
+                      title={field.description}
+                      onClick={() => setActiveKey(key)}
+                      disabled={disabled}
+                    >
+                      <span className="palette-form__color-dot" style={{ background: draft.colors[key] }} />
+                      <span className="palette-form__color-text">
+                        <strong>{field.label}</strong>
+                        {group.main ? <small>{SHORT_DESCRIPTIONS[key]}</small> : null}
+                      </span>
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+          ))}
         </div>
         <div className="palette-form__picker" role="tabpanel">
           <div className="palette-form__picker-content">
@@ -860,13 +884,7 @@ const PaletteForm: React.FC<PaletteFormProps> = ({
       </div>
 
       <div className="palette-form__typography">
-        <div className="palette-form__typography-header">
-          <span className="palette-form__label">Typografie</span>
-          <p>
-            Zvolte fonty pro nadpisy, podnadpisy a tělo textu. Hodnota musí být platný CSS řetězec
-            <code>font-family</code>.
-          </p>
-        </div>
+        <div className="palette-form__group-title">Písma</div>
         <div className="palette-form__typography-grid">
           {FONT_FIELDS.map(field => {
             const controlId = `font-suggestions-${field.key}-${draft.mode}`;
@@ -887,13 +905,13 @@ const PaletteForm: React.FC<PaletteFormProps> = ({
                 >
                   {field.sample}
                 </span>
-                <code className="palette-form__font-value">{draft.typography[field.key]}</code>
               </label>
             );
           })}
         </div>
       </div>
 
+      <div className="palette-form__footer">
       <label className="palette-form__toggle">
         <input
           type="checkbox"
@@ -901,7 +919,7 @@ const PaletteForm: React.FC<PaletteFormProps> = ({
           onChange={event => onChange({ ...draft, is_active: event.target.checked })}
           disabled={disabled}
         />
-        <span>Nastavit jako výchozí paletu pro {draft.mode === 'light' ? 'světlý' : 'tmavý'} režim</span>
+        <span>Používat pro {draft.mode === 'light' ? 'světlý' : 'tmavý'} režim</span>
       </label>
 
       <div className="palette-form__actions">
@@ -911,6 +929,7 @@ const PaletteForm: React.FC<PaletteFormProps> = ({
         <button type="button" onClick={onSubmit} disabled={disabled}>
           Uložit
         </button>
+      </div>
       </div>
     </div>
   );
