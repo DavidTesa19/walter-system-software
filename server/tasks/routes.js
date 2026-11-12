@@ -8,6 +8,7 @@
 //   - a new personal task always goes on the author's own list
 
 import { z } from 'zod/v4';
+import { publishTaskChange, streamTaskEvents } from './events.js';
 import { createFileTaskStore, createPgTaskStore } from './store.js';
 
 export const TASK_LISTS = ['personal', 'team'];
@@ -61,6 +62,9 @@ const completionFields = (status, user) => {
 export function registerTaskRoutes(app, { authenticateToken, pool, dataDir }) {
   const store = pool ? createPgTaskStore(pool) : createFileTaskStore(dataDir);
 
+  // Live updates: one stream per open app, told which list changed (events.js).
+  app.get('/api/tasks/events', authenticateToken, streamTaskEvents);
+
   app.get('/api/tasks', authenticateToken, wrap('Úkoly se nepodařilo načíst.', async (req, res) => {
     const list = req.query.list === 'team' ? 'team' : 'personal';
     const ownerUserId = req.query.owner ? Number(req.query.owner) : req.user.id;
@@ -88,6 +92,7 @@ export function registerTaskRoutes(app, { authenticateToken, pool, dataDir }) {
       createdByName: req.user.username,
       ...(status === 'done' ? completionFields('done', req.user) : {}),
     });
+    publishTaskChange(task);
     res.status(201).json(task);
   }));
 
@@ -117,7 +122,11 @@ export function registerTaskRoutes(app, { authenticateToken, pool, dataDir }) {
       Object.assign(changes, completionFields(changes.status, req.user));
     }
 
-    res.json(await store.updateTask(id, changes));
+    const saved = await store.updateTask(id, changes);
+    // Moved between lists: both the old and the new one changed.
+    publishTaskChange(task);
+    if (saved && (saved.list !== task.list || saved.ownerUserId !== task.ownerUserId)) publishTaskChange(saved);
+    res.json(saved);
   }));
 
   app.delete('/api/tasks/:id', authenticateToken, wrap('Úkol se nepodařilo smazat.', async (req, res) => {
@@ -129,6 +138,7 @@ export function registerTaskRoutes(app, { authenticateToken, pool, dataDir }) {
       return res.status(403).json({ error: 'Tento úkol nemůžete smazat.' });
     }
     await store.deleteTask(id);
+    publishTaskChange(task);
     res.status(204).end();
   }));
 }

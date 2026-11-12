@@ -543,6 +543,21 @@ owner or an admin, the team list by anyone but viewers. The section
 Alt+T) share `useTaskList`, which drops a reload that started before a change
 finished — otherwise a quick second add vanishes until the next refresh.
 
+**Live updates** (instant for colleagues, ~0.2 s measured): every open tab
+keeps one Server-Sent Events stream, `GET /api/tasks/events`
+(`server/tasks/events.js`, `client/src/tasks/taskEvents.ts`). The task
+routes call `publishTaskChange(task)` after each create, edit or delete
+(both lists on a move); the message says only which list changed, and the
+list reloads itself through the normal GET (bursts coalesced, 150 ms). It is
+read with `fetch`, not `EventSource`, which cannot send the Authorization
+header; it reconnects by itself (1 s doubling to 30 s) and a reconnect
+reloads, since changes may have been missed. A 25 s heartbeat keeps proxies
+from closing it; the compression filter skips `text/event-stream`. The
+signal is in-process: right for Railway's single instance, but several
+replicas would need Postgres LISTEN/NOTIFY. Focus and a 5-minute poll remain
+as a fallback. **A new task route that writes must call
+`publishTaskChange`**, or colleagues see the change only on that fallback.
+
 Hlášení chyb: the bug button next to it opens `BugReportDialog` from any
 screen (title, description, severity, screenshots by Ctrl+V, drop, file or
 `getDisplayMedia` capture); the date, the screen and the author are filled in.

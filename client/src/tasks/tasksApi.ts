@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { apiDelete, apiGet, apiPatch, apiPost } from '../utils/api';
+import { subscribeTaskChanges } from './taskEvents';
 
 export type TaskList = 'personal' | 'team';
 export type TaskStatus = 'todo' | 'later' | 'done';
@@ -130,8 +131,8 @@ const scopeKey = (scope: TaskScope | null) => (scope ? (scope.list === 'team' ? 
 
 /**
  * One list, kept fresh: reloaded when another screen changes tasks, when the
- * window regains focus, and every minute while `live` (colleagues' changes to
- * the team list). Changes are applied to the screen at once and rolled back if
+ * window regains focus, and, while `live`, the moment anyone changes this list
+ * (the server's live stream, taskEvents.ts; every 5 minutes as a fallback). Changes are applied to the screen at once and rolled back if
  * the server refuses them.
  */
 export function useTaskList(scope: TaskScope | null, live = true) {
@@ -176,10 +177,25 @@ export function useTaskList(scope: TaskScope | null, live = true) {
   useEffect(() => {
     if (!live || !key) return undefined;
     const onChange = () => void reload();
+    // A colleague's change arrives over the live stream (taskEvents.ts) within
+    // a moment. Several in a row (a bulk add) are reloaded once.
+    let pending: number | undefined;
+    const reloadSoon = () => {
+      window.clearTimeout(pending);
+      pending = window.setTimeout(onChange, 150);
+    };
+    const unsubscribe = subscribeTaskChanges((change) => {
+      if (change.type === 'reconnected' || scopeKey(change.list === 'team' ? { list: 'team' } : { list: 'personal', ownerUserId: change.ownerUserId ?? 0 }) === key) {
+        reloadSoon();
+      }
+    });
     window.addEventListener(TASKS_CHANGED_EVENT, onChange);
     window.addEventListener('focus', onChange);
-    const timer = window.setInterval(onChange, 60_000);
+    // Safety net only, in case the stream is down without noticing.
+    const timer = window.setInterval(onChange, 5 * 60_000);
     return () => {
+      unsubscribe();
+      window.clearTimeout(pending);
       window.removeEventListener(TASKS_CHANGED_EVENT, onChange);
       window.removeEventListener('focus', onChange);
       window.clearInterval(timer);
