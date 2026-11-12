@@ -27,6 +27,7 @@ export const SHORTCUTS: Shortcut[] = [
   { keys: ["Ctrl +", "Ctrl −"], action: "Přiblížit / oddálit celou aplikaci (50–200 %, pamatuje si poslední nastavení)", where: "na Macu ⌘" },
   { keys: ["Ctrl 0"], action: "Přiblížení zpět na 100 %" },
   { keys: ["Ctrl + kolečko"], action: "Plynulé přiblížení myší nebo gestem na touchpadu" },
+  { keys: ["Dva prsty"], action: "Přiblížení v telefonu: roztáhnout nebo stáhnout prsty (posuvník je také v menu)", where: "telefon a tablet" },
   { keys: ["Ctrl+Z"], action: "Vrátit poslední změnu", where: "tabulky subjektů a zakázek, Budoucí funkce" },
   { keys: ["Ctrl+Y", "Ctrl+Shift+Z"], action: "Zopakovat vrácenou změnu", where: "tamtéž" },
   { keys: ["Esc"], action: "Zavřít okno, panel nebo dialog", where: "u Jarvise nejdřív zastaví nahrávání, čtení nebo odpověď" },

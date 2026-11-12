@@ -633,7 +633,8 @@
    use dvh, the height actually visible under a phone's address bar. */
 .mobile-topbar,
 .mobile-backdrop,
-.sidebar-mobile-theme {
+.sidebar-mobile-theme,
+.sidebar-mobile-zoom {
   display: none;
 }
 
@@ -719,6 +720,21 @@
   .sidebar-mobile-theme {
     display: inline-flex;
     margin-bottom: 0.5rem;
+  }
+
+  /* The footer's zoom control, which phones do not show (a pinch works too). */
+  .sidebar-mobile-zoom {
+    display: flex;
+    margin-bottom: 0.5rem;
+  }
+
+  .sidebar-mobile-zoom .zoom-control {
+    width: 100%;
+  }
+
+  .sidebar-mobile-zoom .zoom-control__slider {
+    flex: 1;
+    min-width: 0;
   }
 
   .main-content,

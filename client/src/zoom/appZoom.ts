@@ -9,6 +9,7 @@
 // Shortcuts (they replace the browser's own zoom while the app is open):
 // Ctrl/⌘ + = or +   zoom in      Ctrl/⌘ + −   zoom out
 // Ctrl/⌘ + 0        100 %        Ctrl/⌘ + mouse wheel / trackpad pinch
+// On a phone: a two-finger pinch, or the control in the menu drawer.
 
 import { installCoordinateShim, setShimZoom } from './coordinateShim';
 
@@ -125,4 +126,56 @@ export function startAppZoom() {
   window.addEventListener('storage', (event) => {
     if (event.key === STORAGE_KEY) apply(read());
   });
+
+  startPinchZoom();
+}
+
+// Phones and tablets: a two-finger pinch zooms the app itself, remembered
+// like the rest. (The browser's own pinch only magnifies the screen, does not
+// reflow it and is lost on reload; the Android app's WebView has none.)
+//
+// Distances are measured in screen pixels (screenX/Y): coordinateShim makes
+// clientX/Y answer in the zoomed page's pixels, which change as the zoom
+// does, and the pinch would chase its own tail. The zoom moves in 5 % steps,
+// at most once a frame, since every change reflows the whole app.
+function startPinchZoom() {
+  let pinch: { distance: number; zoom: number } | null = null;
+  let target: number | null = null;
+  let frame = 0;
+  const spread = (touches: TouchList) =>
+    Math.hypot(touches[0].screenX - touches[1].screenX, touches[0].screenY - touches[1].screenY);
+
+  document.addEventListener(
+    'touchstart',
+    (event) => {
+      if (event.touches.length === 2) {
+        const distance = spread(event.touches);
+        pinch = distance > 0 ? { distance, zoom: current } : null;
+      }
+    },
+    { passive: true }
+  );
+  document.addEventListener(
+    'touchmove',
+    (event) => {
+      if (!pinch || event.touches.length !== 2) return;
+      // The browser's own pinch-zoom would run on top of ours.
+      event.preventDefault();
+      target = Math.round(((pinch.zoom * spread(event.touches)) / pinch.distance) * 20) / 20;
+      if (!frame) {
+        frame = requestAnimationFrame(() => {
+          frame = 0;
+          if (target !== null) setZoom(target);
+        });
+      }
+    },
+    { passive: false }
+  );
+  const end = (event: TouchEvent) => {
+    if (event.touches.length < 2) pinch = null;
+  };
+  document.addEventListener('touchend', end, { passive: true });
+  document.addEventListener('touchcancel', end, { passive: true });
+  // iPhone Safari starts its own pinch as a "gesture" event.
+  document.addEventListener('gesturestart', (event) => event.preventDefault());
 }

@@ -121,6 +121,13 @@ before the first render (`startAppZoom()` in main.tsx).
   shim makes those APIs answer in the zoomed page's own pixels (as browser
   zoom does) and `elementFromPoint` take them; at 100 % it returns the
   native values untouched.
+- **Phones** (no footer): the same control sits in the menu drawer
+  (`.sidebar-mobile-zoom`), and a two-finger pinch drives the app zoom
+  (`startPinchZoom`, 5 % steps, once a frame; the browser's own pinch is
+  blocked, iOS via `gesturestart`). The pinch measures `screenX/Y`, not
+  `clientX/Y`: the shim rescales those with the zoom and the pinch would
+  chase itself. To test in the hidden pane, stub `requestAnimationFrame`
+  with a timeout and dispatch `TouchEvent`s with `Touch` objects.
 - `position: fixed` + `inset`/`right`/`bottom` need no change.
 - Media queries still see the real window width, so a zoomed small window
   keeps the desktop layout.

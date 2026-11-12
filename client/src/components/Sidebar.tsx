@@ -16,6 +16,7 @@ import WssLogo from '../assets/WssLogo';
 import ThemeToggleButton from './ThemeToggleButton';
 import InstallAppButton from './InstallAppButton';
 import { openHelp } from '../help/openHelp';
+import ZoomControl from '../zoom/ZoomControl';
 import { BUTTON_ICON } from '../ui/icons';
 import './Sidebar.css';
 
@@ -855,6 +856,10 @@ ${meta}`;
         <InstallAppButton />
         {/* Phones have no footer bar: the theme switch lives here instead. */}
         <ThemeToggleButton variant="footer" className="sidebar-mobile-theme" />
+        {/* …and so does the app zoom (also a two-finger pinch, appZoom.ts). */}
+        <div className="sidebar-mobile-zoom">
+          <ZoomControl />
+        </div>
         {user && (
           <div className="sidebar-account">
             <div className="user-info">
