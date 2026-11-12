@@ -11,12 +11,38 @@ export interface AresFillConfig {
 }
 
 // The changes ARES would make, each with a tick box: filling an empty field is
-// ticked, anything that replaces or adds to what is there is not.
-function AresFillPanel({ company, fill, onDone }: { company: AresCompany; fill: AresFillConfig; onDone: () => void }) {
+// ticked, anything that replaces or adds to what is there is not. Opening it
+// asks ARES once more, this time with the statutory body, for the name list.
+function AresFillPanel({ ico, company: basic, fill, saveLabel, onDone }: {
+  ico: string;
+  company: AresCompany;
+  fill: AresFillConfig;
+  saveLabel: string;
+  onDone: () => void;
+}) {
+  const [company, setCompany] = useState<AresCompany | null>(null);
+  useEffect(() => {
+    let current = true;
+    lookupAresCompany(ico, { people: true })
+      .then((full) => current && setCompany(full))
+      // Without the people the rest still works.
+      .catch(() => current && setCompany(basic));
+    return () => {
+      current = false;
+    };
+  }, [ico, basic]);
+
+  if (!company) return <div className="ico-fill ico-fill--done">Načítám údaje z ARES…</div>;
+  return <AresFillChoices company={company} fill={fill} saveLabel={saveLabel} onDone={onDone} />;
+}
+
+function AresFillChoices({ company, fill, saveLabel, onDone }: { company: AresCompany; fill: AresFillConfig; saveLabel: string; onDone: () => void }) {
   const plan = useMemo(() => planAresFill(company, fill.source), [company, fill.source]);
   const [selected, setSelected] = useState<Set<AresFillChange['id']>>(
     () => new Set(plan.changes.filter((change) => change.preselected).map((change) => change.id)),
   );
+  const nameChange = plan.changes.find((change) => change.id === 'name');
+  const [name, setName] = useState(nameChange?.to ?? '');
 
   const toggle = (id: AresFillChange['id']) =>
     setSelected((current) => {
@@ -25,35 +51,66 @@ function AresFillPanel({ company, fill, onDone }: { company: AresCompany; fill: 
       else next.add(id);
       return next;
     });
+  const allSelected = plan.changes.every((change) => selected.has(change.id));
+  const toggleAll = () => setSelected(allSelected ? new Set() : new Set(plan.changes.map((change) => change.id)));
 
   const apply = () => {
     if (!fill.source) return;
-    const updates = applyAresFill(plan, selected, fill.source);
+    const updates = applyAresFill(plan, selected, fill.source, { name });
     if (updates) fill.onApply(updates);
     onDone();
   };
 
   if (plan.changes.length === 0) {
-    return <div className="ico-fill ico-fill--done">Společnost i sídlo už odpovídají ARES.</div>;
+    return <div className="ico-fill ico-fill--done">Vše, co ARES zná, už je vyplněno.</div>;
   }
 
   return (
     <div className="ico-fill" role="group" aria-label="Doplnit z ARES">
-      {plan.changes.map((change) => (
-        <label key={change.id} className="ico-fill-row">
-          <input type="checkbox" checked={selected.has(change.id)} onChange={() => toggle(change.id)} />
-          <span className="ico-fill-text">
-            <span className="ico-fill-label">
-              {change.label} <span className="ico-fill-action">({change.action})</span>
-            </span>
-            {change.from && <span className="ico-fill-from">{change.from}</span>}
-            <span className="ico-fill-to">{change.to}</span>
-          </span>
+      {plan.changes.length > 1 && (
+        <label className="ico-fill-row ico-fill-row--all">
+          <input type="checkbox" checked={allSelected} onChange={toggleAll} />
+          <span className="ico-fill-label">Vybrat vše</span>
         </label>
+      )}
+      {plan.changes.map((change) => (
+        <div key={change.id} className="ico-fill-row">
+          <input
+            id={`ico-fill-${change.id}`}
+            type="checkbox"
+            checked={selected.has(change.id)}
+            onChange={() => toggle(change.id)}
+          />
+          <span className="ico-fill-text">
+            <label className="ico-fill-label" htmlFor={`ico-fill-${change.id}`}>
+              {change.label} <span className="ico-fill-action">({change.action})</span>
+            </label>
+            {change.from && <span className="ico-fill-from">{change.from}</span>}
+            {change.options && change.options.length > 1 ? (
+              <select
+                className="ico-fill-select"
+                value={name}
+                aria-label="Které jméno"
+                onChange={(event) => {
+                  setName(event.target.value);
+                  setSelected((current) => new Set(current).add('name'));
+                }}
+              >
+                {change.options.map((option) => (
+                  <option key={option.value} value={option.value}>
+                    {option.label}
+                  </option>
+                ))}
+              </select>
+            ) : (
+              <span className="ico-fill-to">{change.to}</span>
+            )}
+          </span>
+        </div>
       ))}
       <div className="ico-fill-actions">
         <button type="button" className="ico-fill-button ico-fill-button--primary" disabled={selected.size === 0} onClick={apply}>
-          Uložit vybrané
+          {saveLabel}
         </button>
         <button type="button" className="ico-fill-button" onClick={onDone}>
           Zrušit
@@ -80,13 +137,12 @@ type Lookup =
   | { state: 'found'; company: AresCompany }
   | { state: 'error'; message: string };
 
-function AresCard({ ico, fill }: { ico: string; fill?: AresFillConfig }) {
+function AresCard({ ico, fill, saveLabel = 'Uložit vybrané' }: { ico: string; fill?: AresFillConfig; saveLabel?: string }) {
   const [lookup, setLookup] = useState<Lookup>({ state: 'loading' });
   const [filling, setFilling] = useState(false);
-  const hasChanges = useMemo(
-    () => Boolean(fill && lookup.state === 'found' && planAresFill(lookup.company, fill.source).changes.length > 0),
-    [fill, lookup],
-  );
+  // The button shows whenever there is a fill: the name list needs a second
+  // lookup, so "nothing to fill" is only known once the panel is open.
+  const hasChanges = Boolean(fill && lookup.state === 'found');
 
   useEffect(() => {
     let current = true;
@@ -134,15 +190,21 @@ function AresCard({ ico, fill }: { ico: string; fill?: AresFillConfig }) {
           </button>
         )}
       </div>
-      {fill && filling && <AresFillPanel company={company} fill={fill} onDone={() => setFilling(false)} />}
+      {fill && filling && <AresFillPanel ico={ico} company={company} fill={fill} saveLabel={saveLabel} onDone={() => setFilling(false)} />}
     </div>
   );
 }
 
 // The create form's IČO input: the draft keeps whatever is typed (it is
 // checked again on submit); a wrong number is pointed out once the user leaves
-// the field, and a valid one shows its ARES card straight away.
-export function DraftIcoInput({ value, disabled, onChange }: { value: string; disabled?: boolean; onChange: (value: string) => void }) {
+// the field, and a valid one shows its ARES card straight away, with
+// "Doplnit z ARES" filling the rest of the form.
+export function DraftIcoInput({ value, disabled, onChange, fill }: {
+  value: string;
+  disabled?: boolean;
+  onChange: (value: string) => void;
+  fill?: AresFillConfig;
+}) {
   const [touched, setTouched] = useState(false);
   const check = checkIco(value);
   const showError = !check.ok && (touched || value.replace(/\s+/g, '').length >= 8);
@@ -162,7 +224,7 @@ export function DraftIcoInput({ value, disabled, onChange }: { value: string; di
         aria-invalid={showError}
       />
       {showError && !check.ok && <div className="ico-field-error" role="alert">{check.error}</div>}
-      {check.ok && check.value && <AresCard ico={check.value} />}
+      {check.ok && check.value && <AresCard ico={check.value} fill={fill} saveLabel="Vyplnit do formuláře" />}
     </div>
   );
 }

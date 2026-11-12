@@ -113,7 +113,11 @@ export async function runAresBulk(
     try {
       const company = await lookupAresCompany(candidate.ico);
       const plan = planAresFill(company, candidate.source);
-      const selected = new Set(plan.changes.filter((change) => change.preselected).map((change) => change.id));
+      // In bulk only the company and the address: a name or a note is a
+      // choice to make per subject, in its profile.
+      const selected = new Set(
+        plan.changes.filter((change) => change.preselected && (change.id === 'company' || change.id === 'region')).map((change) => change.id),
+      );
       const updates = applyAresFill(plan, selected, candidate.source);
       if (!updates) {
         result = { ref: candidate.ref, outcome: 'nothing', detail: 'Není co doplnit bez přepsání vyplněných údajů.' };

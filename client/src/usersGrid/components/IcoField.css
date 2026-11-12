@@ -166,6 +166,36 @@
 
 .ico-fill-label {
   font-weight: 600;
+  cursor: pointer;
+}
+
+/* "Vybrat vše": a quiet line above the changes. */
+.ico-fill-row--all {
+  padding-bottom: 0.3rem;
+  border-bottom: 1px dashed var(--color-border, rgba(100, 116, 139, 0.18));
+}
+
+.ico-fill-row--all .ico-fill-label {
+  font-weight: 500;
+  color: var(--color-text-muted, #64748b);
+}
+
+/* The ARES note keeps its two lines. */
+.ico-fill-to {
+  white-space: pre-line;
+}
+
+/* The name picker: the statutory body's members and the company's name. */
+.ico-fill-select {
+  margin-top: 0.2rem;
+  max-width: 100%;
+  height: var(--ui-control-h-sm, 28px);
+  padding: 0 0.5rem;
+  border: 1px solid var(--color-border, rgba(100, 116, 139, 0.3));
+  border-radius: var(--ui-radius-sm, 6px);
+  background: var(--color-surface, #ffffff);
+  color: var(--color-text, #0f172a);
+  font: inherit;
 }
 
 .ico-fill-action {

@@ -48,6 +48,8 @@ export interface AresCompany {
   zanik?: string;
   stav: "aktivní" | "v likvidaci" | "zaniklý" | "neaktivní";
   odkaz: string;
+  /** Only with `{ people: true }`: the statutory body (jednatel, board), name and role. */
+  osoby?: Array<{ jmeno: string; funkce: string | null }>;
 }
 
 export const aresUrl = (ico: string) => `https://ares.gov.cz/ekonomicke-subjekty?ico=${ico}`;
@@ -56,12 +58,15 @@ export const aresUrl = (ico: string) => `https://ares.gov.cz/ekonomicke-subjekty
 // and what ARES says about a number does not change by the minute.
 const lookups = new Map<string, Promise<AresCompany>>();
 
-export const lookupAresCompany = (ico: string): Promise<AresCompany> => {
-  const cached = lookups.get(ico);
+// `people`: also the statutory body (one more register request), for
+// "Doplnit z ARES" to offer as the contact's name.
+export const lookupAresCompany = (ico: string, { people = false }: { people?: boolean } = {}): Promise<AresCompany> => {
+  const key = people ? `${ico}+osoby` : ico;
+  const cached = lookups.get(key);
   if (cached) return cached;
-  const request = apiGet<AresCompany>(`/api/ares/ico/${ico}`);
-  lookups.set(ico, request);
+  const request = apiGet<AresCompany>(`/api/ares/ico/${ico}${people ? "?osoby=1" : ""}`);
+  lookups.set(key, request);
   // A failure is not remembered, so a retry (or ARES coming back) can work.
-  request.catch(() => lookups.delete(ico));
+  request.catch(() => lookups.delete(key));
   return request;
 };

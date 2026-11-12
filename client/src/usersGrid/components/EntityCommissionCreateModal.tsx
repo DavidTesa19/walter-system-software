@@ -195,7 +195,25 @@ const DraftField: React.FC<DraftFieldProps> = ({ field, value, onChange, disable
   }
 
   if (field.type === "ico") {
-    return <DraftIcoInput value={Array.isArray(value) ? "" : value} disabled={disabled} onChange={(next) => onChange(field.key, next)} />;
+    return (
+      <DraftIcoInput
+        value={Array.isArray(value) ? "" : value}
+        disabled={disabled}
+        onChange={(next) => onChange(field.key, next)}
+        // "Doplnit z ARES" writes into the draft: name, company tree, Kraj /
+        // Lokalita and notes, key by key like a tree edit.
+        fill={
+          field.hierarchySource
+            ? {
+                source: field.hierarchySource,
+                onApply: (updates) => {
+                  for (const [key, entry] of Object.entries(updates)) onChange(key, entry ?? "");
+                },
+              }
+            : undefined
+        }
+      />
+    );
   }
 
   if (field.type === "date") {

@@ -199,15 +199,24 @@ export async function searchByName(name, { city, limit = 10, signal } = {}) {
   };
 }
 
-// The app's IČO field: what ARES says about one number. The register's own
-// data only — no people (that is for Jarvis, on request).
+// The app's IČO field: what ARES says about one number. With `?osoby=1`
+// ("Doplnit z ARES", to offer a contact name) it adds the statutory body's
+// current members as `osoby`: name and role only, the same public register
+// entry the profile links to. Shareholders, capital and anything else from
+// the commercial register stay out (Jarvis has them, on request).
 export function registerAresRoutes(app, { authenticateToken }) {
   app.get('/api/ares/ico/:ico', authenticateToken, async (req, res) => {
     const ico = normalizeIco(req.params.ico);
     if (!ico || !isValidIco(ico)) return res.status(400).json({ error: 'Neplatné IČO.' });
+    const withPeople = req.query.osoby === '1';
     try {
-      const company = await lookupByIco(ico, { people: false });
+      const company = await lookupByIco(ico, { people: withPeople });
       if (!company) return res.status(404).json({ error: 'IČO v ARES není.' });
+      if (withPeople) {
+        const register = company.obchodni_rejstrik;
+        delete company.obchodni_rejstrik;
+        company.osoby = (register?.statutarni_organ ?? []).map(({ jmeno, funkce }) => ({ jmeno, funkce: funkce ?? null }));
+      }
       res.json(company);
     } catch (error) {
       res.status(error instanceof AresError && error.status === 400 ? 400 : 502).json({

@@ -413,7 +413,22 @@ leading zeros); only a valid IČO is saved — from the profile panel and create
 form (`IcoField.tsx`, field type `"ico"`), the grid column, and on create.
 The server does not validate it. Under the number, the profile shows what
 ARES says about it, through `GET /api/ares/ico/:ico` (`server/ares.js`, the
-same module Jarvis's `company_registry` uses). IČO is shared across a
+same module Jarvis's `company_registry` uses).
+
+**Doplnit z ARES** (`usersGrid/aresFill.ts`, panel in `IcoField.tsx`), in the
+profile and in the create form (there it writes into the draft, "Vyplnit do
+formuláře"): Jméno / Název (a sole trader's registered name, or for a company
+a statutory-body member picked from a list, chairman / jednatel first, or the
+company's own name), Společnost, Kraj / Lokalita (the seat) and a Popis /
+Poznámky line (legal form, DIČ, VAT payer, founding date, statutory body).
+Empty fields are pre-ticked, nothing is overwritten unasked; a subject whose
+name is only the profile's fallback (its company or code, or "Nový klient")
+counts as empty. Opening the panel asks ARES again with `?osoby=1`, which adds
+`osoby` (the statutory body's names and roles, nothing else from the
+commercial register). ARES has no phone, e-mail or website. The bulk fill in
+Kvalita dat still writes only Společnost and Kraj / Lokalita. ARES dates are
+formatted from the text (`czDate`), never through `Date`, which shows the day
+before west of Greenwich. IČO is shared across a
 subject's sections and roles (`section-linking.js`, `SUBJECT_SHARED_FIELDS`).
 A new subject field like this one needs: the ALTER in `db.js` (all nine
 entity tables), the public-table INSERTs and the commission joins
