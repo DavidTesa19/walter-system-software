@@ -1,6 +1,6 @@
 import {
   Archive, Bot, Briefcase, CalendarDays, ChartColumn, ChartPie, ChevronDown, ChevronRight, CircleHelp, ClipboardCheck,
-  Ellipsis, Flag, Globe, Hourglass, LayoutGrid, Lightbulb, ListChecks, Lock, MessagesSquare, Palette, Rocket,
+  Crown, Ellipsis, Flag, Globe, Hourglass, LayoutGrid, Lightbulb, ListChecks, Lock, MessagesSquare, Palette,
   ShieldCheck, SquareCheckBig, UserCog, UsersRound, Wallet,
 } from 'lucide-react';
 import React, { useState, useEffect, useRef } from 'react';
@@ -94,7 +94,7 @@ type SidebarSingleItem = {
 const ICON = { size: 18, strokeWidth: 1.75, 'aria-hidden': true } as const;
 const Icons = {
   Tables: () => <LayoutGrid {...ICON} />,
-  Growth: () => <Rocket {...ICON} />,
+  Growth: () => <Crown {...ICON} />,
   Public: () => <Globe {...ICON} />,
   Private: () => <Lock {...ICON} />,
   Subjects: () => <UsersRound {...ICON} />,
