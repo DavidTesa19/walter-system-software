@@ -123,6 +123,17 @@ const VIEW_LABELS: Record<AppView, string> = {
   growth_subjects_archived: 'Growth Club - Subjekty - Archiv'
 };
 
+// The phone's top bar names a table screen like its page title on a computer
+// ("Zakázky · Veřejné"): the status (Aktivní / Ke schválení / Archiv) is the
+// tab right under it. VIEW_LABELS stays as it is for search results, bug
+// reports and analytics.
+const topbarTitle = (view: AppView): string => {
+  const match = /^(?:(projects|growth)_)?(subjects_|entities_)?(?:active|pending|archived)$/.exec(view);
+  if (!match) return VIEW_LABELS[view];
+  const section = match[1] === 'projects' ? 'Neveřejné' : match[1] === 'growth' ? 'Growth Club' : 'Veřejné';
+  return `${match[2] ? 'Subjekty' : 'Zakázky'} · ${section}`;
+};
+
 // Deliberately short: a search result pairs this with the view label
 // ("Partneři › Aktuální subjekty"), so spelling out "Subjekty - Partneři" here
 // would just repeat the half of the line that follows it.
@@ -690,7 +701,7 @@ const AppContent: React.FC = () => {
               <line x1="3" y1="18" x2="21" y2="18" />
             </svg>
           </button>
-          <span className="mobile-topbar-title">{VIEW_LABELS[effectiveView]}</span>
+          <span className="mobile-topbar-title">{topbarTitle(effectiveView)}</span>
         </header>
         {menuOpen && <div className="mobile-backdrop" onClick={() => setMenuOpen(false)} aria-hidden="true" />}
         <Sidebar

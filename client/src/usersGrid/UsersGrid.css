@@ -527,54 +527,48 @@
   font-size: 0.92rem;
 }
 
-/* In-row delete button styles (pinned column) */
-.inrow-delete-btn {
-  background: var(--color-surface-alt);
+/* In-row buttons (approve, archive, delete): quiet ghost icons, as in
+   Linear / Attio. A row of 28 px bordered circles with shadows read as
+   clutter on every line; the colour now comes only on hover. */
+.inrow-delete-btn,
+.inrow-approve-btn,
+.inrow-archive-btn {
+  background: transparent;
   color: var(--color-text-muted);
-  border: 1px solid var(--color-border);
+  border: 1px solid transparent;
   padding: 0;
-  border-radius: 999px;
+  border-radius: var(--ui-radius-sm);
   cursor: pointer;
-  transition: all 0.15s ease;
-  width: 28px;
-  height: 28px;
+  transition: background-color var(--ui-transition), color var(--ui-transition),
+    border-color var(--ui-transition);
+  width: 26px;
+  height: 26px;
   display: flex;
   align-items: center;
   justify-content: center;
   margin: 0 auto;
-  box-shadow: var(--color-shadow-sm);
+  box-shadow: none;
 }
 
-/* In-row approve/restore button styles (pinned column) */
+.inrow-delete-btn:focus-visible,
+.inrow-approve-btn:focus-visible,
+.inrow-archive-btn:focus-visible {
+  outline: 2px solid color-mix(in srgb, var(--color-primary) 55%, transparent);
+  outline-offset: 1px;
+}
+
+/* Approve keeps a hint of green: it is the one action a row is waiting on. */
 .inrow-approve-btn {
-  background: color-mix(in srgb, var(--color-success) 12%, var(--color-surface));
-  color: var(--color-success-hover);
-  border: 1px solid color-mix(in srgb, var(--color-success) 35%, var(--color-border));
-  padding: 0;
-  border-radius: 999px;
-  cursor: pointer;
-  transition: all 0.15s ease;
-  width: 28px;
-  height: 28px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  margin: 0 auto;
-  box-shadow: var(--color-shadow-sm);
+  color: var(--color-success-hover, var(--color-success));
 }
 
 .inrow-approve-btn:hover {
-  background: var(--color-success);
-  color: var(--color-success-contrast);
-  border-color: var(--color-success);
-  transform: translateY(-1px);
+  background: color-mix(in srgb, var(--color-success) 14%, transparent);
+  color: var(--color-success-hover, var(--color-success));
 }
 
 .inrow-approve-btn:active {
-  background: var(--color-success-hover);
-  color: var(--color-success-contrast);
-  border-color: var(--color-success-hover);
-  transform: scale(1.02);
+  background: color-mix(in srgb, var(--color-success) 24%, transparent);
 }
 
 .inrow-approve-btn svg {
@@ -598,53 +592,25 @@
 }
 
 .inrow-delete-btn:hover {
-  background: var(--color-danger);
-  color: var(--color-danger-contrast);
-  border-color: var(--color-danger);
-  transform: translateY(-1px);
+  background: color-mix(in srgb, var(--color-danger) 12%, transparent);
+  color: var(--color-danger);
 }
 
 .inrow-delete-btn:active {
-  background: var(--color-danger-hover);
-  color: var(--color-danger-contrast);
-  border-color: var(--color-danger-hover);
-  transform: scale(1.02);
+  background: color-mix(in srgb, var(--color-danger) 22%, transparent);
 }
 
 .inrow-delete-btn svg {
   pointer-events: none;
 }
 
-/* In-row archive button styles (pinned column) */
-.inrow-archive-btn {
-  background: var(--color-surface-alt);
-  color: var(--color-text-muted);
-  border: 1px solid var(--color-border);
-  padding: 0;
-  border-radius: 999px;
-  cursor: pointer;
-  transition: all 0.15s ease;
-  width: 28px;
-  height: 28px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  margin: 0 auto;
-  box-shadow: var(--color-shadow-sm);
-}
-
 .inrow-archive-btn:hover {
-  background: var(--color-primary);
-  color: var(--color-primary-contrast);
-  border-color: var(--color-primary);
-  transform: translateY(-1px);
+  background: color-mix(in srgb, var(--color-primary) 12%, transparent);
+  color: var(--color-primary);
 }
 
 .inrow-archive-btn:active {
-  background: var(--color-primary-hover);
-  color: var(--color-primary-contrast);
-  border-color: var(--color-primary-hover);
-  transform: scale(1.02);
+  background: color-mix(in srgb, var(--color-primary) 22%, transparent);
 }
 
 .inrow-archive-btn svg {
@@ -874,10 +840,13 @@
     padding: 0.5rem 0.5rem 0.25rem;
   }
 
+  /* One row on a phone: Klienti / Partneři / Tipaři, the cards/table switch
+     and +. Undo/redo (keyboard shortcuts) and the section switch (also in
+     the menu) are left out, and so are the tab icons. */
   .header-section {
-    flex-wrap: wrap;
+    flex-wrap: nowrap;
     justify-content: flex-start;
-    gap: 0.5rem;
+    gap: 6px;
     margin-bottom: 0.5rem;
   }
 
@@ -886,11 +855,18 @@
   }
 
   .header-tabs-group {
-    flex: 1 1 100%;
+    flex: 1 1 auto;
     min-width: 0;
   }
 
+  .header-tabs-group .section-toggle-btn,
+  .header-tabs-group .nav-tab svg,
+  .header-actions .undo-redo-btn {
+    display: none;
+  }
+
   .navigation-tabs {
+    flex: 1;
     min-width: 0;
     max-width: 100%;
     overflow-x: auto;
@@ -902,12 +878,24 @@
   }
 
   .nav-tab {
-    padding: 0.4rem 0.7rem;
-    font-size: 0.85rem;
+    flex: 1 1 auto;
+    padding: 0 8px;
+    font-size: var(--ui-text-sm);
+  }
+
+  .nav-tab__content {
+    justify-content: center;
+    width: 100%;
   }
 
   .header-actions {
-    flex: 1 1 100%;
-    justify-content: flex-end;
+    flex: none;
+    gap: 6px;
+  }
+
+  .add-user-btn {
+    width: var(--ui-control-h);
+    padding: 0;
+    justify-content: center;
   }
 }

@@ -64,6 +64,35 @@ browser's serif to a modern sans-serif. It must look right the first time.
 - **Check it before calling it done**: open the new UI in the preview and
   confirm `getComputedStyle(el).fontFamily` of its text, inputs and buttons
   is the palette font, take a screenshot, and check dark mode and phone width.
+  Dark mode is the app's own switch (`data-theme` on `<html>`), not the
+  system setting. In the hidden pane CSS transitions never finish, so a
+  colour measured right after switching is a frozen mid-transition value:
+  run `document.getAnimations().forEach(a => a.finish())` first.
+
+### The redesign's system (2026-11-12, "clean & dense, like Linear / Attio")
+
+- **Scale tokens** in `styles/global.css`: `--ui-text-xs…xl` (11.5–18 px),
+  `--ui-control-h` 32 px (`-sm` 28), `--ui-radius-sm/md/lg` 6/8/12,
+  `--ui-shadow-xs` (resting) / `--ui-shadow-pop` (menus, popovers),
+  `--ui-transition`. Use these, not new one-off sizes; colours stay the
+  palette's `--color-*`.
+- **Icons are Lucide** (`lucide-react`, pinned), never hand-written inline
+  SVG. Sizes from `ui/icons.ts`: `TAB_ICON` (15) in tabs and small buttons,
+  `BUTTON_ICON` (16) in toolbar buttons; the sidebar uses 18 / 1.75.
+- **Tabs are a segmented control** (`.navigation-tabs` / `.nav-tab` in
+  UsersGrid.css): the active tab is a raised surface, not a filled colour.
+- **Row buttons are ghost icons** (`.inrow-*-btn`): transparent until hover,
+  colour only on hover (approve keeps its green). No bordered circles.
+- **Page titles say where you are**: "Zakázky · Veřejné", "Subjekty ·
+  Growth Club" (the section views pass `title`). The phone top bar shows the
+  same (`topbarTitle` in App.tsx); `VIEW_LABELS` stays for search, bug
+  reports and analytics.
+- **Phone tables** default to cards (`usersGrid/phone/`: `PhoneCardRow`, a
+  full-width ag-Grid row; `usePhoneCardGrid` remounts the grid by mode) with
+  a cards / table switch (`PhoneViewToggle`, `walterGrid.phoneView`). On a
+  phone the header is one row (tabs, switch, +): undo/redo, the section
+  switch and tab icons are hidden, and the floating ?, bug and Úkoly buttons
+  become 32 px icons inside the top bar.
 
 ## App zoom (`client/src/zoom/`)
 

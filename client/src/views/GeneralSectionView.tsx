@@ -125,9 +125,9 @@ const GeneralSectionView: React.FC<GeneralSectionViewProps> = ({
       </div>
 
       {kind === "subjects" ? (
-        <EntitiesSystemView viewMode={currentGridView} searchTarget={searchTarget} sectionToggle={sectionToggle} />
+        <EntitiesSystemView title="Subjekty · Veřejné" viewMode={currentGridView} searchTarget={searchTarget} sectionToggle={sectionToggle} />
       ) : (
-        <UsersGrid viewMode={currentGridView} searchTarget={searchTarget} sectionToggle={sectionToggle} />
+        <UsersGrid title="Zakázky · Veřejné" viewMode={currentGridView} searchTarget={searchTarget} sectionToggle={sectionToggle} />
       )}
     </div>
   );

@@ -18,32 +18,33 @@
   pointer-events: auto;
 }
 
+/* Same size and quiet look as the toolbar buttons beside them (32 px, 8 px
+   corners, a hairline shadow), not floating cards. */
 .floating-tool {
   position: relative;
-  height: 38px;
-  min-width: 38px;
+  height: var(--ui-control-h, 32px);
+  min-width: var(--ui-control-h, 32px);
+  box-sizing: border-box;
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  gap: 7px;
-  padding: 0 11px;
-  border: 1px solid color-mix(in srgb, var(--color-border, rgba(15, 23, 42, 0.14)) 90%, transparent);
-  border-radius: 12px;
-  background: color-mix(in srgb, var(--color-surface, #ffffff) 92%, transparent);
+  gap: 6px;
+  padding: 0 10px;
+  border: 1px solid var(--color-border, rgba(15, 23, 42, 0.14));
+  border-radius: var(--ui-radius-md, 8px);
+  background: var(--color-surface, #ffffff);
   color: var(--color-text, #0f172a);
   font: inherit;
-  font-size: 0.86rem;
-  font-weight: 650;
-  box-shadow: 0 8px 22px -10px rgba(15, 23, 42, 0.35), 0 1px 3px rgba(15, 23, 42, 0.08);
-  backdrop-filter: blur(10px);
+  font-size: var(--ui-text-sm, 12.5px);
+  font-weight: 600;
+  box-shadow: var(--ui-shadow-xs, 0 1px 2px rgba(15, 23, 42, 0.06));
   cursor: pointer;
-  transition: transform 0.15s ease, box-shadow 0.15s ease, border-color 0.15s ease, color 0.15s ease;
+  transition: background-color 0.12s ease, border-color 0.12s ease, color 0.12s ease;
 }
 
 .floating-tool:hover {
-  transform: translateY(-1px);
-  border-color: color-mix(in srgb, var(--color-primary, #2563eb) 50%, transparent);
-  box-shadow: 0 12px 26px -10px rgba(15, 23, 42, 0.4), 0 1px 3px rgba(15, 23, 42, 0.08);
+  border-color: color-mix(in srgb, var(--color-primary, #2563eb) 40%, var(--color-border, rgba(15, 23, 42, 0.14)));
+  background: color-mix(in srgb, var(--color-text, #0f172a) 3%, var(--color-surface, #ffffff));
 }
 
 .floating-tool:focus-visible {
@@ -259,11 +260,41 @@
 
 .floating-tool--help {
   padding: 0;
-  font-weight: 700;
-  font-size: 1rem;
   color: var(--color-text-muted, #64748b);
 }
 
 .floating-tool--help:hover {
   color: var(--color-primary, #2563eb);
+}
+
+/* Phones: the buttons become icons in the top bar (Sidebar.css keeps the
+   title clear of them). Úkoly drops its word; its count sits on the icon. */
+@media (max-width: 768px) {
+  .floating-tools {
+    top: calc((var(--mobile-topbar-height, 52px) - var(--ui-control-h, 32px)) / 2);
+    right: 8px;
+    gap: 2px;
+  }
+
+  .floating-tool {
+    width: var(--ui-control-h, 32px);
+    padding: 0;
+    border-color: transparent;
+    background: transparent;
+    box-shadow: none;
+  }
+
+  .floating-tool-label {
+    display: none;
+  }
+
+  .floating-tool-badge {
+    position: absolute;
+    top: -2px;
+    right: -3px;
+    min-width: 16px;
+    height: 16px;
+    padding: 0 4px;
+    font-size: 0.62rem;
+  }
 }

@@ -34,7 +34,10 @@ export default function PhoneCardRow({ data, context }: PhoneCardRowProps) {
   const person = text(data.name);
   const company = text(resolveRowEntityValue(data, 'company'));
   const title = isSubject ? company || person : text(data.position) || text(data.project_name) || company || person;
-  const subtitle = isSubject ? (company && person ? person : '') : [company, person].filter(Boolean).join(' · ');
+  // Whatever the title already shows is not repeated under it.
+  const subtitle = isSubject
+    ? company && person ? person : ''
+    : [company, person].filter((part) => part && part !== title).join(' · ');
   const phone = text(data.mobile || data.phone);
   const place = [text(resolveRowEntityValue(data, 'location')), text(resolveRowEntityValue(data, 'region'))].filter(Boolean)[0] ?? '';
   const status = !isSubject && data.state ? getWorkflowStatusOption(data.state) : null;

@@ -133,7 +133,7 @@ const GrowthSectionView: React.FC<GrowthSectionViewProps> = ({
           viewMode={currentGridView}
           systemNamespace="growth"
           storageKey={GROWTH_SUBJECTS_TABLE_STORAGE_KEY}
-          title="Growth Club - Subjekty"
+          title="Subjekty · Growth Club"
           searchTarget={searchTarget}
           sectionToggle={sectionToggle}
         />
@@ -143,7 +143,7 @@ const GrowthSectionView: React.FC<GrowthSectionViewProps> = ({
           searchTarget={searchTarget}
           systemNamespace="growth"
           storageKey={GROWTH_COMMISSIONS_TABLE_STORAGE_KEY}
-          title="Growth Club - Zakázky"
+          title="Zakázky · Growth Club"
           sectionToggle={sectionToggle}
         />
       )}

@@ -34,8 +34,13 @@
   --ui-transition: 120ms ease;
 }
 
+/* The page behind the app is the palette's background: without it the
+   browser's own (black in a dark window) showed through as a strip above the
+   content and between the sidebar and the screen. */
 html,
 body {
+  background: var(--color-background, #f8fafc);
+  color: var(--color-text, #0f172a);
   font-family: var(--font-body, var(--font-sans));
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;

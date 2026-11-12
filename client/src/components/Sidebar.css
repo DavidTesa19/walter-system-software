@@ -641,11 +641,12 @@
     background: var(--color-surface-alt);
   }
 
-  /* Room on the right for the floating Úkoly and bug buttons. */
+  /* Room on the right for the three floating buttons (?, bug, Úkoly), which
+     sit in the bar as 32 px icons (FloatingTools.css). */
   .mobile-topbar-title {
     flex: 1;
     min-width: 0;
-    padding-right: 104px;
+    padding-right: 112px;
     overflow: hidden;
     font-family: var(--font-heading, var(--font-body, "Inter", system-ui, sans-serif));
     font-size: 1rem;

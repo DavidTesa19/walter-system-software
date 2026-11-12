@@ -7,7 +7,9 @@
 // 1000), so an open panel covers them instead of the other way round.
 
 import { useEffect, useMemo, useState } from 'react';
+import { CircleQuestionMark, ExternalLink, Flag, Minus, SquareCheckBig } from 'lucide-react';
 import { useAuth } from '../auth/AuthContext';
+import { BUTTON_ICON, TAB_ICON } from '../ui/icons';
 import BugReportDialog from '../bugs/BugReportDialog';
 import HelpPanel from '../help/HelpPanel';
 import TaskQuickAdd from '../tasks/TaskQuickAdd';
@@ -134,7 +136,7 @@ const FloatingTools: React.FC<FloatingToolsProps> = ({ viewId, viewLabel, onNavi
           title="Nápověda (?)"
           aria-label="Nápověda"
         >
-          ?
+          <CircleQuestionMark {...BUTTON_ICON} />
         </button>
 
         <button
@@ -144,10 +146,7 @@ const FloatingTools: React.FC<FloatingToolsProps> = ({ viewId, viewLabel, onNavi
           title="Nahlásit chybu"
           aria-label="Nahlásit chybu"
         >
-          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-            <path d="M4 15s1-1 4-1 5 2 8 2 4-1 4-1V3s-1 1-4 1-5-2-8-2-4 1-4 1z" />
-            <line x1="4" y1="22" x2="4" y2="15" />
-          </svg>
+          <Flag {...BUTTON_ICON} />
         </button>
 
         {!open && (
@@ -158,10 +157,7 @@ const FloatingTools: React.FC<FloatingToolsProps> = ({ viewId, viewLabel, onNavi
             title="Úkoly (Alt+T)"
             aria-label={`Úkoly, ${myOpenCount} k udělání`}
           >
-            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-              <path d="M9 11l3 3L22 4" />
-              <path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11" />
-            </svg>
+            <SquareCheckBig {...BUTTON_ICON} />
             <span className="floating-tool-label">Úkoly</span>
             {myOpenCount > 0 && <span className="floating-tool-badge">{myOpenCount > 99 ? '99+' : myOpenCount}</span>}
           </button>
@@ -190,14 +186,10 @@ const FloatingTools: React.FC<FloatingToolsProps> = ({ viewId, viewLabel, onNavi
                   title="Otevřít sekci Úkoly"
                   aria-label="Otevřít sekci Úkoly"
                 >
-                  <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-                    <path d="M15 3h6v6M10 14 21 3M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6" />
-                  </svg>
+                  <ExternalLink {...TAB_ICON} />
                 </button>
                 <button type="button" className="task-action" onClick={() => setOpenAndRemember(false)} title="Minimalizovat (Alt+T)" aria-label="Minimalizovat">
-                  <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" aria-hidden="true">
-                    <line x1="5" y1="12" x2="19" y2="12" />
-                  </svg>
+                  <Minus {...TAB_ICON} />
                 </button>
               </div>
             </header>

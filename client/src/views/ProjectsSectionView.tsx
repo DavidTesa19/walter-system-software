@@ -275,7 +275,7 @@ const ProjectsSectionView: React.FC<ProjectsSectionViewProps> = ({
   const activeModeCount = getModeCount(isCommissionsSection ? ["active", "pending"] : ["active"]);
   const archivedModeCount = getModeCount(["archived"]);
 
-  const title = kind === "subjects" ? "Projekty - Subjekty" : "Projekty - Zakázky";
+  const title = kind === "subjects" ? "Subjekty · Neveřejné" : "Zakázky · Neveřejné";
 
   return (
     <div className="projects-section-view">
