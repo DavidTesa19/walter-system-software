@@ -9,7 +9,9 @@ import {
   type PaletteInput,
   type Theme
 } from './ThemeContext';
+import { Check, Pencil, Plus, Trash2 } from 'lucide-react';
 import AiPaletteBox, { type AiPaletteProposal } from './AiPaletteBox';
+import { TAB_ICON } from '../ui/icons';
 import { ensureFonts } from './fontLoader';
 import './PaletteManager.css';
 
@@ -365,7 +367,7 @@ const PaletteManager: React.FC = () => {
         </div>
       )}
 
-      <AiPaletteBox defaultMode={theme} disabled={isSaving} onProposal={handleAiProposal} />
+      <AiPaletteBox defaultMode={theme} disabled={isSaving} palettes={palettes} onProposal={handleAiProposal} />
 
       <div className="palette-manager__columns">
         {(['light', 'dark'] as Theme[]).map(mode => {
@@ -375,8 +377,11 @@ const PaletteManager: React.FC = () => {
             <section key={mode} className="palette-column">
               <div className="palette-column__header">
                 <div>
-                  <h3>{mode === 'light' ? 'Světlé palety' : 'Tmavé palety'}</h3>
-                  <p>{mode === 'light' ? 'Použité pro světlý režim' : 'Použité pro tmavý režim'}.</p>
+                  <h3>{mode === 'light' ? 'Světlé' : 'Tmavé'}</h3>
+                  <p>
+                    {modePalettes.length} {modePalettes.length === 1 ? 'paleta' : modePalettes.length >= 2 && modePalettes.length <= 4 ? 'palety' : 'palet'}
+                    {' · '}pro {mode === 'light' ? 'světlý' : 'tmavý'} režim
+                  </p>
                 </div>
                 <button
                   type="button"
@@ -384,7 +389,8 @@ const PaletteManager: React.FC = () => {
                   onClick={() => handleStartCreate(mode)}
                   disabled={Boolean(draft) || isSaving}
                 >
-                  + Přidat paletu
+                  <Plus {...TAB_ICON} />
+                  Nová paleta
                 </button>
               </div>
 
@@ -455,6 +461,29 @@ const PaletteManager: React.FC = () => {
   );
 };
 
+// A small picture of the app in a palette's colours: the page, the menu, a
+// card with two lines of text, a button and an accent dot.
+const PalettePreview: React.FC<{ colors: PaletteColors }> = ({ colors }) => (
+  <div
+    className="palette-preview"
+    style={{ background: colors.background, ['--preview-primary' as string]: colors.primary } as React.CSSProperties}
+    aria-hidden="true"
+  >
+    <div className="palette-preview__menu" style={{ background: colors.surface, borderRight: `1px solid ${colors.border}` }} />
+    <div className="palette-preview__card" style={{ background: colors.surface, border: `1px solid ${colors.border}` }}>
+      <span className="palette-preview__line" style={{ background: colors.text }} />
+      <span className="palette-preview__line palette-preview__line--short" style={{ background: colors.muted }} />
+      <span className="palette-preview__button" style={{ background: colors.primary }} />
+    </div>
+    <span className="palette-preview__dot" style={{ background: colors.accent }} />
+  </div>
+);
+
+// "'Inter', system-ui, sans-serif" → "Inter"; the three fonts, each once.
+const fontName = (stack?: string) => (stack ?? '').split(',')[0].replace(/['"]/g, '').trim();
+const fontSummary = (typography: PaletteTypography) =>
+  [...new Set([typography.heading, typography.subheading, typography.body].map(fontName).filter(Boolean))].join(' · ');
+
 interface PaletteCardProps {
   palette: ColorPalette;
   onEdit: () => void;
@@ -473,60 +502,49 @@ const PaletteCard: React.FC<PaletteCardProps> = ({
   children
 }) => (
   <div className={`palette-card ${palette.is_active ? 'palette-card--active' : ''}`}>
-    <div className="palette-card__header">
-      <div>
-        <h4>{palette.name}</h4>
-        <span className="palette-card__mode">{palette.mode === 'light' ? 'Světlý režim' : 'Tmavý režim'}</span>
-      </div>
-      {palette.is_active ? <span className="palette-card__badge">Aktivní</span> : null}
-    </div>
-    <div className="palette-card__swatches">
-      {COLOR_FIELDS.map(field => (
-        <div key={field.key} className="palette-card__swatch">
-          <span
-            className="palette-card__swatch-color"
-            style={{ background: palette.colors[field.key] }}
-            aria-hidden
-          />
-          <div className="palette-card__swatch-meta">
-            <span className="palette-card__swatch-label">{field.label}</span>
-            <span className="palette-card__swatch-value">{palette.colors[field.key]}</span>
-          </div>
+    <div className="palette-card__row">
+      <PalettePreview colors={palette.colors} />
+      <div className="palette-card__info">
+        <div className="palette-card__title">
+          <h4 title={palette.name}>{palette.name}</h4>
+          {palette.is_active ? (
+            <span className="palette-card__badge">
+              <Check size={12} strokeWidth={2.5} aria-hidden="true" />
+              Používá se
+            </span>
+          ) : null}
         </div>
-      ))}
-    </div>
-    {palette.typography ? (
-      <div className="palette-card__typography">
-        {FONT_FIELDS.map(field => (
-          <div key={field.key} className="palette-card__font">
-            <div className="palette-card__font-meta">
-              <span className="palette-card__font-label">{field.label}</span>
-              <code className="palette-card__font-value">{palette.typography?.[field.key]}</code>
-            </div>
-            <div
-              className="palette-card__font-preview"
-              style={{ fontFamily: palette.typography?.[field.key] }}
-            >
-              {field.sample}
-            </div>
-          </div>
-        ))}
+        <div className="palette-card__strip" role="img" aria-label="Barvy motivu">
+          {COLOR_FIELDS.map(field => (
+            <span
+              key={field.key}
+              style={{ background: palette.colors[field.key] }}
+              title={`${field.label}: ${palette.colors[field.key]}`}
+            />
+          ))}
+        </div>
+        {palette.typography ? <div className="palette-card__fonts">{fontSummary(palette.typography)}</div> : null}
       </div>
-    ) : null}
-    <div className="palette-card__actions">
-      <button
-        type="button"
-        onClick={onActivate}
-        disabled={palette.is_active || disabled}
-      >
-        Použít jako výchozí
-      </button>
-      <button type="button" onClick={onEdit} disabled={disabled}>
-        Upravit
-      </button>
-      <button type="button" onClick={onDelete} disabled={disabled} className="danger">
-        Odstranit
-      </button>
+      <div className="palette-card__actions">
+        {!palette.is_active ? (
+          <button type="button" className="palette-card__use" onClick={onActivate} disabled={disabled}>
+            Použít
+          </button>
+        ) : null}
+        <button type="button" className="palette-card__icon" onClick={onEdit} disabled={disabled} title="Upravit" aria-label={`Upravit ${palette.name}`}>
+          <Pencil {...TAB_ICON} />
+        </button>
+        <button
+          type="button"
+          className="palette-card__icon palette-card__icon--danger"
+          onClick={onDelete}
+          disabled={disabled}
+          title="Odstranit"
+          aria-label={`Odstranit ${palette.name}`}
+        >
+          <Trash2 {...TAB_ICON} />
+        </button>
+      </div>
     </div>
     {children ? <div className="palette-card__editor">{children}</div> : null}
   </div>
@@ -773,6 +791,7 @@ const PaletteForm: React.FC<PaletteFormProps> = ({
                 role="tab"
                 aria-selected={isActive}
                 className={`palette-form__color-tab ${isActive ? 'is-active' : ''}`}
+                title={field.description}
                 onClick={() => setActiveKey(field.key)}
                 disabled={disabled}
               >

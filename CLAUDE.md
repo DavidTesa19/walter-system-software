@@ -298,6 +298,16 @@ and what remains is shown as warnings. 20 proposals per user per hour
 (`PALETTE_AI_HOURLY_LIMIT`), logged as feature `palette_ai`. Measured
 2026-11-10: 5–10 s and about a cent per proposal.
 
+**Upravit existující** (the box's second tab): the chosen saved palette goes
+as `base` (JSON: name, colours, typography) with the change in words; the
+prompt keeps everything the request does not touch. Saved palettes store
+colours as `hsl(…)`, so the box converts them to `#rrggbb` (colord) before
+sending, and `parseBasePalette` refuses anything else. The result is a new
+draft; the original changes only if the user saves over it. The screen
+(2026-11-12) shows each palette as one compact row: `PalettePreview` (a tiny
+mock of the app in its colours), a seven-colour strip, the font names and
+icon actions; the full colour list and font samples are in the edit form.
+
 ## Help: the "?" panel and Ostatní › Nápověda
 
 `client/src/help/helpContent.ts` holds every keyboard shortcut (`SHORTCUTS`)

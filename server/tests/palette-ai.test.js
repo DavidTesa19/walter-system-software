@@ -37,3 +37,15 @@ test('web addresses: a bare domain gets https, other schemes are refused', () =>
   assert.equal(normalizeWebsite('example.com:8080/x'), 'https://example.com:8080/x');
   assert.equal(normalizeWebsite('ftp://example.com'), null);
 });
+
+test('a theme to adjust is read from the form, and a malformed one is refused', async () => {
+  const { parseBasePalette } = await import('../palettes/aiPalette.js');
+  const colors = { primary: '#2563eb', accent: '#f59e0b', background: '#f8fafc', surface: '#ffffff', text: '#0f172a', muted: '#475569', border: '#e2e8f0' };
+  assert.equal(parseBasePalette(''), null);
+  const base = parseBasePalette(JSON.stringify({ name: 'Firemní', colors, typography: { heading: "'Inter', sans-serif" }, id: 7 }));
+  assert.equal(base.name, 'Firemní');
+  assert.equal(base.colors.primary, '#2563eb');
+  assert.equal(base.id, undefined, 'only what the prompt needs');
+  assert.equal(parseBasePalette('{not json'), undefined);
+  assert.equal(parseBasePalette(JSON.stringify({ name: 'X', colors: { ...colors, text: 'black' } })), undefined);
+});

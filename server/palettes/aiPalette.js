@@ -1,6 +1,8 @@
 // Motivy › "AI návrh": Claude proposes a colour theme (7 colours, 3 fonts)
-// from a description, a logo and/or a web address. Nothing is saved here; the
-// screen opens the proposal as a new palette draft the user edits and saves.
+// from a description, a logo and/or a web address, or adjusts an existing
+// theme ("base") the way the description asks ("tmavší", "teplejší akcent").
+// Nothing is saved here; the screen opens the proposal as a new palette
+// draft the user edits and saves.
 //
 // A web address is read by Anthropic's web_fetch server tool, never by this
 // server, so a user-typed URL cannot make the API reach internal addresses.
@@ -58,7 +60,12 @@ Rules:
 - Fonts: only from the allowed list; heading and subheading may differ from body.
 - If a logo is attached, build the theme around its brand colours (primary usually the main brand colour, adjusted for contrast).
 - If a web address is given, fetch the page with web_fetch and use the site's brand colours (theme-color, CSS custom properties, buttons, logo). If it cannot be read, say so in the note and work from the rest.
-- The name and the note are in Czech.`;
+- The name and the note are in Czech.
+
+When an existing theme is given to adjust:
+- Change only what the user asks for and keep the rest of its character: the same hues where the request does not touch them, the same fonts unless fonts are mentioned (if one of its fonts is not on the allowed list, use the closest allowed one).
+- Still meet the contrast rules; if the requested change would break them, get as close as the rules allow and say so in the note.
+- The name is the original name with a short hint of the change; the note says what changed.`;
 
 // ---- Contrast -------------------------------------------------------------
 
@@ -112,10 +119,11 @@ export class PaletteAiError extends Error {
   }
 }
 
-const describeRequest = ({ description, website, mode, hasLogo }) =>
+const describeRequest = ({ description, website, mode, hasLogo, base }) =>
   [
     `Režim: ${mode === 'dark' ? 'tmavý (dark)' : 'světlý (light)'}.`,
-    description ? `Popis od uživatele: ${description}` : null,
+    base ? `Uprav tento existující motiv:\n${JSON.stringify(base)}` : null,
+    description ? `${base ? 'Požadovaná úprava' : 'Popis od uživatele'}: ${description}` : null,
     website ? `Webová adresa značky: ${website}` : null,
     hasLogo ? 'Přiložené je logo značky.' : null,
     `Povolená písma: ${FONT_CHOICES.join(' | ')}`,
@@ -164,12 +172,12 @@ async function askOnce({ content, website, userId, signal }) {
  * mediaType }; mode: 'light' | 'dark'. Returns the proposal plus any contrast
  * problems that a second attempt did not fix (shown as warnings).
  */
-export async function suggestPalette({ description, website, logo, mode, userId, signal }) {
+export async function suggestPalette({ description, website, logo, mode, base = null, userId, signal }) {
   const content = [];
   if (logo) {
     content.push({ type: 'image', source: { type: 'base64', media_type: logo.mediaType, data: logo.data.toString('base64') } });
   }
-  content.push({ type: 'text', text: describeRequest({ description, website, mode, hasLogo: Boolean(logo) }) });
+  content.push({ type: 'text', text: describeRequest({ description, website, mode, hasLogo: Boolean(logo), base }) });
 
   let proposal = await askOnce({ content, website, userId, signal });
   let problems = checkProposal(proposal, mode);
@@ -180,7 +188,7 @@ export async function suggestPalette({ description, website, logo, mode, userId,
       {
         type: 'text',
         text:
-          `${describeRequest({ description, website: null, mode, hasLogo: Boolean(logo) })}\n\n` +
+          `${describeRequest({ description, website: null, mode, hasLogo: Boolean(logo), base })}\n\n` +
           `Předchozí návrh:\n${JSON.stringify(proposal)}\n\nOprav tyto problémy a zachovej charakter návrhu:\n- ${problems.join('\n- ')}`,
       },
     ];
@@ -210,7 +218,30 @@ const Input = z.object({
   description: z.string().trim().max(1000).optional().default(''),
   website: z.string().trim().max(300).optional().default(''),
   mode: z.enum(['light', 'dark']),
+  // The theme to adjust, as JSON (multipart sends text).
+  base: z.string().max(4000).optional().default(''),
 });
+
+// A saved palette as the screen sends it; only what the prompt needs.
+const BasePalette = z.object({
+  name: z.string().trim().max(80),
+  colors: z.object(Object.fromEntries(COLOR_KEYS.map((key) => [key, z.string().regex(HEX)]))),
+  typography: z
+    .object({ heading: z.string().max(120), subheading: z.string().max(120), body: z.string().max(120) })
+    .partial()
+    .optional(),
+});
+
+/** The base palette from the form, or null; undefined when it is malformed. */
+export const parseBasePalette = (text) => {
+  if (!text) return null;
+  try {
+    const parsed = BasePalette.safeParse(JSON.parse(text));
+    return parsed.success ? parsed.data : undefined;
+  } catch {
+    return undefined;
+  }
+};
 
 export const normalizeWebsite = (value) => {
   if (!value) return '';
@@ -244,6 +275,9 @@ export function registerPaletteAiRoutes(app, { authenticateToken }) {
     const { description, mode } = parsed.data;
     const website = normalizeWebsite(parsed.data.website);
     if (website === null) return res.status(400).json({ error: 'Webová adresa není platná.' });
+    const base = parseBasePalette(parsed.data.base);
+    if (base === undefined) return res.status(400).json({ error: 'Motiv k úpravě se nepodařilo přečíst.' });
+    if (base && !description) return res.status(400).json({ error: 'Napište, co se má na motivu změnit.' });
     const file = req.file;
     if (file && !LOGO_TYPES.has(file.mimetype)) {
       return res.status(400).json({ error: 'Logo musí být obrázek PNG, JPEG, WebP nebo GIF.' });
@@ -266,6 +300,7 @@ export function registerPaletteAiRoutes(app, { authenticateToken }) {
         website,
         logo: file ? { data: file.buffer, mediaType: file.mimetype } : null,
         mode,
+        base,
         userId: req.user?.id,
         signal: controller.signal,
       });
