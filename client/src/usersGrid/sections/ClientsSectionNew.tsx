@@ -54,7 +54,7 @@ import { compareWorkflowStatuses, DEFAULT_WORKFLOW_STATUS, getNormalizedWorkflow
 import useAssignableUsers from "../hooks/useAssignableUsers";
 import { useActivity } from "../../activity/ActivityContext";
 import { buildCommissionsRecordScope, buildSubjectsRecordScope, getActivitySystem } from "../../activity/activityKeys";
-import { buildActivityColumn, remapFieldActivity } from "../../activity/gridActivity";
+import { remapFieldActivity } from "../../activity/gridActivity";
 import ActivityConfirmAllButton from "../../activity/ActivityConfirmAllButton";
 import type { FieldActivityMap } from "../../activity/activityUtils";
 import OptionSelectEditor from "../../futureFunctions/cells/OptionSelectEditor";
@@ -2124,7 +2124,6 @@ const ClientsSectionNew: React.FC<SectionProps> = ({
 
   const columnDefs = useMemo<ColDef<ClientGridRow>[]>(() => {
     const cols: ColDef<ClientGridRow>[] = [];
-    cols.push(buildActivityColumn<ClientGridRow>());
     const showApprovalStatusColumn = systemNamespace === "projects";
     // Editable straight from the table, not only from the profile panel.
     const approvalStatusEditable = Boolean(projectStatusOptions?.length) && !readOnly;
@@ -2279,9 +2278,9 @@ const ClientsSectionNew: React.FC<SectionProps> = ({
       headerName: "",
       colId: "profile",
       pinned: "left",
-      width: 60,
-      minWidth: 60,
-      maxWidth: 68,
+      width: 44,
+      minWidth: 44,
+      maxWidth: 44,
       suppressMovable: true,
       lockPosition: true,
       sortable: false,

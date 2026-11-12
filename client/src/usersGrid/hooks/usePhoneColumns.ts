@@ -3,23 +3,36 @@ import { useEffect, useMemo, useState } from "react";
 // The same breakpoint as the phone layout in Sidebar.css.
 export const PHONE_QUERY = "(max-width: 768px)";
 
-// Columns that only hold a row button (approve/restore, delete, archive). On a
-// computer they sit pinned on the left; on a phone four pinned columns took
-// half of the 342 px grid and never scrolled away, so the record's name started
-// off-screen. There these move to the far right end of the scrolled area. The
-// profile button and the change dot stay pinned: opening a record is the main
-// thing a phone is used for.
-const ROW_BUTTON_COLUMNS = new Set(["approve", "delete", "archive"]);
+// Columns that only hold a row button (approve/restore, archive, delete), in
+// the order they appear at the end of the row: the destructive one last.
+const ROW_BUTTON_ORDER = ["approve", "archive", "delete"];
+const ROW_BUTTON_COLUMNS = new Set(ROW_BUTTON_ORDER);
 
+const colIdOf = (col: object) => (col as { colId?: string }).colId;
+
+// The row buttons belong at the end of the row, so a table starts with the
+// profile button and then its first real column (ID).
+//
+// - On a computer they are pinned right: always in reach, however far the
+//   table is scrolled. (They used to be pinned left, ahead of the data.)
+// - On a phone, pinned columns never scroll away and four of them took half of
+//   a 342 px grid, so there they are unpinned and locked to the far right end
+//   of the scrolled area.
+//
+// The profile button stays pinned left: opening a record is the main thing a
+// row is used for. Returns a new array only when there is something to move.
 export function fitColumnsForPhone<C extends object>(cols: C[], isPhone: boolean): C[] {
-  if (!isPhone) return cols;
-  return cols.map((col) => {
-    const colId = (col as { colId?: string }).colId;
-    if (!colId || !ROW_BUTTON_COLUMNS.has(colId)) return col;
-    // `pinned: null` (not undefined) so a column that was pinned before a
-    // resize is actually unpinned when the defs are applied again.
-    return { ...col, pinned: null, lockPosition: "right" as const } as C;
-  });
+  const buttons = cols.filter((col) => ROW_BUTTON_COLUMNS.has(colIdOf(col) ?? ""));
+  if (buttons.length === 0) return cols;
+  const rest = cols.filter((col) => !ROW_BUTTON_COLUMNS.has(colIdOf(col) ?? ""));
+  buttons.sort((a, b) => ROW_BUTTON_ORDER.indexOf(colIdOf(a)!) - ROW_BUTTON_ORDER.indexOf(colIdOf(b)!));
+  const moved = buttons.map(
+    (col) =>
+      // `pinned: null` (not undefined) so a column that was pinned before a
+      // resize is actually unpinned when the defs are applied again.
+      ({ ...col, pinned: isPhone ? null : "right", lockPosition: "right" as const }) as C,
+  );
+  return [...rest, ...moved];
 }
 
 export function useIsPhone(): boolean {
@@ -35,8 +48,8 @@ export function useIsPhone(): boolean {
   return isPhone;
 }
 
-// columnDefs as given on a computer (same identity, no extra column rebuild),
-// rearranged for a phone.
+// columnDefs with the row buttons moved to the end of the row (see above).
+// Memoised on the defs, so it only rebuilds when they do.
 export function usePhoneColumns<C extends object>(cols: C[]): C[] {
   const isPhone = useIsPhone();
   return useMemo(() => fitColumnsForPhone(cols, isPhone), [cols, isPhone]);

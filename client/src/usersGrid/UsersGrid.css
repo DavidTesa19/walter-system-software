@@ -1,6 +1,6 @@
 /* Styles for UsersGrid page */
 .page-container {
-  padding: 0.6rem 2.5rem 0.4rem;
+  padding: 0.5rem 1.5rem 0.4rem;
   background: var(--color-background);
   color: var(--color-text);
   text-align: center;
@@ -29,13 +29,20 @@
   flex-direction: column;
 }
 
+/* Title, then the Klienti / Partneři / Tipaři tabs right after it, then the
+   actions pushed to the right edge. (space-between used to float the tabs in
+   the middle, unattached to anything.) */
 .header-section {
   display: flex;
-  justify-content: space-between;
+  justify-content: flex-start;
   align-items: center;
   text-align: center;
   margin-bottom: 0.5rem;
   gap: 1rem;
+}
+
+.header-section > .header-actions {
+  margin-left: auto;
 }
 
 /* Wraps the Growth Club <-> Veřejné toggle button next to the Klienti/Partneři/Tipaři tabs */
@@ -234,23 +241,41 @@
   padding: 0;
 }
 
+/* The profile button with the change dot on its top-right corner. The
+   wrapper (not the ag-Grid cell, which must stay position: absolute) is the
+   dot's anchor. */
+.profile-cell-inner {
+  position: relative;
+  display: inline-flex;
+}
+
+.profile-cell-dot {
+  position: absolute;
+  top: -6px;
+  right: -8px;
+  display: flex;
+}
+
+.profile-cell-dot:empty {
+  display: none;
+}
+
 .profile-cell-btn {
   background: transparent;
   border: 1px solid transparent;
-  border-radius: 999px;
-  width: 32px;
-  height: 32px;
+  border-radius: var(--ui-radius-sm, 6px);
+  width: 28px;
+  height: 28px;
   display: flex;
   align-items: center;
   justify-content: center;
   color: var(--color-primary);
   cursor: pointer;
-  transition: transform 0.15s ease, border-color 0.15s ease, color 0.15s ease;
+  transition: background-color var(--ui-transition, 120ms ease), color var(--ui-transition, 120ms ease);
 }
 
 .profile-cell-btn:hover {
-  transform: scale(1.05);
-  border-color: color-mix(in srgb, var(--color-primary) 40%, transparent);
+  background: color-mix(in srgb, var(--color-primary) 12%, transparent);
 }
 
 .profile-cell-btn:focus-visible {

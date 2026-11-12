@@ -82,7 +82,13 @@ browser's serif to a modern sans-serif. It must look right the first time.
 - **Tabs are a segmented control** (`.navigation-tabs` / `.nav-tab` in
   UsersGrid.css): the active tab is a raised surface, not a filled colour.
 - **Row buttons are ghost icons** (`.inrow-*-btn`): transparent until hover,
-  colour only on hover (approve keeps its green). No bordered circles.
+  colour only on hover (approve keeps its green). No bordered circles. They
+  sit at the right end of the row (see Phone layout › Grids).
+- **One page grid**: everything on a table screen (status tabs, summary bar,
+  title, table) shares the same left and right edge, the page's 1.5rem
+  padding; the status tabs share the top line with the floating buttons. The
+  header is title, then the Klienti / Partneři / Tipaři tabs, then the actions
+  pushed right.
 - **Page titles say where you are**: "Zakázky · Veřejné", "Subjekty ·
   Growth Club" (the section views pass `title`). The phone top bar shows the
   same (`topbarTitle` in App.tsx); `VIEW_LABELS` stays for search, bug
@@ -148,6 +154,12 @@ These are load-bearing and easy to reintroduce:
   "overlapping text" bug: only the rows carrying a change marker were affected,
   because only those cells got the class. An `::after` anchors fine to the cell
   as it is, since `position: absolute` is already a containing block.
+- **Never copy scroll offsets between the grid's scrollers on every scroll
+  event.** ag-Grid moves the header a frame behind the rows, so copying the
+  header's offset back onto the rows made the table jump back on every frame
+  of a horizontal scroll (felt as lag). `useGridColumnLayout` only puts the
+  header and fake scrollbar back on the rows' offset once scrolling pauses;
+  the rows are never written.
 - Prefer ag-Grid's own APIs (`ensureColumnVisible`, `getColumnState`,
   `sizeColumnsToFit`) over hand-computed pixel maths against ag-Grid's internal
   DOM. Its internals (`.ag-center-cols-container` height, the fake horizontal
@@ -171,11 +183,13 @@ Phones get the same app: no separate code and no app store. Below 768 px
   imported: phone-wide rules live in Sidebar.css (`body { margin: 0 }` among
   them).
 - **Grids** (`usePhoneColumns`, `usersGrid/hooks/usePhoneColumns.ts`): the
-  row-button columns (approve, delete, archive) are unpinned and locked to the
-  right end of the row. Pinned, they took half of a 342 px grid. The change dot
-  and the profile button stay pinned. On a computer the hook returns the defs
-  unchanged (same identity). A new pinned action column belongs in
-  `ROW_BUTTON_COLUMNS`.
+  row-button columns (approve, archive, delete) go to the end of the row on
+  every screen: pinned right on a computer, unpinned and locked to the right
+  end on a phone (pinned, they took half of a 342 px grid). The row starts
+  with the profile button (pinned left, 44 px), which carries the change dot
+  as a badge (`ProfileCellRenderer`); the dot no longer has a column of its
+  own, which sat empty on almost every row. A new row-button column belongs
+  in `ROW_BUTTON_ORDER`.
 - **Calendar** opens in the list week view on a phone. **Jarvis** and the
   profile panel are full screen.
 - **Installable**: `site.webmanifest` (`display: standalone`) and the Apple meta

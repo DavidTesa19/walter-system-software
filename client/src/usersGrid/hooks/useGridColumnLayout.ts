@@ -11,6 +11,13 @@ const SCROLLER_SELECTORS = [
 
 const SCROLLER_SELECTOR = SCROLLER_SELECTORS.join(",");
 
+// The rows lead; the header and the fake scrollbar follow them.
+const ROWS_SELECTOR = ".ag-center-cols-viewport";
+const FOLLOWER_SELECTORS = [".ag-header-viewport", ".ag-body-horizontal-scroll-viewport"] as const;
+
+// How long a horizontal scroll has to pause before the header is checked.
+const SETTLE_MS = 120;
+
 /**
  * Sizes a grid's columns and keeps its rows lined up under the header.
  *
@@ -53,7 +60,14 @@ const SCROLLER_SELECTOR = SCROLLER_SELECTORS.join(",");
  * (its own debounce window). Anything that scrolls one on its own — clicking
  * the filter button in a partly off-screen header cell focuses it, and the
  * browser scrolls it into view — can leave the header offset from the rows.
- * So force them back onto one offset whenever any of them moves.
+ *
+ * So once scrolling pauses, the header and the scrollbar are put back on the
+ * rows' offset. The rows are the source of truth and are never written. (This
+ * used to copy whichever element scrolled onto the other two on every scroll
+ * event. ag-Grid moves the header a frame behind the rows, so the header's own
+ * scroll event then wrote that older offset back onto the rows: the table
+ * jumped back a little on every frame of a horizontal scroll, which read as
+ * lag.)
  *
  * Attach `containerRef` to the element wrapping `<AgGridReact>`, and pass
  * `onGridReady` and `onGridColumnsChanged` to the grid.
@@ -89,16 +103,16 @@ export const useGridColumnLayout = <TData,>(gridRef: React.RefObject<AgGridReact
     [gridRef]
   );
 
-  const syncScrollers = useCallback((source: HTMLElement) => {
+  // Puts the header and the scrollbar on the rows' offset. Only writes when
+  // one has drifted, so it settles instead of ping-ponging with ag-Grid.
+  const alignToRows = useCallback(() => {
     const container = containerRef.current;
-    if (!container) return;
-    const { scrollLeft } = source;
-    for (const selector of SCROLLER_SELECTORS) {
+    const rows = container?.querySelector<HTMLElement>(ROWS_SELECTOR);
+    if (!container || !rows) return;
+    const { scrollLeft } = rows;
+    for (const selector of FOLLOWER_SELECTORS) {
       const scroller = container.querySelector<HTMLElement>(selector);
-      if (!scroller || scroller === source) continue;
-      // Only write when it actually differs, so this settles instead of
-      // ping-ponging with ag-Grid's own sync.
-      if (Math.abs(scroller.scrollLeft - scrollLeft) > 0.5) {
+      if (scroller && Math.abs(scroller.scrollLeft - scrollLeft) > 0.5) {
         scroller.scrollLeft = scrollLeft;
       }
     }
@@ -110,10 +124,14 @@ export const useGridColumnLayout = <TData,>(gridRef: React.RefObject<AgGridReact
 
     // Scroll events don't bubble, but they can be caught on the way down, which
     // keeps working when ag-Grid rebuilds its containers (a domLayout change).
+    // Nothing is read or written while scrolling: only a timer is reset, and
+    // the check runs once the scroll has paused.
+    let timer: ReturnType<typeof setTimeout> | undefined;
     const onScroll = (event: Event) => {
       const target = event.target as HTMLElement | null;
       if (!target?.matches?.(SCROLLER_SELECTOR)) return;
-      syncScrollers(target);
+      clearTimeout(timer);
+      timer = setTimeout(alignToRows, SETTLE_MS);
     };
     container.addEventListener("scroll", onScroll, { capture: true, passive: true });
 
@@ -121,10 +139,11 @@ export const useGridColumnLayout = <TData,>(gridRef: React.RefObject<AgGridReact
     observer.observe(container);
 
     return () => {
+      clearTimeout(timer);
       container.removeEventListener("scroll", onScroll, { capture: true });
       observer.disconnect();
     };
-  }, [fitColumns, syncScrollers]);
+  }, [fitColumns, alignToRows]);
 
   // ag-Grid has rebuilt its columns from the defs, so every width is back at
   // the 200px default and has to be fitted again.

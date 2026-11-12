@@ -51,7 +51,7 @@ import { compareWorkflowStatuses, DEFAULT_WORKFLOW_STATUS, getNormalizedWorkflow
 import useAssignableUsers from "../hooks/useAssignableUsers";
 import { useActivity } from "../../activity/ActivityContext";
 import { buildCommissionsRecordScope, buildSubjectsRecordScope, getActivitySystem } from "../../activity/activityKeys";
-import { buildActivityColumn, remapFieldActivity } from "../../activity/gridActivity";
+import { remapFieldActivity } from "../../activity/gridActivity";
 import ActivityConfirmAllButton from "../../activity/ActivityConfirmAllButton";
 import type { FieldActivityMap } from "../../activity/activityUtils";
 import OptionSelectEditor from "../../futureFunctions/cells/OptionSelectEditor";
@@ -1992,7 +1992,6 @@ const PartnersSectionNew: React.FC<SectionProps> = ({ viewMode, isActive, system
 
   const columnDefs = useMemo<ColDef<PartnerGridRow>[]>(() => {
     const cols: ColDef<PartnerGridRow>[] = [];
-    cols.push(buildActivityColumn<PartnerGridRow>());
     const showApprovalStatusColumn = systemNamespace === "projects";
     // Editable straight from the table, not only from the profile panel.
     const approvalStatusEditable = Boolean(projectStatusOptions?.length) && !readOnly;
@@ -2104,7 +2103,7 @@ const PartnersSectionNew: React.FC<SectionProps> = ({ viewMode, isActive, system
     cols.push(
       { headerName: "", colId: "delete", pinned: "left", width: 36, minWidth: 36, maxWidth: 36, suppressMovable: true, lockPosition: true, sortable: false, filter: false, resizable: false, editable: false, menuTabs: [], cellClass: "action-cell", headerClass: "action-cell", cellRenderer: DeleteArchiveCellRenderer },
       ...(viewMode === "active" ? [{ headerName: "", colId: "archive", pinned: "left" as const, width: 36, minWidth: 36, maxWidth: 36, suppressMovable: true, lockPosition: true, sortable: false, filter: false, resizable: false, editable: false, menuTabs: [], cellClass: "action-cell", headerClass: "action-cell", cellRenderer: ArchiveCellRenderer }] : []),
-      { headerName: "", colId: "profile", pinned: "left", width: 60, minWidth: 60, maxWidth: 68, suppressMovable: true, lockPosition: true, sortable: false, filter: false, resizable: false, editable: false, menuTabs: [], cellClass: "profile-cell", headerClass: "profile-cell", cellRenderer: ProfileCellRenderer },
+      { headerName: "", colId: "profile", pinned: "left", width: 44, minWidth: 44, maxWidth: 44, suppressMovable: true, lockPosition: true, sortable: false, filter: false, resizable: false, editable: false, menuTabs: [], cellClass: "profile-cell", headerClass: "profile-cell", cellRenderer: ProfileCellRenderer },
       {
         headerName: "ID",
         colId: "display_id",
