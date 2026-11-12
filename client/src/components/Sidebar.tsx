@@ -15,6 +15,8 @@ import type { GlobalSearchResult } from '../types/globalSearch';
 import WssLogo from '../assets/WssLogo';
 import ThemeToggleButton from './ThemeToggleButton';
 import InstallAppButton from './InstallAppButton';
+import { openHelp } from '../help/openHelp';
+import { BUTTON_ICON } from '../ui/icons';
 import './Sidebar.css';
 
 interface SidebarProps {
@@ -854,9 +856,20 @@ ${meta}`;
         {/* Phones have no footer bar: the theme switch lives here instead. */}
         <ThemeToggleButton variant="footer" className="sidebar-mobile-theme" />
         {user && (
-          <div className="user-info">
-            <span className="user-name">{user.username}</span>
-            <span className="user-role">{`${user.role} • ${user.accessScope}`}</span>
+          <div className="sidebar-account">
+            <div className="user-info">
+              <span className="user-name">{user.username}</span>
+              <span className="user-role">{`${user.role} • ${user.accessScope}`}</span>
+            </div>
+            <button
+              type="button"
+              className="sidebar-help-button"
+              onClick={openHelp}
+              title="Nápověda k této obrazovce (?)"
+              aria-label="Nápověda"
+            >
+              <CircleHelp {...BUTTON_ICON} />
+            </button>
           </div>
         )}
         <button

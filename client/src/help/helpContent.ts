@@ -206,7 +206,7 @@ export const HELP_TOPICS: HelpTopic[] = [
     title: "Nápověda",
     views: ["help"],
     summary: "Tato stránka: klávesové zkratky a průvodce všemi obrazovkami.",
-    points: ["Nápovědu k obrazovce, na které právě jste, otevřete odkudkoli klávesou ? nebo tlačítkem ? vpravo nahoře."],
+    points: ["Nápovědu k obrazovce, na které právě jste, otevřete odkudkoli klávesou ? nebo tlačítkem ? v menu vedle vašeho účtu."],
   },
 ];
 

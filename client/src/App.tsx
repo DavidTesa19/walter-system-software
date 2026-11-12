@@ -15,6 +15,7 @@ import Login from './auth/Login';
 import Sidebar from './components/Sidebar';
 import Footer from './components/Footer';
 import FloatingTools from './components/FloatingTools';
+import { OPEN_HELP_EVENT } from './help/openHelp';
 import JarvisPanel from './jarvis/JarvisPanel';
 import type { JarvisOpenAction } from './jarvis/jarvisApi';
 import { trackEvent, trackSectionStart } from './utils/analytics';
@@ -646,8 +647,15 @@ const AppContent: React.FC = () => {
     const onKey = (event: KeyboardEvent) => {
       if (event.key === 'Escape') setMenuOpen(false);
     };
+    // Help opened from the drawer (the "?" by the account): the drawer gets
+    // out of its way.
+    const onHelp = () => setMenuOpen(false);
     window.addEventListener('keydown', onKey);
-    return () => window.removeEventListener('keydown', onKey);
+    window.addEventListener(OPEN_HELP_EVENT, onHelp);
+    return () => {
+      window.removeEventListener('keydown', onKey);
+      window.removeEventListener(OPEN_HELP_EVENT, onHelp);
+    };
   }, [menuOpen]);
 
   if (!isAuthenticated) {

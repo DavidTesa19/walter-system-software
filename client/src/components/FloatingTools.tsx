@@ -1,13 +1,14 @@
-// The floating buttons in the top-right corner: "?" (help for this screen,
-// also the ? key), the bug button, which opens the "Nahlásit chybu" dialog
-// from any screen, and Úkoly, which opens into a small task window (and folds
-// back into the button).
+// The floating buttons in the top-right corner: the bug button, which opens
+// the "Nahlásit chybu" dialog from any screen, and Úkoly, which opens into a
+// small task window (and folds back into the button). The help panel lives
+// here too: the ? key and the sidebar's "?" next to the account open it.
 //
 // They sit below the profile panel and other right-hand overlays (z-index
 // 1000), so an open panel covers them instead of the other way round.
 
 import { useEffect, useMemo, useState } from 'react';
-import { CircleQuestionMark, ExternalLink, Flag, Minus, SquareCheckBig } from 'lucide-react';
+import { ExternalLink, Flag, Minus, SquareCheckBig } from 'lucide-react';
+import { OPEN_HELP_EVENT } from '../help/openHelp';
 import { useAuth } from '../auth/AuthContext';
 import { BUTTON_ICON, TAB_ICON } from '../ui/icons';
 import BugReportDialog from '../bugs/BugReportDialog';
@@ -89,6 +90,13 @@ const FloatingTools: React.FC<FloatingToolsProps> = ({ viewId, viewLabel, onNavi
     return { todo, later, doneToday };
   }, [current.tasks, today]);
 
+  // The sidebar's "?" next to the account (help/openHelp.ts).
+  useEffect(() => {
+    const onOpen = () => setHelpOpen(true);
+    window.addEventListener(OPEN_HELP_EVENT, onOpen);
+    return () => window.removeEventListener(OPEN_HELP_EVENT, onOpen);
+  }, []);
+
   // "?" (outside a text field) opens the help for this screen.
   useEffect(() => {
     const onKey = (event: KeyboardEvent) => {
@@ -129,16 +137,6 @@ const FloatingTools: React.FC<FloatingToolsProps> = ({ viewId, viewLabel, onNavi
   return (
     <>
       <div className="floating-tools">
-        <button
-          type="button"
-          className="floating-tool floating-tool--help"
-          onClick={() => setHelpOpen(true)}
-          title="Nápověda (?)"
-          aria-label="Nápověda"
-        >
-          <CircleQuestionMark {...BUTTON_ICON} />
-        </button>
-
         <button
           type="button"
           className="floating-tool floating-tool--bug"

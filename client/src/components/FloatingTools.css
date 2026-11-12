@@ -258,15 +258,6 @@
   padding-top: 48px;
 }
 
-.floating-tool--help {
-  padding: 0;
-  color: var(--color-text-muted, #64748b);
-}
-
-.floating-tool--help:hover {
-  color: var(--color-primary, #2563eb);
-}
-
 /* Phones: the buttons become icons in the top bar (Sidebar.css keeps the
    title clear of them). Úkoly drops its word; its count sits on the icon. */
 @media (max-width: 768px) {

@@ -469,11 +469,51 @@
   background: var(--color-surface-alt);
 }
 
+/* The signed-in account, with the help button beside it. */
+.sidebar-account {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  margin-bottom: 0.5rem;
+}
+
 .user-info {
   display: flex;
   flex-direction: column;
-  padding: 0.5rem 1rem;
-  margin-bottom: 0.5rem;
+  flex: 1;
+  min-width: 0;
+  padding: 0.5rem 0 0.5rem 1rem;
+}
+
+.user-info > span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.sidebar-help-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex: none;
+  width: var(--ui-control-h, 32px);
+  height: var(--ui-control-h, 32px);
+  border: 1px solid transparent;
+  border-radius: var(--ui-radius-md, 8px);
+  background: transparent;
+  color: var(--color-text-muted);
+  cursor: pointer;
+  transition: background-color var(--ui-transition, 120ms ease), color var(--ui-transition, 120ms ease);
+}
+
+.sidebar-help-button:hover {
+  background: color-mix(in srgb, var(--color-primary) 12%, transparent);
+  color: var(--color-primary);
+}
+
+.sidebar-help-button:focus-visible {
+  outline: 2px solid color-mix(in srgb, var(--color-primary) 55%, transparent);
+  outline-offset: 1px;
 }
 
 .user-name {
@@ -641,12 +681,13 @@
     background: var(--color-surface-alt);
   }
 
-  /* Room on the right for the three floating buttons (?, bug, Úkoly), which
-     sit in the bar as 32 px icons (FloatingTools.css). */
+  /* Room on the right for the two floating buttons (bug, Úkoly), which sit
+     in the bar as 32 px icons (FloatingTools.css). Help is in the drawer,
+     next to the account. */
   .mobile-topbar-title {
     flex: 1;
     min-width: 0;
-    padding-right: 112px;
+    padding-right: 80px;
     overflow: hidden;
     font-family: var(--font-heading, var(--font-body, "Inter", system-ui, sans-serif));
     font-size: 1rem;

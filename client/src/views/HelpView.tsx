@@ -33,7 +33,7 @@ export default function HelpView() {
         <h1>Nápověda</h1>
         <p>
           Nápovědu k obrazovce, na které právě jste, otevřete odkudkoli klávesou <kbd>?</kbd> nebo tlačítkem
-          {' '}<strong>?</strong> vpravo nahoře.
+          {' '}<strong>?</strong> v menu vedle vašeho účtu.
         </p>
         <input
           type="search"
