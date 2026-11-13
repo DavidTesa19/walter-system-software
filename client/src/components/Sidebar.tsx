@@ -1,5 +1,5 @@
 import {
-  Archive, Bot, Briefcase, CalendarDays, ChartColumn, ChartPie, ChevronDown, ChevronRight, CircleHelp, ClipboardCheck,
+  Archive, Bot, Briefcase, CalendarDays, ChartColumn, ChartNoAxesColumnIncreasing, ChartPie, ChevronDown, ChevronRight, CircleHelp, ClipboardCheck,
   Crown, Ellipsis, Flag, Globe, Hourglass, LayoutGrid, Lightbulb, ListChecks, Lock, MessagesSquare, Palette,
   ShieldCheck, SquareCheckBig, UserCog, UsersRound, Wallet,
 } from 'lucide-react';
@@ -114,6 +114,7 @@ const Icons = {
   Analytics: () => <ChartColumn {...ICON} />,
   Analysis: () => <ChartPie {...ICON} />,
   DataQuality: () => <ClipboardCheck {...ICON} />,
+  Pipeline: () => <ChartNoAxesColumnIncreasing {...ICON} />,
   Finance: () => <Wallet {...ICON} />,
   Users: () => <UserCog {...ICON} />,
   Tasks: () => <SquareCheckBig {...ICON} />,
@@ -200,7 +201,7 @@ const Sidebar: React.FC<SidebarProps> = ({
       { id: 'calendar', views: ['calendar'] },
       { id: 'teamchat', views: ['teamchat'] },
       { id: 'tasks', views: ['tasks'] },
-      { id: 'analysis', views: ['analytics', 'finance', 'data_quality'] },
+      { id: 'analysis', views: ['analytics', 'finance', 'data_quality', 'pipeline'] },
       { id: 'other', views: ['future', 'bugs', 'chatbot', 'palettes', 'admin_users', 'safety', 'help'] }
     ];
 
@@ -373,7 +374,8 @@ const Sidebar: React.FC<SidebarProps> = ({
       items: [
         { id: 'analytics', label: 'Analytika', icon: <Icons.Analytics /> },
         { id: 'finance', label: 'Finance', icon: <Icons.Finance /> },
-        { id: 'data_quality', label: 'Kvalita dat', icon: <Icons.DataQuality /> }
+        { id: 'data_quality', label: 'Kvalita dat', icon: <Icons.DataQuality /> },
+        { id: 'pipeline', label: 'Pipeline zakázek', icon: <Icons.Pipeline /> }
       ]
     },
     {

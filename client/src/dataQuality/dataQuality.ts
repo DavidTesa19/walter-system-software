@@ -96,7 +96,7 @@ function subjectRef(data: SectionData, row: Row): RecordRef {
   };
 }
 
-function commissionRef(data: SectionData, row: Row): RecordRef {
+export function commissionRef(data: SectionData, row: Row): RecordRef {
   const title = text(row.position) || text(row.service);
   return {
     section: data.section,

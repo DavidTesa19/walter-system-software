@@ -1,0 +1,337 @@
+/* Analýza › Pipeline. One series per chart, in the palette's primary colour;
+   numbers in text colours; recessive tracks; data ends rounded (4 px). */
+
+.pl-view {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+  padding: 0.5rem 1.5rem 1.5rem;
+  color: var(--color-text);
+  overflow-y: auto;
+  min-height: 0;
+  flex: 1;
+}
+
+.pl-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 1rem;
+}
+
+.pl-eyebrow {
+  font-size: var(--ui-text-xs, 11.5px);
+  font-weight: 650;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--color-text-muted);
+}
+
+.pl-header h1 {
+  margin: 0.15rem 0 0.25rem;
+  font-size: var(--ui-text-xl, 18px);
+  font-weight: 650;
+}
+
+.pl-muted {
+  margin: 0;
+  color: var(--color-text-muted);
+  font-size: var(--ui-text-sm, 12.5px);
+  max-width: 720px;
+}
+
+.pl-small {
+  margin-top: 0.5rem;
+  font-size: var(--ui-text-xs, 11.5px);
+}
+
+.pl-button {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  height: var(--ui-control-h, 32px);
+  padding: 0 0.8rem;
+  border: 1px solid var(--color-border);
+  border-radius: var(--ui-radius-md, 8px);
+  background: var(--color-surface);
+  color: var(--color-text);
+  font: inherit;
+  font-size: var(--ui-text-sm, 12.5px);
+  font-weight: 600;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.pl-button:disabled {
+  opacity: 0.6;
+  cursor: default;
+}
+
+.pl-warning {
+  padding: 0.6rem 0.8rem;
+  border: 1px solid color-mix(in srgb, var(--color-warning, #d97706) 40%, var(--color-border));
+  border-radius: var(--ui-radius-md, 8px);
+  font-size: var(--ui-text-sm, 12.5px);
+}
+
+/* Headline numbers. */
+.pl-tiles {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: 0.75rem;
+}
+
+.pl-tile,
+.pl-card {
+  border: 1px solid var(--color-border);
+  border-radius: var(--ui-radius-lg, 12px);
+  background: var(--color-surface);
+  box-shadow: var(--ui-shadow-xs, 0 1px 2px rgba(15, 23, 42, 0.06));
+}
+
+.pl-tile {
+  display: flex;
+  flex-direction: column;
+  gap: 0.15rem;
+  padding: 0.75rem 0.9rem;
+}
+
+.pl-tile-label {
+  font-size: var(--ui-text-xs, 11.5px);
+  font-weight: 600;
+  color: var(--color-text-muted);
+}
+
+.pl-tile-value {
+  font-size: 1.5rem;
+  font-weight: 650;
+  font-variant-numeric: tabular-nums;
+}
+
+.pl-tile-note {
+  font-size: var(--ui-text-xs, 11.5px);
+  color: var(--color-text-muted);
+}
+
+.pl-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(340px, 1fr));
+  gap: 0.75rem;
+  align-items: start;
+}
+
+.pl-card {
+  padding: 0.9rem 1rem;
+}
+
+.pl-card-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 0.75rem;
+  margin-bottom: 0.75rem;
+}
+
+.pl-card-head h2 {
+  margin: 0;
+  font-size: var(--ui-text-md, 13.5px);
+  font-weight: 650;
+}
+
+.pl-subhead {
+  margin: 0.75rem 0 0.4rem;
+  font-size: var(--ui-text-xs, 11.5px);
+  font-weight: 650;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--color-text-muted);
+}
+
+/* The app's segmented control. */
+.pl-switch {
+  display: inline-flex;
+  gap: 2px;
+  padding: 2px;
+  border-radius: var(--ui-radius-md, 8px);
+  background: color-mix(in srgb, var(--color-text) 6%, var(--color-surface));
+}
+
+.pl-switch button {
+  height: 24px;
+  padding: 0 0.6rem;
+  border: 1px solid transparent;
+  border-radius: var(--ui-radius-sm, 6px);
+  background: transparent;
+  color: var(--color-text-muted);
+  font: inherit;
+  font-size: var(--ui-text-xs, 11.5px);
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.pl-switch button.is-active {
+  background: var(--color-surface);
+  border-color: var(--color-border);
+  color: var(--color-text);
+}
+
+/* Horizontal bars by state. */
+.pl-bars {
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+}
+
+.pl-bar-row {
+  display: grid;
+  grid-template-columns: 110px minmax(0, 1fr) 90px;
+  align-items: center;
+  gap: 0.6rem;
+  font-size: var(--ui-text-sm, 12.5px);
+}
+
+.pl-bar-track {
+  height: 12px;
+  border-radius: 0 4px 4px 0;
+  background: color-mix(in srgb, var(--color-text) 5%, transparent);
+  overflow: hidden;
+}
+
+.pl-bar-fill {
+  display: block;
+  height: 100%;
+  border-radius: 0 4px 4px 0;
+  background: var(--color-primary);
+}
+
+.pl-bars--muted .pl-bar-fill {
+  background: color-mix(in srgb, var(--color-text-muted) 70%, transparent);
+}
+
+.pl-bar-value {
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+  color: var(--color-text);
+}
+
+.pl-bar-row:hover .pl-bar-label,
+.pl-bar-row:hover .pl-bar-value {
+  font-weight: 650;
+}
+
+/* Columns by month. */
+.pl-columns {
+  display: grid;
+  grid-template-columns: repeat(12, minmax(0, 1fr));
+  gap: 4px;
+  height: 180px;
+}
+
+.pl-column {
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 4px;
+  min-width: 0;
+}
+
+.pl-column-value {
+  height: 14px;
+  text-align: center;
+  font-size: var(--ui-text-xs, 11.5px);
+  font-variant-numeric: tabular-nums;
+  color: var(--color-text-muted);
+}
+
+.pl-column-track {
+  flex: 1;
+  display: flex;
+  align-items: flex-end;
+  border-bottom: 1px solid var(--color-border);
+}
+
+.pl-column-fill {
+  display: block;
+  width: 100%;
+  border-radius: 4px 4px 0 0;
+  background: var(--color-primary);
+}
+
+.pl-column:hover .pl-column-fill {
+  filter: brightness(1.1);
+}
+
+.pl-column-label {
+  text-align: center;
+  font-size: 10.5px;
+  color: var(--color-text-muted);
+  white-space: nowrap;
+  overflow: hidden;
+}
+
+/* The biggest open zakázky. */
+.pl-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: var(--ui-text-sm, 12.5px);
+}
+
+.pl-table th {
+  padding: 0.35rem 0.5rem;
+  border-bottom: 1px solid var(--color-border);
+  text-align: left;
+  font-size: var(--ui-text-xs, 11.5px);
+  font-weight: 600;
+  color: var(--color-text-muted);
+}
+
+.pl-table td {
+  padding: 0.45rem 0.5rem;
+  border-bottom: 1px solid color-mix(in srgb, var(--color-border) 60%, transparent);
+}
+
+.pl-num {
+  text-align: right !important;
+  font-variant-numeric: tabular-nums;
+}
+
+.pl-name {
+  font-weight: 600;
+}
+
+.pl-open {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  border: 1px solid transparent;
+  border-radius: var(--ui-radius-sm, 6px);
+  background: transparent;
+  color: var(--color-text-muted);
+  cursor: pointer;
+}
+
+.pl-open:hover {
+  background: color-mix(in srgb, var(--color-primary) 12%, transparent);
+  color: var(--color-primary);
+}
+
+@media (max-width: 768px) {
+  .pl-view {
+    padding: 0.5rem 0.5rem 1rem;
+  }
+
+  .pl-header {
+    flex-direction: column;
+  }
+
+  .pl-bar-row {
+    grid-template-columns: 90px minmax(0, 1fr) 72px;
+  }
+
+  .pl-table th:nth-child(2),
+  .pl-table td:nth-child(2) {
+    display: none;
+  }
+}

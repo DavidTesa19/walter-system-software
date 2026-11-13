@@ -584,6 +584,20 @@ would leave alone (a Lokalita without a Kraj) is not listed, or it stays on
 the list forever. API rows call the company column `company_name`;
 `fillSourceOf` maps it to the trees' `company`.
 
+## Pipeline zakázek (Analýza › Pipeline zakázek)
+
+`PipelineView.tsx` + `client/src/pipeline/pipeline.ts` (pure `summarise`): every
+zakázka of the user's sections and roles (archive left out), one per deal
+(`deal_id`), with headline tiles (open, commission in negotiation, 12-month
+success rate = Podepsáno+Uzavřeno against Zrušeno, won commission), bars by
+state (count / commission), columns by month (new by `created_at`, won by
+the `updated_at` of a won zakázka) and the biggest open ones. The amount is
+`commission_value`, else `budget`, both free text: `parseAmount` reads
+"150 000 Kč", "1,5 mil", "50k", "350 tis." (a k/m/t unit counts only when no
+letter follows, or the k of "Kč" multiplied by 1000). Admins and managers
+only (not in the salesman/viewer list). One series per chart, the palette's
+primary colour.
+
 ## Úkoly and Hlášení chyb (`server/tasks/`, `server/bugs/`)
 
 Úkoly is the team's simple to-do list, separate from Budoucí funkce (product

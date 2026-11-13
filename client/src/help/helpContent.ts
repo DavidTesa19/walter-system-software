@@ -152,6 +152,17 @@ export const HELP_TOPICS: HelpTopic[] = [
     ],
   },
   {
+    id: "pipeline",
+    title: "Pipeline zakázek",
+    views: ["pipeline"],
+    summary: "Jak si stojí obchod: zakázky podle stavu, po měsících a ty největší rozjednané.",
+    points: [
+      "Nahoře otevřené zakázky (a kolik je po termínu), provize v jednání, úspěšnost a získaná provize za 12 měsíců.",
+      "Graf podle stavu přepnete mezi počtem a provizí; graf po měsících mezi novými a získanými zakázkami.",
+      "Zakázka propojená s klientem, partnerem i tipařem se počítá jednou. Částka je provize, jinak rozpočet.",
+    ],
+  },
+  {
     id: "future",
     title: "Budoucí funkce",
     views: ["future"],
