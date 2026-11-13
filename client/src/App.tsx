@@ -104,7 +104,7 @@ const VIEW_LABELS: Record<AppView, string> = {
   analytics: 'Ostatní',
   finance: 'Finance',
   data_quality: 'Kvalita dat',
-  pipeline: 'Přehled obchodu',
+  pipeline: 'Analytika zakázek',
   admin_users: 'Správa uživatelů',
   safety: 'Bezpečnost a zálohy',
   tasks: 'Úkoly',

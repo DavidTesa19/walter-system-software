@@ -1,4 +1,4 @@
-// Analýza › Přehled obchodu (view id `pipeline`): where the business stands. Headline numbers, zakázky by
+// Analýza › Analytika zakázek (view id `pipeline`): where the business stands. Headline numbers, zakázky by
 // state (count or commission), new and won zakázky by month, and the biggest
 // open ones with a button to each. Numbers from pipeline/pipeline.ts.
 
@@ -95,7 +95,7 @@ export default function PipelineView({ onOpenRecord }: { onOpenRecord: (action: 
       <header className="pl-header">
         <div>
           <span className="pl-eyebrow">Analýza</span>
-          <h1>Přehled obchodu</h1>
+          <h1>Analytika zakázek</h1>
           <p className="pl-muted">
             Zakázky ze sekcí, které máte otevřené ({sections.map((section) => SECTION_LABELS[section]).join(', ') || 'žádné'}), bez archivu.
             Zakázka propojená s klientem, partnerem i tipařem se počítá jednou. Částka je provize, jinak rozpočet.

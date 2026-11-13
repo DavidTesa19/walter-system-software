@@ -588,10 +588,11 @@ would leave alone (a Lokalita without a Kraj) is not listed, or it stays on
 the list forever. API rows call the company column `company_name`;
 `fillSourceOf` maps it to the trees' `company`.
 
-## Přehled obchodu (Analýza › Přehled obchodu, view id `pipeline`)
+## Analytika zakázek (Analýza › Analytika zakázek, view id `pipeline`)
 
 The main analytics screen, first in Analýza (renamed from "Pipeline
-zakázek" on 2026-11-13: nobody understood "pipeline"). The app-usage screen
+zakázek" on 2026-11-13: nobody understood "pipeline"; briefly "Přehled
+obchodu", then "Analytika zakázek" at the user's request). The app-usage screen
 (view id `analytics`) is "Ostatní", last in the group (not the sidebar's own Ostatní group).
 `PipelineView.tsx` + `client/src/pipeline/pipeline.ts` (pure `summarise`): every
 zakázka of the user's sections and roles (archive left out), one per deal

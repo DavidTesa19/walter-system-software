@@ -121,7 +121,7 @@ export const HELP_TOPICS: HelpTopic[] = [
   },
   {
     id: "pipeline",
-    title: "Přehled obchodu",
+    title: "Analytika zakázek",
     views: ["pipeline"],
     summary: "Jak si stojí obchod: zakázky podle stavu, po měsících a ty největší rozjednané.",
     points: [
