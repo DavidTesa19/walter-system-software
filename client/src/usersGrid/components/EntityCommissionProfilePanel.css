@@ -3199,3 +3199,141 @@
     justify-content: flex-start;
   }
 }
+
+/* ---- Quick actions and the phone layout (2026-11-13) ---- */
+
+.ec-profile-quick {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+  margin-top: 0.6rem;
+}
+
+.ec-quick-action {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  height: var(--ui-control-h-sm, 28px);
+  padding: 0 0.7rem;
+  border: 1px solid var(--color-border, #e5e7eb);
+  border-radius: 999px;
+  background: var(--color-surface, #ffffff);
+  color: var(--color-text, #1f2937);
+  font-size: var(--ui-text-sm, 12.5px);
+  font-weight: 600;
+  text-decoration: none;
+}
+
+.ec-quick-action:hover {
+  border-color: var(--color-primary, #2563eb);
+  color: var(--color-primary, #2563eb);
+}
+
+.ec-profile-title {
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* Phones: one scroll for the whole profile (notes at the end, not half the
+   screen), a compact header with the close button in its corner, labels
+   above their values, nothing wider than the screen. */
+@media (max-width: 768px) {
+  .ec-profile-panel {
+    height: calc(100dvh / var(--app-zoom, 1));
+    max-height: calc(100dvh / var(--app-zoom, 1));
+  }
+
+  .ec-profile-header {
+    position: relative;
+    gap: 0.6rem;
+    padding: 0.75rem 3rem 0.6rem 0.9rem;
+  }
+
+  .ec-profile-header-info {
+    width: 100%;
+    min-width: 0;
+  }
+
+  .ec-profile-title {
+    font-size: 1.2rem;
+    white-space: nowrap;
+  }
+
+  .ec-profile-header-actions {
+    width: auto;
+    gap: 0.4rem;
+  }
+
+  .ec-profile-theme {
+    display: none;
+  }
+
+  .ec-profile-close {
+    position: absolute;
+    top: 0.5rem;
+    right: 0.5rem;
+  }
+
+  .ec-profile-view-switch {
+    margin: 0;
+  }
+
+  .ec-profile-quick .ec-quick-action {
+    flex: 1;
+    justify-content: center;
+    height: 36px;
+  }
+
+  .ec-profile-body {
+    flex-direction: column;
+    overflow-y: auto;
+    -webkit-overflow-scrolling: touch;
+  }
+
+  .ec-profile-main {
+    flex: none;
+    overflow: visible;
+    padding: 0.75rem;
+    gap: 1rem;
+  }
+
+  .ec-profile-sidebar {
+    flex: none;
+    max-height: none;
+    overflow: visible;
+  }
+
+  .ec-profile-column,
+  .ec-column-content,
+  .field-group {
+    min-width: 0;
+  }
+
+  .field-group {
+    padding: 0.6rem;
+    border-radius: 10px;
+  }
+
+  .field-row {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 0.15rem;
+    padding: 0.35rem 0.25rem;
+  }
+
+  .field-row > :first-child {
+    font-size: var(--ui-text-xs, 11.5px);
+    color: var(--color-text-muted, #64748b);
+    text-align: left;
+  }
+
+  .ec-section-link-toggle-group {
+    gap: 0.25rem;
+    font-size: var(--ui-text-sm, 12.5px);
+  }
+
+  .ec-notes-textarea {
+    width: 100%;
+    max-width: 100%;
+    box-sizing: border-box;
+  }
+}

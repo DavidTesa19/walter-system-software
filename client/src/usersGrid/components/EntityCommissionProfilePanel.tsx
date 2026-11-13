@@ -5,6 +5,7 @@ import { getApprovalStatusMeta } from "../utils/approvalStatus";
 import type { DocumentBreadcrumb } from "../hooks/useProfileDocuments";
 import DocumentExplorer from "./DocumentExplorer";
 import ThemeToggleButton from "../../components/ThemeToggleButton";
+import { Globe, Mail, Phone } from "lucide-react";
 import FieldSelectInput, { type FieldPickerConfig } from "./FieldSelectInput";
 import type { FieldOption } from "../fieldOptions";
 import { SPECIALIZATION_DROPDOWN_LABELS } from "../cells/fieldDropdown";
@@ -1479,6 +1480,18 @@ const EntityCommissionProfilePanel: React.FC<EntityCommissionProfilePanelProps> 
     }
   }, [activeView, showDocumentsSection]);
 
+  // The subject's own name for the title ("Anna Novakova", not "Klient"),
+  // and its first phone, e-mail and website for the quick actions.
+  const fieldValue = (key: string) =>
+    entity?.groups.flatMap((group) => group.fields).find((field) => field.key === key)?.value;
+  const firstValue = (key: string) => parseMultiValue(fieldValue(key))[0]?.trim() ?? '';
+  const subjectName =
+    (typeof fieldValue('name') === 'string' ? String(fieldValue('name')).trim() : '') || firstValue('company') || entityLabel;
+  const phone = firstValue('mobile');
+  const email = firstValue('email');
+  const website = firstValue('website');
+  const websiteHref = website && !/^https?:\/\//i.test(website) ? `https://${website}` : website;
+
   const handleOverlayMouseDown = (event: React.MouseEvent<HTMLDivElement>) => {
     if (event.target === event.currentTarget) {
       onClose();
@@ -1497,7 +1510,7 @@ const EntityCommissionProfilePanel: React.FC<EntityCommissionProfilePanelProps> 
         <header className="ec-profile-header">
           <div className="ec-profile-header-info">
             <span className="ec-profile-type">{entityTypeLabels[entityType]}</span>
-            <h2 className="ec-profile-title">{entityLabel}</h2>
+            <h2 className="ec-profile-title" title={subjectName}>{subjectName}</h2>
             <div className="ec-profile-ids">
               <span className="ec-id-badge entity">{entity.entity_id}</span>
               {commission ? (
@@ -1514,6 +1527,25 @@ const EntityCommissionProfilePanel: React.FC<EntityCommissionProfilePanelProps> 
                 <span className="ec-standalone-badge">Bez zakázky</span>
               )}
             </div>
+            {phone || email || website ? (
+              <div className="ec-profile-quick">
+                {phone ? (
+                  <a className="ec-quick-action" href={`tel:${phone.replace(/[^\d+]/g, '')}`} title={`Zavolat ${phone}`}>
+                    <Phone size={14} strokeWidth={2} aria-hidden="true" /> Zavolat
+                  </a>
+                ) : null}
+                {email ? (
+                  <a className="ec-quick-action" href={`mailto:${email}`} title={`Napsat na ${email}`}>
+                    <Mail size={14} strokeWidth={2} aria-hidden="true" /> E-mail
+                  </a>
+                ) : null}
+                {website ? (
+                  <a className="ec-quick-action" href={websiteHref} target="_blank" rel="noreferrer" title={website}>
+                    <Globe size={14} strokeWidth={2} aria-hidden="true" /> Web
+                  </a>
+                ) : null}
+              </div>
+            ) : null}
           </div>
           <div className="ec-profile-view-switch" role="tablist" aria-label="Zobrazení profilu">
             <button
@@ -1538,7 +1570,7 @@ const EntityCommissionProfilePanel: React.FC<EntityCommissionProfilePanelProps> 
             ) : null}
           </div>
           <div className="ec-profile-header-actions">
-            <ThemeToggleButton variant="icon" />
+            <span className="ec-profile-theme"><ThemeToggleButton variant="icon" /></span>
             {commission && onDuplicateEntityCommission ? (
               <button
                 type="button"

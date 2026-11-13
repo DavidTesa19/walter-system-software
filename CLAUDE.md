@@ -198,7 +198,15 @@ Phones get the same app: no separate code and no app store. Below 768 px
   own, which sat empty on almost every row. A new row-button column belongs
   in `ROW_BUTTON_ORDER`.
 - **Calendar** opens in the list week view on a phone. **Jarvis** and the
-  profile panel are full screen.
+  profile panel are full screen. The profile on a phone (2026-11-13) is one
+  scroll (notes at the end, not a fixed half), labels above values, the
+  close button in the header's corner and the theme switch hidden (it is in
+  the menu). Every screen: the title is the subject's own name (not
+  "Klient"), with Zavolat / E-mail / Web quick actions from its first
+  phone, e-mail and website.
+- **Sidebar** (2026-11-13): headings Sekce / Práce / Další; Growth Club,
+  Veřejné and Neveřejné open one at a time (`MAJOR_GROUPS`); search is
+  the top bar's Ctrl+K, not a box in the menu.
 - **Installable**: `site.webmanifest` (`display: standalone`) and the Apple meta
   tags in index.html. `InstallAppButton` in the sidebar footer catches
   `beforeinstallprompt` when its module loads (main.tsx imports it, since the
