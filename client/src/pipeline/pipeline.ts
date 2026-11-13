@@ -21,7 +21,7 @@ const text = (value: unknown) => (typeof value === 'string' ? value.trim() : val
  * Null when there is no number in it. Ranges ("100–200 tis.") take the first.
  */
 export function parseAmount(raw: unknown): number | null {
-  const value = text(raw).toLowerCase().replace(/ /g, ' ');
+  const value = text(raw).toLowerCase().replace(/[\u00a0\u202f]/g, ' ');
   if (!value) return null;
   const match = value.match(/(\d[\d\s.]*(?:,\d+)?|\d+(?:\.\d+)?)/);
   if (!match) return null;
