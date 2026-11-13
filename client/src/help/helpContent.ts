@@ -91,10 +91,10 @@ export const HELP_TOPICS: HelpTopic[] = [
     id: "calendar",
     title: "Kalendář",
     views: ["calendar"],
-    summary: "Vaše události a termíny zakázek. Na telefonu se otevře jako seznam týdne.",
+    summary: "Vaše vlastní události (kolegové je nevidí). Na telefonu se otevře Program: události týdne den po dni.",
     points: [
-      "Událost přidáte kliknutím do dne, v týdenním a denním pohledu tažením přes čas. Kliknutím na událost ji upravíte.",
-      "Pohled (měsíc, týden, den, seznam, rok) přepnete vpravo nahoře.",
+      "Událost přidáte tlačítkem „+ Nová událost“, kliknutím (na telefonu klepnutím) do dne nebo času, v týdenním a denním pohledu i tažením přes čas. Kliknutím na událost ji upravíte.",
+      "Pohled (měsíc, týden, den, program, rok) přepnete vpravo nahoře; datum události změníte ve formuláři.",
       "Jarvis umí události přidat, posunout i smazat („Připomeň mi zítra v 9 zavolat Novákovi“); smazání vždy potvrzujete vy.",
     ],
   },

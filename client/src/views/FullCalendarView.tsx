@@ -8,7 +8,7 @@ import multiMonthPlugin from '@fullcalendar/multimonth';
 import rrulePlugin from '@fullcalendar/rrule';
 import csLocale from '@fullcalendar/core/locales/cs';
 import type { EventInput, EventClickArg, DateSelectArg, EventDropArg, EventContentArg } from '@fullcalendar/core';
-import type { EventResizeDoneArg } from '@fullcalendar/interaction';
+import type { DateClickArg, EventResizeDoneArg } from '@fullcalendar/interaction';
 import { apiGet, apiPost, apiPut, apiDelete } from '../utils/api';
 import './FullCalendarView.css';
 import ClockTimePicker from '../components/ClockTimePicker';
@@ -112,6 +112,9 @@ const EventModal: React.FC<EventModalProps> = ({ isOpen, onClose, onSave, onDele
   const titleRef = useRef<HTMLInputElement>(null);
   const popoverRef = useRef<HTMLDivElement>(null);
   const [posStyle, setPosStyle] = useState<React.CSSProperties>({});
+  // A tap that opened the form is followed by the browser's emulated
+  // mousedown on the calendar: that one must not count as "outside".
+  const openedAt = useRef(0);
 
   // Build current preview data from form state
   const buildPreview = useCallback((overrides: Partial<{
@@ -140,6 +143,21 @@ const EventModal: React.FC<EventModalProps> = ({ isOpen, onClose, onSave, onDele
 
   // Wrapped setters that also emit preview
   const updateTitle = (v: string) => { setTitle(v); emitPreview({ title: v }); };
+  // A one-day event moves with its date; one spanning several days keeps its length.
+  const updateDate = (v: string) => {
+    if (!v) return;
+    let nextEnd = endDate;
+    if (!endDate || endDate === startDate) nextEnd = v;
+    else if (startDate) {
+      const days = Math.round((Date.parse(endDate) - Date.parse(startDate)) / 86_400_000);
+      const d = new Date(`${v}T12:00`);
+      d.setDate(d.getDate() + days);
+      nextEnd = formatDateLocal(d);
+    }
+    setStartDate(v);
+    setEndDate(nextEnd);
+    emitPreview({ startDate: v, endDate: nextEnd });
+  };
   const updateStartTime = (v: string) => { setStartTime(v); emitPreview({ startTime: v }); };
   const updateEndTime = (v: string) => { setEndTime(v); emitPreview({ endTime: v }); };
   const updateColor = (v: string) => { setColor(v); emitPreview({ color: v }); };
@@ -149,6 +167,7 @@ const EventModal: React.FC<EventModalProps> = ({ isOpen, onClose, onSave, onDele
   useEffect(() => {
     if (!isOpen || showTimePicker) return;
     const handler = (e: MouseEvent) => {
+      if (Date.now() - openedAt.current < 600) return;
       // If clicking inside the time picker portal (if it were one), ignore.
       if (document.querySelector('.clock-overlay')?.contains(e.target as Node)) return;
       
@@ -164,6 +183,7 @@ const EventModal: React.FC<EventModalProps> = ({ isOpen, onClose, onSave, onDele
   useEffect(() => {
     if (!isOpen) return;
 
+    openedAt.current = Date.now();
     setTitle(initial?.title ?? '');
     setDescription(initial?.description ?? '');
     setColor(initial?.color ?? EVENT_COLORS[0].value);
@@ -249,15 +269,16 @@ const EventModal: React.FC<EventModalProps> = ({ isOpen, onClose, onSave, onDele
             placeholder="Název události"
           />
 
-          {/* Date (read-only display) */}
-          {startDate && (
-            <>
-              <label style={labelStyle}>Datum</label>
-              <div style={{ ...inputStyle, background: 'var(--color-surface-muted)', color: 'var(--color-text-muted)', cursor: 'default' }}>
-                {formatDisplayDate(startDate)}
-              </div>
-            </>
-          )}
+          {/* Date */}
+          <label style={labelStyle} htmlFor="fc-event-date">Datum</label>
+          <input
+            id="fc-event-date"
+            type="date"
+            required
+            style={{ ...inputStyle, cursor: 'pointer' }}
+            value={startDate}
+            onChange={(e) => updateDate(e.target.value)}
+          />
 
           {/* Start time */}
           <label style={labelStyle}>Začátek</label>
@@ -359,11 +380,10 @@ const formatDateLocal = (d: Date) => `${d.getFullYear()}-${pad(d.getMonth() + 1)
 
 const formatTimeLocal = (d: Date) => `${pad(d.getHours())}:${pad(d.getMinutes())}`;
 
-/** Format \"2026-02-26\" → \"26.02.2026\" for display */
-const formatDisplayDate = (dateStr: string) => {
-  const [y, m, d] = dateStr.split('-');
-  return `${d}.${m}.${y}`;
-};
+/** "YYYY-MM-DDTHH:mm" in local time, which the form reads as it is. */
+const formatLocalDateTime = (d: Date) => `${formatDateLocal(d)}T${formatTimeLocal(d)}`;
+
+const isTouchEvent = (e: Event | undefined) => !!e && e.type.startsWith('touch');
 
 // ---------------------------------------------------------------------------
 // Main Calendar Component
@@ -459,24 +479,60 @@ const FullCalendarView: React.FC = () => {
 
   // ------- Event handlers -------
 
+  // On a touch screen a long press both selects and "clicks": the second
+  // one within a moment of the first is the same gesture.
+  const lastCreateOpen = useRef(0);
+
+  const openCreate = useCallback((start: string, end: string, anchor: { x: number; y: number }) => {
+    if (Date.now() - lastCreateOpen.current < 600) return;
+    lastCreateOpen.current = Date.now();
+    setModalMode('create');
+    setEditingEventId(null);
+    setModalInitial({ start, end, allDay: false });
+    setAnchorPos(anchor);
+    setModalOpen(true);
+    // Add a persistent preview event block
+    addPreviewEvent(start, end, false);
+  }, [addPreviewEvent]);
+
   /** Click on empty date / time-range select → create */
   const handleDateSelect = useCallback((selectInfo: DateSelectArg) => {
     // Immediately unselect FC's built-in highlight (we manage our own)
     selectInfo.view.calendar.unselect();
+    openCreate(selectInfo.startStr, selectInfo.endStr, { ...mousePos.current });
+  }, [openCreate]);
 
-    setModalMode('create');
-    setEditingEventId(null);
-    setModalInitial({
-      start: selectInfo.startStr,
-      end: selectInfo.endStr,
-      allDay: false,
-    });
-    setAnchorPos({ ...mousePos.current });
-    setModalOpen(true);
+  /** A tap on a touch screen creates at once (selecting needs a long press there). */
+  const handleDateClick = useCallback((info: DateClickArg) => {
+    if (!isTouchEvent(info.jsEvent)) return; // a mouse click already went through `select`
+    const rect = info.dayEl.getBoundingClientRect();
+    const anchor = { x: rect.left, y: rect.top };
+    if (info.allDay) {
+      openCreate(info.dateStr, info.dateStr, anchor);
+      return;
+    }
+    const end = new Date(info.date.getTime() + 60 * 60 * 1000);
+    openCreate(formatLocalDateTime(info.date), formatLocalDateTime(end), anchor);
+  }, [openCreate]);
 
-    // Add a persistent preview event block
-    addPreviewEvent(selectInfo.startStr, selectInfo.endStr, false);
-  }, [addPreviewEvent]);
+  /** The toolbar's "+ Nová událost": today at the next full hour when today is
+   *  on screen, else the first day shown at 9:00. One hour long. */
+  const handleAddClick = useCallback((_ev: MouseEvent, el: HTMLElement) => {
+    const view = calendarRef.current?.getApi().view;
+    const now = new Date();
+    let start: Date;
+    if (view && (now < view.activeStart || now >= view.activeEnd)) {
+      start = new Date(view.activeStart);
+      start.setHours(9, 0, 0, 0);
+    } else {
+      start = new Date(now);
+      start.setHours(Math.min(Math.max(now.getHours() + 1, 8), 21), 0, 0, 0);
+    }
+    const end = new Date(start.getTime() + 60 * 60 * 1000);
+    const rect = el.getBoundingClientRect();
+    lastCreateOpen.current = 0;
+    openCreate(formatLocalDateTime(start), formatLocalDateTime(end), { x: rect.left, y: rect.bottom });
+  }, [openCreate]);
 
   /** Click existing event → edit */
   const handleEventClick = useCallback((clickInfo: EventClickArg) => {
@@ -642,10 +698,13 @@ const FullCalendarView: React.FC = () => {
         plugins={[dayGridPlugin, timeGridPlugin, listPlugin, interactionPlugin, multiMonthPlugin, rrulePlugin]}
         // A month grid has no room for event titles on a phone: start on the list there.
         initialView={window.matchMedia('(max-width: 768px)').matches ? 'listWeek' : 'dayGridMonth'}
+        customButtons={{
+          addEvent: { text: '+ Nová událost', hint: 'Přidat událost', click: handleAddClick },
+        }}
         headerToolbar={{
           left: 'prev,today,next',
           center: 'title',
-          right: 'dayGridMonth,timeGridWeek,timeGridDay,listWeek,multiMonthYear',
+          right: 'addEvent dayGridMonth,timeGridWeek,timeGridDay,listWeek,multiMonthYear',
         }}
         locale={csLocale}
         buttonText={{
@@ -653,7 +712,7 @@ const FullCalendarView: React.FC = () => {
           month: 'Měsíc',
           week: 'Týden',
           day: 'Den',
-          list: 'Seznam',
+          list: 'Program',
           year: 'Rok',
         }}
         events={events}
@@ -668,6 +727,13 @@ const FullCalendarView: React.FC = () => {
         eventResizableFromStart={true}
         eventDurationEditable={true}
         select={handleDateSelect}
+        dateClick={handleDateClick}
+        noEventsContent={() => (
+          <div className="fc-empty-program">
+            <strong>Na tyto dny nemáte nic naplánováno.</strong>
+            <span>Program vypíše vaše události ve zvoleném týdnu, den po dni. Novou přidáte tlačítkem „+ Nová událost“ nebo klepnutím do dne v pohledu Měsíc, Týden či Den.</span>
+          </div>
+        )}
         eventClick={handleEventClick}
         eventDrop={handleEventDrop}
         eventResize={handleEventResize}
@@ -730,6 +796,8 @@ const popoverStyle: React.CSSProperties = {
   background: 'var(--color-surface)',
   borderRadius: 12,
   padding: 24,
+  // The padding counts in the width, or the form overflows a phone's screen.
+  boxSizing: 'border-box',
   width: 380,
   maxWidth: 'calc(95vw / var(--app-zoom, 1))',
   maxHeight: 'calc(85vh / var(--app-zoom, 1))',

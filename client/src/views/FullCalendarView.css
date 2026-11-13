@@ -295,7 +295,20 @@
   .fc-wrapper .fc .fc-toolbar-chunk:last-child {
     display: flex;
     flex: 1 1 100%;
+    flex-wrap: wrap;
     justify-content: center;
+    row-gap: 8px;
+  }
+
+  /* "+ Nová událost" gets a full-width row of its own under the date,
+     the view switch below it. */
+  .fc-wrapper .fc .fc-toolbar-chunk:last-child > .fc-addEvent-button {
+    flex: 1 1 100%;
+    min-height: 36px;
+  }
+
+  .fc-direction-ltr .fc-toolbar-chunk:last-child > .fc-button-group {
+    margin-left: 0;
   }
 
   .fc-wrapper .fc .fc-toolbar-title {
@@ -306,4 +319,27 @@
     padding: 0.3em 0.55em;
     font-size: 0.85rem;
   }
+}
+
+/* "+ Nová událost": the one filled button beside the view switch */
+.fc-wrapper .fc .fc-addEvent-button {
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+/* Program (list view) with nothing in it: say what it is and how to fill it */
+.fc-wrapper .fc .fc-empty-program {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  max-width: 340px;
+  padding: 0 16px;
+  text-align: center;
+  font-size: var(--ui-text-sm, 13px);
+  line-height: 1.45;
+}
+
+.fc-wrapper .fc .fc-empty-program strong {
+  color: var(--color-text);
+  font-size: var(--ui-text-md, 14px);
 }

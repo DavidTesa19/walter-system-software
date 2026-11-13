@@ -197,7 +197,11 @@ Phones get the same app: no separate code and no app store. Below 768 px
   as a badge (`ProfileCellRenderer`); the dot no longer has a column of its
   own, which sat empty on almost every row. A new row-button column belongs
   in `ROW_BUTTON_ORDER`.
-- **Calendar** opens in the list week view on a phone. **Jarvis** and the
+- **Calendar** opens in the list week view ("Program") on a phone. Events
+  are added with the toolbar's "+ Nová událost" (its own full-width row on a
+  phone) or a tap: on touch, `dateClick` creates at once (FullCalendar's
+  `select` needs a long press there); a mouse click goes through `select`
+  only. The form's date is editable. **Jarvis** and the
   profile panel are full screen. The profile on a phone (2026-11-13) is one
   scroll (notes at the end, not a fixed half), labels above values, the
   close button in the header's corner and the theme switch hidden (it is in
