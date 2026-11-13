@@ -101,7 +101,7 @@ const VIEW_LABELS: Record<AppView, string> = {
   chatbot: 'AI Asistent',
   calendar: 'Kalendář',
   teamchat: 'Týmový chat',
-  analytics: 'Využití aplikace',
+  analytics: 'Ostatní',
   finance: 'Finance',
   data_quality: 'Kvalita dat',
   pipeline: 'Přehled obchodu',

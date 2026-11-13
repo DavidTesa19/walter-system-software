@@ -154,7 +154,7 @@ export const HELP_TOPICS: HelpTopic[] = [
   },
   {
     id: "analytics",
-    title: "Využití aplikace",
+    title: "Ostatní",
     views: ["analytics"],
     summary: "Jak se aplikace používá.",
     points: [

@@ -592,7 +592,7 @@ the list forever. API rows call the company column `company_name`;
 
 The main analytics screen, first in Analýza (renamed from "Pipeline
 zakázek" on 2026-11-13: nobody understood "pipeline"). The app-usage screen
-(view id `analytics`) is "Využití aplikace", last in the group.
+(view id `analytics`) is "Ostatní", last in the group (not the sidebar's own Ostatní group).
 `PipelineView.tsx` + `client/src/pipeline/pipeline.ts` (pure `summarise`): every
 zakázka of the user's sections and roles (archive left out), one per deal
 (`deal_id`), with headline tiles (open, commission in negotiation, 12-month

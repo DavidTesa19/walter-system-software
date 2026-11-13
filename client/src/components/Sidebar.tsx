@@ -375,7 +375,7 @@ const Sidebar: React.FC<SidebarProps> = ({
         { id: 'pipeline', label: 'Přehled obchodu', icon: <Icons.Pipeline /> },
         { id: 'data_quality', label: 'Kvalita dat', icon: <Icons.DataQuality /> },
         { id: 'finance', label: 'Finance', icon: <Icons.Finance /> },
-        { id: 'analytics', label: 'Využití aplikace', icon: <Icons.Analytics /> }
+        { id: 'analytics', label: 'Ostatní', icon: <Icons.Analytics /> }
       ]
     },
     {
