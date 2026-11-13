@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { Check, Copy, Pencil, RotateCcw } from 'lucide-react';
 import MarkdownMessage from '../components/MarkdownMessage';
 import { jarvisApi } from './jarvisApi';
 import type {
@@ -1147,6 +1148,54 @@ interface JarvisPanelProps {
 
 // 👍/👎 under an answer. Clicking the chosen one again takes it back; after 👎
 // an optional note says what was wrong. Admins read both in Finance › Jarvis.
+// Under an answer: copy its text; on the latest one also ask the same
+// question again or put it back in the box to edit (the conversation only
+// grows, so both send a new question rather than rewrite the old one).
+function AnswerActions({
+  answer,
+  latest,
+  disabled,
+  onAskAgain,
+  onEdit,
+}: {
+  answer: string;
+  latest: boolean;
+  disabled: boolean;
+  onAskAgain: () => void;
+  onEdit: () => void;
+}) {
+  const [copied, setCopied] = useState(false);
+  const copy = async () => {
+    try {
+      await navigator.clipboard.writeText(answer);
+      setCopied(true);
+      window.setTimeout(() => setCopied(false), 1500);
+    } catch {
+      setCopied(false);
+    }
+  };
+  return (
+    <span className="jarvis-answer-actions">
+      <button type="button" className="jarvis-answer-action" onClick={() => void copy()} title="Zkopírovat odpověď" aria-label="Zkopírovat odpověď">
+        {copied ? <Check size={14} strokeWidth={2.2} aria-hidden="true" /> : <Copy size={14} strokeWidth={2} aria-hidden="true" />}
+        <span>{copied ? 'Zkopírováno' : 'Kopírovat'}</span>
+      </button>
+      {latest && (
+        <>
+          <button type="button" className="jarvis-answer-action" onClick={onAskAgain} disabled={disabled} title="Položit stejnou otázku znovu">
+            <RotateCcw size={14} strokeWidth={2} aria-hidden="true" />
+            <span>Znovu</span>
+          </button>
+          <button type="button" className="jarvis-answer-action" onClick={onEdit} disabled={disabled} title="Upravit otázku a poslat znovu">
+            <Pencil size={14} strokeWidth={2} aria-hidden="true" />
+            <span>Upravit otázku</span>
+          </button>
+        </>
+      )}
+    </span>
+  );
+}
+
 function AnswerFeedback({
   rating,
   onRate,
@@ -2066,6 +2115,21 @@ export default function JarvisPanel({ open, onOpen, onClose, viewLabel, launcher
                         : ` · automaticky: ${turn.answerRouting.reason ?? ''}`)}
                   </span>
                 )}
+                <AnswerActions
+                  answer={turn.answer}
+                  latest={index === turns.length - 1}
+                  disabled={busy}
+                  onAskAgain={() => void send(turn.question.text)}
+                  onEdit={() => {
+                    setInput(turn.question.text);
+                    window.setTimeout(() => {
+                      const box = inputRef.current;
+                      if (!box) return;
+                      box.focus();
+                      box.setSelectionRange(box.value.length, box.value.length);
+                    }, 0);
+                  }}
+                />
                 {conversationId && (
                   <AnswerFeedback rating={turn.feedback} onRate={(rating, comment) => rateAnswer(index, rating, comment)} />
                 )}
