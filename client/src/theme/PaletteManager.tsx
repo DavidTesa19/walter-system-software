@@ -475,19 +475,28 @@ const PaletteManager: React.FC = () => {
 
 // A small picture of the app in a palette's colours: the page, the menu, a
 // card with two lines of text, a button and an accent dot.
-const PalettePreview: React.FC<{ colors: PaletteColors }> = ({ colors }) => (
-  <div
-    className="palette-preview"
-    style={{ background: colors.background, ['--preview-primary' as string]: colors.primary } as React.CSSProperties}
-    aria-hidden="true"
-  >
-    <div className="palette-preview__menu" style={{ background: colors.surface, borderRight: `1px solid ${colors.border}` }} />
-    <div className="palette-preview__card" style={{ background: colors.surface, border: `1px solid ${colors.border}` }}>
-      <span className="palette-preview__line" style={{ background: colors.text }} />
-      <span className="palette-preview__line palette-preview__line--short" style={{ background: colors.muted }} />
-      <span className="palette-preview__button" style={{ background: colors.primary }} />
+// A miniature of the app: menu with an active item, a page title and button,
+// and a table card with rows, a badge in the accent colour and muted text.
+// Laid out in percentages, so the same picture works small and large.
+const PalettePreview: React.FC<{ colors: PaletteColors; large?: boolean }> = ({ colors, large }) => (
+  <div className={`palette-preview${large ? ' palette-preview--large' : ''}`} style={{ background: colors.background }} aria-hidden="true">
+    <div className="pp-menu" style={{ background: colors.surface, borderRight: `1px solid ${colors.border}` }}>
+      <span className="pp-logo" style={{ background: colors.primary }} />
+      <span className="pp-item is-active" style={{ background: `color-mix(in srgb, ${colors.primary} 22%, transparent)` }} />
+      <span className="pp-item" style={{ background: colors.muted }} />
+      <span className="pp-item" style={{ background: colors.muted }} />
     </div>
-    <span className="palette-preview__dot" style={{ background: colors.accent }} />
+    <span className="pp-title" style={{ background: colors.text }} />
+    <span className="pp-button" style={{ background: colors.primary }} />
+    <div className="pp-card" style={{ background: colors.surface, border: `1px solid ${colors.border}` }}>
+      {[0, 1, 2].map(row => (
+        <div key={row} className="pp-row" style={{ borderBottom: row < 2 ? `1px solid ${colors.border}` : 'none' }}>
+          <span className="pp-text" style={{ background: colors.text }} />
+          <span className="pp-muted" style={{ background: colors.muted }} />
+          {row === 0 ? <span className="pp-badge" style={{ background: colors.accent }} /> : null}
+        </div>
+      ))}
+    </div>
   </div>
 );
 
@@ -527,12 +536,13 @@ const PaletteCard: React.FC<PaletteCardProps> = ({
           ) : null}
         </div>
         <div className="palette-card__strip" role="img" aria-label="Barvy motivu">
-          {COLOR_FIELDS.map(field => (
-            <span
-              key={field.key}
-              style={{ background: palette.colors[field.key] }}
-              title={`${field.label}: ${palette.colors[field.key]}`}
-            />
+          {COLOR_GROUPS.map(group => (
+            <span key={group.title} className={`palette-card__strip-group${group.main ? ' is-main' : ''}`}>
+              {group.keys.map(key => {
+                const field = COLOR_FIELDS.find(item => item.key === key)!;
+                return <span key={key} style={{ background: palette.colors[key] }} title={`${field.label}: ${palette.colors[key]}`} />;
+              })}
+            </span>
           ))}
         </div>
         {palette.typography ? <div className="palette-card__fonts">{fontSummary(palette.typography)}</div> : null}
@@ -781,6 +791,8 @@ const PaletteForm: React.FC<PaletteFormProps> = ({
           Zavřít
         </button>
       </div>
+      {/* Live: changes as the colours are picked. */}
+      <PalettePreview colors={draft.colors} large />
       <label className="palette-form__label" htmlFor={`palette-name-${draft.mode}`}>
         Název palety
       </label>

@@ -1292,3 +1292,27 @@
     grid-template-columns: 70px minmax(0, 1fr);
   }
 }
+
+/* ---- Preview, richer (2026-11-12): menu, title, button, table card ---- */
+.palette-preview { width: 96px; height: 64px; }
+.palette-preview--large { width: 100%; height: auto; aspect-ratio: 3 / 1.4; max-height: 150px; border-radius: 8px; }
+.palette-preview > * { position: absolute; }
+.pp-menu { inset: 0 auto 0 0; width: 22%; display: flex; flex-direction: column; gap: 7%; padding: 8% 4%; box-sizing: border-box; }
+.pp-menu > span { position: static; display: block; border-radius: 2px; height: 5%; min-height: 2px; }
+.pp-logo { width: 40%; height: 9% !important; }
+.pp-item { width: 80%; opacity: 0.55; }
+.pp-item.is-active { opacity: 1; }
+.pp-title { left: 28%; top: 10%; width: 28%; height: 6%; min-height: 2px; border-radius: 2px; }
+.pp-button { right: 6%; top: 7%; width: 14%; height: 12%; border-radius: 3px; }
+.pp-card { left: 28%; right: 6%; top: 27%; bottom: 9%; border-radius: 4px; display: flex; flex-direction: column; overflow: hidden; }
+.pp-row { position: relative; flex: 1; display: flex; align-items: center; gap: 6%; padding: 0 6%; }
+.pp-row > span { display: block; height: 18%; min-height: 2px; border-radius: 2px; }
+.pp-text { width: 34%; }
+.pp-muted { width: 24%; opacity: 0.8; }
+.pp-badge { width: 14%; height: 34% !important; border-radius: 999px !important; margin-left: auto; }
+
+/* The strip: the three main colours wide, the four details narrow. */
+.palette-card__strip { gap: 3px; border: none; overflow: visible; max-width: 240px; }
+.palette-card__strip-group { display: flex; flex: 1; border-radius: 4px; overflow: hidden; border: 1px solid var(--color-border); }
+.palette-card__strip-group.is-main { flex: 1.6; }
+.palette-card__strip-group span { flex: 1; }
