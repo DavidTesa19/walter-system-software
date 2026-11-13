@@ -21,8 +21,47 @@ export interface OverviewDocument {
   entityId: number;
   section: DocumentSection;
   role: DocumentRole;
-  owner: { label: string; status: string | null; exists: boolean };
+  // ok: opens in its profile; legacy: only in the pre-2026 tables; missing:
+  // the subject was deleted. legacy and missing files show in no profile.
+  owner: { label: string; status: string | null; exists: boolean; state: 'ok' | 'legacy' | 'missing' };
 }
+
+export interface HistoryMonth {
+  month: string; // "2026-04"
+  addedCount: number;
+  addedBytes: number;
+  removedCount: number;
+  removedBytes: number;
+  netBytes: number;
+  totalBytes: number;
+  totalCount: number;
+  costCzk: number;
+}
+
+export interface DocumentsHistory {
+  months: HistoryMonth[];
+  summary: {
+    totalBytes: number;
+    costCzk: number;
+    costPerGbCzk: number;
+    ramCostPerGbCzk: number;
+    avgMonthlyBytes: number;
+    averagedMonths: number;
+    in12Bytes: number;
+    in12CostCzk: number;
+    busiestMonth: { month: string; addedBytes: number; addedCount: number } | null;
+    deletionsTrackedSince: string;
+  };
+}
+
+// A file no profile shows: its subject was deleted or lives only in an old table.
+export const isOrphan = (doc: Pick<OverviewDocument, 'owner'>) => doc.owner.state !== 'ok';
+
+const MONTH_NAMES = ['led', 'úno', 'bře', 'dub', 'kvě', 'čvn', 'čvc', 'srp', 'zář', 'říj', 'lis', 'pro'];
+const MONTH_LONG = ['leden', 'únor', 'březen', 'duben', 'květen', 'červen', 'červenec', 'srpen', 'září', 'říjen', 'listopad', 'prosinec'];
+// "dub 26" on the axis, "duben 2026" in a tooltip.
+export const monthShort = (key: string) => `${MONTH_NAMES[Number(key.slice(5, 7)) - 1]} ${key.slice(2, 4)}`;
+export const monthLong = (key: string) => `${MONTH_LONG[Number(key.slice(5, 7)) - 1]} ${key.slice(0, 4)}`;
 
 export interface DeletedDocument {
   auditId: number;
@@ -50,6 +89,7 @@ export interface DocumentsOverview {
   };
   cost: { disk: number; offsite: number; total: number; usdCzk: number; rateDate: string | null };
   prices: { railwayDiskUsdPerGbMonth: number; railwayRamUsdPerGbMonth: number; r2UsdPerGbMonth: number; r2FreeGb: number };
+  history: DocumentsHistory;
   generatedAt: string;
 }
 
@@ -171,6 +211,7 @@ export interface DocumentFilters {
   state: StateFilter;
   minMb: SizeFilter;
   duplicatesOnly: boolean;
+  orphansOnly: boolean;
   owner: string | null; // `${entityType}:${entityId}`
 }
 
@@ -181,6 +222,7 @@ export const EMPTY_FILTERS: DocumentFilters = {
   state: 'all',
   minMb: 0,
   duplicatesOnly: false,
+  orphansOnly: false,
   owner: null,
 };
 
@@ -199,6 +241,7 @@ export function filterDocuments(documents: OverviewDocument[], filters: Document
     if (filters.state === 'archived' && !doc.archivedAt) return false;
     if (minBytes > 0 && doc.sizeBytes < minBytes) return false;
     if (filters.duplicatesOnly && !duplicates.has(doc.id)) return false;
+    if (filters.orphansOnly && !isOrphan(doc)) return false;
     if (filters.owner && ownerKey(doc) !== filters.owner) return false;
     if (words.length > 0) {
       const haystack = fold(`${doc.filename} ${doc.folder} ${doc.owner.label} ${doc.uploadedBy ?? ''}`);

@@ -14,6 +14,7 @@ import {
   formatBytes,
   formatCzk,
   groupBy,
+  isOrphan,
   memoryCostCzk,
   ownerKey,
   sortDocuments,
@@ -31,6 +32,7 @@ import type {
 } from '../documentsOverview/documentsOverview';
 import type { JarvisOpenAction } from '../jarvis/jarvisApi';
 import type { AppView } from '../types/appView';
+import HistoryCard from '../documentsOverview/HistoryCard';
 import { BUTTON_ICON, TAB_ICON } from '../ui/icons';
 import { apiDelete, apiDownload, apiGet } from '../utils/api';
 import './DocumentsOverviewView.css';
@@ -91,6 +93,10 @@ export default function DocumentsOverviewView({ onOpenRecord, onOpenView }: Prop
   const bySection = useMemo(() => groupBy(documents, (doc) => doc.section, (doc) => SECTION_LABELS[doc.section]), [documents]);
   const byOwner = useMemo(() => groupBy(documents, ownerKey, (doc) => doc.owner.label).slice(0, 8), [documents]);
   const archivedCount = useMemo(() => documents.filter((doc) => doc.archivedAt).length, [documents]);
+  const orphans = useMemo(() => {
+    const list = documents.filter(isOrphan);
+    return { count: list.length, bytes: list.reduce((sum, doc) => sum + doc.sizeBytes, 0), owners: new Set(list.map(ownerKey)).size };
+  }, [documents]);
   const deletedBytes = useMemo(() => (data?.deleted ?? []).reduce((sum, doc) => sum + doc.sizeBytes, 0), [data]);
 
   const setFilter = <K extends keyof DocumentFilters>(key: K, value: DocumentFilters[K]) => {
@@ -219,6 +225,21 @@ export default function DocumentsOverviewView({ onOpenRecord, onOpenView }: Prop
             </button>
             <button
               type="button"
+              className={`dov-tile dov-tile--button${filters.orphansOnly ? ' is-active' : ''}`}
+              onClick={() => setFilter('orphansOnly', !filters.orphansOnly)}
+              disabled={orphans.count === 0}
+              title={orphans.count ? 'Zobrazit jen soubory, které žádný profil neukazuje' : undefined}
+            >
+              <span className="dov-tile-label">Bez subjektu</span>
+              <span className="dov-tile-value">{orphans.count}</span>
+              <span className="dov-tile-note">
+                {orphans.count
+                  ? `${formatBytes(orphans.bytes)} · ${Math.round((orphans.bytes / Math.max(1, totalBytes)) * 100)} % · v žádném profilu`
+                  : 'každý soubor má svůj subjekt'}
+              </span>
+            </button>
+            <button
+              type="button"
               className={`dov-tile dov-tile--button${showDeleted ? ' is-active' : ''}`}
               onClick={() => setShowDeleted((value) => !value)}
               disabled={data.deleted.length === 0}
@@ -294,6 +315,8 @@ export default function DocumentsOverviewView({ onOpenRecord, onOpenView }: Prop
               onPick={(key) => setFilter('owner', filters.owner === key ? null : key)}
             />
           </div>
+
+          <HistoryCard history={data.history} />
 
           <section className="dov-card">
             <div className="dov-toolbar">
@@ -382,7 +405,14 @@ export default function DocumentsOverviewView({ onOpenRecord, onOpenView }: Prop
                               <ExternalLink {...TAB_ICON} size={12} />
                             </button>
                           ) : (
-                            <span className="dov-muted" title="Subjekt už neexistuje">{doc.owner.label} (smazán)</span>
+                            <span
+                              className="dov-orphan"
+                              title={doc.owner.state === 'legacy'
+                                ? 'Patří k záznamu ze staré tabulky, žádný profil ho neukazuje.'
+                                : 'Subjekt byl smazán; soubor v aplikaci nikde neuvidíte.'}
+                            >
+                              {doc.owner.label}
+                            </span>
                           )}
                           {doc.role && <div className="dov-sub">{ROLE_LABELS[doc.role]}</div>}
                         </td>

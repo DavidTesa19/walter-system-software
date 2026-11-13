@@ -8,6 +8,7 @@
 
 import crypto from 'node:crypto';
 import { getRates } from '../finance/rates.js';
+import { monthlyHistory } from './history.js';
 
 // Railway bills a volume at $0.000003472 per GB-minute (≈ $0.15 per GB-month)
 // and RAM at $0.000231 per GB-minute (≈ $10 per GB-month); Cloudflare R2 is
@@ -35,6 +36,10 @@ export const OWNER_TABLES = Object.freeze({
   'growth-tipers': { table: 'growth_tiper_entities', section: 'growth', role: 'tiper' },
   'future-functions': { table: 'future_functions', section: 'future', role: null },
 });
+
+// The tables Veřejné used before the subject/zakázka split (2026). A file still
+// pointing at one of these ids is not shown in any profile.
+const LEGACY_TABLES = Object.freeze({ clients: 'clients', partners: 'partners', tipers: 'tipers' });
 
 const text = (value) => (typeof value === 'string' ? value.trim() : '');
 
@@ -70,14 +75,30 @@ async function loadOwners(pool, documents) {
     idsByType.get(doc.entityType).add(doc.entityId);
   }
   const owners = new Map();
-  for (const [type, ids] of idsByType) {
-    const { table } = OWNER_TABLES[type];
-    if (!(await tableExists(pool, table))) continue;
+  const lookup = async (type, table, ids, state) => {
+    if (ids.length === 0 || !(await tableExists(pool, table))) return;
     // to_jsonb keeps this working whichever name columns a table has.
-    const { rows } = await pool.query(`SELECT id, to_jsonb(t) AS row FROM "${table}" t WHERE id = ANY($1::int[])`, [[...ids]]);
-    for (const { id, row } of rows) owners.set(`${type}:${id}`, row);
+    const { rows } = await pool.query(`SELECT id, to_jsonb(t) AS row FROM "${table}" t WHERE id = ANY($1::int[])`, [ids]);
+    for (const { id, row } of rows) owners.set(`${type}:${id}`, { ...row, __state: state });
+  };
+  for (const [type, ids] of idsByType) {
+    await lookup(type, OWNER_TABLES[type].table, [...ids], 'ok');
+    if (LEGACY_TABLES[type]) {
+      await lookup(type, LEGACY_TABLES[type], [...ids].filter((id) => !owners.has(`${type}:${id}`)), 'legacy');
+    }
   }
   return owners;
+}
+
+const ROLE_WORDS = { client: 'klient', partner: 'partner', tiper: 'tipař' };
+const SECTION_WORDS = { public: 'Veřejné', projects: 'Neveřejné', growth: 'Growth Club', future: 'Budoucí funkce' };
+
+// "Smazaný subjekt · Neveřejné klient #25"
+export function missingOwnerLabel(entityType, entityId) {
+  const meta = OWNER_TABLES[entityType];
+  if (!meta) return `${entityType} #${entityId}`;
+  if (meta.section === 'future') return `Smazaná funkce #${entityId}`;
+  return `Smazaný subjekt · ${SECTION_WORDS[meta.section]} ${ROLE_WORDS[meta.role] ?? ''} #${entityId}`.replace(/\s+#/, ' #');
 }
 
 // Folder names from the root down: "Smlouvy / 2026".
@@ -115,9 +136,13 @@ function shapeDocuments(documents, owners) {
         entityId: doc.entityId,
         section: meta.section,
         role: meta.role,
-        owner: owner
-          ? { label: ownerLabel(owner), status: text(owner.status) || 'accepted', exists: true }
-          : { label: `${doc.entityType} #${doc.entityId}`, status: null, exists: false },
+        // ok: opens in its profile; legacy: only in the pre-2026 tables, no
+        // profile shows it; missing: the subject is gone.
+        owner: owner?.__state === 'ok'
+          ? { label: ownerLabel(owner), status: text(owner.status) || 'accepted', exists: true, state: 'ok' }
+          : owner
+            ? { label: `${ownerLabel(owner)} (starý záznam)`, status: null, exists: false, state: 'legacy' }
+            : { label: missingOwnerLabel(doc.entityType, doc.entityId), status: null, exists: false, state: 'missing' },
       };
     });
 }
@@ -189,10 +214,26 @@ async function pgOverview(pool) {
            ${hasBackupFiles ? '(SELECT count(*) FROM backup_files)' : '0'}::bigint AS offsite_file_count,
            ${hasBackups ? "(SELECT coalesce(sum(size_bytes), 0) FROM backups WHERE status = 'ok')" : '0'}::bigint AS archive_bytes`);
 
+  // Every file deletion the change log knows (since 2026-10), for the monthly
+  // history; folders weigh nothing.
+  let deletions = [];
+  if (hasAudit) {
+    const { rows: deletedRows } = await pool.query(`
+      SELECT (old_data->>'size_bytes')::bigint AS size_bytes, old_data->>'created_at' AS created_at, at
+        FROM audit_log
+       WHERE table_name = 'documents' AND op = 'D' AND coalesce(old_data->>'item_kind', 'file') <> 'folder'`);
+    deletions = deletedRows.map((row) => ({
+      sizeBytes: Number(row.size_bytes ?? 0),
+      createdAt: row.created_at,
+      deletedAt: toIso(row.at),
+    }));
+  }
+
   const owners = await loadOwners(pool, documents);
   return {
     documents: shapeDocuments(documents, owners),
     folderCount: documents.filter((doc) => doc.itemKind === 'folder').length,
+    deletions,
     deleted,
     storage: {
       databaseBytes: Number(sizes.database_bytes),
@@ -240,6 +281,7 @@ function fileOverview(store) {
   return {
     documents: shapeDocuments(documents, owners),
     folderCount: documents.filter((doc) => doc.itemKind === 'folder').length,
+    deletions: [],
     deleted: [],
     storage: {
       databaseBytes: fileBytes,
@@ -257,15 +299,23 @@ function fileOverview(store) {
 export function registerDocumentOverviewRoutes(app, { authenticateToken, requireRole, pool, readStore }) {
   app.get('/api/documents/overview', authenticateToken, requireRole('admin'), async (_req, res) => {
     try {
-      const overview = pool ? await pgOverview(pool) : fileOverview(readStore());
+      const { deletions, ...overview } = pool ? await pgOverview(pool) : fileOverview(readStore());
       const { storage } = overview;
       const cost = storageCostUsd({
         diskBytes: storage.documentsBytes + storage.deletedBytes,
         offsiteBytes: storage.offsiteFileBytes + storage.offsiteArchiveBytes,
       });
       const { rates, date } = await getRates();
+      const history = monthlyHistory({
+        files: overview.documents,
+        deletions,
+        now: new Date(),
+        prices: STORAGE_PRICES,
+        usdCzk: rates.USD,
+      });
       res.json({
         ...overview,
+        history,
         cost: { ...cost, usdCzk: rates.USD, rateDate: date ?? null },
         prices: STORAGE_PRICES,
         generatedAt: new Date().toISOString(),

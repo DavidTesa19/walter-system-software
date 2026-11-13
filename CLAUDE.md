@@ -592,6 +592,21 @@ log apply; a deleted file's bytes stay a year in the change log).
 Duplicates are files with the same SHA-256. Managers are blocked
 (`MANAGER_BLOCKED_VIEWS`), like Finance.
 
+- **Owner states**: `ok` (found in the section's `*_entities`), `legacy`
+  (only in the pre-2026 `clients` / `partners` / `tipers` tables) or
+  `missing` (`missingOwnerLabel`: "Smazaný subjekt · Neveřejné klient #25").
+  Neither of the last two shows in any profile; the "Bez subjektu" tile
+  filters them. On 2026-11-13 that was 245 of 289 files (354 MB): Neveřejné
+  subjects 7–39 were deleted before the change log existed and their files
+  stayed. Do not delete them without the user's say.
+- **Vývoj v čase** (`HistoryCard.tsx`, server `documents/history.js`, pure,
+  tested): per Prague month uploads, deletions (change log only, so from
+  2026-10), net change, the total at month end and its disk cost; a switch
+  between Úložiště / Přírůstek / Náklady (a shrinking month in the danger
+  colour below zero), a tooltip per column, a table view, and figures (cost
+  per GB, average growth of the last six months, size and cost in a year at
+  that rate, busiest month).
+
 ## Kvalita dat (Analýza › Kvalita dat)
 
 `DataQualityView.tsx` + `client/src/dataQuality/dataQuality.ts` (pure

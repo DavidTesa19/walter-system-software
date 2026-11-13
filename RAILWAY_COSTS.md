@@ -33,6 +33,32 @@ Why it went up:
    are small (a few MB each). To be confirmed by step 3.
 3. The two static sites (`npx serve`) hold ~250 MB between them to serve files.
 
+## Expected costs, before and after
+
+Monthly, at 22,1 Kč/$. The bill is usage + 21 % VAT once usage passes the
+plan's included $5; below that it is the $5 fee + VAT.
+
+| | Usage | Bill (with VAT) | Kč | Change |
+|---|---|---|---|---|
+| Before (12 Oct – 12 Nov) | $17.30 | $20.89 | ≈ 462 Kč | — |
+| **Now** (Period 0 paused, backup fix; Postgres back to ~0.28–0.35 GB) | ≈ $7.9 | **≈ $9.5** | **≈ 210 Kč** | **−55 %** |
+| + step 7 (static sites on Cloudflare Pages) | ≈ $5.3 | ≈ $6.4 | ≈ 141 Kč | −70 % |
+| + steps 5 and 8 (Postgres cap, slimmer back-end) | ≤ $5 | $6.05 (floor) | ≈ 134 Kč | −71 % |
+| Before June, for comparison | < $5 | the floor | ≈ 100–130 Kč | |
+
+"Now" per service: Postgres ≈ $3.0 (was $7.66), Back-End $2.26, Front-End
+$1.96, Public Form Page $0.64; Period 0 ($2.86) and the deleted services
+($1.93) are gone. Postgres's new level is an estimate until its Memory graph
+settles: every 0.1 GB it holds is ≈ $1 a month. The floor ($5 + VAT) is the
+Hobby plan's minimum; nothing below it is possible on Railway.
+
+Storing the files themselves is cheap: 456 MB on the disk ≈ 1,5 Kč a month,
+and the R2 copies are free up to 10 GB. They cost money only while held in
+memory (≈ 221 Kč per GB a month), which the backup fix stopped. 245 of the
+289 files (354 MB, 78 %) belong to no existing subject: mostly Neveřejné
+subjects 7–39, deleted before the change log (October 2026), plus a few
+pointing at the pre-2026 Veřejné tables (Analýza › Dokumenty › Bez subjektu).
+
 ## To-do, one by one
 
 Savings are per month, estimated from the table above. Backups, the change log
@@ -99,6 +125,30 @@ and every safety guard stay as they are.
       form.waltersystem.cz, free there. `client/public/serve.json`'s rewrites
       (`/stahnout`, the SPA catch-all) become a `_redirects` file. The Railway
       services are then paused like Period 0, not deleted.
+      **Parked 2026-11-13 ("later")**: tracked in the Walter Skill Tree as
+      `perf-pages`; steps 5 and 8 as `perf-pg-memory` / `perf-backend-ram`.
+      **Plan (2026-11-13):** DNS is at WEDOS (CNAMEs to `*.up.railway.app`),
+      so Cloudflare only hosts the files; the CNAMEs change at WEDOS.
+      Pages needs no `_redirects`: `/stahnout` serves `stahnout.html` by
+      itself, and with no `404.html` every other path gets `index.html`.
+      `client/public/_headers` carries serve.json's APK headers.
+      1. Pages project **walter-app** from GitHub `walter-system-software`,
+         branch `main`, root `client`, build `npm run build`, output `dist`,
+         env `NODE_VERSION=22`, `VITE_API_URL=https://api.waltersystem.cz`,
+         `VITE_GOOGLE_MAPS_API_KEY` (you paste it from Railway › Walter
+         System Front-End › Variables).
+      2. Pages project **walter-form**: root `public-form`, no build, output
+         `.` (index.html + field-options.json; the form calls the API by
+         itself).
+      3. Check both on their `*.pages.dev` address (the API allows any
+         origin, so login works there too).
+      4. Custom domains in Pages (app. and form.waltersystem.cz), then you
+         change the two CNAMEs at WEDOS to `walter-app.pages.dev` /
+         `walter-form.pages.dev`. No downtime: Railway answers until the DNS
+         moves.
+      5. A day later, pause Walter System Front-End and Public Form Page on
+         Railway (remove the deployment, keep the service). Rollback = the
+         CNAME back + Redeploy.
 - [ ] **8. Slim the back-end** (code, Claude). Saves ≈ $0.50–1. Build the
       backup archive table by table instead of one huge string, load
       pdfmake / exceljs / docx / unpdf only when Jarvis makes or reads a file,
