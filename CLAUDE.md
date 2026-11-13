@@ -308,6 +308,15 @@ draft; the original changes only if the user saves over it. The screen
 mock of the app in its colours), a seven-colour strip, the font names and
 icon actions; the full colour list and font samples are in the edit form.
 
+## Search from anywhere (Ctrl/⌘+K, `components/SearchPalette.tsx`)
+
+The "Hledat…" button in the top bar (FloatingTools; an icon in the phone's
+top bar) and Ctrl/⌘+K open a search window: records through the same
+`runGlobalSearch` / `handleSearchNavigate` as the sidebar's box, plus the
+screens the user may open (`VIEW_LABELS` filtered by `isViewAllowed`,
+accent-insensitive). Enter opens, Shift+Enter opens the profile. Anything
+can open it with `openSearch()` (event `walter:open-search`, App listens).
+
 ## Help: the "?" panel and Ostatní › Nápověda
 
 `client/src/help/helpContent.ts` holds every keyboard shortcut (`SHORTCUTS`)

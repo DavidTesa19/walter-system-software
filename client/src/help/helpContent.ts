@@ -17,6 +17,7 @@ export interface Shortcut {
 
 export const SHORTCUTS: Shortcut[] = [
   { keys: ["?"], action: "Nápověda k obrazovce, na které jste", where: "kdekoli mimo textové pole" },
+  { keys: ["Ctrl K"], action: "Hledat odkudkoli: záznamy i obrazovky (Enter otevře, Shift+Enter otevře profil)", where: "na Macu ⌘K; také tlačítko Hledat… nahoře" },
   { keys: ["Alt+J"], action: "Otevřít nebo zavřít Jarvise" },
   {
     keys: ["Alt+M"],

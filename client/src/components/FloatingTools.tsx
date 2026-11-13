@@ -7,7 +7,8 @@
 // 1000), so an open panel covers them instead of the other way round.
 
 import { useEffect, useMemo, useState } from 'react';
-import { ExternalLink, Flag, Minus, SquareCheckBig } from 'lucide-react';
+import { ExternalLink, Flag, Minus, Search, SquareCheckBig } from 'lucide-react';
+import { openSearch, SEARCH_SHORTCUT } from './SearchPalette';
 import { OPEN_HELP_EVENT } from '../help/openHelp';
 import { useAuth } from '../auth/AuthContext';
 import { BUTTON_ICON, TAB_ICON } from '../ui/icons';
@@ -137,6 +138,18 @@ const FloatingTools: React.FC<FloatingToolsProps> = ({ viewId, viewLabel, onNavi
   return (
     <>
       <div className="floating-tools">
+        <button
+          type="button"
+          className="floating-tool floating-tool--search"
+          onClick={openSearch}
+          title={`Hledat v aplikaci (${SEARCH_SHORTCUT})`}
+          aria-label="Hledat v aplikaci"
+        >
+          <Search {...BUTTON_ICON} />
+          <span className="floating-tool-label floating-tool-search-label">Hledat…</span>
+          <kbd className="floating-tool-kbd">{SEARCH_SHORTCUT}</kbd>
+        </button>
+
         <button
           type="button"
           className="floating-tool floating-tool--bug"

@@ -1,4 +1,4 @@
-import React, { Suspense, lazy, useState, useEffect, useCallback, useRef } from 'react';
+import React, { Suspense, lazy, useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import {
   AuthProvider,
   canAccessGrowthSystem,
@@ -16,6 +16,7 @@ import Sidebar from './components/Sidebar';
 import Footer from './components/Footer';
 import FloatingTools from './components/FloatingTools';
 import { OPEN_HELP_EVENT } from './help/openHelp';
+import SearchPalette, { OPEN_SEARCH_EVENT } from './components/SearchPalette';
 import JarvisPanel from './jarvis/JarvisPanel';
 import type { JarvisOpenAction } from './jarvis/jarvisApi';
 import { trackEvent, trackSectionStart } from './utils/analytics';
@@ -642,6 +643,35 @@ const AppContent: React.FC = () => {
     handleSearchNavigate(result, options);
   }, [handleSearchNavigate]);
 
+  // Search from anywhere: Ctrl/⌘+K and the top bar's search button.
+  const [searchOpen, setSearchOpen] = useState(false);
+  useEffect(() => {
+    const onOpen = () => {
+      setMenuOpen(false);
+      setSearchOpen(true);
+    };
+    const onKey = (event: KeyboardEvent) => {
+      if ((event.ctrlKey || event.metaKey) && !event.altKey && event.key.toLowerCase() === 'k') {
+        event.preventDefault();
+        setMenuOpen(false);
+        setSearchOpen((value) => !value);
+      }
+    };
+    window.addEventListener(OPEN_SEARCH_EVENT, onOpen);
+    window.addEventListener('keydown', onKey);
+    return () => {
+      window.removeEventListener(OPEN_SEARCH_EVENT, onOpen);
+      window.removeEventListener('keydown', onKey);
+    };
+  }, []);
+  const searchScreens = useMemo(
+    () =>
+      (Object.entries(VIEW_LABELS) as Array<[AppView, string]>)
+        .filter(([view]) => isViewAllowed(view))
+        .map(([view, label]) => ({ view, label })),
+    [isViewAllowed]
+  );
+
   useEffect(() => {
     if (!menuOpen) return undefined;
     const onKey = (event: KeyboardEvent) => {
@@ -781,6 +811,14 @@ const AppContent: React.FC = () => {
         </div>
         {!isFullscreenView && <Footer />}
         <FloatingTools viewId={effectiveView} viewLabel={VIEW_LABELS[effectiveView]} onNavigate={handleViewChange} />
+        <SearchPalette
+          open={searchOpen}
+          onClose={() => setSearchOpen(false)}
+          screens={searchScreens}
+          onSearch={runGlobalSearch}
+          onOpenRecord={handleSearchNavigate}
+          onOpenScreen={handleViewChange}
+        />
         <JarvisPanel
           open={jarvisOpen}
           onOpen={openJarvis}

@@ -688,7 +688,7 @@
   .mobile-topbar-title {
     flex: 1;
     min-width: 0;
-    padding-right: 80px;
+    padding-right: 114px;
     overflow: hidden;
     font-family: var(--font-heading, var(--font-body, "Inter", system-ui, sans-serif));
     font-size: 1rem;
