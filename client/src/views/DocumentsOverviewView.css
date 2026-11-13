@@ -1,0 +1,510 @@
+/* Analýza › Dokumenty. Same system as Analytika zakázek (PipelineView.css):
+   palette colours, the --ui-* scale, one series per chart in the primary colour. */
+
+.dov-view {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+  padding: 0.5rem 1.5rem 1.5rem;
+  color: var(--color-text);
+  overflow-y: auto;
+  min-height: 0;
+  flex: 1;
+}
+
+.dov-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 1rem;
+}
+
+.dov-eyebrow {
+  font-size: var(--ui-text-xs, 11.5px);
+  font-weight: 650;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--color-text-muted);
+}
+
+.dov-header h1 {
+  margin: 0.15rem 0 0.25rem;
+  font-size: var(--ui-text-xl, 18px);
+  font-weight: 650;
+}
+
+.dov-muted {
+  margin: 0;
+  color: var(--color-text-muted);
+  font-size: var(--ui-text-sm, 12.5px);
+  max-width: 760px;
+}
+
+.dov-note {
+  max-width: none;
+  font-size: var(--ui-text-xs, 11.5px);
+}
+
+.dov-warning {
+  padding: 0.6rem 0.8rem;
+  border: 1px solid color-mix(in srgb, var(--color-warning, #d97706) 40%, var(--color-border));
+  border-radius: var(--ui-radius-md, 8px);
+  font-size: var(--ui-text-sm, 12.5px);
+}
+
+.dov-button {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  height: var(--ui-control-h, 32px);
+  padding: 0 0.8rem;
+  border: 1px solid var(--color-border);
+  border-radius: var(--ui-radius-md, 8px);
+  background: var(--color-surface);
+  color: var(--color-text);
+  font: inherit;
+  font-size: var(--ui-text-sm, 12.5px);
+  font-weight: 600;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: background var(--ui-transition, 120ms ease);
+}
+
+.dov-button:hover:not(:disabled) {
+  background: color-mix(in srgb, var(--color-text) 5%, var(--color-surface));
+}
+
+.dov-button:disabled {
+  opacity: 0.6;
+  cursor: default;
+}
+
+.dov-button--ghost {
+  border-color: transparent;
+  background: transparent;
+  color: var(--color-text-muted);
+}
+
+.dov-more {
+  align-self: center;
+  margin-top: 0.75rem;
+}
+
+/* Headline numbers; Duplicity and Smazané are buttons. */
+.dov-tiles {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(170px, 1fr));
+  gap: 0.75rem;
+}
+
+.dov-tile,
+.dov-card {
+  border: 1px solid var(--color-border);
+  border-radius: var(--ui-radius-lg, 12px);
+  background: var(--color-surface);
+  box-shadow: var(--ui-shadow-xs, 0 1px 2px rgba(15, 23, 42, 0.06));
+}
+
+.dov-tile {
+  display: flex;
+  flex-direction: column;
+  gap: 0.15rem;
+  padding: 0.75rem 0.9rem;
+  color: var(--color-text);
+  font: inherit;
+  text-align: left;
+}
+
+.dov-tile--button {
+  cursor: pointer;
+  transition: border-color var(--ui-transition, 120ms ease), background var(--ui-transition, 120ms ease);
+}
+
+.dov-tile--button:hover:not(:disabled) {
+  border-color: color-mix(in srgb, var(--color-primary) 45%, var(--color-border));
+}
+
+.dov-tile--button:disabled {
+  cursor: default;
+}
+
+.dov-tile--button.is-active {
+  border-color: var(--color-primary);
+  background: color-mix(in srgb, var(--color-primary) 7%, var(--color-surface));
+}
+
+.dov-tile-label {
+  font-size: var(--ui-text-xs, 11.5px);
+  font-weight: 600;
+  color: var(--color-text-muted);
+}
+
+.dov-tile-value {
+  font-size: 1.5rem;
+  font-weight: 650;
+  font-variant-numeric: tabular-nums;
+}
+
+.dov-tile-note {
+  font-size: var(--ui-text-xs, 11.5px);
+  color: var(--color-text-muted);
+}
+
+.dov-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+  gap: 0.75rem;
+  align-items: start;
+}
+
+.dov-card {
+  padding: 0.9rem 1rem;
+  min-width: 0;
+}
+
+.dov-card-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 0.75rem;
+  margin-bottom: 0.6rem;
+}
+
+.dov-card-head h2 {
+  margin: 0;
+  font-size: var(--ui-text-md, 13.5px);
+  font-weight: 650;
+}
+
+/* Bars: label, track, size, count. Each row filters the table. */
+.dov-bars {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.dov-bar-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1.5fr) minmax(40px, 1fr) auto 22px;
+  align-items: center;
+  gap: 0.6rem;
+  padding: 0.25rem 0.35rem;
+  border: 1px solid transparent;
+  border-radius: var(--ui-radius-sm, 6px);
+  background: transparent;
+  color: var(--color-text);
+  font: inherit;
+  font-size: var(--ui-text-sm, 12.5px);
+  text-align: left;
+  cursor: pointer;
+}
+
+.dov-bar-row:hover {
+  background: color-mix(in srgb, var(--color-text) 4%, transparent);
+}
+
+.dov-bar-row.is-active {
+  border-color: color-mix(in srgb, var(--color-primary) 50%, var(--color-border));
+  background: color-mix(in srgb, var(--color-primary) 8%, transparent);
+}
+
+.dov-bar-label {
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.dov-bar-track {
+  height: 10px;
+  border-radius: 0 4px 4px 0;
+  background: color-mix(in srgb, var(--color-text) 5%, transparent);
+  overflow: hidden;
+}
+
+.dov-bar-fill {
+  display: block;
+  height: 100%;
+  border-radius: 0 4px 4px 0;
+  background: var(--color-primary);
+}
+
+.dov-bar-value,
+.dov-bar-count {
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+
+.dov-bar-count {
+  color: var(--color-text-muted);
+  font-size: var(--ui-text-xs, 11.5px);
+}
+
+/* Filters. */
+.dov-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  align-items: center;
+}
+
+.dov-input {
+  height: var(--ui-control-h, 32px);
+  padding: 0 0.6rem;
+  border: 1px solid var(--color-border);
+  border-radius: var(--ui-radius-md, 8px);
+  background: var(--color-surface);
+  color: var(--color-text);
+  font: inherit;
+  font-size: var(--ui-text-sm, 12.5px);
+  min-width: 0;
+}
+
+.dov-input:focus-visible {
+  outline: 2px solid color-mix(in srgb, var(--color-primary) 60%, transparent);
+  outline-offset: 1px;
+}
+
+.dov-search {
+  flex: 1 1 220px;
+}
+
+.dov-count {
+  margin: 0.6rem 0 0.25rem;
+  font-size: var(--ui-text-xs, 11.5px);
+}
+
+/* The file table. */
+.dov-table-wrap {
+  overflow-x: auto;
+}
+
+.dov-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: var(--ui-text-sm, 12.5px);
+}
+
+.dov-table th {
+  padding: 0.35rem 0.5rem;
+  border-bottom: 1px solid var(--color-border);
+  text-align: left;
+  font-size: var(--ui-text-xs, 11.5px);
+  font-weight: 600;
+  color: var(--color-text-muted);
+  white-space: nowrap;
+}
+
+.dov-table td {
+  padding: 0.45rem 0.5rem;
+  border-bottom: 1px solid color-mix(in srgb, var(--color-border) 60%, transparent);
+  vertical-align: top;
+}
+
+.dov-table tbody tr:hover td {
+  background: color-mix(in srgb, var(--color-text) 3%, transparent);
+}
+
+.dov-table--compact td {
+  padding: 0.3rem 0.5rem;
+}
+
+.dov-sort {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+  padding: 0;
+  border: none;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  cursor: pointer;
+}
+
+.dov-sort:hover {
+  color: var(--color-text);
+}
+
+.dov-num {
+  text-align: right !important;
+  font-variant-numeric: tabular-nums;
+}
+
+.dov-num .dov-sort {
+  flex-direction: row-reverse;
+}
+
+.dov-filename {
+  max-width: 360px;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  font-weight: 600;
+}
+
+.dov-sub {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem;
+  margin-top: 0.15rem;
+  color: var(--color-text-muted);
+  font-size: var(--ui-text-xs, 11.5px);
+}
+
+.dov-sub.dov-num {
+  justify-content: flex-end;
+}
+
+.dov-badge {
+  padding: 0 0.4rem;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--color-text) 7%, transparent);
+  color: var(--color-text-muted);
+  font-weight: 600;
+}
+
+.dov-badge--warn {
+  background: color-mix(in srgb, var(--color-warning, #d97706) 15%, transparent);
+  color: var(--color-warning, #b45309);
+}
+
+.dov-owner {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+  max-width: 260px;
+  padding: 0;
+  border: none;
+  background: transparent;
+  color: var(--color-primary);
+  font: inherit;
+  font-weight: 600;
+  text-align: left;
+  cursor: pointer;
+}
+
+.dov-owner:hover {
+  text-decoration: underline;
+}
+
+.dov-actions-head {
+  width: 64px;
+}
+
+.dov-actions {
+  white-space: nowrap;
+  text-align: right;
+}
+
+/* Ghost icon buttons, coloured only on hover (the app's row buttons). */
+.dov-icon-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: var(--ui-control-h-sm, 28px);
+  height: var(--ui-control-h-sm, 28px);
+  border: 1px solid transparent;
+  border-radius: var(--ui-radius-sm, 6px);
+  background: transparent;
+  color: var(--color-text-muted);
+  cursor: pointer;
+}
+
+.dov-icon-button:hover:not(:disabled) {
+  background: color-mix(in srgb, var(--color-primary) 12%, transparent);
+  color: var(--color-primary);
+}
+
+.dov-icon-button--danger:hover:not(:disabled) {
+  background: color-mix(in srgb, var(--color-danger, #dc2626) 12%, transparent);
+  color: var(--color-danger, #dc2626);
+}
+
+.dov-icon-button:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+
+.dov-empty {
+  padding: 1rem 0.5rem;
+}
+
+.dov-sr {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+}
+
+/* Phone: each file becomes a small card. */
+@media (max-width: 768px) {
+  .dov-view {
+    padding: 0.5rem 1rem 1rem;
+  }
+
+  .dov-header {
+    flex-direction: column;
+  }
+
+  .dov-grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .dov-table thead {
+    display: none;
+  }
+
+  .dov-table:not(.dov-table--compact) tbody tr {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    gap: 0.1rem 0.75rem;
+    padding: 0.6rem 0;
+    border-bottom: 1px solid color-mix(in srgb, var(--color-border) 60%, transparent);
+  }
+
+  .dov-table:not(.dov-table--compact) td {
+    padding: 0;
+    border: none;
+  }
+
+  .dov-table:not(.dov-table--compact) td[data-label="Soubor"] {
+    grid-column: 1 / -1;
+  }
+
+  .dov-table:not(.dov-table--compact) td[data-label="Typ"],
+  .dov-table:not(.dov-table--compact) td[data-label="Sekce"] {
+    display: none;
+  }
+
+  .dov-table:not(.dov-table--compact) td[data-label="Velikost"] {
+    grid-column: 2;
+    grid-row: 2;
+  }
+
+  .dov-table:not(.dov-table--compact) td[data-label="Patří k"] {
+    grid-column: 1;
+    grid-row: 2;
+  }
+
+  .dov-table:not(.dov-table--compact) td[data-label="Nahráno"] {
+    grid-column: 1;
+    grid-row: 3;
+    color: var(--color-text-muted);
+    font-size: var(--ui-text-xs, 11.5px);
+  }
+
+  .dov-table:not(.dov-table--compact) .dov-actions {
+    grid-column: 2;
+    grid-row: 3;
+  }
+
+  .dov-filename {
+    max-width: none;
+    white-space: normal;
+    overflow-wrap: anywhere;
+  }
+
+  .dov-bar-row {
+    grid-template-columns: minmax(0, 1fr) minmax(48px, 1fr) auto 22px;
+  }
+}

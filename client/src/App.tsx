@@ -46,6 +46,7 @@ const SafetyView = lazy(() => import('./views/SafetyView'));
 const FinanceView = lazy(() => import('./views/FinanceView'));
 const DataQualityView = lazy(() => import('./views/DataQualityView'));
 const PipelineView = lazy(() => import('./views/PipelineView'));
+const DocumentsOverviewView = lazy(() => import('./views/DocumentsOverviewView'));
 const TasksView = lazy(() => import('./views/TasksView'));
 const BugReportsView = lazy(() => import('./views/BugReportsView'));
 const ProjectsSectionView = lazy(() => import('./views/ProjectsSectionView'));
@@ -105,6 +106,7 @@ const VIEW_LABELS: Record<AppView, string> = {
   finance: 'Finance',
   data_quality: 'Kvalita dat',
   pipeline: 'Analytika zakázek',
+  documents: 'Dokumenty',
   admin_users: 'Správa uživatelů',
   safety: 'Bezpečnost a zálohy',
   tasks: 'Úkoly',
@@ -777,6 +779,8 @@ const AppContent: React.FC = () => {
                 return <DataQualityView onOpenRecord={handleJarvisOpenRecord} />;
               case 'pipeline':
                 return <PipelineView onOpenRecord={handleJarvisOpenRecord} />;
+              case 'documents':
+                return <DocumentsOverviewView onOpenRecord={handleJarvisOpenRecord} onOpenView={handleViewChange} />;
               case 'admin_users':
                 return <AdminUsersView />;
               case 'safety':

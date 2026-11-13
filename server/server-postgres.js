@@ -62,6 +62,7 @@ import { activityListFields } from "./list-fields.js";
 import { registerAresRoutes } from "./ares.js";
 import { registerPaletteAiRoutes } from "./palettes/aiPalette.js";
 import { registerFinanceRoutes } from "./finance/routes.js";
+import { registerDocumentOverviewRoutes } from "./documents/overview.js";
 import { registerTaskRoutes } from "./tasks/routes.js";
 import { dataChangeMiddleware } from "./tasks/events.js";
 import { registerBugReportRoutes } from "./bugs/routes.js";
@@ -1429,6 +1430,14 @@ registerFinanceRoutes(app, {
   requireRole,
   pool: db.isPostgres() ? db.getPool() : null,
   dataDir: DATA_DIR,
+});
+
+// Analýza › Dokumenty: every uploaded file, its size and storage cost — admin only.
+registerDocumentOverviewRoutes(app, {
+  authenticateToken,
+  requireRole,
+  pool: db.isPostgres() ? db.getPool() : null,
+  readStore: () => readDb(),
 });
 
 // Úkoly (personal and team to-do lists) and Hlášení chyb (bug reports with

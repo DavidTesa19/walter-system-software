@@ -417,6 +417,16 @@ break from code:
   primary key cannot be restored; give it one.
 - The JSON dev backend (`server.js`) has no change log or backups; its
   `/api/safety/*` routes answer "unavailable" on purpose.
+- **Never read every document's bytes on a schedule.** Uploaded files live in
+  `documents.data` (478 MB on 2026-11-13, 94 % of the database). Until then
+  the nightly backup hashed every file, which kept them all in Postgres's
+  memory, and Railway bills RAM at ~$10/GB a month (RAILWAY_COSTS.md). Each
+  file's SHA-256 and size now sit in `document_file_hashes`, kept by the
+  trigger `walter_document_file_hash` on every insert and every change of
+  `data` (uploads and restores) and filled for old files on the first boot
+  (`installDocumentFileHashes`, pg-install.js). The backup and the restore
+  read it through `rowSelectSql(..., { hashTable })`, falling back to hashing
+  a row it lacks. The table is derived: out of the change log and backups.
 
 ### Verifying safety changes locally
 
@@ -561,6 +571,26 @@ The telemetry tables (`finance_ai_usage`, `finance_ai_turns`, `finance_provider_
 CZK conversion uses ČNB's daily fixing (`rates.js`, fixed fallback). To test
 a connector locally, pass its token as an env var to a wrapper around
 `server.js` — never write tokens into tracked files.
+
+## Dokumenty (Analýza › Dokumenty, view id `documents`)
+
+Admin-only overview of every uploaded file (`DocumentsOverviewView.tsx`,
+pure logic in `client/src/documentsOverview/documentsOverview.ts`), from
+`GET /api/documents/overview` (`server/documents/overview.js`, both servers,
+`requireRole('admin')`, read only). Per file: owner (looked up in the
+section's `*_entities` table by `entity_type`/`entity_id`, opened with
+`handleJarvisOpenRecord`), size and hash from `document_file_hashes` (never
+the bytes), folder path, uploader (the change log's insert row, so only
+since 2026-10), archive state. Also the deleted files still kept in
+`audit_blobs` for a restore (sizes via `pg_column_size`, no byte read), the
+database / documents / backups sizes, and the monthly storage cost
+(`STORAGE_PRICES`: Railway disk $0.15/GB, RAM $10/GB, R2 free to 10 GB, CZK
+at ČNB). The screen filters (type, section, state, size, duplicates, owner,
+accent-insensitive search), sorts by column, and downloads or deletes a file
+through the normal `/documents/:id` routes (so the section guard and change
+log apply; a deleted file's bytes stay a year in the change log).
+Duplicates are files with the same SHA-256. Managers are blocked
+(`MANAGER_BLOCKED_VIEWS`), like Finance.
 
 ## Kvalita dat (Analýza › Kvalita dat)
 

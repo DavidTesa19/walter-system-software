@@ -44,16 +44,29 @@ export const AUDIT_EXCLUDED_TABLES = new Set([
   // image into the log as hex. The reports themselves (bug_reports) are
   // logged, and the screenshots are in the backups.
   'bug_report_screenshots',
+  // Each document file's SHA-256 and size, kept by a trigger on documents
+  // (pg-install.js). Derived from documents, which is logged.
+  'document_file_hashes',
 ]);
 
-// Never inside a backup archive: the log and the backups themselves.
+// Never inside a backup archive: the log and the backups themselves, and
+// document_file_hashes (rebuilt from documents on every write).
 export const BACKUP_EXCLUDED_TABLES = new Set([
   'audit_log',
   'audit_blobs',
   'backups',
   'backup_files',
   'backup_file_refs',
+  'document_file_hashes',
 ]);
+
+// Each document's file hash and size, without reading the file. A document
+// the trigger has not seen yet (it cannot happen after the first boot, but the
+// backup must never be wrong) falls back to hashing its bytes.
+export const DOCUMENT_HASH_TABLE = 'document_file_hashes';
+export const documentHashColumns = (alias = 'd', hashAlias = 'h') =>
+  `coalesce(${hashAlias}.sha256, encode(sha256(${alias}.data), 'hex')) AS data_sha256, ` +
+  `coalesce(${hashAlias}.size_bytes, octet_length(${alias}.data)) AS data_size`;
 
 // One top-level statement may not delete more rows than this from a guarded
 // table. Cascades (a subject taking its commissions with it) are exempt — the

@@ -153,6 +153,17 @@ export const HELP_TOPICS: HelpTopic[] = [
     ],
   },
   {
+    id: "documents",
+    title: "Dokumenty",
+    views: ["documents"],
+    summary: "Všechny nahrané soubory: komu patří, kolik zabírají a co jejich uložení stojí.",
+    points: [
+      "Nahoře počet souborů, kolik místa zabírají, co uložení stojí měsíčně, duplicity a smazané soubory držené pro obnovu.",
+      "Pruhy podle typu, sekce a subjektu i dlaždice Duplicity filtrují tabulku; hledání najde název souboru, složku i subjekt.",
+      "Kliknutím na záhlaví sloupce řadíte. U souboru jde otevřít profil subjektu, soubor stáhnout nebo smazat (smazaný se rok drží pro obnovu).",
+    ],
+  },
+  {
     id: "analytics",
     title: "Ostatní",
     views: ["analytics"],

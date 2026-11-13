@@ -22,6 +22,8 @@ import { SafetyError } from './pg-store.js';
 import { valuesEqual } from './revert.js';
 import {
   BACKUP_EXCLUDED_TABLES,
+  DOCUMENT_HASH_TABLE,
+  documentHashColumns,
   RESTORE_GROUPS,
   SAFETY_TABLES,
   isSafeIdentifier,
@@ -134,13 +136,19 @@ async function orderByDependencies(client, tables) {
   return ordered;
 }
 
-const rowSelectSql = (table, columns) => {
-  const list = columns.filter((column) => !(table === 'documents' && column === 'data')).map(quoteIdent).join(', ');
-  const extra = table === 'documents'
-    ? `, encode(sha256(data), 'hex') AS data_sha256, octet_length(data) AS data_size`
-    : '';
-  const order = columns.includes('id') ? ' ORDER BY id' : '';
-  return `SELECT to_jsonb(x) AS row FROM (SELECT ${list}${extra} FROM ${quoteIdent(table)}${order}) x`;
+// Documents leave out the file bytes and carry their hash and size instead.
+// With document_file_hashes (hashTable) those come from it, so the file bytes
+// are not read at all; without it every file is read and hashed.
+export const rowSelectSql = (table, columns, { hashTable = false } = {}) => {
+  const order = columns.includes('id') ? ' ORDER BY t.id' : '';
+  if (table !== 'documents') {
+    return `SELECT to_jsonb(x) AS row FROM (SELECT ${columns.map((c) => `t.${quoteIdent(c)}`).join(', ')} FROM ${quoteIdent(table)} t${order}) x`;
+  }
+  const list = columns.filter((column) => column !== 'data').map((c) => `t.${quoteIdent(c)}`).join(', ');
+  const hashes = hashTable
+    ? `${documentHashColumns('t', 'h')} FROM documents t LEFT JOIN ${DOCUMENT_HASH_TABLE} h ON h.document_id = t.id`
+    : `encode(sha256(t.data), 'hex') AS data_sha256, octet_length(t.data) AS data_size FROM documents t`;
+  return `SELECT to_jsonb(x) AS row FROM (SELECT ${list}, ${hashes}${order}) x`;
 };
 
 export async function readArchiveBuffer(buffer) {
@@ -228,7 +236,7 @@ export async function applyArchive(client, archive, {
     const keyColumns = keyColumnsOf.get(table);
     const columnSet = new Set(columns);
     const archiveRows = archive.tables[table]?.rows ?? [];
-    const { rows: currentRows } = await client.query(rowSelectSql(table, columns));
+    const { rows: currentRows } = await client.query(rowSelectSql(table, columns, { hashTable: existingTables.has(DOCUMENT_HASH_TABLE) }));
     const current = new Map(currentRows.map(({ row }) => [keyOf(table, row), row]));
 
     const toInsert = [];
@@ -253,7 +261,10 @@ export async function applyArchive(client, archive, {
 
     if (table === 'documents') {
       if (!documentHashes) {
-        const { rows } = await client.query(`SELECT DISTINCT ON (sha) id, sha FROM (SELECT id, encode(sha256(data), 'hex') AS sha FROM documents) d`);
+        const { rows } = await client.query(existingTables.has(DOCUMENT_HASH_TABLE)
+          ? `SELECT DISTINCT ON (sha) id, sha FROM (SELECT d.id, coalesce(h.sha256, encode(sha256(d.data), 'hex')) AS sha
+               FROM documents d LEFT JOIN ${DOCUMENT_HASH_TABLE} h ON h.document_id = d.id) x`
+          : `SELECT DISTINCT ON (sha) id, sha FROM (SELECT id, encode(sha256(data), 'hex') AS sha FROM documents) d`);
         documentHashes = new Map(rows.map((row) => [row.sha, row.id]));
       }
       const bytesFor = async (sha) => {
@@ -522,10 +533,12 @@ export function createPgBackupService({ pool, onBackupFailed = async () => {} })
           try {
             await snapClient.query('BEGIN ISOLATION LEVEL REPEATABLE READ READ ONLY');
             serverVersion = (await snapClient.query('SHOW server_version')).rows[0].server_version;
-            for (const table of await listPublicTables(snapClient)) {
+            const snapshotTables = await listPublicTables(snapClient);
+            const hashTable = snapshotTables.includes(DOCUMENT_HASH_TABLE);
+            for (const table of snapshotTables) {
               if (BACKUP_EXCLUDED_TABLES.has(table)) continue;
               const columns = await listColumns(snapClient, table);
-              const { rows } = await snapClient.query(rowSelectSql(table, columns));
+              const { rows } = await snapClient.query(rowSelectSql(table, columns, { hashTable }));
               const tableRows = rows.map((r) => r.row);
               archiveTables[table] = { columns, rows: tableRows };
               tableCounts[table] = tableRows.length;

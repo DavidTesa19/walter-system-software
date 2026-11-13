@@ -16,6 +16,7 @@
 import {
   AGENT_FORBIDDEN_TABLES,
   AUDIT_EXCLUDED_TABLES,
+  DOCUMENT_HASH_TABLE,
   IGNORED_CHANGE_FIELDS,
   MASS_DELETE_LIMIT,
   MASS_DELETE_UNGUARDED_TABLES,
@@ -437,6 +438,47 @@ async function installDocumentJson(client, tables) {
   return 'ok';
 }
 
+// Each document file's SHA-256 and size, kept in their own table by a trigger,
+// so the nightly backup reads ~250 small rows instead of every file (478 MB on
+// 2026-11-13). Reading the files each night kept them all in Postgres's memory,
+// which Railway bills by the GB. Written on every insert and on every change of
+// `data` (uploads, restores); deleted with the document. The first boot fills
+// it for the files already there, reading each one once.
+async function installDocumentFileHashes(client, tables) {
+  if (!tables.includes('documents')) return 'skipped';
+  await client.query(`
+    CREATE TABLE IF NOT EXISTS ${DOCUMENT_HASH_TABLE} (
+      document_id INTEGER PRIMARY KEY REFERENCES documents(id) ON DELETE CASCADE,
+      sha256 TEXT NOT NULL,
+      size_bytes BIGINT NOT NULL
+    );
+
+    CREATE OR REPLACE FUNCTION walter_document_file_hash() RETURNS trigger
+    LANGUAGE plpgsql AS $fn$
+    BEGIN
+      INSERT INTO ${DOCUMENT_HASH_TABLE} (document_id, sha256, size_bytes)
+      VALUES (NEW.id, encode(sha256(NEW.data), 'hex'), octet_length(NEW.data))
+      ON CONFLICT (document_id) DO UPDATE
+        SET sha256 = EXCLUDED.sha256, size_bytes = EXCLUDED.size_bytes;
+      RETURN NULL;
+    END
+    $fn$;
+
+    CREATE OR REPLACE TRIGGER walter_document_file_hash
+    AFTER INSERT OR UPDATE OF data ON documents
+    FOR EACH ROW EXECUTE FUNCTION walter_document_file_hash();
+  `);
+  const { rowCount } = await client.query(`
+    INSERT INTO ${DOCUMENT_HASH_TABLE} (document_id, sha256, size_bytes)
+    SELECT d.id, encode(sha256(d.data), 'hex'), octet_length(d.data)
+      FROM documents d
+     WHERE NOT EXISTS (SELECT 1 FROM ${DOCUMENT_HASH_TABLE} h WHERE h.document_id = d.id)
+    ON CONFLICT (document_id) DO NOTHING
+  `);
+  if (rowCount > 0) console.log(`✓ Document file hashes filled in for ${rowCount} documents`);
+  return 'ok';
+}
+
 // Blocking DROP TABLE needs an event trigger, which only a superuser can make.
 // Railway's default user is one; anywhere else this just logs and moves on.
 async function installDropGuard(client) {
@@ -531,6 +573,7 @@ export async function installSafetyLayer(client) {
     });
     if (schemaOk !== 'ok') return installStatus;
 
+    await step('document file hashes', async () => installDocumentFileHashes(client, await listPublicTables(client)));
     const tables = await listPublicTables(client);
     await step('document json', () => installDocumentJson(client, tables));
     await step('triggers', () => installTableTriggers(client, tables));
