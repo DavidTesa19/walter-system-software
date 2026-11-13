@@ -57,3 +57,58 @@ export function streamTaskEvents(req, res) {
 }
 
 export const taskListenerCount = () => bus.listenerCount('change');
+
+// ---- The same stream for the rest of the app's data ------------------------
+//
+// Clients, partners, tipaři, zakázky, documents and the Obor lists: after a
+// successful change the stream says only "data changed" with the area of the
+// app (`{ kind: 'data', area }`), never the data; open tables then refresh
+// themselves through their normal, permission-checked GETs. (The tasks' own
+// messages carry `list`, so the two never mix.)
+
+// Write routes whose success changes data a colleague may be looking at.
+const DATA_ROUTE = /^\/(?:api\/)?(?:(?:client|partner|tiper)-(?:entities|commissions)|(?:projects|growth)(?:\/|$)|(?:clients|partners|tipers)(?:\/|$)|project-|growth-|documents(?:\/|$)|field-(?:specialization-)?options)/;
+const WRITE_METHODS = new Set(['POST', 'PUT', 'PATCH', 'DELETE']);
+
+/** The area of the app a path belongs to ("client-entities", "projects", …). */
+export const dataArea = (path) => {
+  const match = DATA_ROUTE.exec(path);
+  if (!match) return null;
+  return path.replace(/^\/(?:api\/)?/, '').split('/')[0] || null;
+};
+
+// Coalesces a burst (a bulk ARES fill, an import) into a few messages.
+let pending = new Set();
+let timer = null;
+const flush = () => {
+  timer = null;
+  const areas = [...pending];
+  pending = new Set();
+  for (const area of areas) {
+    try {
+      bus.emit('change', { kind: 'data', area });
+    } catch (error) {
+      console.error('Data change broadcast failed:', error);
+    }
+  }
+};
+
+/** Tells every open app that one area's data changed (coalesced over 300 ms). */
+export function publishDataChange(area) {
+  if (!area) return;
+  pending.add(area);
+  if (!timer) timer = setTimeout(flush, 300);
+}
+
+/** Express middleware: after a successful write to a data route, publish it. */
+export function dataChangeMiddleware(req, res, next) {
+  if (WRITE_METHODS.has(req.method)) {
+    const area = dataArea(req.path);
+    if (area) {
+      res.on('finish', () => {
+        if (res.statusCode < 400) publishDataChange(area);
+      });
+    }
+  }
+  next();
+}

@@ -22,6 +22,7 @@ import { registerAresRoutes } from "./ares.js";
 import { registerPaletteAiRoutes } from "./palettes/aiPalette.js";
 import { registerFinanceRoutes } from "./finance/routes.js";
 import { registerTaskRoutes } from "./tasks/routes.js";
+import { dataChangeMiddleware } from "./tasks/events.js";
 import { registerBugReportRoutes } from "./bugs/routes.js";
 import { openAiUsageTokens, recordAiUsage, recordBraveQuota } from "./finance/usage.js";
 import {
@@ -1355,6 +1356,9 @@ app.use((req, res, next) => {
   next();
 });
 app.use(express.json());
+// Open apps hear at once that data changed and refresh their tables
+// (tasks/events.js; the message names only the area, never the data).
+app.use(dataChangeMiddleware);
 
 // Veřejné and Growth Club used to keep separate catalogs of custom obor and
 // Zaměření options, so an obor added in one section was missing in the other.

@@ -613,6 +613,15 @@ replicas would need Postgres LISTEN/NOTIFY. Focus and a 5-minute poll remain
 as a fallback. **A new task route that writes must call
 `publishTaskChange`**, or colleagues see the change only on that fallback.
 
+**The same stream carries the rest of the app's data** (2026-11-13):
+`dataChangeMiddleware` (both servers, right after `express.json`) publishes
+`{ kind: 'data', area }` after any successful POST/PUT/PATCH/DELETE to a data
+route (`DATA_ROUTE`: subjects, zakázky, the section routes, documents, Obor
+lists; not tasks, Jarvis, auth), coalesced over 300 ms. `useAutoRefresh` (every
+grid section) and the change bubbles (`ActivityContext`) refresh on it, half a
+second later and never mid-edit. Measured: a rename shows in a colleague's open
+table in ~1 s. A new write route for shared data must match `DATA_ROUTE`.
+
 Hlášení chyb: the bug button next to it opens `BugReportDialog` from any
 screen (title, description, severity, screenshots by Ctrl+V, drop, file or
 `getDisplayMedia` capture); the date, the screen and the author are filled in.

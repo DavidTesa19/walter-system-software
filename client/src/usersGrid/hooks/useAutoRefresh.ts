@@ -1,4 +1,5 @@
 import { useEffect, useRef } from "react";
+import { subscribeTaskChanges } from "../../tasks/taskEvents";
 
 interface AutoRefreshOptions {
   // Only refresh while this section is the one on screen.
@@ -56,10 +57,22 @@ export const useAutoRefresh = (
     document.addEventListener("visibilitychange", handleVisibility);
     const timer = window.setInterval(run, intervalMs);
 
+    // Anyone's change to the app's data arrives over the live stream at once
+    // (tasks/taskEvents.ts): refresh then, half a second later so a burst of
+    // changes is one refresh. A reconnect may have missed some, so it counts.
+    let pending: number | undefined;
+    const unsubscribe = subscribeTaskChanges((change) => {
+      if (change.type !== "data" && change.type !== "reconnected") return;
+      window.clearTimeout(pending);
+      pending = window.setTimeout(run, 500);
+    });
+
     return () => {
       window.removeEventListener("focus", run);
       document.removeEventListener("visibilitychange", handleVisibility);
       window.clearInterval(timer);
+      window.clearTimeout(pending);
+      unsubscribe();
     };
   }, [enabled, intervalMs]);
 };

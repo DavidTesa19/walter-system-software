@@ -2,6 +2,7 @@ import React, { createContext, useCallback, useContext, useEffect, useMemo, useS
 import { canAccessGrowthSystem, canAccessProjectsSystem, canAccessStandardSystem, type UserAccessScope } from "../auth/AuthContext";
 import type { AppView, GridView } from "../types/appView";
 import { apiGet } from "../utils/api";
+import { subscribeTaskChanges } from "../tasks/taskEvents";
 import {
   ADMIN_USERS_COLLECTION_KEY,
   ADMIN_USERS_RECORD_SCOPE,
@@ -431,10 +432,20 @@ export const ActivityProvider: React.FC<ActivityProviderProps> = ({ userId, user
       if (document.visibilityState === "visible" && Date.now() - lastRun >= REFRESH_MS) run();
     };
     document.addEventListener("visibilitychange", onVisible);
+    // A colleague's change arrives over the live stream: the bubbles follow
+    // within a second instead of at the next poll.
+    let pending: number | undefined;
+    const unsubscribe = subscribeTaskChanges((change) => {
+      if (change.type !== "data" || document.visibilityState !== "visible") return;
+      window.clearTimeout(pending);
+      pending = window.setTimeout(run, 800);
+    });
 
     return () => {
       window.clearInterval(intervalId);
+      window.clearTimeout(pending);
       document.removeEventListener("visibilitychange", onVisible);
+      unsubscribe();
     };
   }, [refresh]);
 

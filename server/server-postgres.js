@@ -63,6 +63,7 @@ import { registerAresRoutes } from "./ares.js";
 import { registerPaletteAiRoutes } from "./palettes/aiPalette.js";
 import { registerFinanceRoutes } from "./finance/routes.js";
 import { registerTaskRoutes } from "./tasks/routes.js";
+import { dataChangeMiddleware } from "./tasks/events.js";
 import { registerBugReportRoutes } from "./bugs/routes.js";
 import { openAiUsageTokens, recordAiUsage, recordBraveQuota } from "./finance/usage.js";
 
@@ -1387,6 +1388,9 @@ app.use((req, res, next) => {
   next();
 });
 app.use(express.json());
+// Open apps hear at once that data changed and refresh their tables
+// (tasks/events.js; the message names only the area, never the data).
+app.use(dataChangeMiddleware);
 
 // Remembers who is making each request, so the database change log can record
 // who made every change (see safety/context.js).

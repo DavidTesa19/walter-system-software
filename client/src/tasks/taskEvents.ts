@@ -10,6 +10,9 @@ import { API_BASE } from '../utils/api';
 
 export type TaskChange =
   | { type: 'change'; list: 'personal' | 'team'; ownerUserId: number | null }
+  // The rest of the app's data (tasks/events.js dataChangeMiddleware): an
+  // area such as "client-entities" changed; open tables refresh themselves.
+  | { type: 'data'; area: string }
   | { type: 'reconnected' };
 
 type Listener = (change: TaskChange) => void;
@@ -83,7 +86,9 @@ async function run(signal: AbortSignal) {
           if (!data || /^event: ready/m.test(message)) continue;
           try {
             const parsed = JSON.parse(data);
-            if (parsed && (parsed.list === 'team' || parsed.list === 'personal')) {
+            if (parsed?.kind === 'data' && typeof parsed.area === 'string') {
+              notify({ type: 'data', area: parsed.area });
+            } else if (parsed && (parsed.list === 'team' || parsed.list === 'personal')) {
               notify({ type: 'change', list: parsed.list, ownerUserId: parsed.ownerUserId ?? null });
             }
           } catch {

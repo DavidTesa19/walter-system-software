@@ -185,6 +185,7 @@ export function useTaskList(scope: TaskScope | null, live = true) {
       pending = window.setTimeout(onChange, 150);
     };
     const unsubscribe = subscribeTaskChanges((change) => {
+      if (change.type === 'data') return;
       if (change.type === 'reconnected' || scopeKey(change.list === 'team' ? { list: 'team' } : { list: 'personal', ownerUserId: change.ownerUserId ?? 0 }) === key) {
         reloadSoon();
       }
