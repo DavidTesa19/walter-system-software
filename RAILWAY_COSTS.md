@@ -61,7 +61,10 @@ and every safety guard stay as they are.
       `audit_log` 0.4 MB. Postgres runs with `shared_buffers` 128 MB, so its
       ~730 MB of RAM is mostly the document files held in the file cache:
       confirms step 4. All 12 backups have `offsite_status = ok`.
-- [ ] **4. Stop the backup reading every file every night** (code, Claude).
+- [x] **4. Stop the backup reading every file every night** (code, Claude).
+      **Deployed 2026-11-13** (7156d4e): on the live database all 369
+      documents got their hash (456 MB of files), trigger installed. The
+      first backup using it is the next nightly one (2:00 Prague).
       Saves ≈ $3–4. Store each document's SHA-256 and size in their own
       columns when it is uploaded (backfilled once), and let the backup read
       those instead of the file bytes. Same backups, same restores; the
@@ -74,7 +77,7 @@ and every safety guard stay as they are.
       files went from 40.5 MB of pages to almost none. The first start after
       the deploy hashes the existing files once (~478 MB, a few seconds).
       Check Postgres's Memory graph in the days after.
-- [x] **Extra: Analýza › Dokumenty** (2026-11-13, not yet deployed): every
+- [x] **Extra: Analýza › Dokumenty** (deployed 2026-11-13, 7156d4e): every
       file with its owner, size, duplicates, deleted files kept for a
       restore and the monthly storage cost, with filters, sorting, download
       and delete. See CLAUDE.md › Dokumenty.
