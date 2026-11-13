@@ -182,8 +182,8 @@ export default function AiPaletteBox({ defaultMode, disabled, palettes, onPropos
       ) : (
         <>
       <p className="ai-palette__hint">
-        Popište, jak má aplikace působit, nebo přidejte logo či web značky. Nejpřesnější barvy dá logo: z webu AI
-        přečte hlavně text, ne styly. Návrh se otevře jako nová paleta, kterou před uložením upravíte.
+        Popište, jak má aplikace působit, nebo přidejte logo či web značky. Z webu se načtou jeho skutečné barvy
+        a písma; nejpřesnější je logo. Návrh se otevře jako nová paleta, kterou před uložením upravíte.
       </p>
 
       <label className="ai-palette__field">

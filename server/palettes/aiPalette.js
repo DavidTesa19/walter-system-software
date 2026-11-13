@@ -4,8 +4,9 @@
 // Nothing is saved here; the screen opens the proposal as a new palette
 // draft the user edits and saves.
 //
-// A web address is read by Anthropic's web_fetch server tool, never by this
-// server, so a user-typed URL cannot make the API reach internal addresses.
+// A web address is read by this server (siteColors.js, with an SSRF guard):
+// its real colours and fonts go to Claude as text. When the site cannot be
+// read that way, Anthropic's web_fetch reads the page instead (text only).
 // Every call is logged with recordAiUsage (feature 'palette_ai').
 
 import Anthropic from '@anthropic-ai/sdk';
@@ -13,6 +14,7 @@ import { zodOutputFormat } from '@anthropic-ai/sdk/helpers/zod';
 import multer from 'multer';
 import { z } from 'zod/v4';
 import { recordAiUsage } from '../finance/usage.js';
+import { describeSiteStyle, readSiteStyle, SiteFetchError } from './siteColors.js';
 import { reenterRequestContext } from '../safety/context.js';
 
 const MODEL = process.env.PALETTE_AI_MODEL || 'claude-sonnet-5-5';
@@ -59,7 +61,8 @@ Rules:
 - background and surface close to each other but distinguishable.
 - Fonts: only from the allowed list; heading and subheading may differ from body.
 - If a logo is attached, build the theme around its brand colours (primary usually the main brand colour, adjusted for contrast).
-- If a web address is given, fetch the page with web_fetch and use the site's brand colours (theme-color, CSS custom properties, buttons, logo). If it cannot be read, say so in the note and work from the rest.
+- If styles read from the website are given, build the theme from them: primary from the brand colour the site uses most (or its theme-color / a --primary or --brand variable), accent from its second brand colour, neutrals in the site's spirit; fonts: the allowed fonts closest to the site's. Say in the note which site colours you used.
+- If only a web address is given (no styles), fetch the page with web_fetch and use the site's brand colours (theme-color, CSS custom properties, buttons, logo). If it cannot be read, say so in the note and work from the rest.
 - The name and the note are in Czech.
 
 When an existing theme is given to adjust:
@@ -119,12 +122,12 @@ export class PaletteAiError extends Error {
   }
 }
 
-const describeRequest = ({ description, website, mode, hasLogo, base }) =>
+const describeRequest = ({ description, website, mode, hasLogo, base, siteStyle }) =>
   [
     `Režim: ${mode === 'dark' ? 'tmavý (dark)' : 'světlý (light)'}.`,
     base ? `Uprav tento existující motiv:\n${JSON.stringify(base)}` : null,
     description ? `${base ? 'Požadovaná úprava' : 'Popis od uživatele'}: ${description}` : null,
-    website ? `Webová adresa značky: ${website}` : null,
+    siteStyle ? describeSiteStyle(siteStyle) : website ? `Webová adresa značky: ${website}` : null,
     hasLogo ? 'Přiložené je logo značky.' : null,
     `Povolená písma: ${FONT_CHOICES.join(' | ')}`,
   ]
@@ -177,9 +180,18 @@ export async function suggestPalette({ description, website, logo, mode, base = 
   if (logo) {
     content.push({ type: 'image', source: { type: 'base64', media_type: logo.mediaType, data: logo.data.toString('base64') } });
   }
-  content.push({ type: 'text', text: describeRequest({ description, website, mode, hasLogo: Boolean(logo), base }) });
+  // The site's own colours and fonts, read here; web_fetch only as a fallback.
+  let siteStyle = null;
+  if (website) {
+    try {
+      siteStyle = await readSiteStyle(website, { signal });
+    } catch (error) {
+      if (!(error instanceof SiteFetchError)) console.warn('Palette AI: site style not read:', error?.message ?? error);
+    }
+  }
+  content.push({ type: 'text', text: describeRequest({ description, website, mode, hasLogo: Boolean(logo), base, siteStyle }) });
 
-  let proposal = await askOnce({ content, website, userId, signal });
+  let proposal = await askOnce({ content, website: siteStyle ? null : website, userId, signal });
   let problems = checkProposal(proposal, mode);
   if (problems.length) {
     // One more try, told what to fix; the page is not fetched again.
@@ -188,7 +200,7 @@ export async function suggestPalette({ description, website, logo, mode, base = 
       {
         type: 'text',
         text:
-          `${describeRequest({ description, website: null, mode, hasLogo: Boolean(logo), base })}\n\n` +
+          `${describeRequest({ description, website: null, mode, hasLogo: Boolean(logo), base, siteStyle })}\n\n` +
           `Předchozí návrh:\n${JSON.stringify(proposal)}\n\nOprav tyto problémy a zachovej charakter návrhu:\n- ${problems.join('\n- ')}`,
       },
     ];
@@ -199,7 +211,7 @@ export async function suggestPalette({ description, website, logo, mode, base = 
       problems = secondProblems;
     }
   }
-  return { ...proposal, mode, warnings: problems };
+  return { ...proposal, mode, warnings: problems, siteRead: Boolean(siteStyle) };
 }
 
 // ---- Route ----------------------------------------------------------------

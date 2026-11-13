@@ -297,9 +297,15 @@ Grid changes are verifiable end to end; do it rather than guessing.
 and 3 fonts as structured output; nothing is saved, the screen opens the
 proposal as a new palette draft. The fonts are an enum of `FONT_CHOICES`,
 which must match `FONT_SUGGESTIONS` in PaletteManager.tsx. A web address is
-read by Anthropic's `web_fetch` tool, never by this server (no SSRF). It
-returns page text, not styles, so a website gives brand colours from
-Claude's knowledge; a logo is the accurate input (the browser redraws it as
+read by this server (`palettes/siteColors.js`, 2026-11-13): the page and up to
+4 stylesheets, 12 s in all, giving theme-color, brand CSS variables, the most
+used colours and the font families, sent to Claude as text. **SSRF guard**:
+http(s) on ports 80/443 only, no credentials, every connection resolves the
+host through `guardedLookup` and refuses private/loopback/link-local/CGNAT/
+metadata addresses (so redirects and DNS rebinding are covered), 3 redirects,
+size caps; keep it that way. Sites that refuse (Alza answers 403) or time out
+fall back to Anthropic's `web_fetch` (page text only). A logo is still the
+most accurate input (the browser redraws it as
 a PNG of at most 800 px, SVG included). `checkProposal` checks WCAG contrast
 and the mode; a failing proposal gets one retry with the problems listed,
 and what remains is shown as warnings. 20 proposals per user per hour
