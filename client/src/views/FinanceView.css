@@ -1056,3 +1056,67 @@ td > .finance-chip:first-child {
     grid-row: 2;
   }
 }
+
+/* Finance › Hosting (HostingTab.tsx). */
+.finance-hosting {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.finance-hosting-project {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.finance-hosting-table td {
+  vertical-align: top;
+}
+
+.finance-hosting-share {
+  min-width: 120px;
+}
+
+.finance-hosting-share .finance-bar-track {
+  display: block;
+  margin: 6px 0 2px;
+}
+
+.finance-hosting-grid {
+  align-items: start;
+}
+
+.finance-hosting-list {
+  margin: 0;
+  padding-left: 18px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  font-size: 0.9rem;
+  line-height: 1.45;
+}
+
+.finance-hosting .finance-bar-row {
+  grid-template-columns: minmax(120px, 1.4fr) minmax(60px, 1fr) auto;
+}
+
+@media (max-width: 768px) {
+  .finance-hosting-table th:nth-child(2),
+  .finance-hosting-table td:nth-child(2),
+  .finance-hosting-table th:nth-child(3),
+  .finance-hosting-table td:nth-child(3),
+  .finance-hosting-table th:nth-child(4),
+  .finance-hosting-table td:nth-child(4),
+  .finance-hosting-table th:nth-child(5),
+  .finance-hosting-table td:nth-child(5),
+  .finance-hosting-table .finance-row-sub {
+    display: none;
+  }
+
+  .finance-table.finance-hosting-table thead th,
+  .finance-table.finance-hosting-table tfoot th,
+  .finance-table.finance-hosting-table td {
+    white-space: normal;
+  }
+}

@@ -149,6 +149,7 @@ export const HELP_TOPICS: HelpTopic[] = [
     points: [
       "Napojeno = číslo přímo od poskytovatele, Pevná cena = potvrzeno z faktury, Nepotvrzeno = odhad.",
       "Historie ukazuje platby měsíc po měsíci od září 2025, v korunách podle kurzu ČNB toho dne.",
+      "Hosting: co která služba na Railway stojí v tomto období, odhad účtu proti minulému, co je v databázi a kde jsou zálohy.",
       "Záložka Jarvis: kolik stojí odpovědi, kdo se ptá nejvíc, nejdražší a nejpomalejší otázky a hodnocení 👍/👎.",
     ],
   },

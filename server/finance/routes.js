@@ -19,6 +19,7 @@ import { HISTORY_START, buildHistory, recurringPayments } from './history.js';
 import { env } from './http.js';
 import { BILLING_PROVIDERS, ProviderCostError, fetchProviderCosts, isProviderConfigured } from './providers.js';
 import { getRates } from './rates.js';
+import { PLAN, RAILWAY_PRICES, backupBreakdown, databaseBreakdown, fetchRailwayHosting, isRailwayConfigured, vatRate } from './hosting.js';
 import { createFileFinanceStore, createPgFinanceStore } from './store.js';
 import { USAGE_DAYS, summarizeJarvisUsage } from './jarvis-usage.js';
 import { setFeedbackSink, setStateSink, setTurnSink, setUsageSink } from './usage.js';
@@ -251,6 +252,49 @@ export function registerFinanceRoutes(app, { authenticateToken, requireRole, poo
 
   app.get('/api/finance/overview', ...guard, wrap('Finanční přehled se nepodařilo načíst.', async (_req, res) => {
     res.json(await overview());
+  }));
+
+  // Hosting: Railway's usage per service this period (cached an hour,
+  // ?fresh=1 re-reads), what is inside the database and the backups.
+  const HOSTING_KEY = 'railway_hosting';
+  const HOSTING_MAX_AGE_MS = 3600 * 1000;
+  let hostingRead = null;
+  app.get('/api/finance/hosting', ...guard, wrap('Náklady hostingu se nepodařilo načíst.', async (req, res) => {
+    let state = (await store.getStates([HOSTING_KEY]))[HOSTING_KEY] ?? null;
+    if (isRailwayConfigured() && (req.query.fresh === '1' || isStale(state, HOSTING_MAX_AGE_MS))) {
+      // Two screens opening at once share one read.
+      hostingRead ??= (async () => {
+        const at = new Date().toISOString();
+        try {
+          const next = { at, error: null, value: await fetchRailwayHosting() };
+          await store.setState(HOSTING_KEY, next);
+          return next;
+        } catch (error) {
+          const next = { ...(state ?? {}), at, error: errorMessage(error, 'Railway usage not read') };
+          await store.setState(HOSTING_KEY, next).catch(() => {});
+          return next;
+        }
+      })().finally(() => { hostingRead = null; });
+      state = await hostingRead;
+    }
+    const [database, backups, rates] = await Promise.all([
+      pool ? databaseBreakdown(pool) : null,
+      pool ? backupBreakdown(pool) : null,
+      getRates(),
+    ]);
+    res.json({
+      configured: isRailwayConfigured(),
+      checkedAt: state?.at ?? null,
+      error: state?.error ?? null,
+      railway: state?.value ?? null,
+      database,
+      backups,
+      prices: RAILWAY_PRICES,
+      plan: PLAN,
+      vatRate: vatRate(),
+      r2: { freeGb: 10, usdPerGbMonth: 0.015 },
+      usdCzk: rates.rates.USD,
+    });
   }));
 
   // Jarvis usage over the last 7, 30 or 90 days (AI spotřeba › Jarvis).

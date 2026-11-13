@@ -543,6 +543,23 @@ Data (`server/finance/store.js`, Postgres or `server/data/finance.json`):
   `HISTORY_START` moves — reads bills back to that date (`historyFrom` in its
   sync state).
 
+- **Hosting tab** (`HostingTab.tsx`, `GET /api/finance/hosting`,
+  `server/finance/hosting.js`): what each Railway service costs this billing
+  period. Railway's GraphQL `usage` (groupBy `SERVICE_ID`, `includeDeleted`;
+  MEMORY_USAGE_GB / DISK_USAGE_GB in GB-minutes, CPU_USAGE in vCPU-minutes,
+  NETWORK_TX_GB in GB) for the period so far, the last hour and the previous
+  period, read with the connector's `RAILWAY_API_TOKEN`; cached an hour in
+  `finance_state` (`railway_hosting`), `?fresh=1` re-reads. A service's
+  period is projected from its last hour, so a paused one stops counting;
+  `estimatedUsage` (Railway's own figure) is shown only in a footnote. Bill =
+  $5 fee incl. $5 usage + usage above + VAT (`RAILWAY_VAT_RATE`, default
+  0.21). `serviceRole` names what a service is from its name (Postgres,
+  Back-End, Front-End, Form, "Period N" = paused copy). Also live from
+  Postgres: what the database holds (`groupTables`: files, change log,
+  backups, telemetry, Jarvis, business data, system) and the backups (in
+  the DB and on R2, free to 10 GB). `RAILWAY_API_URL` exists only to point
+  a local test at a mock. Prices in `RAILWAY_PRICES` (2026-11).
+
 - **Jarvis tab** (`JarvisUsageTab.tsx`, `GET /api/finance/jarvis?days=7|30|90`,
   `jarvis-usage.js`): `finance_ai_turns` keeps one row per Jarvis question
   (`recordJarvisTurn`, written in the chat route's `finally`): the question
