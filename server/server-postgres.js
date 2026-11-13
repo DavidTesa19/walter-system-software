@@ -1438,6 +1438,7 @@ registerDocumentOverviewRoutes(app, {
   requireRole,
   pool: db.isPostgres() ? db.getPool() : null,
   readStore: () => readDb(),
+  writeStore: (store) => writeDb(store),
 });
 
 // Úkoly (personal and team to-do lists) and Hlášení chyb (bug reports with

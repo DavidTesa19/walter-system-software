@@ -729,3 +729,116 @@
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 }
+
+/* Soubory bez subjektu (OrphansCard): opens from the "Bez subjektu" tile. */
+.dov-orphans {
+  display: flex;
+  flex-direction: column;
+  gap: 0.6rem;
+}
+
+.dov-orphan-tools {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.4rem;
+}
+
+.dov-orphan-spacer {
+  flex: 1;
+}
+
+.dov-button--primary {
+  border-color: var(--color-primary);
+  background: var(--color-primary);
+  color: var(--color-on-primary, #fff);
+}
+
+.dov-button--primary:hover:not(:disabled) {
+  background: color-mix(in srgb, var(--color-primary) 88%, #000);
+}
+
+.dov-button--danger {
+  color: var(--color-danger, #dc2626);
+}
+
+.dov-button--danger-solid {
+  border-color: var(--color-danger, #dc2626);
+  background: var(--color-danger, #dc2626);
+  color: #fff;
+}
+
+.dov-button--danger-solid:hover:not(:disabled) {
+  background: color-mix(in srgb, var(--color-danger, #dc2626) 85%, #000);
+}
+
+.dov-success {
+  padding: 0.6rem 0.8rem;
+  border: 1px solid color-mix(in srgb, var(--color-success, #16a34a) 45%, var(--color-border));
+  border-radius: var(--ui-radius-md, 8px);
+  background: color-mix(in srgb, var(--color-success, #16a34a) 8%, transparent);
+  font-size: var(--ui-text-sm, 12.5px);
+}
+
+.dov-orphan-form {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  padding: 0.75rem 0.9rem;
+  border: 1px solid color-mix(in srgb, var(--color-primary) 40%, var(--color-border));
+  border-radius: var(--ui-radius-md, 8px);
+  background: color-mix(in srgb, var(--color-primary) 5%, var(--color-surface));
+  font-size: var(--ui-text-sm, 12.5px);
+}
+
+.dov-orphan-form--danger {
+  border-color: color-mix(in srgb, var(--color-danger, #dc2626) 45%, var(--color-border));
+  background: color-mix(in srgb, var(--color-danger, #dc2626) 5%, var(--color-surface));
+}
+
+.dov-orphan-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.5rem 1rem;
+}
+
+.dov-orphan-row label,
+.dov-orphan-check {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  cursor: pointer;
+}
+
+.dov-orphan-row input[type="radio"],
+.dov-orphan-check input,
+.dov-orphan-table input[type="checkbox"] {
+  accent-color: var(--color-primary);
+}
+
+.dov-orphan-table tbody tr {
+  cursor: pointer;
+}
+
+.dov-orphan-table tbody tr.is-selected td {
+  background: color-mix(in srgb, var(--color-primary) 8%, transparent);
+}
+
+.dov-orphan-folders {
+  max-width: 340px;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+@media (max-width: 768px) {
+  .dov-orphan-table th:nth-child(3),
+  .dov-orphan-table td:nth-child(3) {
+    display: none;
+  }
+
+  .dov-orphan-spacer {
+    display: none;
+  }
+}

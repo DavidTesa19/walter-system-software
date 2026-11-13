@@ -598,7 +598,21 @@ Duplicates are files with the same SHA-256. Managers are blocked
   Neither of the last two shows in any profile; the "Bez subjektu" tile
   filters them. On 2026-11-13 that was 245 of 289 files (354 MB): Neveřejné
   subjects 7–39 were deleted before the change log existed and their files
-  stayed. Do not delete them without the user's say.
+  stayed (deleting a subject never deletes its files). Do not delete them
+  without the user's say.
+- **Soubory bez subjektu** (`OrphansCard.tsx`, opens with the "Bez subjektu"
+  tile; server `POST /api/documents/orphans/move|delete`, admin only,
+  `documents/orphans.js` + overview.js): one row per former subject; move to
+  an existing subject or a new one created through the section's own create
+  route with `status: 'archived'`, or delete. The server refuses a key that
+  has a subject (409), works in one transaction on the request's pool
+  checkout (so the change log names the user), keeps the folder tree, and
+  wraps loose files or several top folders in one new folder
+  (`planOwnerMove`). `repairFilename` undoes the latin1 mangling of old
+  uploads only when the result is plain letters/punctuation. "Vybrat jen
+  kopie" uses one keeper per file content (a live subject, then a copy in a
+  folder, then the newest), so two former subjects with the same files never
+  both count as copies.
 - **Vývoj v čase** (`HistoryCard.tsx`, server `documents/history.js`, pure,
   tested): per Prague month uploads, deletions (change log only, so from
   2026-10), net change, the total at month end and its disk cost; a switch

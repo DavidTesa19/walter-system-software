@@ -161,6 +161,8 @@ export const HELP_TOPICS: HelpTopic[] = [
       "Nahoře počet souborů, kolik místa zabírají, co uložení stojí měsíčně, duplicity a smazané soubory držené pro obnovu.",
       "Pruhy podle typu, sekce a subjektu i dlaždice Duplicity filtrují tabulku; hledání najde název souboru, složku i subjekt.",
       "Kliknutím na záhlaví sloupce řadíte. U souboru jde otevřít profil subjektu, soubor stáhnout nebo smazat (smazaný se rok drží pro obnovu).",
+      "Dlaždice Bez subjektu ukáže soubory smazaných subjektů po bývalých subjektech: vybrané přesunete k subjektu (i k novému v archivu) nebo smažete. „Vybrat jen kopie“ vybere ty, jejichž soubory jsou celé uložené jinde.",
+      "Vývoj v čase: velikost úložiště, přírůstek a náklady po měsících; najetím na sloupec uvidíte podrobnosti.",
     ],
   },
   {

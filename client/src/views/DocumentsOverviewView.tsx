@@ -33,6 +33,7 @@ import type {
 import type { JarvisOpenAction } from '../jarvis/jarvisApi';
 import type { AppView } from '../types/appView';
 import HistoryCard from '../documentsOverview/HistoryCard';
+import OrphansCard from '../documentsOverview/OrphansCard';
 import { BUTTON_ICON, TAB_ICON } from '../ui/icons';
 import { apiDelete, apiDownload, apiGet } from '../utils/api';
 import './DocumentsOverviewView.css';
@@ -315,6 +316,8 @@ export default function DocumentsOverviewView({ onOpenRecord, onOpenView }: Prop
               onPick={(key) => setFilter('owner', filters.owner === key ? null : key)}
             />
           </div>
+
+          {filters.orphansOnly && <OrphansCard documents={documents} onChanged={load} />}
 
           <HistoryCard history={data.history} />
 

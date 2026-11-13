@@ -95,3 +95,48 @@ test('monthlyHistory: totals, empty months, deletions and the projection', () =>
   assert.equal(history.summary.busiestMonth.month, '2026-04');
   assert.deepEqual(monthlyHistory({ prices: STORAGE_PRICES, usdCzk: 20 }).months, []);
 });
+
+test('repairFilename: latin1-mangled names come back, others stay', async () => {
+  const { repairFilename } = await import('../documents/orphans.js');
+  // What the bug stored: the browser's UTF-8 bytes read as latin1 (macOS sends
+  // names decomposed, Windows composed).
+  const mangle = (name, form = 'NFC') => Buffer.from(name.normalize(form), 'utf8').toString('latin1');
+  assert.equal(repairFilename(mangle('Ruská LOI návrh.docx', 'NFD')), 'Ruská LOI návrh.docx');
+  assert.equal(repairFilename(mangle('ČD Na Švihance.pdf', 'NFD')), 'ČD Na Švihance.pdf');
+  assert.equal(repairFilename(mangle('260218_Laboratorní výsledky.pdf')), '260218_Laboratorní výsledky.pdf');
+  // Mangled some other way: the repair would give "Z†mek", so the name stays.
+  assert.equal(repairFilename('Zâ mek Jablonnâ  - foto.pdf'), 'Zâ mek Jablonnâ  - foto.pdf');
+  assert.equal(repairFilename('Zámek Jablonná'), 'Zámek Jablonná');
+  assert.equal(repairFilename('Ořechovka.pdf'), 'Ořechovka.pdf');
+  assert.equal(repairFilename('plain.pdf'), 'plain.pdf');
+});
+
+test('planOwnerMove: one top folder moves as is, anything else gets a wrapper', async () => {
+  const { planOwnerMove, parseOwnerKey } = await import('../documents/orphans.js');
+  const single = planOwnerMove([
+    { id: 1, item_kind: 'folder', parent_id: null, filename: 'Developerský projekt Plzeň' },
+    { id: 2, item_kind: 'file', parent_id: 1, filename: 'a.pdf' },
+  ], { fallbackName: 'Bývalý subjekt #25' });
+  assert.equal(single.wrapperName, null);
+  assert.deepEqual(single.rootIds, []);
+
+  const loose = planOwnerMove([
+    { id: 3, item_kind: 'file', parent_id: null, filename: 'x.pdf' },
+    { id: 4, item_kind: 'file', parent_id: null, filename: Buffer.from('Materiál.pdf'.normalize('NFD'), 'utf8').toString('latin1') },
+  ], { fallbackName: 'Bývalý subjekt #28' });
+  assert.equal(loose.wrapperName, 'Bývalý subjekt #28');
+  assert.deepEqual(loose.rootIds, [3, 4]);
+  assert.deepEqual(loose.renames, [{ id: 4, filename: 'Materiál.pdf' }]);
+
+  const several = planOwnerMove([
+    { id: 5, item_kind: 'folder', parent_id: null, filename: 'Klecany' },
+    { id: 6, item_kind: 'folder', parent_id: null, filename: 'Ralsko' },
+    { id: 7, item_kind: 'file', parent_id: 99, filename: 'orphan-parent.pdf' },
+  ], { fallbackName: 'Bývalý subjekt #27', repairNames: false });
+  assert.equal(several.wrapperName, 'Klecany, Ralsko');
+  assert.deepEqual(several.rootIds, [5, 6, 7]);
+  assert.deepEqual(several.renames, []);
+
+  assert.deepEqual(parseOwnerKey('project-clients:25'), { entityType: 'project-clients', entityId: 25 });
+  assert.equal(parseOwnerKey('x:y'), null);
+});

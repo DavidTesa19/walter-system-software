@@ -1700,7 +1700,7 @@ registerFinanceRoutes(app, {
 });
 
 // Analýza › Dokumenty: every uploaded file, its size and storage cost — admin only.
-registerDocumentOverviewRoutes(app, { authenticateToken, requireRole, pool: null, readStore: () => readDb() });
+registerDocumentOverviewRoutes(app, { authenticateToken, requireRole, pool: null, readStore: () => readDb(), writeStore: (store) => writeDb(store) });
 
 // Úkoly (personal and team to-do lists) and Hlášení chyb (bug reports with
 // screenshots) — every signed-in user.

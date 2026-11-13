@@ -9,6 +9,7 @@
 import crypto from 'node:crypto';
 import { getRates } from '../finance/rates.js';
 import { monthlyHistory } from './history.js';
+import { OrphanError, parseOwnerKey, planOwnerMove } from './orphans.js';
 
 // Railway bills a volume at $0.000003472 per GB-minute (≈ $0.15 per GB-month)
 // and RAM at $0.000231 per GB-minute (≈ $10 per GB-month); Cloudflare R2 is
@@ -296,7 +297,203 @@ function fileOverview(store) {
   };
 }
 
-export function registerDocumentOverviewRoutes(app, { authenticateToken, requireRole, pool, readStore }) {
+// ---------- Soubory bez subjektu: move or delete a former subject's files ----------
+
+const MAX_OWNERS_PER_CALL = 60;
+
+function readOwnerKeys(body) {
+  const keys = Array.isArray(body?.owners) ? body.owners : [];
+  if (keys.length === 0) throw new OrphanError('Vyberte aspoň jeden bývalý subjekt.');
+  if (keys.length > MAX_OWNERS_PER_CALL) throw new OrphanError(`Najednou nejvýš ${MAX_OWNERS_PER_CALL} subjektů.`);
+  const owners = keys.map(parseOwnerKey);
+  if (owners.some((owner) => !owner || !OWNER_TABLES[owner.entityType])) throw new OrphanError('Neplatný subjekt.');
+  return owners;
+}
+
+// Every key must still be without a subject: this tool never touches files a
+// profile shows.
+async function pgOwnerDocs(client, owners) {
+  const docs = [];
+  for (const owner of owners) {
+    const { rows } = await client.query(
+      `SELECT id, entity_type, entity_id, item_kind, parent_id, filename FROM documents
+        WHERE entity_type = $1 AND entity_id = $2 ORDER BY id`,
+      [owner.entityType, owner.entityId],
+    );
+    docs.push({ owner, docs: rows });
+  }
+  const existing = await loadOwners(client, docs.flatMap(({ owner }) => [{ entityType: owner.entityType, entityId: owner.entityId }]));
+  for (const { owner } of docs) {
+    if (existing.get(`${owner.entityType}:${owner.entityId}`)?.__state === 'ok') {
+      throw new OrphanError(`${owner.entityType} #${owner.entityId} má subjekt; jeho soubory se spravují v profilu.`, 409);
+    }
+  }
+  return docs;
+}
+
+async function pgMoveOrphans(pool, { owners, target, repairNames }) {
+  const targetMeta = OWNER_TABLES[target.entityType];
+  const client = await pool.connect();
+  try {
+    await client.query('BEGIN');
+    const { rows: targetRows } = await client.query(`SELECT id FROM "${targetMeta.table}" WHERE id = $1`, [target.entityId]);
+    if (targetRows.length === 0) throw new OrphanError('Cílový subjekt neexistuje.', 404);
+    const groups = await pgOwnerDocs(client, owners);
+    let moved = 0;
+    let renamed = 0;
+    let wrappers = 0;
+    for (const { owner, docs } of groups) {
+      if (docs.length === 0) continue;
+      const plan = planOwnerMove(docs, {
+        fallbackName: `Bývalý subjekt #${owner.entityId}`,
+        repairNames,
+      });
+      let wrapperId = null;
+      if (plan.wrapperName) {
+        const { rows } = await client.query(
+          `INSERT INTO documents (entity_type, entity_id, item_kind, parent_id, filename, mime_type, size_bytes, data)
+           VALUES ($1, $2, 'folder', NULL, $3, 'inode/directory', 0, $4) RETURNING id`,
+          [target.entityType, target.entityId, plan.wrapperName, Buffer.alloc(0)],
+        );
+        wrapperId = rows[0].id;
+        wrappers += 1;
+      }
+      const ids = docs.map((doc) => Number(doc.id));
+      await client.query(
+        `UPDATE documents SET entity_type = $1, entity_id = $2, updated_at = CURRENT_TIMESTAMP WHERE id = ANY($3::int[])`,
+        [target.entityType, target.entityId, ids],
+      );
+      if (wrapperId != null && plan.rootIds.length > 0) {
+        await client.query('UPDATE documents SET parent_id = $1 WHERE id = ANY($2::int[])', [wrapperId, plan.rootIds]);
+      }
+      for (const { id, filename } of plan.renames) {
+        await client.query('UPDATE documents SET filename = $1 WHERE id = $2', [filename.slice(0, 255), id]);
+      }
+      moved += docs.filter((doc) => doc.item_kind !== 'folder').length;
+      renamed += plan.renames.length;
+    }
+    await client.query('COMMIT');
+    return { moved, renamed, wrappers };
+  } catch (error) {
+    await client.query('ROLLBACK').catch(() => {});
+    throw error;
+  } finally {
+    client.release();
+  }
+}
+
+async function pgDeleteOrphans(pool, { owners }) {
+  const client = await pool.connect();
+  try {
+    await client.query('BEGIN');
+    const groups = await pgOwnerDocs(client, owners);
+    const ids = groups.flatMap(({ docs }) => docs.map((doc) => Number(doc.id)));
+    const files = groups.flatMap(({ docs }) => docs.filter((doc) => doc.item_kind !== 'folder')).length;
+    if (ids.length > 0) await client.query('DELETE FROM documents WHERE id = ANY($1::int[])', [ids]);
+    await client.query('COMMIT');
+    return { deleted: files };
+  } catch (error) {
+    await client.query('ROLLBACK').catch(() => {});
+    throw error;
+  } finally {
+    client.release();
+  }
+}
+
+// The JSON dev store: the same rules on db.json's documents array.
+function fileOrphanOwners(store, owners) {
+  const all = Array.isArray(store.documents) ? store.documents : [];
+  return owners.map((owner) => {
+    const meta = OWNER_TABLES[owner.entityType];
+    const list = store[meta.table] ?? (owner.entityType === 'future-functions' ? store.futureFunctions : null) ?? [];
+    if (Array.isArray(list) && list.some((row) => Number(row.id) === owner.entityId)) {
+      throw new OrphanError(`${owner.entityType} #${owner.entityId} má subjekt; jeho soubory se spravují v profilu.`, 409);
+    }
+    const docs = all.filter((doc) => doc.entityType === owner.entityType && Number(doc.entityId) === owner.entityId);
+    return { owner, docs };
+  });
+}
+
+function fileMoveOrphans(store, { owners, target, repairNames }) {
+  const meta = OWNER_TABLES[target.entityType];
+  const list = store[meta.table] ?? (target.entityType === 'future-functions' ? store.futureFunctions : null) ?? [];
+  if (!Array.isArray(list) || !list.some((row) => Number(row.id) === target.entityId)) throw new OrphanError('Cílový subjekt neexistuje.', 404);
+  let moved = 0;
+  let renamed = 0;
+  let wrappers = 0;
+  for (const { owner, docs } of fileOrphanOwners(store, owners)) {
+    if (docs.length === 0) continue;
+    const plan = planOwnerMove(
+      docs.map((doc) => ({ id: doc.id, item_kind: doc.itemKind === 'folder' ? 'folder' : 'file', parent_id: doc.parentId ?? null, filename: doc.filename })),
+      { fallbackName: `Bývalý subjekt #${owner.entityId}`, repairNames },
+    );
+    let wrapperId = null;
+    if (plan.wrapperName) {
+      wrapperId = store.documents.reduce((max, doc) => Math.max(max, Number(doc.id) || 0), 0) + 1;
+      store.documents.push({
+        id: wrapperId, entityType: target.entityType, entityId: target.entityId, itemKind: 'folder', parentId: null,
+        filename: plan.wrapperName, mimeType: 'inode/directory', sizeBytes: 0, data: '', createdAt: new Date().toISOString(),
+      });
+      wrappers += 1;
+    }
+    const renames = new Map(plan.renames.map((item) => [Number(item.id), item.filename]));
+    const roots = new Set(plan.rootIds);
+    for (const doc of docs) {
+      doc.entityType = target.entityType;
+      doc.entityId = target.entityId;
+      if (wrapperId != null && roots.has(Number(doc.id))) doc.parentId = wrapperId;
+      if (renames.has(Number(doc.id))) doc.filename = renames.get(Number(doc.id));
+      if (doc.itemKind !== 'folder') moved += 1;
+    }
+    renamed += plan.renames.length;
+  }
+  return { moved, renamed, wrappers };
+}
+
+function fileDeleteOrphans(store, { owners }) {
+  const groups = fileOrphanOwners(store, owners);
+  const ids = new Set(groups.flatMap(({ docs }) => docs.map((doc) => Number(doc.id))));
+  const files = groups.flatMap(({ docs }) => docs.filter((doc) => doc.itemKind !== 'folder')).length;
+  store.documents = store.documents.filter((doc) => !ids.has(Number(doc.id)));
+  return { deleted: files };
+}
+
+export function registerDocumentOverviewRoutes(app, { authenticateToken, requireRole, pool, readStore, writeStore }) {
+  const fail = (res, error, fallback) => {
+    if (error instanceof OrphanError) return res.status(error.status).json({ error: error.message });
+    console.error(fallback, error);
+    return res.status(500).json({ error: fallback });
+  };
+
+  app.post('/api/documents/orphans/move', authenticateToken, requireRole('admin'), async (req, res) => {
+    try {
+      const owners = readOwnerKeys(req.body);
+      const target = { entityType: String(req.body?.target?.entityType ?? ''), entityId: Number(req.body?.target?.entityId) };
+      if (!OWNER_TABLES[target.entityType] || !Number.isInteger(target.entityId)) throw new OrphanError('Vyberte cílový subjekt.');
+      const repairNames = req.body?.repairNames !== false;
+      if (pool) return res.json(await pgMoveOrphans(pool, { owners, target, repairNames }));
+      const store = readStore();
+      const result = fileMoveOrphans(store, { owners, target, repairNames });
+      if (!writeStore(store)) throw new Error('db.json not written');
+      return res.json(result);
+    } catch (error) {
+      return fail(res, error, 'Soubory se nepodařilo přesunout.');
+    }
+  });
+
+  app.post('/api/documents/orphans/delete', authenticateToken, requireRole('admin'), async (req, res) => {
+    try {
+      const owners = readOwnerKeys(req.body);
+      if (pool) return res.json(await pgDeleteOrphans(pool, { owners }));
+      const store = readStore();
+      const result = fileDeleteOrphans(store, { owners });
+      if (!writeStore(store)) throw new Error('db.json not written');
+      return res.json(result);
+    } catch (error) {
+      return fail(res, error, 'Soubory se nepodařilo smazat.');
+    }
+  });
+
   app.get('/api/documents/overview', authenticateToken, requireRole('admin'), async (_req, res) => {
     try {
       const { deletions, ...overview } = pool ? await pgOverview(pool) : fileOverview(readStore());
