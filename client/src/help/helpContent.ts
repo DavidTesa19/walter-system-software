@@ -120,24 +120,14 @@ export const HELP_TOPICS: HelpTopic[] = [
     ],
   },
   {
-    id: "analytics",
-    title: "Analytika",
-    views: ["analytics"],
-    summary: "Jak se aplikace používá.",
+    id: "pipeline",
+    title: "Přehled obchodu",
+    views: ["pipeline"],
+    summary: "Jak si stojí obchod: zakázky podle stavu, po měsících a ty největší rozjednané.",
     points: [
-      "Návštěvy sekcí a čas v nich, aktivita jednotlivých uživatelů a přihlášení.",
-      "Kliknutí na veřejný formulář.",
-    ],
-  },
-  {
-    id: "finance",
-    title: "Finance",
-    views: ["finance"],
-    summary: "Všechno, co aplikace stojí, a odkud to číslo je.",
-    points: [
-      "Napojeno = číslo přímo od poskytovatele, Pevná cena = potvrzeno z faktury, Nepotvrzeno = odhad.",
-      "Historie ukazuje platby měsíc po měsíci od září 2025, v korunách podle kurzu ČNB toho dne.",
-      "Záložka Jarvis: kolik stojí odpovědi, kdo se ptá nejvíc, nejdražší a nejpomalejší otázky a hodnocení 👍/👎.",
+      "Nahoře otevřené zakázky (a kolik je po termínu), provize v jednání, úspěšnost a získaná provize za 12 měsíců.",
+      "Graf podle stavu přepnete mezi počtem a provizí; graf po měsících mezi novými a získanými zakázkami.",
+      "Zakázka propojená s klientem, partnerem i tipařem se počítá jednou. Částka je provize, jinak rozpočet.",
     ],
   },
   {
@@ -152,14 +142,24 @@ export const HELP_TOPICS: HelpTopic[] = [
     ],
   },
   {
-    id: "pipeline",
-    title: "Pipeline zakázek",
-    views: ["pipeline"],
-    summary: "Jak si stojí obchod: zakázky podle stavu, po měsících a ty největší rozjednané.",
+    id: "finance",
+    title: "Finance",
+    views: ["finance"],
+    summary: "Všechno, co aplikace stojí, a odkud to číslo je.",
     points: [
-      "Nahoře otevřené zakázky (a kolik je po termínu), provize v jednání, úspěšnost a získaná provize za 12 měsíců.",
-      "Graf podle stavu přepnete mezi počtem a provizí; graf po měsících mezi novými a získanými zakázkami.",
-      "Zakázka propojená s klientem, partnerem i tipařem se počítá jednou. Částka je provize, jinak rozpočet.",
+      "Napojeno = číslo přímo od poskytovatele, Pevná cena = potvrzeno z faktury, Nepotvrzeno = odhad.",
+      "Historie ukazuje platby měsíc po měsíci od září 2025, v korunách podle kurzu ČNB toho dne.",
+      "Záložka Jarvis: kolik stojí odpovědi, kdo se ptá nejvíc, nejdražší a nejpomalejší otázky a hodnocení 👍/👎.",
+    ],
+  },
+  {
+    id: "analytics",
+    title: "Využití aplikace",
+    views: ["analytics"],
+    summary: "Jak se aplikace používá.",
+    points: [
+      "Návštěvy sekcí a čas v nich, aktivita jednotlivých uživatelů a přihlášení.",
+      "Kliknutí na veřejný formulář.",
     ],
   },
   {

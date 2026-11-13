@@ -1,5 +1,5 @@
 import {
-  Archive, Bot, Briefcase, CalendarDays, ChartColumn, ChartNoAxesColumnIncreasing, ChartPie, ChevronDown, ChevronRight, CircleHelp, ClipboardCheck,
+  Archive, Bot, Briefcase, CalendarDays, Activity, ChartNoAxesColumnIncreasing, ChartPie, ChevronDown, ChevronRight, CircleHelp, ClipboardCheck,
   Crown, Ellipsis, Flag, Globe, Hourglass, LayoutGrid, Lightbulb, ListChecks, Lock, MessagesSquare, Palette,
   ShieldCheck, SquareCheckBig, UserCog, UsersRound, Wallet,
 } from 'lucide-react';
@@ -111,7 +111,7 @@ const Icons = {
   Future: () => <Lightbulb {...ICON} />,
   Chatbot: () => <Bot {...ICON} />,
   Palettes: () => <Palette {...ICON} />,
-  Analytics: () => <ChartColumn {...ICON} />,
+  Analytics: () => <Activity {...ICON} />,
   Analysis: () => <ChartPie {...ICON} />,
   DataQuality: () => <ClipboardCheck {...ICON} />,
   Pipeline: () => <ChartNoAxesColumnIncreasing {...ICON} />,
@@ -201,7 +201,7 @@ const Sidebar: React.FC<SidebarProps> = ({
       { id: 'calendar', views: ['calendar'] },
       { id: 'teamchat', views: ['teamchat'] },
       { id: 'tasks', views: ['tasks'] },
-      { id: 'analysis', views: ['analytics', 'finance', 'data_quality', 'pipeline'] },
+      { id: 'analysis', views: ['pipeline', 'data_quality', 'finance', 'analytics'] },
       { id: 'other', views: ['future', 'bugs', 'chatbot', 'palettes', 'admin_users', 'safety', 'help'] }
     ];
 
@@ -372,10 +372,10 @@ const Sidebar: React.FC<SidebarProps> = ({
       label: 'Analýza',
       icon: <Icons.Analysis />,
       items: [
-        { id: 'analytics', label: 'Analytika', icon: <Icons.Analytics /> },
-        { id: 'finance', label: 'Finance', icon: <Icons.Finance /> },
+        { id: 'pipeline', label: 'Přehled obchodu', icon: <Icons.Pipeline /> },
         { id: 'data_quality', label: 'Kvalita dat', icon: <Icons.DataQuality /> },
-        { id: 'pipeline', label: 'Pipeline zakázek', icon: <Icons.Pipeline /> }
+        { id: 'finance', label: 'Finance', icon: <Icons.Finance /> },
+        { id: 'analytics', label: 'Využití aplikace', icon: <Icons.Analytics /> }
       ]
     },
     {

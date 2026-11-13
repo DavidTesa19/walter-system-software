@@ -97,7 +97,7 @@ export const SECTION_LABELS: Record<string, string> = {
   chatbot: 'AI Asistent',
   palettes: 'Motivy',
   future: 'Budoucí funkce',
-  analytics: 'Analytika',
+  analytics: 'Využití aplikace',
   finance: 'Finance',
   help: 'Nápověda',
 };
