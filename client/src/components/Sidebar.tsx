@@ -3,7 +3,7 @@ import {
   Crown, Ellipsis, Flag, Globe, Hourglass, LayoutGrid, Lightbulb, ListChecks, Lock, MessagesSquare, Palette,
   ShieldCheck, SquareCheckBig, UserCog, UsersRound, Wallet,
 } from 'lucide-react';
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect } from 'react';
 import { canAccessGrowthSystem, canAccessProjectsSystem, canAccessStandardSystem, isViewAllowedForRole, useAuth } from '../auth/AuthContext';
 import ActivityIndicator from '../activity/ActivityIndicator';
 import ActivityConfirmAllButton from '../activity/ActivityConfirmAllButton';
@@ -127,8 +127,6 @@ const Icons = {
 const Sidebar: React.FC<SidebarProps> = ({
   activeView,
   onViewChange,
-  onGlobalSearch,
-  onSearchNavigate,
   mobileOpen = false
 }) => {
   const { user, logout } = useAuth();
@@ -138,19 +136,12 @@ const Sidebar: React.FC<SidebarProps> = ({
   const canAccessStandard = canAccessStandardSystem(accessScope);
   const canAccessProjects = canAccessProjectsSystem(accessScope);
   const canAccessGrowth = canAccessGrowthSystem(accessScope);
-  const [searchQuery, setSearchQuery] = useState('');
-  const [searchResults, setSearchResults] = useState<GlobalSearchResult[]>([]);
-  const [isSearching, setIsSearching] = useState(false);
-  const [isSearchOpen, setIsSearchOpen] = useState(false);
-  const [highlightedSearchIndex, setHighlightedSearchIndex] = useState<number>(-1);
-  const searchContainerRef = useRef<HTMLDivElement | null>(null);
-  const searchRequestIdRef = useRef(0);
   
   // State for expanded groups
   const [expandedGroups, setExpandedGroups] = useState<Record<string, boolean>>({
-    general: true,
-    projects: true,
-    growth: true,
+    general: false,
+    projects: false,
+    growth: false,
     general_subjects: true,
     general_commissions: true,
     projects_subjects: true,
@@ -160,14 +151,23 @@ const Sidebar: React.FC<SidebarProps> = ({
     calendar: true,
     teamchat: true,
     tasks: true,
-    other: true
+    other: false
   });
 
+  // Growth Club, Veřejné and Neveřejné open one at a time (an accordion):
+  // all three open made the menu long and hard to scan.
+  const MAJOR_GROUPS = ['growth', 'general', 'projects'];
   const toggleGroup = (groupId: string) => {
-    setExpandedGroups(prev => ({
-      ...prev,
-      [groupId]: !prev[groupId]
-    }));
+    setExpandedGroups(prev => {
+      const opening = !prev[groupId];
+      const next = { ...prev, [groupId]: opening };
+      if (opening && MAJOR_GROUPS.includes(groupId)) {
+        MAJOR_GROUPS.filter(id => id !== groupId).forEach(id => {
+          next[id] = false;
+        });
+      }
+      return next;
+    });
   };
 
   // Ensure the group containing the active view is expanded
@@ -206,10 +206,15 @@ const Sidebar: React.FC<SidebarProps> = ({
 
     const activeGroup = groups.find(g => g.views.includes(activeView as string));
     if (activeGroup && !expandedGroups[activeGroup.id]) {
-      setExpandedGroups(prev => ({
-        ...prev,
-        [activeGroup.id]: true
-      }));
+      setExpandedGroups(prev => {
+        const next = { ...prev, [activeGroup.id]: true };
+        if (MAJOR_GROUPS.includes(activeGroup.id)) {
+          MAJOR_GROUPS.filter(id => id !== activeGroup.id).forEach(id => {
+            next[id] = false;
+          });
+        }
+        return next;
+      });
     }
 
     const activeSection = groups
@@ -224,63 +229,8 @@ const Sidebar: React.FC<SidebarProps> = ({
     }
   }, [activeView]);
 
-  useEffect(() => {
-    const handleOutsideClick = (event: MouseEvent) => {
-      if (searchContainerRef.current && !searchContainerRef.current.contains(event.target as Node)) {
-        setIsSearchOpen(false);
-      }
-    };
 
-    document.addEventListener('mousedown', handleOutsideClick);
-    return () => document.removeEventListener('mousedown', handleOutsideClick);
-  }, []);
 
-  useEffect(() => {
-    const query = searchQuery.trim();
-    if (!query) {
-      setSearchResults([]);
-      setIsSearching(false);
-      setHighlightedSearchIndex(-1);
-      return;
-    }
-
-    setIsSearching(true);
-    const timeoutId = window.setTimeout(async () => {
-      const requestId = ++searchRequestIdRef.current;
-      try {
-        const results = await onGlobalSearch(query);
-        if (requestId === searchRequestIdRef.current) {
-          setSearchResults(results);
-          setHighlightedSearchIndex(results.length > 0 ? 0 : -1);
-          setIsSearchOpen(true);
-        }
-      } catch (error) {
-        console.error('Global search error:', error);
-        if (requestId === searchRequestIdRef.current) {
-          setSearchResults([]);
-          setHighlightedSearchIndex(-1);
-        }
-      } finally {
-        if (requestId === searchRequestIdRef.current) {
-          setIsSearching(false);
-        }
-      }
-    }, 250);
-
-    return () => {
-      window.clearTimeout(timeoutId);
-    };
-  }, [onGlobalSearch, searchQuery]);
-
-  // `openProfile` is the profile button on the result rather than the result
-  // itself: same jump to the row, but the profile panel opens on arrival.
-  const handleSearchResultClick = (result: GlobalSearchResult, openProfile = false) => {
-    onSearchNavigate(result, { openProfile });
-    setIsSearchOpen(false);
-    setSearchQuery('');
-    setSearchResults([]);
-    setHighlightedSearchIndex(-1);
-  };
 
   const sidebarGroups: SidebarGroup[] = [
     {
@@ -396,6 +346,7 @@ const Sidebar: React.FC<SidebarProps> = ({
     }
   ];
 
+  const WORK_ITEMS = ['calendar', 'tasks', 'teamchat'];
   const sidebarSingleItems: SidebarSingleItem[] = [
     {
       id: 'calendar',
@@ -496,152 +447,7 @@ const Sidebar: React.FC<SidebarProps> = ({
         <WssLogo className="sidebar-brand-logo" />
       </div>
       <nav className="sidebar-nav">
-        <div className="sidebar-search" ref={searchContainerRef}>
-          <div className="sidebar-search-input-wrap">
-            <svg
-              className="sidebar-search-icon"
-              width="16"
-              height="16"
-              viewBox="0 0 24 24"
-              fill="none"
-              stroke="currentColor"
-              strokeWidth="2"
-              strokeLinecap="round"
-              strokeLinejoin="round"
-            >
-              <circle cx="11" cy="11" r="8"></circle>
-              <line x1="21" y1="21" x2="16.65" y2="16.65"></line>
-            </svg>
-            <input
-              type="text"
-              className="sidebar-search-input"
-              placeholder="Hledat v aplikaci..."
-              value={searchQuery}
-              onChange={(event) => {
-                setSearchQuery(event.target.value);
-                setIsSearchOpen(true);
-              }}
-              onFocus={() => setIsSearchOpen(true)}
-              onKeyDown={(event) => {
-                if (event.key === 'ArrowDown') {
-                  event.preventDefault();
-                  if (!isSearchOpen) {
-                    setIsSearchOpen(true);
-                  }
-                  if (searchResults.length > 0) {
-                    setHighlightedSearchIndex((prev) =>
-                      prev < 0 ? 0 : (prev + 1) % searchResults.length
-                    );
-                  }
-                  return;
-                }
-
-                if (event.key === 'ArrowUp') {
-                  event.preventDefault();
-                  if (!isSearchOpen) {
-                    setIsSearchOpen(true);
-                  }
-                  if (searchResults.length > 0) {
-                    setHighlightedSearchIndex((prev) => {
-                      if (prev < 0) {
-                        return searchResults.length - 1;
-                      }
-                      return prev === 0 ? searchResults.length - 1 : prev - 1;
-                    });
-                  }
-                  return;
-                }
-
-                if (event.key === 'Escape') {
-                  event.preventDefault();
-                  setIsSearchOpen(false);
-                  setHighlightedSearchIndex(-1);
-                  return;
-                }
-
-                if (event.key === 'Enter' && searchResults.length > 0) {
-                  event.preventDefault();
-                  const nextIndex = highlightedSearchIndex >= 0 ? highlightedSearchIndex : 0;
-                  handleSearchResultClick(searchResults[nextIndex]);
-                }
-              }}
-            />
-            {searchQuery && (
-              <button
-                type="button"
-                className="sidebar-search-clear"
-                onClick={() => {
-                  setSearchQuery('');
-                  setSearchResults([]);
-                  setIsSearchOpen(false);
-                  setHighlightedSearchIndex(-1);
-                }}
-                aria-label="Vymazat hledání"
-              >
-                ×
-              </button>
-            )}
-          </div>
-
-          {isSearchOpen && (searchQuery.trim() || isSearching) && (
-            <div className="sidebar-search-results" role="listbox">
-              {isSearching ? (
-                <div className="sidebar-search-status">Vyhledávání…</div>
-              ) : searchResults.length > 0 ? (
-                searchResults.map((result, index) => {
-                  const canOpenProfile = Boolean(result.table && typeof result.recordId === 'number');
-                  const meta = [result.locationLabel, result.matchedFields?.join(', ')]
-                    .filter(Boolean)
-                    .join(' · ');
-                  // Both lines are clipped to one line each, so the tooltip is
-                  // where the full text stays readable.
-                  const tooltip = `${result.title}
-${meta}`;
-
-                  return (
-                    <div
-                      key={result.id}
-                      role="option"
-                      aria-selected={highlightedSearchIndex === index}
-                      className={`sidebar-search-result ${highlightedSearchIndex === index ? 'active' : ''}`}
-                      onMouseEnter={() => setHighlightedSearchIndex(index)}
-                    >
-                      <button
-                        type="button"
-                        className="sidebar-search-result-main"
-                        onClick={() => handleSearchResultClick(result)}
-                        title={tooltip}
-                      >
-                        <span className="sidebar-search-result-title">{result.title}</span>
-                        <span className="sidebar-search-result-meta">{meta}</span>
-                      </button>
-                      {canOpenProfile && (
-                        <button
-                          type="button"
-                          className="sidebar-search-result-profile"
-                          onClick={(event) => {
-                            event.stopPropagation();
-                            handleSearchResultClick(result, true);
-                          }}
-                          title="Otevřít profil"
-                          aria-label="Otevřít profil"
-                        >
-                          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
-                            <path d="M12 12C14.4853 12 16.5 9.98528 16.5 7.5C16.5 5.01472 14.4853 3 12 3C9.51472 3 7.5 5.01472 7.5 7.5C7.5 9.98528 9.51472 12 12 12Z" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" />
-                            <path d="M4.5 20.25C4.5 16.7982 7.29822 14 10.75 14H13.25C16.7018 14 19.5 16.7982 19.5 20.25" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" />
-                          </svg>
-                        </button>
-                      )}
-                    </div>
-                  );
-                })
-              ) : (
-                <div className="sidebar-search-status">Nic nenalezeno</div>
-              )}
-            </div>
-          )}
-        </div>
-
+        {/* Search lives in the top bar (Ctrl/⌘+K, SearchPalette), not here. */}
         {globalUnseenCount > 0 && (
           <div className="sidebar-confirm-everything">
             <ActivityConfirmAllButton
@@ -651,6 +457,7 @@ ${meta}`;
           </div>
         )}
 
+        {visibleSidebarGroups.length > 0 && <div className="sidebar-heading">Sekce</div>}
         {visibleSidebarGroups.map(group => (
           <div key={group.id} className="sidebar-group sidebar-group--major">
             <div className="sidebar-row">
@@ -753,8 +560,16 @@ ${meta}`;
           </div>
         ))}
 
-        {visibleSidebarSingleItems.map(group => {
+        {visibleSidebarSingleItems.map((group, index) => {
           const isSingleItem = group.items.length === 1 && group.items[0].id === group.id;
+          // "Práce" before the first everyday screen, "Další" before the rest.
+          const block = WORK_ITEMS.includes(group.id) ? 'Práce' : 'Další';
+          const previous = visibleSidebarSingleItems[index - 1];
+          const heading =
+            !previous || (WORK_ITEMS.includes(previous.id) ? 'Práce' : 'Další') !== block ? (
+              <div key={`heading-${block}`} className="sidebar-heading">{block}</div>
+            ) : null;
+          const rendered = (() => {
 
           if (isSingleItem) {
             const item = group.items[0];
@@ -803,6 +618,13 @@ ${meta}`;
                 </div>
               )}
             </div>
+          );
+          })();
+          return (
+            <React.Fragment key={group.id}>
+              {heading}
+              {rendered}
+            </React.Fragment>
           );
         })}
 

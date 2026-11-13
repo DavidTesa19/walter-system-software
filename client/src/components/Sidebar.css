@@ -764,3 +764,71 @@
   font-size: 0.8rem;
   line-height: 1.4;
 }
+
+/* ---- Menu layout (2026-11-13): headings, and one search for the app ---- */
+
+/* "Sekce" / "Práce" / "Další": quiet labels that split the menu into blocks. */
+.sidebar-heading {
+  margin: 0.9rem 0 0.25rem;
+  padding: 0 0.75rem;
+  font-size: var(--ui-text-xs, 11.5px);
+  font-weight: 650;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--color-text-muted);
+}
+
+.sidebar-confirm-everything + .sidebar-heading,
+.sidebar-search-open + .sidebar-heading {
+  margin-top: 0.5rem;
+}
+
+/* Opens the Ctrl/⌘+K search window (SearchPalette). */
+.sidebar-search-open {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  width: 100%;
+  height: var(--ui-control-h, 32px);
+  margin-bottom: 0.25rem;
+  padding: 0 0.6rem;
+  box-sizing: border-box;
+  border: 1px solid var(--color-border);
+  border-radius: var(--ui-radius-md, 8px);
+  background: var(--color-surface);
+  color: var(--color-text-muted);
+  font: inherit;
+  font-size: var(--ui-text-sm, 12.5px);
+  cursor: pointer;
+  transition: border-color var(--ui-transition, 120ms ease);
+}
+
+.sidebar-search-open:hover {
+  border-color: color-mix(in srgb, var(--color-primary) 45%, var(--color-border));
+}
+
+.sidebar-search-open span {
+  flex: 1;
+  text-align: left;
+}
+
+.sidebar-search-open kbd {
+  padding: 0 0.3rem;
+  border: 1px solid var(--color-border);
+  border-radius: 4px;
+  font-family: inherit;
+  font-size: var(--ui-text-xs, 11.5px);
+}
+
+/* A count badge keeps its own width; the label stays on one line. */
+.sidebar-button .activity-indicator,
+.group-header-content .activity-indicator {
+  flex: none;
+}
+
+.sidebar-button > span:not(.activity-indicator) {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
