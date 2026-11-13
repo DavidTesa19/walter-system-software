@@ -136,7 +136,134 @@ const canonicalJson = (raw) => {
   }
 };
 const sameValue = (field, left, right) =>
-  field === 'company_structure' ? canonicalJson(left) === canonicalJson(right) : display(field, left) === display(field, right);
+  field === 'company_structure'
+    ? canonicalJson(left) === canonicalJson(right)
+    : field === 'assigned_user_ids'
+      ? sortedIds(left) === sortedIds(right)
+      : display(field, left) === display(field, right);
+
+// Assigned users: the same people in any order are the same assignment.
+const sortedIds = (raw) => (Array.isArray(raw) ? raw : unpackValue(raw) ?? [])
+  .map(Number)
+  .filter(Number.isInteger)
+  .sort((a, b) => a - b)
+  .join(',');
+
+/**
+ * Who is responsible for a subject or a zakázka: `names` matched against the
+ * team (username, case and accents ignored), then replace, add or remove.
+ * The card shows names; the app stores ids (and fills assigned_to itself).
+ */
+export function buildAssignProposal({ kind, section, role, record, names, mode = 'replace', team, reason, label }) {
+  const fold = (value) => String(value ?? '').normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase().trim();
+  const picked = [];
+  for (const name of names ?? []) {
+    const wanted = fold(name);
+    const matches = team.filter((user) => fold(user.username) === wanted);
+    const loose = matches.length ? matches : team.filter((user) => fold(user.username).includes(wanted) || wanted.includes(fold(user.username)));
+    if (loose.length !== 1) {
+      throw new ProposalError(
+        `${loose.length ? `„${name}“ odpovídá víc lidem` : `„${name}“ v týmu není`}. Uživatelé: ${team.map((user) => user.username).join(', ')}.`
+      );
+    }
+    if (!picked.includes(loose[0])) picked.push(loose[0]);
+  }
+  const current = (Array.isArray(record.assigned_user_ids) ? record.assigned_user_ids : []).map(Number);
+  const pickedIds = picked.map((user) => Number(user.id));
+  const next =
+    mode === 'add' ? [...new Set([...current, ...pickedIds])]
+      : mode === 'remove' ? current.filter((id) => !pickedIds.includes(id))
+        : pickedIds;
+  if (sortedIds(current) === sortedIds(next)) throw new ProposalError('Přiřazení už je takové – není co měnit.');
+  const nameOf = (id) => team.find((user) => Number(user.id) === id)?.username ?? `#${id}`;
+  const text = (ids) => (ids.length ? ids.map(nameOf).join(', ') : '—');
+  return {
+    id: crypto.randomUUID(),
+    type: 'update',
+    kind,
+    section,
+    role,
+    recordId: Number(record.id),
+    label,
+    where: `${kind === 'commission' ? 'Zakázka' : ROLE_LABELS[role]} · ${SECTION_LABELS[section]}`,
+    changes: [{ field: 'assigned_user_ids', label: 'Přiřazení', from: current, to: next, fromText: text(current), toText: text(next) }],
+    reason: reason ? String(reason).slice(0, 300) : undefined,
+    createdAt: new Date().toISOString(),
+  };
+}
+
+/**
+ * A to-do in Úkoly: add one (personal or team list) or mark one done. The
+ * card shows the task; confirming writes it through the tasks API, whose live
+ * stream shows it to everyone at once. `task` is the current task for "done".
+ */
+export function buildTaskProposal({ action, list = 'personal', title, dueDate, important, assignee, task, team = [] }) {
+  if (action === 'done') {
+    if (!task) throw new ProposalError('Úkol s tímto id jsem nenašel. Načti úkoly znovu (nástroj tasks).');
+    if (task.status === 'done') throw new ProposalError('Tento úkol už je hotový.');
+    return {
+      id: crypto.randomUUID(),
+      type: 'task',
+      action: 'done',
+      label: truncateText(task.title, 120),
+      where: `Úkoly · ${task.list === 'team' ? 'týmové' : 'moje'}`,
+      changes: [{ field: 'status', label: 'Stav', from: task.status, to: 'done', fromText: task.status === 'later' ? 'Později' : 'K udělání', toText: 'Hotovo' }],
+      payload: { taskId: Number(task.id), title: task.title },
+      createdAt: new Date().toISOString(),
+    };
+  }
+  const text = String(title ?? '').trim();
+  if (!text) throw new ProposalError('Úkol nemá název.');
+  if (text.length > 500) throw new ProposalError('Název úkolu je delší než 500 znaků.');
+  const due = dueDate ? date(dueDate) : null;
+  let assigneeUserId = null;
+  if (assignee) {
+    if (list !== 'team') throw new ProposalError('Přidělit kolegovi jde jen úkol na týmovém seznamu (list = team).');
+    const fold = (value) => String(value ?? '').normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase().trim();
+    const match = team.filter((user) => fold(user.username) === fold(assignee));
+    if (match.length !== 1) throw new ProposalError(`„${assignee}“ v týmu není. Uživatelé: ${team.map((user) => user.username).join(', ')}.`);
+    assigneeUserId = Number(match[0].id);
+  }
+  const rows = [{ field: 'title', label: 'Úkol', from: null, to: text, fromText: '', toText: text }];
+  if (due) rows.push({ field: 'dueDate', label: 'Termín', from: null, to: due, fromText: '', toText: display('deadline', due) });
+  if (important) rows.push({ field: 'important', label: 'Důležitý', from: null, to: true, fromText: '', toText: 'ano' });
+  if (assigneeUserId) rows.push({ field: 'assignee', label: 'Přiděleno', from: null, to: assigneeUserId, fromText: '', toText: team.find((user) => Number(user.id) === assigneeUserId)?.username });
+  return {
+    id: crypto.randomUUID(),
+    type: 'task',
+    action: 'add',
+    label: list === 'team' ? 'Nový týmový úkol' : 'Nový úkol',
+    where: `Úkoly · ${list === 'team' ? 'týmové' : 'moje'}`,
+    changes: rows,
+    payload: { list, title: text, dueDate: due, important: Boolean(important), assigneeUserId },
+    createdAt: new Date().toISOString(),
+  };
+}
+
+const truncateText = (value, length) => {
+  const text = String(value ?? '');
+  return text.length > length ? `${text.slice(0, length - 1)}…` : text;
+};
+
+async function applyTask(proposal, api) {
+  if (proposal.action === 'add') {
+    const { list, title, dueDate, important, assigneeUserId } = proposal.payload;
+    await api.request('POST', '/api/tasks', {
+      list,
+      title,
+      ...(dueDate ? { dueDate } : {}),
+      ...(important ? { important: true } : {}),
+      ...(assigneeUserId ? { assigneeUserId } : {}),
+    });
+    return;
+  }
+  // Done: the task must still be there and still open.
+  const lists = await Promise.all(['personal', 'team'].map((list) => api.request('GET', `/api/tasks?list=${list}`).catch(() => null)));
+  const task = lists.flatMap((page) => page?.tasks ?? []).find((item) => Number(item.id) === proposal.payload.taskId);
+  if (!task) throw new ProposalError('Úkol už v seznamu není, nic jsem neměnil.');
+  if (task.status === 'done') return;
+  await api.request('PATCH', `/api/tasks/${proposal.payload.taskId}`, { status: 'done' });
+}
 
 /**
  * An Obor (and optionally its Zaměření) for a subject, from the section's own
@@ -352,6 +479,7 @@ export function buildCreateCommissionProposal({ section, role, record, commissio
 // A one-line description, for the change log and for Jarvis's next turn.
 export const describeProposal = (proposal) => {
   if (proposal.type === 'note') return `${proposal.label}: nová poznámka`;
+  if (proposal.type === 'task') return proposal.action === 'done' ? `úkol „${proposal.label}“ hotový` : `nový úkol „${proposal.payload?.title}“ (${proposal.where})`;
   if (proposal.type === 'create_subject') {
     return `nový ${ROLE_LABELS[proposal.role].toLowerCase()} ${proposal.label} (${SECTION_LABELS[proposal.section]})${proposal.payload?.commission ? ` se zakázkou ${proposal.payload.commission.position}` : ''}`;
   }
@@ -406,6 +534,9 @@ async function applyCreate(proposal, api) {
 export async function applyProposal(proposal, api) {
   if (proposal.type === 'create_subject' || proposal.type === 'create_commission') {
     return applyCreate(proposal, api);
+  }
+  if (proposal.type === 'task') {
+    return applyTask(proposal, api);
   }
   if (proposal.type === 'note') {
     await api.request('POST', `/${documentResource(proposal.section, proposal.role)}/${proposal.recordId}/notes`, { content: proposal.note });

@@ -786,6 +786,15 @@ names its own sans-serif font (`--jarvis-font`). Needs `ANTHROPIC_API_KEY`;
   — keep the two in step. The card has one row (the tree, compared as JSON
   for the stale check); `alsoWrite` carries the mirrors `field` and
   `field_specialization`.
+- **Assignment and Úkoly with approval** (2026-11-13): `propose_assign`
+  (`buildAssignProposal`) sets who is responsible for a subject or zakázka
+  (replace / add / remove; names matched to `/api/team-users` usernames,
+  case and accents ignored; the card shows names, the PUT sends
+  `assigned_user_ids` and the server fills `assigned_to`). `propose_task`
+  (`buildTaskProposal`, type `task`) adds a to-do (personal or team, due
+  date, important, team assignee) or ticks one off by the id the `tasks`
+  tool now returns; confirming goes through `/api/tasks`, so the live stream
+  shows it at once. Both are blocked in the team chat.
 - **New records with approval** (`propose_create_subject`,
   `propose_create_commission`): the same card, with the values and no
   "from"; a subject may carry its first zakázka (`commissionChanges`).

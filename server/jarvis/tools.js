@@ -41,7 +41,9 @@ import {
   buildCreateCommissionProposal,
   buildCreateSubjectProposal,
   buildNoteProposal,
+  buildAssignProposal,
   buildOborProposal,
+  buildTaskProposal,
   buildUpdateProposal,
 } from './proposals.js';
 import { DATE_ONLY, DAY_MS, eventEndLabel, formatPrague, parseDay, parseEventTime, pragueMidnight, pragueParts } from './time.js';
@@ -425,6 +427,26 @@ const noteInput = z.object({
   role,
   id: z.number().int().positive().describe('Interní id subjektu (poslední část ref).'),
   text: z.string().min(1).max(4000).describe('Text poznámky, jak bude uložen.'),
+  reason: z.string().max(300).optional(),
+}).strict();
+
+const taskInput = z.object({
+  action: z.enum(['add', 'done']).describe('add = nový úkol, done = označit úkol jako hotový.'),
+  list: z.enum(['personal', 'team']).default('personal').describe('personal = moje úkoly, team = týmový seznam.'),
+  title: z.string().max(500).optional().describe('add: název úkolu, krátce a věcně.'),
+  due: z.string().max(20).optional().describe('add: termín 2026-11-30 nebo 30.11.2026 (nepovinné).'),
+  important: z.boolean().optional().describe('add: označit jako důležitý.'),
+  assignee: z.string().max(80).optional().describe('add, jen týmový seznam: uživatelské jméno kolegy.'),
+  task_id: z.number().int().positive().optional().describe('done: id úkolu z nástroje tasks.'),
+}).strict();
+
+const assignInput = z.object({
+  section,
+  role,
+  kind: kind.describe('subject = subjekt, commission = zakázka.'),
+  id: z.number().int().positive().describe('Interní id záznamu (poslední část ref).'),
+  users: z.array(z.string().min(1).max(80)).max(10).describe('Uživatelská jména kolegů (jak je vrací tým, např. z find/get výsledků); prázdný seznam s mode=replace = zrušit přiřazení.'),
+  mode: z.enum(['replace', 'add', 'remove']).default('replace').describe('replace = jen tito lidé, add = přidat k dosavadním, remove = odebrat tyto.'),
   reason: z.string().max(300).optional(),
 }).strict();
 
@@ -1148,6 +1170,87 @@ export const TOOLS = [
     },
   },
   {
+    name: 'propose_task',
+    description:
+      'Přidá úkol do Úkolů (moje nebo týmové) nebo označí úkol jako hotový. NIC NEZAPISUJE: uživatel uvidí kartu a ' +
+      'potvrdí ji. Použij na „přidej úkol …“, „napiš do týmových úkolů …“, „odškrtni úkol …“. Pro „hotovo“ si nejdřív ' +
+      'najdi id úkolu nástrojem tasks. „Připomeň mi v pátek v 10“ s přesným časem patří do kalendáře; bez času může být úkol s termínem.',
+    input: taskInput,
+    label: (input) => (input.action === 'done' ? 'Připravuji odškrtnutí úkolu' : `Připravuji nový úkol (${truncate(input.title ?? '', 40)})`),
+    async run(input, ctx) {
+      if (ctx.user.role === 'viewer') throw new ToolError('Uživatel má jen přístup ke čtení – úkoly měnit nelze.');
+      ctx.proposalCount = (ctx.proposalCount ?? 0) + 1;
+      if (ctx.proposalCount > 10) throw new ToolError('V jedné odpovědi lze navrhnout nejvýš 10 změn. Navrhni zbytek v další odpovědi.');
+      let task;
+      if (input.action === 'done') {
+        if (!input.task_id) throw new ToolError('Chybí task_id – najdi úkol nástrojem tasks.');
+        const pages = await Promise.all(['personal', 'team'].map((list) => ctx.api.get(`/api/tasks?list=${list}`).catch(() => null)));
+        task = pages.flatMap((page) => page?.tasks ?? []).find((item) => Number(item.id) === input.task_id);
+      }
+      const team = input.assignee ? [...(await loadTeam(ctx)).values()] : [];
+      let proposal;
+      try {
+        proposal = buildTaskProposal({
+          action: input.action,
+          list: input.list,
+          title: input.title,
+          dueDate: input.due,
+          important: input.important,
+          assignee: input.assignee,
+          task,
+          team,
+        });
+      } catch (error) {
+        if (error instanceof ProposalError) throw new ToolError(error.message);
+        throw error;
+      }
+      ctx.emitProposal(proposal);
+      return {
+        navrh: proposal.id,
+        zmeny: proposal.changes.map((change) => `${change.label}: ${change.fromText ? `${change.fromText} → ` : ''}${change.toText}`),
+        stav: PENDING_NOTE,
+      };
+    },
+  },
+  {
+    name: 'propose_assign',
+    description:
+      'Navrhne, kdo má mít na starosti zakázku nebo subjekt (Přiřazení uživatelé). NIC NEZAPISUJE: uživatel uvidí kartu ' +
+      's lidmi před a po a potvrdí ji. Použij na „přiřaď K012-003 Petrovi“, „dej mi tuhle zakázku“, „přidej Janu k …“, ' +
+      '„odeber Pavla z …“. Lidi zadávej uživatelskými jmény z týmu; při neshodě dostaneš seznam týmu. ' +
+      '„mně“ = přihlášený uživatel z <kontext>. Jeden záznam = jeden návrh.',
+    input: assignInput,
+    label: (input) => `Připravuji návrh přiřazení (${(input.users ?? []).join(', ') || 'nikdo'})`,
+    async run(input, ctx) {
+      const { record, label } = await loadForProposal(ctx, input);
+      const team = [...(await loadTeam(ctx)).values()];
+      let proposal;
+      try {
+        proposal = buildAssignProposal({
+          kind: input.kind,
+          section: input.section,
+          role: input.role,
+          record,
+          names: input.users,
+          mode: input.mode,
+          team,
+          reason: input.reason,
+          label,
+        });
+      } catch (error) {
+        if (error instanceof ProposalError) throw new ToolError(error.message);
+        throw error;
+      }
+      ctx.emitProposal(proposal);
+      return {
+        navrh: proposal.id,
+        zaznam: label,
+        zmeny: proposal.changes.map((change) => `${change.label}: ${change.fromText} → ${change.toText}`),
+        stav: PENDING_NOTE,
+      };
+    },
+  },
+  {
     name: 'propose_obor',
     description:
       'Navrhne doplnit subjektu Obor (a případně Zaměření) z nabídky jeho sekce. NIC NEZAPISUJE: uživatel uvidí kartu ' +
@@ -1397,7 +1500,8 @@ export const TOOLS = [
     name: 'tasks',
     description:
       'Úkoly (sekce Úkoly): osobní seznam uživatele a týmový seznam. Vrátí otevřené úkoly s termínem, důležitostí a ' +
-      'tím, komu jsou přidělené. Použij pro „co mám udělat“, „jaké mám úkoly“, ranní přehled. Úkoly jen čte, neupravuje.',
+      'tím, komu jsou přidělené. Použij pro „co mám udělat“, „jaké mám úkoly“, ranní přehled. Úkoly jen čte; přidat nebo ' +
+      'odškrtnout úkol umí propose_task.',
     input: tasksInput,
     label: () => 'Procházím úkoly',
     async run(input, ctx) {
@@ -1419,6 +1523,7 @@ export const TOOLS = [
           k_udelani: tasks.filter(({ bucket }) => bucket === 'todo').length,
           pozdeji: tasks.filter(({ bucket }) => bucket === 'later').length,
           ukoly: tasks.slice(0, 40).map(({ task, bucket }) => ({
+            id: task.id,
             nazev: truncate(task.title, 200),
             stav: TASK_BUCKET_LABELS[bucket],
             termin: task.dueDate ? formatPrague(task.dueDate, { dateOnly: true }) : undefined,
@@ -1677,6 +1782,8 @@ export const toolLabel = (name, input) => {
 // read by everyone in the room, so Jarvis answers there with these left out.
 const TEAM_CHAT_BLOCKED_TOOLS = new Set([
   'propose_update',
+  'propose_task',
+  'propose_assign',
   'propose_obor',
   'propose_note',
   'propose_create_subject',

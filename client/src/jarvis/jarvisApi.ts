@@ -27,7 +27,7 @@ export interface JarvisProposalChange {
 
 export interface JarvisProposal {
   id: string;
-  type: 'update' | 'note' | 'create_subject' | 'create_commission';
+  type: 'update' | 'note' | 'create_subject' | 'create_commission' | 'task';
   kind: JarvisKind;
   section: JarvisSection;
   role: JarvisRole;

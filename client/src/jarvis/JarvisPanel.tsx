@@ -197,6 +197,7 @@ const PROPOSAL_BADGE: Record<JarvisProposal['type'], string> = {
   note: 'Nová poznámka',
   create_subject: 'Nový záznam',
   create_commission: 'Nová zakázka',
+  task: 'Úkol',
 };
 
 // Rows of a proposal card: "old → new" for a change, just the value for a
