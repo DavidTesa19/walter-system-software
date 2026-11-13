@@ -32,6 +32,7 @@ import {
   unpackValue,
 } from './catalog.js';
 import { matchRecord, recordWords } from './fuzzy.js';
+import { getFixedFieldOptionValues } from '../field-options.js';
 import { DocumentTextError, MAX_DOCUMENT_BYTES, documentText } from './documents.js';
 import { AresError, isValidIco, lookupByIco, normalizeIco, searchByName } from '../ares.js';
 import {
@@ -40,6 +41,7 @@ import {
   buildCreateCommissionProposal,
   buildCreateSubjectProposal,
   buildNoteProposal,
+  buildOborProposal,
   buildUpdateProposal,
 } from './proposals.js';
 import { DATE_ONLY, DAY_MS, eventEndLabel, formatPrague, parseDay, parseEventTime, pragueMidnight, pragueParts } from './time.js';
@@ -425,6 +427,36 @@ const noteInput = z.object({
   text: z.string().min(1).max(4000).describe('Text poznámky, jak bude uložen.'),
   reason: z.string().max(300).optional(),
 }).strict();
+
+const oborInput = z.object({
+  section,
+  role,
+  id: z.number().int().positive().describe('Interní id subjektu (poslední část ref).'),
+  obor: z.string().min(1).max(120).describe('Obor přesně z nabídky sekce (nevíš-li, zkus nejbližší – při neshodě dostaneš celou nabídku).'),
+  specialization: z.string().max(120).optional().describe('Zaměření k oboru z nabídky; vynech, když si nejsi jistý.'),
+  company: z.string().max(200).optional().describe('U které společnosti subjektu obor přidat, má-li jich víc; jinak vynech.'),
+  reason: z.string().max(300).optional().describe('Z čeho obor vychází (ARES, web firmy, název…).'),
+}).strict();
+
+// The Obor and Zaměření catalog of a section: the fixed list plus the ones the
+// team added, read through the app's API as the user.
+const FIELD_OPTION_SCOPES = { public: 'standard', projects: 'project', growth: 'growth' };
+async function loadOborCatalog(ctx, sectionId) {
+  const scope = FIELD_OPTION_SCOPES[sectionId];
+  const [custom, specs] = await Promise.all([
+    ctx.api.request('GET', `/field-options?scope=${scope}`).catch(() => []),
+    ctx.api.request('GET', `/field-specialization-options?scope=${scope}`).catch(() => []),
+  ]);
+  const obors = [...new Set([...getFixedFieldOptionValues(scope), ...(Array.isArray(custom) ? custom.map((entry) => String(entry?.value ?? '').trim()) : [])].filter(Boolean))];
+  const specializations = new Map();
+  for (const entry of Array.isArray(specs) ? specs : []) {
+    const field = String(entry?.field_value ?? '').trim();
+    const value = String(entry?.value ?? '').trim();
+    if (!field || !value) continue;
+    specializations.set(field, [...(specializations.get(field) ?? []), value]);
+  }
+  return { obors, specializations };
+}
 
 // The record a proposal is about, read fresh (not from the run's cache), and
 // a label people recognise.
@@ -1092,7 +1124,7 @@ export const TOOLS = [
     description:
       'Navrhne změnu polí jednoho subjektu nebo zakázky. NIC NEZAPISUJE: uživateli se ukáže karta se starými a novými hodnotami ' +
       'a změna se provede, až ji potvrdí tlačítkem Potvrdit. Subjekt: ico, phone, email, website, tier, info. ' +
-      'Zakázka: state, deadline, priority, commission_value, budget, notes. Jména, společnost, obor ani lokalitu měnit neumíš. ' +
+      'Zakázka: state, deadline, priority, commission_value, budget, notes. Obor doplníš nástrojem propose_obor; jména, společnost ani lokalitu měnit neumíš. ' +
       'Použij, když uživatel o změnu žádá (např. „doplň IČO z ARES“, „posuň termín“, „nastav stav na Podepsáno“). ' +
       'Před návrhem si záznam načti (get_subject / get_commission), ať víš, co v něm je. Jeden záznam = jeden návrh.',
     input: proposeInput,
@@ -1102,6 +1134,46 @@ export const TOOLS = [
       let proposal;
       try {
         proposal = buildUpdateProposal({ kind: input.kind, section: input.section, role: input.role, record, changes: input.changes, reason: input.reason, label });
+      } catch (error) {
+        if (error instanceof ProposalError) throw new ToolError(error.message);
+        throw error;
+      }
+      ctx.emitProposal(proposal);
+      return {
+        navrh: proposal.id,
+        zaznam: label,
+        zmeny: proposal.changes.map((change) => `${change.label}: ${change.fromText} → ${change.toText}`),
+        stav: PENDING_NOTE,
+      };
+    },
+  },
+  {
+    name: 'propose_obor',
+    description:
+      'Navrhne doplnit subjektu Obor (a případně Zaměření) z nabídky jeho sekce. NIC NEZAPISUJE: uživatel uvidí kartu ' +
+      's obory před a po a potvrdí ji tlačítkem Potvrdit. Použij, když uživatel chce obor doplnit nebo navrhnout ' +
+      '(„doplň obor“, „jaký obor má K012?“, „navrhni obory subjektům bez oboru“). Obor odvoď z toho, čím se firma ' +
+      'zabývá: název, Popis / Poznámky, web, ARES (company_registry), případně web_search. Obor musí být přesně z nabídky ' +
+      'sekce – při neshodě dostaneš celou nabídku a vybereš z ní. Zaměření jen z nabídky k danému oboru, jinak ho vynech. ' +
+      'Stávající obory zůstávají, nový se přidá. Jeden subjekt = jeden návrh; víc subjektů = víc návrhů (nejvýš 10 v jedné odpovědi).',
+    input: oborInput,
+    label: (input) => `Připravuji návrh oboru (${input.obor})`,
+    async run(input, ctx) {
+      const { record, label } = await loadForProposal(ctx, { ...input, kind: 'subject' });
+      const catalog = await loadOborCatalog(ctx, input.section);
+      let proposal;
+      try {
+        proposal = buildOborProposal({
+          section: input.section,
+          role: input.role,
+          record,
+          obor: input.obor,
+          specialization: input.specialization,
+          company: input.company,
+          catalog,
+          reason: input.reason,
+          label,
+        });
       } catch (error) {
         if (error instanceof ProposalError) throw new ToolError(error.message);
         throw error;
@@ -1605,6 +1677,7 @@ export const toolLabel = (name, input) => {
 // read by everyone in the room, so Jarvis answers there with these left out.
 const TEAM_CHAT_BLOCKED_TOOLS = new Set([
   'propose_update',
+  'propose_obor',
   'propose_note',
   'propose_create_subject',
   'propose_create_commission',

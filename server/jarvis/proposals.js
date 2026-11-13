@@ -11,6 +11,7 @@
 import crypto from 'node:crypto';
 import { isValidIco, normalizeIco } from '../ares.js';
 import { ROLE_LABELS, SECTION_LABELS, commissionsPath, documentResource, entitiesPath, unpackValue } from './catalog.js';
+import { companyTreeUpdates, describeObors, readCompanyTree, withObor } from './companyTree.js';
 
 export class ProposalError extends Error {}
 
@@ -124,8 +125,72 @@ const display = (field, raw) => {
 };
 
 // Two stored values are the same if they read the same (an ISO deadline and
-// its date-only form, a scalar and a one-element list).
-const sameValue = (field, left, right) => display(field, left) === display(field, right);
+// its date-only form, a scalar and a one-element list). A company tree is
+// compared as its parsed JSON.
+const canonicalJson = (raw) => {
+  if (raw === null || raw === undefined || raw === '') return '';
+  try {
+    return JSON.stringify(typeof raw === 'string' ? JSON.parse(raw) : raw);
+  } catch {
+    return String(raw);
+  }
+};
+const sameValue = (field, left, right) =>
+  field === 'company_structure' ? canonicalJson(left) === canonicalJson(right) : display(field, left) === display(field, right);
+
+/**
+ * An Obor (and optionally its Zaměření) for a subject, from the section's own
+ * catalog. The card shows the obors before and after; confirming writes the
+ * company tree with its flat mirrors (field, field_specialization), as the
+ * profile panel does. `catalog` is { obors: string[], specializations:
+ * Map<obor, string[]> }.
+ */
+export function buildOborProposal({ section, role, record, obor, specialization, company, catalog, reason, label }) {
+  const findIn = (list, value) => list.find((item) => item.toLocaleLowerCase('cs') === String(value ?? '').trim().toLocaleLowerCase('cs'));
+  const pickedObor = findIn(catalog.obors, obor);
+  if (!pickedObor) {
+    throw new ProposalError(
+      `Obor „${obor}“ v nabídce této sekce není. Vyber přesně jeden z: ${catalog.obors.join(', ')}.`
+    );
+  }
+  let pickedSpecialization = '';
+  if (specialization) {
+    const allowed = catalog.specializations.get(pickedObor) ?? [];
+    pickedSpecialization = findIn(allowed, specialization) ?? '';
+    if (!pickedSpecialization) {
+      throw new ProposalError(
+        allowed.length
+          ? `Zaměření „${specialization}“ k oboru ${pickedObor} v nabídce není. Možnosti: ${allowed.join(', ')}. Nebo zaměření vynech.`
+          : `Obor ${pickedObor} nemá v nabídce žádná zaměření – navrhni ho bez zaměření.`
+      );
+    }
+  }
+  const before = readCompanyTree(record);
+  const after = withObor(before, { obor: pickedObor, specialization: pickedSpecialization, company });
+  const updates = companyTreeUpdates(after);
+  const current = record.company_structure ?? null;
+  if (canonicalJson(current) === canonicalJson(updates.company_structure) && display('field', record.field) === display('field', updates.field)) {
+    throw new ProposalError('Tento obor (a zaměření) už subjekt má – není co měnit.');
+  }
+  return {
+    id: crypto.randomUUID(),
+    type: 'update',
+    kind: 'subject',
+    section,
+    role,
+    recordId: Number(record.id),
+    label,
+    where: `${ROLE_LABELS[role]} · ${SECTION_LABELS[section]}`,
+    // The card shows one row; the tree is what is checked for a later edit.
+    changes: [
+      { field: 'company_structure', label: 'Obor / Zaměření', from: current, to: updates.company_structure, fromText: describeObors(before), toText: describeObors(after) },
+    ],
+    // Written with it, not shown: the tree's flat mirrors.
+    alsoWrite: { field: updates.field, field_specialization: updates.field_specialization },
+    reason: reason ? String(reason).slice(0, 300) : undefined,
+    createdAt: new Date().toISOString(),
+  };
+}
 
 const recordPath = (proposal) =>
   `${proposal.kind === 'commission' ? commissionsPath(proposal.section, proposal.role) : entitiesPath(proposal.section, proposal.role)}/${proposal.recordId}`;
@@ -353,6 +418,6 @@ export async function applyProposal(proposal, api) {
       `Záznam se mezitím změnil (${moved.map((change) => change.label).join(', ')}), změnu jsem proto neprovedl. Požádejte Jarvise o nový návrh.`
     );
   }
-  const payload = Object.fromEntries(proposal.changes.map((change) => [change.field, change.to]));
+  const payload = { ...Object.fromEntries(proposal.changes.map((change) => [change.field, change.to])), ...(proposal.alsoWrite ?? {}) };
   await api.request('PUT', recordPath(proposal), payload);
 }

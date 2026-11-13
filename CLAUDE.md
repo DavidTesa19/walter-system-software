@@ -759,8 +759,18 @@ names its own sans-serif font (`--jarvis-font`). Needs `ANTHROPIC_API_KEY`;
   the card was made is not overwritten (status `stale`). Decisions are
   transcript items (`proposal_status`) and reach Jarvis's next turn through
   `proposalOutcomes` in the `<kontext>` block. Only fields in
-  `SUBJECT_FIELDS` / `COMMISSION_FIELDS` can be changed — names, companies,
-  obor and places are trees the profile panel edits; viewers cannot propose.
+  `SUBJECT_FIELDS` / `COMMISSION_FIELDS` can be changed — names, companies
+  and places are trees the profile panel edits; viewers cannot propose.
+- **Obor with approval** (`propose_obor`, `buildOborProposal`): Jarvis adds an
+  Obor (and optionally a Zaměření) from the section's own catalog
+  (`getFixedFieldOptionValues` + `/field-options` and
+  `/field-specialization-options`; public → standard, projects → project);
+  a value not in it returns the whole list for Jarvis to pick from. Existing
+  obors stay. `server/jarvis/companyTree.js` is a port of the client's
+  hierarchy.ts (read the tree reconciled with the mirrors, serialize, mirrors)
+  — keep the two in step. The card has one row (the tree, compared as JSON
+  for the stale check); `alsoWrite` carries the mirrors `field` and
+  `field_specialization`.
 - **New records with approval** (`propose_create_subject`,
   `propose_create_commission`): the same card, with the values and no
   "from"; a subject may carry its first zakázka (`commissionChanges`).
@@ -776,7 +786,7 @@ names its own sans-serif font (`--jarvis-font`). Needs `ANTHROPIC_API_KEY`;
   warnings. The decision item carries `created` (code and id): the card
   shows "Vytvořeno: K045 / K045-001" with "Otevřít", and the next turn's
   `<kontext>` gets the new ref. A new zakázka checks its subject still
-  exists. Obor and Zaměření are not set by Jarvis. **Business cards**: the
+  exists. Obor and Zaměření come later through `propose_obor`. **Business cards**: the
   panel's "Vizitka → nový kontakt" suggestion opens the camera
   (`capture="environment"`; a file picker on a computer), attaches the
   photo and leaves `CARD_PROMPT` in the box to adjust role and section
