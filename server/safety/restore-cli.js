@@ -15,7 +15,8 @@
 //   --yes                            actually write; otherwise a dry run
 //
 // Document files come from the database if they are still there, otherwise
-// from the off-site bucket (BACKUP_S3_* and, if used, BACKUP_ENCRYPTION_KEY).
+// from the off-site bucket (BACKUP_S3_* and, if used, BACKUP_ENCRYPTION_KEY and,
+// after a key rotation, BACKUP_ENCRYPTION_KEY_PREVIOUS).
 
 import fs from 'node:fs';
 import crypto from 'node:crypto';

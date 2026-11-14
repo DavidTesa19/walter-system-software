@@ -74,7 +74,22 @@ plan has them).
 | `BACKUP_SCHEDULE_DISABLED` | — | `true` turns the nightly backup off |
 | `BACKUP_S3_REGION` | `auto` | Only for non-R2 S3 providers |
 | `BACKUP_S3_PREFIX` | `walter-backups` | Folder inside the bucket |
+| `BACKUP_ENCRYPTION_KEY_PREVIOUS` | — | The encryption key from before the last rotation; see below |
 | `AI_READONLY_DB_PASSWORD` | — | Creates the `walter_ai_readonly` database login for the AI agent's searches |
+
+### Rotating `BACKUP_ENCRYPTION_KEY`
+
+New uploads always use `BACKUP_ENCRYPTION_KEY`, and a backup can only be read
+with the key it was made under. To rotate without stranding the old backups:
+
+1. Copy the current key into `BACKUP_ENCRYPTION_KEY_PREVIOUS`.
+2. Put the new key into `BACKUP_ENCRYPTION_KEY`, then redeploy.
+3. Keep the previous key until every backup made under it has aged out of the
+   bucket. Only one previous key is supported: rotating twice before then
+   strands whatever was made under the oldest one.
+
+Rotating the key does not protect backups that were already copied out under
+the old one; to cut off access to the bucket, replace the R2 API token.
 
 ## Disaster recovery (the database is gone)
 

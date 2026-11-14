@@ -13,6 +13,12 @@
 //                                off-site is AES-256-GCM encrypted first. Keep a
 //                                copy somewhere safe: without it the off-site
 //                                backups cannot be read.
+//   BACKUP_ENCRYPTION_KEY_PREVIOUS  optional: the key in use before the last
+//                                rotation. New uploads always use
+//                                BACKUP_ENCRYPTION_KEY; reading tries it first
+//                                and then this one, so backups made before the
+//                                rotation stay restorable. Remove it once they
+//                                have aged out.
 
 import crypto from 'node:crypto';
 import {
@@ -28,17 +34,23 @@ const MAGIC = Buffer.from('WALTERE1');
 const IV_LENGTH = 12;
 const TAG_LENGTH = 16;
 
-let cachedKey = null;
-let cachedPassphrase = null;
+// scrypt is deliberately slow, so each passphrase is derived once.
+const derivedKeys = new Map();
 
-function encryptionKey() {
-  const passphrase = process.env.BACKUP_ENCRYPTION_KEY;
+function deriveKey(passphrase) {
   if (!passphrase) return null;
-  if (cachedPassphrase !== passphrase) {
-    cachedKey = crypto.scryptSync(passphrase, 'walter-backup-v1', 32);
-    cachedPassphrase = passphrase;
+  if (!derivedKeys.has(passphrase)) {
+    derivedKeys.set(passphrase, crypto.scryptSync(passphrase, 'walter-backup-v1', 32));
   }
-  return cachedKey;
+  return derivedKeys.get(passphrase);
+}
+
+const encryptionKey = () => deriveKey(process.env.BACKUP_ENCRYPTION_KEY);
+
+// Current key first, then the one from before the last rotation (if it differs).
+function decryptionKeys() {
+  const passphrases = [process.env.BACKUP_ENCRYPTION_KEY, process.env.BACKUP_ENCRYPTION_KEY_PREVIOUS];
+  return [...new Set(passphrases.filter(Boolean))].map(deriveKey);
 }
 
 export const isEncryptionConfigured = () => Boolean(process.env.BACKUP_ENCRYPTION_KEY);
@@ -56,18 +68,23 @@ export function encryptBuffer(plain) {
 // not strand the files uploaded before.
 export function decryptBuffer(stored) {
   if (stored.length < MAGIC.length || !stored.subarray(0, MAGIC.length).equals(MAGIC)) return stored;
-  const key = encryptionKey();
-  if (!key) throw new Error('Záloha je zašifrovaná, ale BACKUP_ENCRYPTION_KEY není nastaven.');
+  const keys = decryptionKeys();
+  if (keys.length === 0) throw new Error('Záloha je zašifrovaná, ale BACKUP_ENCRYPTION_KEY není nastaven.');
   const iv = stored.subarray(MAGIC.length, MAGIC.length + IV_LENGTH);
   const tag = stored.subarray(MAGIC.length + IV_LENGTH, MAGIC.length + IV_LENGTH + TAG_LENGTH);
   const body = stored.subarray(MAGIC.length + IV_LENGTH + TAG_LENGTH);
-  const decipher = crypto.createDecipheriv('aes-256-gcm', key, iv);
-  decipher.setAuthTag(tag);
-  try {
-    return Buffer.concat([decipher.update(body), decipher.final()]);
-  } catch {
-    throw new Error('Zálohu nelze dešifrovat: BACKUP_ENCRYPTION_KEY neodpovídá klíči, kterým byla zašifrována.');
+  for (const key of keys) {
+    try {
+      const decipher = crypto.createDecipheriv('aes-256-gcm', key, iv);
+      decipher.setAuthTag(tag);
+      return Buffer.concat([decipher.update(body), decipher.final()]);
+    } catch {
+      // GCM's auth tag fails on a wrong key; try the next one.
+    }
   }
+  throw new Error(
+    'Zálohu nelze dešifrovat: BACKUP_ENCRYPTION_KEY (ani BACKUP_ENCRYPTION_KEY_PREVIOUS) neodpovídá klíči, kterým byla zašifrována.'
+  );
 }
 
 export function getOffsiteConfig() {
