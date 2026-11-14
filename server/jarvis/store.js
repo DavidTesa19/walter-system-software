@@ -13,7 +13,8 @@
 import fs from 'node:fs';
 import path from 'node:path';
 
-const LIST_LIMIT = 50;
+// The Jarvis screen lists, searches and groups these; pinned ones always come first.
+const LIST_LIMIT = 200;
 
 export async function installJarvisSchema(client) {
   await client.query(`
@@ -36,11 +37,28 @@ export async function installJarvisSchema(client) {
     CREATE INDEX IF NOT EXISTS idx_jarvis_conversations_user
       ON jarvis_conversations (user_id, updated_at DESC)
   `);
+  // 2026-11-14: conversations can be pinned on the Jarvis screen.
+  await client.query(`ALTER TABLE jarvis_conversations ADD COLUMN IF NOT EXISTS pinned BOOLEAN NOT NULL DEFAULT false`);
+  // Saved questions ("Šablony" on the Jarvis screen): a user's own, and the
+  // ones colleagues shared with the team.
+  await client.query(`
+    CREATE TABLE IF NOT EXISTS jarvis_prompts (
+      id BIGSERIAL PRIMARY KEY,
+      user_id INTEGER NOT NULL,
+      title TEXT NOT NULL,
+      text TEXT NOT NULL,
+      is_shared BOOLEAN NOT NULL DEFAULT false,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+      updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
+    )
+  `);
+  await client.query(`CREATE INDEX IF NOT EXISTS idx_jarvis_prompts_user ON jarvis_prompts (user_id)`);
 }
 
 const summary = (row) => ({
   id: row.id,
   title: row.title,
+  pinned: Boolean(row.pinned),
   createdAt: row.created_at,
   updatedAt: row.updated_at,
 });
@@ -49,8 +67,8 @@ export function createPgConversationStore(pool) {
   return {
     async list(userId) {
       const { rows } = await pool.query(
-        `SELECT id, title, created_at, updated_at FROM jarvis_conversations
-          WHERE user_id = $1 ORDER BY updated_at DESC LIMIT ${LIST_LIMIT}`,
+        `SELECT id, title, pinned, created_at, updated_at FROM jarvis_conversations
+          WHERE user_id = $1 ORDER BY pinned DESC, updated_at DESC LIMIT ${LIST_LIMIT}`,
         [userId]
       );
       return rows.map(summary);
@@ -87,6 +105,19 @@ export function createPgConversationStore(pool) {
       );
     },
 
+    // A new title or pin. updated_at stays: renaming does not move it up the list.
+    async update(id, userId, { title, pinned }) {
+      const { rows } = await pool.query(
+        `UPDATE jarvis_conversations
+            SET title = COALESCE($3, title),
+                pinned = COALESCE($4, pinned)
+          WHERE id = $1 AND user_id = $2
+          RETURNING id, title, pinned, created_at, updated_at`,
+        [id, userId, title ?? null, typeof pinned === 'boolean' ? pinned : null]
+      );
+      return rows[0] ? summary(rows[0]) : null;
+    },
+
     async remove(id, userId) {
       const { rowCount } = await pool.query(
         `DELETE FROM jarvis_conversations WHERE id = $1 AND user_id = $2`,
@@ -116,7 +147,7 @@ export function createFileConversationStore(dataDir) {
     async list(userId) {
       return read()
         .filter((row) => row.user_id === userId)
-        .sort((a, b) => String(b.updated_at).localeCompare(String(a.updated_at)))
+        .sort((a, b) => Number(Boolean(b.pinned)) - Number(Boolean(a.pinned)) || String(b.updated_at).localeCompare(String(a.updated_at)))
         .slice(0, LIST_LIMIT)
         .map(summary);
     },
@@ -146,6 +177,16 @@ export function createFileConversationStore(dataDir) {
       row.cache_write_tokens += usage.cacheWrite;
       row.updated_at = new Date().toISOString();
       write(rows);
+    },
+
+    async update(id, userId, { title, pinned }) {
+      const rows = read();
+      const row = rows.find((item) => item.id === id && item.user_id === userId);
+      if (!row) return null;
+      if (typeof title === 'string') row.title = title;
+      if (typeof pinned === 'boolean') row.pinned = pinned;
+      write(rows);
+      return summary(row);
     },
 
     async remove(id, userId) {

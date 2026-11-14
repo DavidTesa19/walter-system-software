@@ -1,4 +1,4 @@
-import { API_BASE, apiDelete, apiGet, apiPost, apiUpload } from '../utils/api';
+import { API_BASE, apiDelete, apiGet, apiPatch, apiPost, apiPut, apiUpload } from '../utils/api';
 import type { TranscriptionHints } from './transcriptionHints';
 import type { ModelChoice } from './models';
 
@@ -192,9 +192,26 @@ export type UploadedAttachment =
   | { id: string; name: string; kind: AttachmentKind; size: number; error?: undefined }
   | { id?: undefined; name: string; error: string };
 
+export interface JarvisPrompt {
+  id: number;
+  userId: number;
+  title: string;
+  text: string;
+  shared: boolean;
+  mine: boolean;
+  updatedAt: string;
+}
+
+export interface JarvisPromptInput {
+  title: string;
+  text: string;
+  shared?: boolean;
+}
+
 export interface ConversationSummary {
   id: string;
   title: string | null;
+  pinned?: boolean;
   createdAt: string;
   updatedAt: string;
 }
@@ -357,6 +374,15 @@ export const jarvisApi = {
   conversation: (id: string) =>
     apiGet<{ id: string; title: string | null; transcript: TranscriptItem[] }>(`/api/jarvis/conversations/${id}`),
   deleteConversation: (id: string) => apiDelete(`/api/jarvis/conversations/${id}`),
+  // Rename or pin (the Jarvis screen's list).
+  updateConversation: (id: string, patch: { title?: string; pinned?: boolean }) =>
+    apiPatch<ConversationSummary>(`/api/jarvis/conversations/${id}`, patch),
+
+  // Saved questions ("Šablony"): the user's own and the team's shared ones.
+  prompts: () => apiGet<JarvisPrompt[]>('/api/jarvis/prompts'),
+  createPrompt: (input: JarvisPromptInput) => apiPost<JarvisPrompt>('/api/jarvis/prompts', input),
+  updatePrompt: (id: number, input: JarvisPromptInput) => apiPut<JarvisPrompt>(`/api/jarvis/prompts/${id}`, input),
+  deletePrompt: (id: number) => apiDelete(`/api/jarvis/prompts/${id}`),
   // Undo a calendar change, or confirm / keep a proposed deletion.
   decideCalendar: (conversationId: string, cardId: string, action: 'undo' | 'confirm' | 'keep') =>
     apiPost<CalendarDecision>(`/api/jarvis/conversations/${conversationId}/calendar/${cardId}`, { action }),

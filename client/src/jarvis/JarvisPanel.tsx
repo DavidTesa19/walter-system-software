@@ -1,5 +1,9 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { Check, Copy, Pencil, RotateCcw } from 'lucide-react';
+import { createPortal } from 'react-dom';
+import { Bookmark, Check, Copy, Download, Maximize2, Pencil, RotateCcw, Trash2 } from 'lucide-react';
+import { useAuth } from '../auth/AuthContext';
+import JarvisWorkspace, { JarvisHome } from './JarvisWorkspace';
+import type { JarvisSection } from './JarvisWorkspace';
 import MarkdownMessage from '../components/MarkdownMessage';
 import { jarvisApi } from './jarvisApi';
 import type {
@@ -23,6 +27,8 @@ import type {
   JarvisProposalChange,
   JarvisVoiceEngine,
   JarvisVoiceOption,
+  JarvisPrompt,
+  JarvisPromptInput,
   ProposalDecision,
   TranscriptItem,
 } from './jarvisApi';
@@ -1144,6 +1150,35 @@ interface JarvisPanelProps {
   // screen's message box (whose send button is in the corner), or in the corner.
   launcherPlacement: 'footer' | 'composer' | 'corner';
   onOpenRecord: (action: JarvisOpenAction) => void;
+  // The Jarvis screen's element: when set, the panel is drawn there as the
+  // whole screen (JarvisWorkspace) instead of sliding in from the right.
+  pageHost?: HTMLElement | null;
+  // Opens the Jarvis screen (the panel header's "full screen" button).
+  onOpenPage?: () => void;
+  onOpenView?: (view: 'help') => void;
+}
+
+// A conversation as Markdown, for "Exportovat".
+function conversationMarkdown(title: string, turns: Turn[]) {
+  const lines = [`# ${title}`, '', `_Jarvis · ${new Date().toLocaleString('cs-CZ')}_`, ''];
+  for (const turn of turns) {
+    lines.push(`**Otázka:** ${turn.question.text || '(příloha)'}`, '');
+    if (turn.answer) lines.push(turn.answer, '');
+    for (const source of turn.sources) lines.push(`- [${source.title}](${source.url})`);
+    lines.push('---', '');
+  }
+  return lines.join('\n');
+}
+
+function downloadText(name: string, text: string) {
+  const url = URL.createObjectURL(new Blob([text], { type: 'text/markdown;charset=utf-8' }));
+  const link = document.createElement('a');
+  link.href = url;
+  link.download = name;
+  document.body.appendChild(link);
+  link.click();
+  link.remove();
+  window.setTimeout(() => URL.revokeObjectURL(url), 1000);
 }
 
 // 👍/👎 under an answer. Clicking the chosen one again takes it back; after 👎
@@ -1157,14 +1192,17 @@ function AnswerActions({
   disabled,
   onAskAgain,
   onEdit,
+  onSaveQuestion,
 }: {
   answer: string;
   latest: boolean;
   disabled: boolean;
   onAskAgain: () => void;
   onEdit: () => void;
+  onSaveQuestion?: () => Promise<boolean>;
 }) {
   const [copied, setCopied] = useState(false);
+  const [saved, setSaved] = useState(false);
   const copy = async () => {
     try {
       await navigator.clipboard.writeText(answer);
@@ -1180,6 +1218,18 @@ function AnswerActions({
         {copied ? <Check size={14} strokeWidth={2.2} aria-hidden="true" /> : <Copy size={14} strokeWidth={2} aria-hidden="true" />}
         <span>{copied ? 'Zkopírováno' : 'Kopírovat'}</span>
       </button>
+      {onSaveQuestion && (
+        <button
+          type="button"
+          className="jarvis-answer-action"
+          onClick={() => void onSaveQuestion().then(setSaved)}
+          disabled={saved}
+          title="Uložit otázku do šablon (Jarvis › Šablony)"
+        >
+          {saved ? <Check size={14} strokeWidth={2.2} aria-hidden="true" /> : <Bookmark size={14} strokeWidth={2} aria-hidden="true" />}
+          <span>{saved ? 'V šablonách' : 'Do šablon'}</span>
+        </button>
+      )}
       {latest && (
         <>
           <button type="button" className="jarvis-answer-action" onClick={onAskAgain} disabled={disabled} title="Položit stejnou otázku znovu">
@@ -1262,7 +1312,25 @@ function AnswerFeedback({
   );
 }
 
-export default function JarvisPanel({ open, onOpen, onClose, viewLabel, launcherPlacement, onOpenRecord }: JarvisPanelProps) {
+export default function JarvisPanel({
+  open,
+  onOpen,
+  onClose,
+  viewLabel,
+  launcherPlacement,
+  onOpenRecord,
+  pageHost = null,
+  onOpenPage,
+  onOpenView,
+}: JarvisPanelProps) {
+  // On the Jarvis screen the panel is the screen: always visible.
+  const page = pageHost !== null;
+  const visible = open || page;
+  const { user } = useAuth();
+  const isAdmin = user?.role === 'admin';
+  const [pageSection, setPageSection] = useState<JarvisSection>('chat');
+  const [pageConversations, setPageConversations] = useState<ConversationSummary[] | null>(null);
+  const [prompts, setPrompts] = useState<JarvisPrompt[] | null>(null);
   const [status, setStatus] = useState<JarvisStatus | null>(null);
   const [conversationId, setConversationId] = useState<string | null>(() => readStored(CONVERSATION_KEY));
   const [transcript, setTranscript] = useState<TranscriptItem[]>([]);
@@ -1277,7 +1345,7 @@ export default function JarvisPanel({ open, onOpen, onClose, viewLabel, launcher
   // An answer that finished while the panel was closed lights a dot on the
   // launcher until the panel is opened again.
   const [unseen, setUnseen] = useState(false);
-  const openRef = useRef(open);
+  const openRef = useRef(visible);
   const scrollRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
   const [readAloud, setReadAloud] = useState(() => readStored(READ_ALOUD_KEY) === '1');
@@ -1391,8 +1459,8 @@ export default function JarvisPanel({ open, onOpen, onClose, viewLabel, launcher
 
   // The microphone never stays on behind a closed panel.
   useEffect(() => {
-    if (!open) cancelListening();
-  }, [open, cancelListening]);
+    if (!visible) cancelListening();
+  }, [visible, cancelListening]);
 
   const closePanel = useCallback(() => {
     stopSpeaking();
@@ -1400,9 +1468,9 @@ export default function JarvisPanel({ open, onOpen, onClose, viewLabel, launcher
   }, [onClose, stopSpeaking]);
 
   useEffect(() => {
-    openRef.current = open;
-    if (open) setUnseen(false);
-  }, [open]);
+    openRef.current = visible;
+    if (visible) setUnseen(false);
+  }, [visible]);
 
   // Loaded with the app, not on first open: Alt+M needs to know whether the
   // server can listen before the panel has ever been opened.
@@ -1433,8 +1501,8 @@ export default function JarvisPanel({ open, onOpen, onClose, viewLabel, launcher
   }, [loadAttention]);
 
   useEffect(() => {
-    if (open) void loadAttention();
-  }, [open, loadAttention]);
+    if (visible) void loadAttention();
+  }, [visible, loadAttention]);
 
   const loadConversation = useCallback(async (id: string | null) => {
     setConversationId(id);
@@ -1456,12 +1524,38 @@ export default function JarvisPanel({ open, onOpen, onClose, viewLabel, launcher
   }, []);
 
   useEffect(() => {
-    if (open) void loadConversation(readStored(CONVERSATION_KEY));
-  }, [open, loadConversation]);
+    if (visible) void loadConversation(readStored(CONVERSATION_KEY));
+    // Only when it becomes visible: the floating panel turning into the screen
+    // keeps the conversation it shows.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [visible]);
 
   useEffect(() => {
-    if (open) window.setTimeout(() => inputRef.current?.focus(), 120);
-  }, [open]);
+    if (visible) window.setTimeout(() => inputRef.current?.focus(), 120);
+  }, [visible, page]);
+
+  // The screen's conversation list and saved questions.
+  const refreshConversations = useCallback(async () => {
+    try {
+      const items = await jarvisApi.conversations();
+      setPageConversations(items);
+      setConversations(items);
+    } catch {
+      setPageConversations((current) => current ?? []);
+    }
+  }, []);
+  const loadPrompts = useCallback(async () => {
+    try {
+      setPrompts(await jarvisApi.prompts());
+    } catch {
+      setPrompts((current) => current ?? []);
+    }
+  }, []);
+  useEffect(() => {
+    if (!page) return;
+    void refreshConversations();
+    void loadPrompts();
+  }, [page, refreshConversations, loadPrompts]);
 
   useEffect(() => {
     scrollRef.current?.scrollTo({ top: scrollRef.current.scrollHeight });
@@ -1470,17 +1564,17 @@ export default function JarvisPanel({ open, onOpen, onClose, viewLabel, launcher
   // Escape closes the panel, but first drops a recording, stops reading
   // aloud, or stops a running answer.
   useEffect(() => {
-    if (!open) return undefined;
+    if (!visible) return undefined;
     const onKey = (event: KeyboardEvent) => {
       if (event.key !== 'Escape' || document.querySelector('.safety-modal')) return;
       if (listening) cancelListening();
       else if (speaking) stopSpeaking();
       else if (abortRef.current) abortRef.current.abort();
-      else closePanel();
+      else if (!page) closePanel();
     };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
-  }, [open, closePanel, listening, speaking, cancelListening, stopSpeaking]);
+  }, [visible, page, closePanel, listening, speaking, cancelListening, stopSpeaking]);
 
   // Alt+M from anywhere: a tap starts listening (and opens the panel), a
   // second tap sends; held down, it is push-to-talk and letting go sends.
@@ -1498,7 +1592,7 @@ export default function JarvisPanel({ open, onOpen, onClose, viewLabel, launcher
         voice.stopListening();
         return;
       }
-      if (!open) onOpen();
+      if (!visible) onOpen();
       pushToTalkRef.current = { pressedAt: Date.now(), started: true };
       void voice.startListening();
     };
@@ -1514,7 +1608,7 @@ export default function JarvisPanel({ open, onOpen, onClose, viewLabel, launcher
       window.removeEventListener('keydown', onDown);
       window.removeEventListener('keyup', onUp);
     };
-  }, [voice, busy, status, listening, open, onOpen]);
+  }, [voice, busy, status, listening, visible, onOpen]);
 
   const toggleAttention = () => {
     setShowVoiceSettings(false);
@@ -1540,11 +1634,58 @@ export default function JarvisPanel({ open, onOpen, onClose, viewLabel, launcher
     try {
       await jarvisApi.deleteConversation(id);
       setConversations((items) => items.filter((item) => item.id !== id));
+      setPageConversations((items) => items?.filter((item) => item.id !== id) ?? items);
       if (id === conversationId) void loadConversation(null);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Konverzaci se nepodařilo smazat.');
     }
   };
+
+  // Rename or pin; pinned ones stay on top, the rest newest first.
+  const updateConversation = async (id: string, patch: { title?: string; pinned?: boolean }) => {
+    try {
+      const updated = await jarvisApi.updateConversation(id, patch);
+      const merge = (items: ConversationSummary[]) =>
+        items
+          .map((item) => (item.id === id ? { ...item, ...updated } : item))
+          .sort((a, b) => Number(Boolean(b.pinned)) - Number(Boolean(a.pinned)) || b.updatedAt.localeCompare(a.updatedAt));
+      setConversations(merge);
+      setPageConversations((items) => (items ? merge(items) : items));
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Konverzaci se nepodařilo upravit.');
+    }
+  };
+
+  // Saved questions (Jarvis › Šablony).
+  const createPrompt = async (input: JarvisPromptInput) => {
+    try {
+      const created = await jarvisApi.createPrompt(input);
+      setPrompts((items) => [created, ...(items ?? [])]);
+      return true;
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Šablonu se nepodařilo uložit.');
+      return false;
+    }
+  };
+  const updatePrompt = async (id: number, input: JarvisPromptInput) => {
+    try {
+      const updated = await jarvisApi.updatePrompt(id, input);
+      setPrompts((items) => (items ?? []).map((item) => (item.id === id ? updated : item)));
+      return true;
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Šablonu se nepodařilo uložit.');
+      return false;
+    }
+  };
+  const deletePrompt = async (id: number) => {
+    try {
+      await jarvisApi.deletePrompt(id);
+      setPrompts((items) => (items ?? []).filter((item) => item.id !== id));
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Šablonu se nepodařilo smazat.');
+    }
+  };
+  const saveQuestion = (text: string) => createPrompt({ title: text.replace(/\s+/g, ' ').trim().slice(0, 60), text });
 
   async function send(raw: string, spoken = false) {
     const message = raw.trim();
@@ -1710,6 +1851,8 @@ export default function JarvisPanel({ open, onOpen, onClose, viewLabel, launcher
       setLive(null);
       if (openRef.current) inputRef.current?.focus();
       else setUnseen(true);
+      // A new conversation gets its title; the list moves it to the top.
+      if (page) void refreshConversations();
       // In a spoken conversation the microphone then reopens for the next
       // question, unless the answer was stopped, the panel closed or the tab
       // hidden.
@@ -1724,6 +1867,37 @@ export default function JarvisPanel({ open, onOpen, onClose, viewLabel, launcher
   }
 
   const stop = () => abortRef.current?.abort();
+
+  // A question from the screen's sections: into the box to finish, or sent.
+  const usePrompt = (text: string, sendNow: boolean) => {
+    setPageSection('chat');
+    if (sendNow) {
+      void send(text);
+      return;
+    }
+    setInput(text);
+    window.setTimeout(() => {
+      const box = inputRef.current;
+      if (!box) return;
+      box.focus();
+      box.setSelectionRange(box.value.length, box.value.length);
+    }, 0);
+  };
+
+  // Alt+N: a new conversation, wherever Jarvis is showing.
+  useEffect(() => {
+    if (!visible) return undefined;
+    const onKey = (event: KeyboardEvent) => {
+      if (!event.altKey || event.ctrlKey || event.metaKey || event.code !== 'KeyN') return;
+      event.preventDefault();
+      if (abortRef.current) return;
+      void loadConversation(null);
+      setPageSection('chat');
+      window.setTimeout(() => inputRef.current?.focus(), 0);
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [visible, loadConversation]);
 
   // Jump to the record and step aside so its profile is fully visible; the
   // conversation stays, Alt+J brings it back.
@@ -1873,8 +2047,35 @@ export default function JarvisPanel({ open, onOpen, onClose, viewLabel, launcher
           ? 'Mluvím…'
           : 'AI asistent';
 
-  return (
-    <>
+  const currentTitle =
+    (conversationId && (pageConversations ?? conversations).find((item) => item.id === conversationId)?.title) ||
+    (turns.length ? turns[0].question.text.slice(0, 70) : 'Nová konverzace');
+
+  const attentionList = (
+    <AttentionList
+      attention={attention}
+      onOpenRecord={openRecord}
+      onBriefing={() => {
+        setPageSection('chat');
+        void send(BRIEFING_PROMPT);
+      }}
+      disabled={busy || Boolean(unavailable)}
+    />
+  );
+  const voiceSettingsPanel =
+    voice.canSpeak || voice.canListen ? (
+      <VoiceSettingsPanel
+        settings={voiceSettings}
+        status={status}
+        onChange={changeVoiceSettings}
+        previewing={voice.speakingKey === 'preview'}
+        onPreview={(choice) => void voice.speak(VOICE_SAMPLE, 'preview', choice ?? {})}
+        onStopPreview={stopSpeaking}
+        lastRecording={voice.lastRecording}
+      />
+    ) : null;
+
+  const launcher = page ? null : (
     <button
       type="button"
       className={[
@@ -1898,10 +2099,99 @@ export default function JarvisPanel({ open, onOpen, onClose, viewLabel, launcher
         Jarvis <kbd>Alt+J</kbd>
       </span>
     </button>
+  );
 
+  const pageHeader = (
+    <header className="jarvis-header jarvis-header--page">
+      <div className="jarvis-title">
+        <strong>{currentTitle}</strong>
+        <span>{subtitle}</span>
+      </div>
+      <div className="jarvis-header-actions">
+        <div className="jarvis-model-segmented" role="radiogroup" aria-label="Model, který odpovídá">
+          {MODEL_CHOICES.map((choice) => (
+            <button
+              key={choice.value}
+              type="button"
+              role="radio"
+              aria-checked={modelChoice === choice.value}
+              className={modelChoice === choice.value ? 'is-on' : undefined}
+              onClick={() => chooseModel(choice.value)}
+              title={choice.hint}
+            >
+              {choice.label}
+            </button>
+          ))}
+        </div>
+        <select
+          className="jarvis-model-select jarvis-only-phone"
+          value={modelChoice}
+          onChange={(event) => chooseModel(event.target.value as ModelChoice)}
+          aria-label="Model, který odpovídá"
+        >
+          {MODEL_CHOICES.map((choice) => (
+            <option key={choice.value} value={choice.value}>
+              {choice.label}
+            </option>
+          ))}
+        </select>
+        {voice.canSpeak && (
+          <button
+            type="button"
+            className={`jarvis-icon-button${readAloud ? ' jarvis-icon-button--on' : ''}`}
+            onClick={toggleReadAloud}
+            title={readAloud ? 'Čtu nahlas všechny odpovědi (kliknutím vypnete)' : 'Číst nahlas i odpovědi na psané dotazy'}
+            aria-label="Číst odpovědi nahlas"
+            aria-pressed={readAloud}
+          >
+            {readAloud ? Icon.speaker : Icon.speakerOff}
+          </button>
+        )}
+        <button
+          type="button"
+          className="jarvis-icon-button"
+          onClick={() => downloadText(`${currentTitle.replace(/[\\/:*?"<>|]+/g, ' ').trim() || 'jarvis'}.md`, conversationMarkdown(currentTitle, turns))}
+          disabled={turns.length === 0}
+          title="Exportovat konverzaci (Markdown)"
+          aria-label="Exportovat konverzaci"
+        >
+          <Download size={17} strokeWidth={2} aria-hidden="true" />
+        </button>
+        {conversationId && (
+          <button
+            type="button"
+            className="jarvis-icon-button"
+            onClick={() => {
+              if (window.confirm('Smazat tuto konverzaci? Nejde to vrátit.')) void deleteConversation(conversationId);
+            }}
+            disabled={busy}
+            title="Smazat konverzaci"
+            aria-label="Smazat konverzaci"
+          >
+            <Trash2 size={17} strokeWidth={2} aria-hidden="true" />
+          </button>
+        )}
+        <button type="button" className="jarvis-icon-button jarvis-only-phone" onClick={openHistory} title="Historie konverzací" aria-label="Historie konverzací" aria-expanded={showHistory}>
+          {Icon.history}
+        </button>
+        <button
+          type="button"
+          className="jarvis-icon-button jarvis-only-phone"
+          onClick={() => void loadConversation(null)}
+          disabled={busy}
+          title="Nová konverzace (Alt+N)"
+          aria-label="Nová konverzace"
+        >
+          {Icon.plus}
+        </button>
+      </div>
+    </header>
+  );
+
+  const aside = (
     <aside
-      className={`jarvis-panel${open ? ' jarvis-panel--open' : ''}`}
-      aria-hidden={!open}
+      className={`jarvis-panel${page ? ' jarvis-panel--page' : open ? ' jarvis-panel--open' : ''}`}
+      aria-hidden={!visible}
       aria-label="Jarvis"
       onDragOver={(event) => {
         if (unavailable || !event.dataTransfer.types.includes('Files')) return;
@@ -1925,6 +2215,7 @@ export default function JarvisPanel({ open, onOpen, onClose, viewLabel, launcher
           <span>Dokumenty a obrázky, nejvýš {MAX_ATTACHMENTS}, každý do 25 MB</span>
         </div>
       )}
+      {page ? pageHeader : (
       <header className="jarvis-header">
         <JarvisMark busy={busy || speaking || listening} />
         <div className="jarvis-title">
@@ -1993,37 +2284,26 @@ export default function JarvisPanel({ open, onOpen, onClose, viewLabel, launcher
             className="jarvis-icon-button"
             onClick={() => void loadConversation(null)}
             disabled={busy}
-            title="Nová konverzace"
+            title="Nová konverzace (Alt+N)"
             aria-label="Nová konverzace"
           >
             {Icon.plus}
           </button>
+          {onOpenPage && (
+            <button type="button" className="jarvis-icon-button" onClick={onOpenPage} title="Otevřít Jarvise na celé obrazovce" aria-label="Celá obrazovka">
+              <Maximize2 size={16} strokeWidth={2} aria-hidden="true" />
+            </button>
+          )}
           <button type="button" className="jarvis-icon-button" onClick={closePanel} title="Zavřít (Esc)" aria-label="Zavřít">
             {Icon.close}
           </button>
         </div>
       </header>
-
-      {showVoiceSettings && (
-        <VoiceSettingsPanel
-          settings={voiceSettings}
-          status={status}
-          onChange={changeVoiceSettings}
-          previewing={voice.speakingKey === 'preview'}
-          onPreview={(choice) => void voice.speak(VOICE_SAMPLE, 'preview', choice ?? {})}
-          onStopPreview={stopSpeaking}
-          lastRecording={voice.lastRecording}
-        />
       )}
 
-      {showAttention && (
-        <AttentionList
-          attention={attention}
-          onOpenRecord={openRecord}
-          onBriefing={() => void send(BRIEFING_PROMPT)}
-          disabled={busy || Boolean(unavailable)}
-        />
-      )}
+      {!page && showVoiceSettings && voiceSettingsPanel}
+
+      {!page && showAttention && attentionList}
 
       {showHistory && (
         <div className="jarvis-history">
@@ -2055,7 +2335,21 @@ export default function JarvisPanel({ open, onOpen, onClose, viewLabel, launcher
           <div className="jarvis-callout">Jarvis není na serveru nastavený (chybí klíč ANTHROPIC_API_KEY).</div>
         )}
 
-        {turns.length === 0 && !live && !unavailable && (
+        {page && turns.length === 0 && !live && (
+          <JarvisHome
+            userName={user?.username ?? null}
+            prompts={prompts}
+            urgent={urgent}
+            unavailable={Boolean(unavailable)}
+            onUse={usePrompt}
+            onSection={setPageSection}
+            onBriefing={() => void send(BRIEFING_PROMPT)}
+            onCard={() => cardInputRef.current?.click()}
+            voiceHint={voice.canListen}
+          />
+        )}
+
+        {!page && turns.length === 0 && !live && !unavailable && (
           <div className="jarvis-welcome">
             <JarvisMark large />
             <div className="jarvis-welcome-title">Na co se chcete zeptat?</div>
@@ -2119,6 +2413,7 @@ export default function JarvisPanel({ open, onOpen, onClose, viewLabel, launcher
                   answer={turn.answer}
                   latest={index === turns.length - 1}
                   disabled={busy}
+                  onSaveQuestion={turn.question.text ? () => saveQuestion(turn.question.text) : undefined}
                   onAskAgain={() => void send(turn.question.text)}
                   onEdit={() => {
                     setInput(turn.question.text);
@@ -2238,9 +2533,11 @@ export default function JarvisPanel({ open, onOpen, onClose, viewLabel, launcher
       >
         <div className="jarvis-composer-meta">
           <div className="jarvis-context-group">
-            <div className="jarvis-context" title="Jarvis ví, kde v aplikaci jste">
-              {viewLabel}
-            </div>
+            {!page && (
+              <div className="jarvis-context" title="Jarvis ví, kde v aplikaci jste">
+                {viewLabel}
+              </div>
+            )}
             {focus && (
               <div className="jarvis-context jarvis-context--record" title="Jarvis ví, že máte otevřený tento záznam – „tenhle“ myslí jeho">
                 {Icon.record}
@@ -2441,6 +2738,46 @@ export default function JarvisPanel({ open, onOpen, onClose, viewLabel, launcher
         </div>
       </form>
     </aside>
+  );
+
+  if (page && pageHost) {
+    return createPortal(
+      <JarvisWorkspace
+        section={pageSection}
+        onSection={setPageSection}
+        chat={aside}
+        busy={busy}
+        subtitle={unavailable ? 'Není nastavený' : subtitle}
+        conversations={pageConversations}
+        activeId={conversationId}
+        onNewConversation={() => void loadConversation(null)}
+        onOpenConversation={(id) => void loadConversation(id)}
+        onDeleteConversation={(id) => void deleteConversation(id)}
+        onUpdateConversation={(id, patch) => void updateConversation(id, patch)}
+        urgent={urgent}
+        attention={attentionList}
+        prompts={prompts}
+        onCreatePrompt={createPrompt}
+        onUpdatePrompt={updatePrompt}
+        onDeletePrompt={(id) => void deletePrompt(id)}
+        onUsePrompt={usePrompt}
+        modelChoice={modelChoice}
+        onModelChoice={chooseModel}
+        readAloud={readAloud}
+        onToggleReadAloud={toggleReadAloud}
+        canSpeak={voice.canSpeak}
+        voiceSettings={voiceSettingsPanel}
+        isAdmin={isAdmin}
+        onOpenHelp={onOpenView ? () => onOpenView('help') : undefined}
+      />,
+      pageHost
+    );
+  }
+
+  return (
+    <>
+      {launcher}
+      {aside}
     </>
   );
 }

@@ -21,6 +21,7 @@ import {
   truncate,
 } from './catalog.js';
 import { createFileConversationStore, createPgConversationStore } from './store.js';
+import { registerPromptRoutes } from './prompts.js';
 import {
   MAX_AUDIO_BYTES,
   MAX_SPEECH_CHARS,
@@ -45,7 +46,7 @@ import {
   deleteFiles,
   prepareAttachment,
 } from './attachments.js';
-import { estimateCostUsd } from '../finance/pricing.js';
+import { partsTotal, turnCostParts, turnDetails } from '../finance/jarvis-turns.js';
 import { recordAiUsage, recordJarvisFeedback, recordJarvisTurn } from '../finance/usage.js';
 import { ProposalError, applyProposal, describeProposal } from './proposals.js';
 import { CalendarError, calendarOutcomes, cardState, decideCalendarCard } from './calendarActions.js';
@@ -183,6 +184,7 @@ export function buildContextBlock(user, context, attachmentNames = [], proposalL
 
 export function registerJarvisRoutes(app, { authenticateToken, pool, dataDir, port, signAgentToken }) {
   const store = pool ? createPgConversationStore(pool) : createFileConversationStore(dataDir);
+  registerPromptRoutes(app, { authenticateToken, pool, dataDir });
   const baseUrl = `http://127.0.0.1:${port}`;
   const running = new Set();
 
@@ -465,6 +467,24 @@ export function registerJarvisRoutes(app, { authenticateToken, pool, dataDir, po
     }
   });
 
+  // Rename or pin a conversation (the Jarvis screen's list).
+  app.patch('/api/jarvis/conversations/:id', authenticateToken, async (req, res) => {
+    if (!UUID_PATTERN.test(req.params.id)) return res.status(404).json({ error: 'Konverzace nenalezena.' });
+    const rawTitle = req.body?.title;
+    const title = typeof rawTitle === 'string' ? rawTitle.replace(/\s+/g, ' ').trim().slice(0, 120) : undefined;
+    if (title !== undefined && !title) return res.status(400).json({ error: 'Název nesmí být prázdný.' });
+    const pinned = typeof req.body?.pinned === 'boolean' ? req.body.pinned : undefined;
+    if (title === undefined && pinned === undefined) return res.status(400).json({ error: 'Není co změnit.' });
+    try {
+      const updated = await store.update(req.params.id, Number(req.user.id), { title, pinned });
+      if (!updated) return res.status(404).json({ error: 'Konverzace nenalezena.' });
+      res.json(updated);
+    } catch (error) {
+      console.error('Jarvis: updating a conversation failed:', error);
+      res.status(500).json({ error: 'Konverzaci se nepodařilo upravit.' });
+    }
+  });
+
   app.delete('/api/jarvis/conversations/:id', authenticateToken, async (req, res) => {
     try {
       if (!UUID_PATTERN.test(req.params.id)) return res.status(404).json({ error: 'Konverzace nenalezena.' });
@@ -692,7 +712,10 @@ export function registerJarvisRoutes(app, { authenticateToken, pool, dataDir, po
 
     // What the admins' usage view keeps about this question (finance_ai_turns).
     const startedAt = Date.now();
-    const turnLog = { firstTextMs: null, tools: [], failedTools: 0, error: null, answered: false };
+    const turnLog = { firstTextMs: null, tools: [], failedTools: 0, error: null, answered: false, ocr: [] };
+    // How deep in its conversation this question is (0 = the first): later
+    // questions carry the whole history and cost more.
+    const depth = (conversation?.transcript ?? []).filter((item) => item.type === 'question').length;
     const emit = (event, data) => {
       if (event === 'text' && turnLog.firstTextMs === null) turnLog.firstTextMs = Date.now() - startedAt;
       else if (event === 'tool' && data?.name && data.name !== 'compaction') turnLog.tools.push(data.name);
@@ -759,6 +782,8 @@ export function registerJarvisRoutes(app, { authenticateToken, pool, dataDir, po
         sections: sectionsForScope(user.accessScope ?? user.access_scope),
         // Stopping the answer also stops a long document transcription.
         signal: abort.signal,
+        // A scan read by read_document counts in this question's cost.
+        onUsage: (entry) => turnLog.ocr.push(entry),
         emitAction: (action) => {
           pendingActions.push({ type: 'action', action });
           emit('action', action);
@@ -831,7 +856,22 @@ export function registerJarvisRoutes(app, { authenticateToken, pool, dataDir, po
       if (!res.writableEnded) res.end();
       const usage = result?.usage ?? zeroUsage();
       const webSearches = usage.webSearches ?? 0;
+      const rounds = result?.rounds ?? [];
+      const parts = turnCostParts({ model, usage, rounds, ocr: turnLog.ocr });
       recordJarvisTurn({
+        // The model that wrote the answer (a fallback may have taken over).
+        model: rounds.at(-1)?.model ?? model,
+        details: turnDetails({
+          rounds,
+          toolRuns: result?.toolRuns ?? [],
+          ocr: turnLog.ocr,
+          view: req.body?.context?.view,
+          depth,
+          attachments: attachments.length,
+          routing,
+          usage,
+          parts,
+        }),
         userId,
         conversationId,
         question: truncate(text || attachments.map((attachment) => attachment.name).join(', '), 300),
@@ -848,9 +888,7 @@ export function registerJarvisRoutes(app, { authenticateToken, pool, dataDir, po
         cacheRead: usage.cacheRead,
         cacheWrite: usage.cacheWrite,
         webSearches,
-        costUsd:
-          (estimateCostUsd({ provider: 'anthropic', model, feature: 'jarvis', ...usage }) ?? 0) +
-          (estimateCostUsd({ provider: 'anthropic', model, feature: 'web_search', units: webSearches }) ?? 0),
+        costUsd: partsTotal(parts),
       });
     }
   });

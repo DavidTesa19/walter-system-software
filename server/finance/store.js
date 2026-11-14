@@ -88,6 +88,10 @@ export async function installFinanceSchema(client) {
     )
   `);
   await client.query(`CREATE INDEX IF NOT EXISTS idx_finance_ai_turns_created ON finance_ai_turns (created_at)`);
+  // 2026-11-14: the model that answered and the per-question breakdown
+  // (API calls, cost parts, tool times, screen) for Jarvis › Analýza.
+  await client.query(`ALTER TABLE finance_ai_turns ADD COLUMN IF NOT EXISTS model TEXT`);
+  await client.query(`ALTER TABLE finance_ai_turns ADD COLUMN IF NOT EXISTS details JSONB`);
   await client.query(`
     CREATE TABLE IF NOT EXISTS finance_ai_feedback (
       id BIGSERIAL PRIMARY KEY,
@@ -344,11 +348,13 @@ export function createPgFinanceStore(pool) {
       await pool.query(
         `INSERT INTO finance_ai_turns
            (user_id, conversation_id, question, voice, status, stop_reason, error, duration_ms, first_text_ms, tools,
-            failed_tools, input_tokens, output_tokens, cache_read_tokens, cache_write_tokens, web_searches, cost_usd)
-         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17)`,
+            failed_tools, input_tokens, output_tokens, cache_read_tokens, cache_write_tokens, web_searches, cost_usd,
+            model, details)
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19)`,
         [turn.userId, turn.conversationId, turn.question, turn.voice, turn.status, turn.stopReason, turn.error,
           turn.durationMs, turn.firstTextMs, JSON.stringify(turn.tools), turn.failedTools, turn.input, turn.output,
-          turn.cacheRead, turn.cacheWrite, turn.webSearches, turn.costUsd]
+          turn.cacheRead, turn.cacheWrite, turn.webSearches, turn.costUsd, turn.model ?? null,
+          turn.details ? JSON.stringify(turn.details) : null]
       );
     },
 
@@ -367,7 +373,7 @@ export function createPgFinanceStore(pool) {
         pool.query(
           `SELECT created_at, user_id, conversation_id, question, voice, status, stop_reason, error, duration_ms,
                   first_text_ms, tools, failed_tools, input_tokens, output_tokens, cache_read_tokens,
-                  cache_write_tokens, web_searches, cost_usd::float8 AS cost_usd
+                  cache_write_tokens, web_searches, cost_usd::float8 AS cost_usd, model, details
              FROM finance_ai_turns
             WHERE created_at >= $1
             ORDER BY created_at DESC
@@ -421,6 +427,8 @@ export function createPgFinanceStore(pool) {
           cacheWrite: Number(row.cache_write_tokens),
           webSearches: row.web_searches,
           costUsd: row.cost_usd,
+          model: row.model ?? null,
+          details: row.details ?? null,
         })),
         usage: usage.rows.map((row) => ({ userId: row.user_id, feature: row.feature, calls: row.calls, costUsd: row.cost_usd })),
       };

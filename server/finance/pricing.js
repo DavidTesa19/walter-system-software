@@ -69,6 +69,30 @@ const findPrice = (table, model) => {
   return best ? table[best] : null;
 };
 
+export const ANTHROPIC_USD_PER_WEB_SEARCH = ANTHROPIC_USD_PER_SEARCH;
+
+/**
+ * One Claude call's price split into what it was paid for: fresh input, cache
+ * writes, cache reads and output (thinking included; the API counts it as
+ * output). Null when the model has no price. The parts add up to what
+ * estimateCostUsd returns for the same call.
+ */
+export function anthropicCostParts({ model, input = 0, output = 0, cacheRead = 0, cacheWrite = 0, cacheWrite1h = 0 }) {
+  const price = findPrice(ANTHROPIC_PRICES, model);
+  if (!price) return null;
+  const perToken = (rate) => (rate ?? 0) / 1_000_000;
+  const longWrites = Math.min(Math.max(cacheWrite1h, 0), cacheWrite);
+  return {
+    input: input * perToken(price.input),
+    cacheWrite: (cacheWrite - longWrites) * perToken(price.cacheWrite ?? price.input) + longWrites * perToken(price.input * 2),
+    cacheRead: cacheRead * perToken(price.cacheRead),
+    output: output * perToken(price.output),
+  };
+}
+
+/** The list price of a model per million tokens ({ input, cacheWrite, cacheRead, output }), or null. */
+export const anthropicPrice = (model) => findPrice(ANTHROPIC_PRICES, model);
+
 /**
  * Estimated cost in USD of one logged call, or null when the model is not in
  * the price list (the call is still counted; it just has no price).

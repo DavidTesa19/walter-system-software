@@ -208,9 +208,16 @@ Phones get the same app: no separate code and no app store. Below 768 px
   the menu). Every screen: the title is the subject's own name (not
   "Klient"), with Zavolat / E-mail / Web quick actions from its first
   phone, e-mail and website.
-- **Sidebar** (2026-11-13): headings Sekce / Práce / Další; Growth Club,
-  Veřejné and Neveřejné open one at a time (`MAJOR_GROUPS`); search is
-  the top bar's Ctrl+K, not a box in the menu.
+- **Sidebar** (2026-11-13, denser 2026-11-14): rows are 32 px
+  (`--ui-control-h`), the header 52 px, so the folded menu fits a laptop
+  screen without scrolling. Sekce (Growth Club, Veřejné and Neveřejné open
+  one at a time, `MAJOR_GROUPS`, each with Subjekty / Zakázky), Práce
+  (Jarvis, Kalendář, Úkoly, Týmový chat; always open), then Analýza, Správa
+  (users, safety) and Další (Budoucí funkce, Hlášení chyb, Motivy, Nápověda,
+  Veřejný formulář) as headings that fold (`walterSidebar.blocks` in
+  localStorage; the block holding the open screen opens by itself). The
+  footer is one account row (initials, name, role · scope, help, sign-out).
+  Search is the top bar's Ctrl+K, not a box in the menu.
 - **Installable**: `site.webmanifest` (`display: standalone`) and the Apple meta
   tags in index.html. `InstallAppButton` in the sidebar footer catches
   `beforeinstallprompt` when its module loads (main.tsx imports it, since the
@@ -573,8 +580,22 @@ Data (`server/finance/store.js`, Postgres or `server/data/finance.json`):
   the DB and on R2, free to 10 GB). `RAILWAY_API_URL` exists only to point
   a local test at a mock. Prices in `RAILWAY_PRICES` (2026-11).
 
-- **Jarvis tab** (`JarvisUsageTab.tsx`, `GET /api/finance/jarvis?days=7|30|90`,
-  `jarvis-usage.js`): `finance_ai_turns` keeps one row per Jarvis question
+- **Jarvis tab** = Jarvis › Analýza nákladů (one component,
+  `client/src/jarvis/analytics/JarvisAnalytics.tsx`; `GET /api/finance/jarvis?days=7|30|90`
+  for the summary and `costBreakdown`, `GET /api/finance/jarvis/questions` for
+  the filtered, sorted, paged question list; `jarvis-usage.js`, tested).
+  Since 2026-11-14 each question also stores `model` and `details`
+  (`finance/jarvis-turns.js`): every API call of the turn (model that
+  answered, ms, tokens, cache 1h, searches, tools asked for, compaction),
+  each tool's run time, cost parts (input, cache write, cache read, output,
+  web search, OCR from `read_document` via `ctx.onUsage`), the screen it was
+  asked from, its depth in the conversation, attachments and routing. The
+  screen shows where the money goes (parts, models, tools, screens,
+  conversation depth), when (Prague days and hours) and why (`costInsights`:
+  plain rules such as cache writes ≥ 25 %, Opus answering without tools,
+  deep conversations ≥ 1.8× the first question), and each question down to
+  its API calls. Older rows have no details: their parts are estimated from
+  the token totals and labelled so. `finance_ai_turns` keeps one row per Jarvis question
   (`recordJarvisTurn`, written in the chat route's `finally`): the question
   (300 chars), time to the first word and to the end, tools, how it ended
   (`turnStatus`: ok, stopped, empty, truncated, error, refusal, tool_limit)
@@ -753,11 +774,27 @@ Claude (model `JARVIS_MODEL`, default `claude-opus-5-5`; effort `JARVIS_EFFORT`,
 default `medium`) behind a manual streaming tool loop (`agent.js`), relayed to
 the browser as Server-Sent Events from `POST /api/jarvis/chat`. The panel opens
 from a floating launcher in the bottom-right corner or Alt+J; the launcher sits
-above the footer, or above the message box on Týmový chat / AI Asistent, whose
-send buttons are in that corner (`launcherPlacement` in App.tsx). Jarvis's CSS
+above the footer, or above the message box on Týmový chat, whose
+send button is in that corner (`launcherPlacement` in App.tsx). Jarvis's CSS
 names its own sans-serif font (`--jarvis-font`). Needs `ANTHROPIC_API_KEY`;
 `JARVIS_HOURLY_LIMIT` caps turns per user (default 60).
 
+- **The Jarvis screen** (view id `jarvis`, Práce › Jarvis; replaced the old
+  OpenAI "AI Asistent" screen on 2026-11-14, whose `/api/chat` routes are
+  still in both servers but unused): the same `JarvisPanel` (one state, one
+  conversation, one voice) drawn into App's `.jarvis-page-host` through a
+  portal as `JarvisWorkspace.tsx` instead of sliding in. A rail with the
+  sections (Konverzace, Schopnosti = `capabilities.ts`, Šablony, Upozornění,
+  Nastavení, Analýza nákladů for admins) and the user's conversations
+  (search, pin, rename: `PATCH /api/jarvis/conversations/:id`, column
+  `pinned`), a page header with the model as a segmented control, export
+  to Markdown and delete. The launcher is hidden there; the floating
+  panel's ⤢ button opens the screen and Alt+J does nothing on it. Alt+N
+  starts a new conversation wherever Jarvis shows. **Šablony** are saved
+  questions (`server/jarvis/prompts.js`, table `jarvis_prompts`, own +
+  shared with the team, 100 per user), also saved from a question's "Do
+  šablon" action. A new capability or tool belongs in `capabilities.ts`
+  too, or the Schopnosti section goes out of date.
 - **Tools never touch the database.** They call this server's own HTTP API
   (`api.js`) with a 15-minute token carrying the user's claims plus
   `actorType: 'ai_agent'`. Section access, role checks, business logic (deal

@@ -106,6 +106,34 @@ export function contentForHistory(content) {
 // at 2x input instead of 1.25x); pricing.js prices the two apart.
 const zeroUsage = () => ({ input: 0, output: 0, cacheRead: 0, cacheWrite: 0, cacheWrite1h: 0, webSearches: 0 });
 
+const sumUsage = (total, part) => {
+  for (const key of Object.keys(total)) total[key] += part[key] ?? 0;
+};
+
+// One API call of a turn, for the per-question cost breakdown (Jarvis ›
+// Analýza): which model answered, what it read and wrote, how long it took and
+// which tools it asked for. A turn is one or more of these.
+function roundRecord(message, usage, ms, content) {
+  const toolNames = content.filter((block) => block.type === 'tool_use').map((block) => block.name);
+  const webFetches =
+    message.usage?.server_tool_use?.web_fetch_requests ??
+    content.filter((block) => block.type === 'server_tool_use' && block.name === 'web_fetch').length;
+  return {
+    model: message.model ?? null,
+    ms,
+    input: usage.input,
+    output: usage.output,
+    cacheRead: usage.cacheRead,
+    cacheWrite: usage.cacheWrite,
+    cacheWrite1h: usage.cacheWrite1h,
+    webSearches: usage.webSearches,
+    webFetches,
+    stop: message.stop_reason ?? null,
+    tools: toolNames,
+    compaction: content.some((block) => block.type === 'compaction'),
+  };
+}
+
 // A compaction is billed on top of the reply: the top-level counts leave its
 // iteration out. Web searches are billed per search on top of their tokens.
 const addUsage = (total, usage) => {
@@ -196,6 +224,10 @@ function friendlyError(error) {
  */
 export async function runJarvisTurn({ model = JARVIS_MODEL, routing = null, history, toolContext, emit, onStep, signal }) {
   const usage = zeroUsage();
+  // Per API call and per tool run, for the cost breakdown (routes.js stores them).
+  const rounds = [];
+  const toolRuns = [];
+  const finish = (stopReason) => ({ usage, stopReason, rounds, toolRuns });
   let messages = [...history];
   let jsonRetries = 0;
   let askedForAnswer = false;
@@ -204,9 +236,10 @@ export async function runJarvisTurn({ model = JARVIS_MODEL, routing = null, hist
   const tools = toolDefinitionsFor(profile.webVersion);
 
   for (let round = 0; round < MAX_TOOL_ROUNDS; round += 1) {
-    if (signal.aborted) return { usage, stopReason: 'aborted' };
+    if (signal.aborted) return finish('aborted');
 
     let message;
+    const roundStartedAt = Date.now();
     try {
       const stream = anthropic().beta.messages.stream(
         {
@@ -271,7 +304,7 @@ export async function runJarvisTurn({ model = JARVIS_MODEL, routing = null, hist
       message = await stream.finalMessage();
       jsonRetries = 0;
     } catch (error) {
-      if (signal.aborted || error instanceof Anthropic.APIUserAbortError) return { usage, stopReason: 'aborted' };
+      if (signal.aborted || error instanceof Anthropic.APIUserAbortError) return finish('aborted');
       // An unparseable streamed tool input (no tool_use block to answer):
       // re-issue the same request, a couple of times at most.
       if (!(error instanceof Anthropic.APIError) && error instanceof Anthropic.AnthropicError && jsonRetries < MAX_JSON_RETRIES) {
@@ -282,11 +315,14 @@ export async function runJarvisTurn({ model = JARVIS_MODEL, routing = null, hist
       if (isCreditExhausted(error)) recordAnthropicCredit(false);
       console.error('Jarvis model call failed:', error);
       emit('error', { message: friendlyError(error) });
-      return { usage, stopReason: 'error' };
+      return finish('error');
     }
 
     recordAnthropicCredit(true);
-    addUsage(usage, message.usage);
+    const roundUsage = zeroUsage();
+    addUsage(roundUsage, message.usage);
+    sumUsage(usage, roundUsage);
+    rounds.push(roundRecord(message, roundUsage, Date.now() - roundStartedAt, message.content ?? []));
     logContextEdits(message);
     const compacted = message.content.some((block) => block.type === 'compaction')
       ? [{ type: 'tool', name: 'compaction', label: 'Dlouhá konverzace zkrácena', ok: true }]
@@ -296,7 +332,7 @@ export async function runJarvisTurn({ model = JARVIS_MODEL, routing = null, hist
       const text = 'Tuto žádost nemohu zpracovat. Zkuste ji prosím formulovat jinak.';
       emit('notice', { text });
       await onStep([], [{ type: 'notice', text }]);
-      return { usage, stopReason: 'refusal' };
+      return finish('refusal');
     }
 
     const content = contentForHistory(message.content);
@@ -341,14 +377,21 @@ export async function runJarvisTurn({ model = JARVIS_MODEL, routing = null, hist
         ...(sources.length ? [{ type: 'sources', sources }] : []),
       ]);
       if (message.stop_reason === 'max_tokens') emit('notice', { text: 'Odpověď byla příliš dlouhá a je zkrácená.' });
-      return { usage, stopReason: message.stop_reason };
+      return finish(message.stop_reason);
     }
 
     // Run every tool call of this message (in parallel), then store the
     // assistant message and all its results together.
     const steps = toolUses.map((block) => ({ id: block.id, name: block.name, label: toolLabel(block.name, block.input) }));
     for (const step of steps) emit('tool', step);
-    const results = await Promise.all(toolUses.map((block) => runTool(block.name, block.input, toolContext)));
+    const results = await Promise.all(
+      toolUses.map(async (block) => {
+        const startedAt = Date.now();
+        const result = await runTool(block.name, block.input, toolContext);
+        toolRuns.push({ name: block.name, ms: Date.now() - startedAt, ok: !result.isError, round: rounds.length - 1 });
+        return result;
+      })
+    );
     for (const [index, result] of results.entries()) {
       emit('tool_done', { id: steps[index].id, ok: !result.isError });
     }
@@ -378,5 +421,5 @@ export async function runJarvisTurn({ model = JARVIS_MODEL, routing = null, hist
   const text = 'Jarvis udělal maximální počet kroků a skončil. Zkuste otázku zúžit.';
   emit('notice', { text });
   await onStep([], [{ type: 'notice', text }]);
-  return { usage, stopReason: 'tool_limit' };
+  return finish('tool_limit');
 }

@@ -11,8 +11,13 @@
   box-shadow: var(--color-shadow-sm);
 }
 
+/* The logo's drawing is square with room above and below the letters: the
+   header shows its middle band, so the menu starts higher (2026-11-14). */
 .sidebar-header {
-  padding: 0 1.25rem;
+  flex: none;
+  height: 52px;
+  padding: 0 1.1rem;
+  overflow: hidden;
   border-bottom: 1px solid var(--color-border);
   background: var(--color-surface-alt);
   display: flex;
@@ -21,9 +26,9 @@
 
 .sidebar-brand-logo {
   display: block;
-  width: 76px;
-  max-width: 100%;
-  height: auto;
+  flex: none;
+  width: 64px;
+  height: 64px;
 }
 
 .sidebar-header h2 {
@@ -38,9 +43,10 @@
 .sidebar-nav {
   display: flex;
   flex-direction: column;
-  padding: 1rem 0.75rem; /* Reduced padding to fit groups better */
-  gap: 0.25rem;
+  padding: 0.6rem 0.6rem 0.75rem;
+  gap: 1px;
   flex: 1;
+  min-height: 0;
   overflow-y: auto;
 }
 
@@ -219,22 +225,27 @@
   box-shadow: 0 0 0 3px color-mix(in srgb, var(--color-primary) 30%, transparent);
 }
 
+/* Dense rows (2026-11-14): 32 px, like the rest of the redesign, so the
+   whole menu fits on a normal screen without scrolling. */
 .sidebar-button, .sidebar-group-header {
   display: flex;
   align-items: center;
-  gap: 0.85rem;
-  padding: 0.75rem 1rem;
+  gap: 0.65rem;
+  height: var(--ui-control-h, 32px);
+  padding: 0 0.65rem;
+  box-sizing: border-box;
   border: 1px solid transparent;
   background: transparent;
-  border-radius: 0.5rem;
+  border-radius: var(--ui-radius-md, 8px);
   cursor: pointer;
-  font-size: 0.9rem;
+  font-size: var(--ui-text-md, 13.5px);
   font-weight: 500;
-  font-family: var(--font-subheading);
+  font-family: var(--font-subheading, var(--font-body));
   color: var(--color-text-muted);
-  transition: all 0.2s ease;
+  transition: background-color var(--ui-transition, 120ms ease), color var(--ui-transition, 120ms ease);
   text-align: left;
   width: 100%;
+  text-decoration: none;
 }
 
 /* A nav row that also carries a "confirm all" control alongside it: the nav
@@ -246,8 +257,7 @@
 }
 
 .sidebar-row > .sidebar-button,
-.sidebar-row > .sidebar-group-header,
-.sidebar-row > .sidebar-section-header {
+.sidebar-row > .sidebar-group-header {
   width: auto;
   flex: 1;
   min-width: 0;
@@ -263,8 +273,8 @@
   justify-content: center;
   align-self: center;
   flex-shrink: 0;
-  width: 1.6rem;
-  height: 1.6rem;
+  width: 1.5rem;
+  height: 1.5rem;
   padding: 0;
   border: 1px solid transparent;
   border-radius: 0.4rem;
@@ -283,7 +293,7 @@
 /* Wraps the app-wide "Potvrdit vše" button (all systems, all tables, all grid
    views) above the group list. */
 .sidebar-confirm-everything {
-  margin-bottom: 0.5rem;
+  margin-bottom: 0.25rem;
 }
 
 .sidebar-confirm-everything .activity-confirm-all-btn {
@@ -317,18 +327,24 @@
   font-family: inherit;
 }
 
-/* Group Headers */
+/* Section headers (Growth Club, Veřejné, Neveřejné) */
 .sidebar-group-header {
   color: var(--color-text);
   font-weight: 600;
   justify-content: space-between;
 }
 
+/* A folded section holding the open screen keeps a hint of it. */
+.sidebar-group-header.has-active {
+  color: var(--color-primary-text, var(--color-primary));
+}
+
 .group-header-content {
   display: flex;
   align-items: center;
-  gap: 0.85rem;
+  gap: 0.65rem;
   flex: 1;
+  min-width: 0;
 }
 
 .group-chevron {
@@ -341,141 +357,90 @@
 .sidebar-group-content {
   display: flex;
   flex-direction: column;
-  gap: 0.15rem;
-  margin-top: 0.15rem;
-  padding-left: 0.5rem;
+  gap: 1px;
+  margin: 1px 0 3px;
 }
 
-.sidebar-group--major {
-  margin-bottom: 0.35rem;
-}
-
-.sidebar-group-content--sections {
-  gap: 0.35rem;
-  padding-left: 0.6rem;
-}
-
-.sidebar-section {
+.sidebar-block-items {
   display: flex;
   flex-direction: column;
-  gap: 0.15rem;
+  gap: 1px;
 }
 
-.sidebar-section-header {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  width: 100%;
-  padding: 0.55rem 0.85rem 0.55rem 1.2rem;
-  border: 1px solid transparent;
-  border-radius: 0.45rem;
-  background: transparent;
-  color: var(--color-text-muted);
-  cursor: pointer;
-  font-size: 0.84rem;
-  font-weight: 600;
-  font-family: var(--font-subheading);
-  transition: all 0.2s ease;
-  text-align: left;
-}
-
-.sidebar-section-header:hover {
-  background: var(--color-surface-hover);
-  color: var(--color-text);
-}
-
-.sidebar-section-header svg {
-  flex-shrink: 0;
-  opacity: 0.8;
-}
-
-.sidebar-section-content {
-  display: flex;
-  flex-direction: column;
-  gap: 0.15rem;
-  padding-left: 1.1rem;
-}
-
+/* Subjekty / Zakázky under a section: indented under its icon, with a thin
+   guide line on the left. */
 .sidebar-button--leaf {
-  padding: 0.55rem 0.9rem 0.55rem 3.2rem;
-  font-size: 0.83rem;
+  height: 30px;
+  padding-left: 1.45rem;
+  margin-left: 1.05rem;
+  width: calc(100% - 1.05rem);
+  font-size: var(--ui-text-sm, 12.5px);
   position: relative;
+}
+
+.sidebar-row > .sidebar-button--leaf {
+  width: auto;
 }
 
 .sidebar-button--leaf::before {
   content: '';
   position: absolute;
-  left: 1.95rem;
-  top: 50%;
-  transform: translateY(-50%);
-  width: 5px;
-  height: 5px;
-  border-radius: 50%;
+  left: 0.15rem;
+  top: 4px;
+  bottom: 4px;
+  width: 2px;
+  border-radius: 1px;
   background-color: var(--color-border);
-  transition: background-color 0.2s ease;
+  transition: background-color var(--ui-transition, 120ms ease);
 }
 
-.sidebar-button--leaf.active::before,
-.sidebar-button--leaf:hover::before {
+.sidebar-button--leaf.active::before {
   background-color: var(--color-primary);
 }
 
-/* Indented sub-items */
-.sidebar-button.sub-item {
-  padding: 0.6rem 1rem 0.6rem 2.75rem; /* Increased left padding for indentation */
-  font-size: 0.85rem;
-  position: relative;
+.sidebar-button--leaf svg {
+  width: 16px;
+  height: 16px;
 }
 
-.sidebar-button.sub-item::before {
-  content: '';
-  position: absolute;
-  left: 1.4rem; /* Adjusted for visual alignment */
-  top: 50%;
-  transform: translateY(-50%);
-  width: 4px;
-  height: 4px;
-  border-radius: 50%;
-  background-color: var(--color-border);
-  transition: background-color 0.2s;
+/* Jarvis's own colour in the menu: the screen with everything AI. */
+.sidebar-button--jarvis svg {
+  color: var(--color-primary);
+  opacity: 1;
 }
 
-.sidebar-button.sub-item.active::before,
-.sidebar-button.sub-item:hover::before {
-  background-color: var(--color-primary);
-}
-
-
-.sidebar-separator {
-  margin-top: auto;
-  height: 1rem;
-}
-
-.sidebar-link {
-  text-decoration: none;
-  border-top: 1px solid var(--color-border);
-  margin-top: 0.5rem !important;
-  padding-top: 1rem !important;
-  color: var(--color-text);
-}
-
-.sidebar-link:hover {
-  border-color: var(--color-accent);
-  color: var(--color-accent);
+.sidebar-link-icon {
+  margin-left: auto;
+  opacity: 0.6;
 }
 
 .sidebar-footer {
-  padding: 1rem;
+  flex: none;
+  padding: 0.5rem 0.6rem 0.6rem;
   border-top: 1px solid var(--color-border);
   background: var(--color-surface-alt);
 }
 
-/* The signed-in account, with the help button beside it. */
+/* The signed-in account: initials, name and role, help and sign-out. */
 .sidebar-account {
   display: flex;
   align-items: center;
-  gap: 0.5rem;
-  margin-bottom: 0.5rem;
+  gap: 0.35rem;
+}
+
+.sidebar-avatar {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex: none;
+  width: 30px;
+  height: 30px;
+  border-radius: 50%;
+  background: color-mix(in srgb, var(--color-primary) 16%, var(--color-surface));
+  color: var(--color-primary-text, var(--color-primary));
+  font-size: 11.5px;
+  font-weight: 700;
+  letter-spacing: 0.02em;
 }
 
 .user-info {
@@ -483,7 +448,7 @@
   flex-direction: column;
   flex: 1;
   min-width: 0;
-  padding: 0.5rem 0 0.5rem 1rem;
+  padding: 0 0 0 0.25rem;
 }
 
 .user-info > span {
@@ -518,29 +483,23 @@
 }
 
 .user-name {
-  font-size: 0.95rem;
+  font-size: var(--ui-text-md, 13.5px);
   font-weight: 600;
+  line-height: 1.25;
   color: var(--color-text);
-  font-family: var(--font-subheading);
+  font-family: var(--font-subheading, var(--font-body));
 }
 
 .user-role {
-  font-size: 0.8rem;
+  font-size: var(--ui-text-xs, 11.5px);
+  line-height: 1.3;
   color: var(--color-text-muted);
-  text-transform: capitalize;
   font-family: var(--font-body);
 }
 
-.logout-button {
-  background: transparent;
-  color: var(--color-text-muted);
-  border: 1px solid var(--color-border);
-}
-
-.logout-button:hover {
-  background: color-mix(in srgb, var(--color-error, #ef4444) 10%, transparent);
-  color: var(--color-error, #ef4444);
-  border-color: var(--color-error, #ef4444);
+.sidebar-logout-button:hover {
+  background: color-mix(in srgb, var(--color-danger, var(--color-error, #ef4444)) 12%, transparent);
+  color: var(--color-danger, var(--color-error, #ef4444));
 }
 
 /*
@@ -738,6 +697,11 @@
     min-width: 0;
   }
 
+  /* The floating buttons sit in the top bar on a phone: no band to keep free. */
+  .main-content {
+    --floating-tools-band: 0px;
+  }
+
   .main-content,
   .main-content--fullscreen {
     margin-left: 0;
@@ -749,11 +713,13 @@
   }
 }
 
-/* "Nainstalovat aplikaci" / "Přidat na plochu" (InstallAppButton.tsx). */
+/* "Nainstalovat aplikaci" / "Aplikace do telefonu" (InstallAppButton.tsx):
+   a quiet row above the account, not a big bordered button. */
 .install-app-button {
-  margin-bottom: 0.5rem;
-  border-color: var(--color-border);
-  color: var(--color-primary);
+  height: 28px;
+  margin-bottom: 0.35rem;
+  font-size: var(--ui-text-sm, 12.5px);
+  color: var(--color-primary-text, var(--color-primary));
   /* Some of these are links (to /stahnout). */
   text-decoration: none;
   box-sizing: border-box;
@@ -768,20 +734,56 @@
 
 /* ---- Menu layout (2026-11-13): headings, and one search for the app ---- */
 
-/* "Sekce" / "Práce" / "Další": quiet labels that split the menu into blocks. */
+/* "Sekce" / "Práce" / "Analýza" / "Správa" / "Další": quiet labels that split
+   the menu into blocks; the last three fold away (remembered per device). */
 .sidebar-heading {
-  margin: 0.9rem 0 0.25rem;
-  padding: 0 0.75rem;
-  font-size: var(--ui-text-xs, 11.5px);
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  width: 100%;
+  margin: 0.7rem 0 0.15rem;
+  padding: 0 0.65rem;
+  box-sizing: border-box;
+  border: 0;
+  background: none;
+  font-family: var(--font-body);
+  font-size: 11px;
   font-weight: 650;
-  letter-spacing: 0.04em;
+  letter-spacing: 0.05em;
   text-transform: uppercase;
+  text-align: left;
   color: var(--color-text-muted);
 }
 
+.sidebar-nav > .sidebar-heading:first-child,
 .sidebar-confirm-everything + .sidebar-heading,
 .sidebar-search-open + .sidebar-heading {
-  margin-top: 0.5rem;
+  margin-top: 0.15rem;
+}
+
+.sidebar-heading--toggle {
+  height: 24px;
+  border-radius: var(--ui-radius-sm, 6px);
+  cursor: pointer;
+  transition: color var(--ui-transition, 120ms ease), background-color var(--ui-transition, 120ms ease);
+}
+
+.sidebar-heading--toggle:hover {
+  color: var(--color-text);
+  background: var(--color-surface-hover, var(--color-surface-alt));
+}
+
+.sidebar-heading--toggle span {
+  flex: 1;
+}
+
+/* A folded block holding the open screen. */
+.sidebar-heading--toggle.has-active {
+  color: var(--color-primary-text, var(--color-primary));
+}
+
+.sidebar-block .sidebar-heading:not(.sidebar-heading--toggle) {
+  margin-top: 0.7rem;
 }
 
 /* Opens the Ctrl/⌘+K search window (SearchPalette). */

@@ -6,7 +6,7 @@ const VALID_APP_VIEWS: AppView[] = [
   "archived",
   "future",
   "palettes",
-  "chatbot",
+  "jarvis",
   "calendar",
   "teamchat",
   "analytics",
@@ -45,7 +45,9 @@ export const FUTURE_FUNCTIONS_VIEW_STORAGE_KEY = "walterFutureFunctions.view";
 
 export const getStoredAppView = (fallback: AppView = "active"): AppView => {
   try {
-    const storedValue = localStorage.getItem(APP_VIEW_STORAGE_KEY);
+    const raw = localStorage.getItem(APP_VIEW_STORAGE_KEY);
+    // The old AI Asistent screen became the Jarvis screen (2026-11-14).
+    const storedValue = raw === "chatbot" ? "jarvis" : raw;
     if (storedValue && VALID_APP_VIEWS.includes(storedValue as AppView)) {
       return storedValue as AppView;
     }

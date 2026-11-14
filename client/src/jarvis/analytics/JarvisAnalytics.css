@@ -1,0 +1,839 @@
+/* Jarvis › Analýza nákladů and Finance › Jarvis (JarvisAnalytics.tsx).
+   Palette colours, the redesign's scale tokens; charts are one series in the
+   palette's primary colour. */
+
+.jxa {
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+  max-width: 1280px;
+  margin: 0 auto;
+  padding: 22px 28px 40px;
+  box-sizing: border-box;
+  color: var(--color-text);
+  font-family: var(--font-body);
+  font-size: var(--ui-text-md);
+}
+
+/* Inside Finance the page already has its padding. */
+.finance-panel .jxa,
+.finance-view .jxa {
+  padding: 0;
+  max-width: none;
+}
+
+.jxa-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+  flex-wrap: wrap;
+}
+
+.jxa-head h2 {
+  margin: 0 0 4px;
+  font-family: var(--font-heading, var(--font-body));
+  font-size: var(--ui-text-xl);
+  font-weight: 700;
+  letter-spacing: -0.01em;
+}
+
+.jxa-head p {
+  margin: 0;
+  max-width: 680px;
+  color: var(--color-text-muted);
+  line-height: 1.5;
+}
+
+.jxa-head-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.jxa-segmented {
+  display: inline-flex;
+  padding: 2px;
+  border: 1px solid var(--color-border);
+  border-radius: var(--ui-radius-md);
+  background: var(--color-surface-alt, var(--color-background));
+}
+
+.jxa-segmented button {
+  height: 28px;
+  padding: 0 12px;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--color-text-muted);
+  font: inherit;
+  font-size: var(--ui-text-sm);
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.jxa-segmented button.is-on {
+  background: var(--color-surface);
+  color: var(--color-text);
+  box-shadow: var(--ui-shadow-xs);
+}
+
+.jxa-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  min-width: var(--ui-control-h);
+  height: var(--ui-control-h);
+  padding: 0 10px;
+  box-sizing: border-box;
+  border: 1px solid var(--color-border);
+  border-radius: var(--ui-radius-md);
+  background: var(--color-surface);
+  color: var(--color-text);
+  font: inherit;
+  font-size: var(--ui-text-sm);
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.jxa-btn:hover:not(:disabled) {
+  border-color: color-mix(in srgb, var(--color-primary) 45%, var(--color-border));
+}
+
+.jxa-btn:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
+.jxa-btn--ghost {
+  border-style: dashed;
+}
+
+.jxa-more {
+  align-self: center;
+  margin-top: 10px;
+}
+
+.jxa-callout {
+  padding: 10px 14px;
+  border: 1px solid color-mix(in srgb, var(--color-danger, #dc2626) 40%, transparent);
+  border-radius: var(--ui-radius-md);
+  background: color-mix(in srgb, var(--color-danger, #dc2626) 8%, transparent);
+  color: var(--color-danger, #dc2626);
+}
+
+.jxa-muted {
+  margin: 0;
+  color: var(--color-text-muted);
+}
+
+.jxa-pad {
+  padding: 16px;
+}
+
+.jxa-note {
+  margin: 10px 0 0;
+  color: var(--color-text-muted);
+  font-size: var(--ui-text-xs);
+  line-height: 1.5;
+}
+
+.jxa-card .jxa-note:first-of-type {
+  margin: -4px 0 10px;
+}
+
+/* ---------- tiles ---------- */
+
+.jxa-tiles {
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.jxa-tile {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 0;
+  padding: 12px 14px;
+  border: 1px solid var(--color-border);
+  border-radius: var(--ui-radius-lg);
+  background: var(--color-surface);
+  box-shadow: var(--ui-shadow-xs);
+}
+
+.jxa-tile-label {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--color-text-muted);
+  font-size: var(--ui-text-xs);
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+}
+
+.jxa-tile strong {
+  font-size: 22px;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  font-variant-numeric: tabular-nums;
+}
+
+.jxa-tile small {
+  color: var(--color-text-muted);
+  font-size: var(--ui-text-xs);
+  line-height: 1.4;
+}
+
+.jxa-tile--warn {
+  border-color: color-mix(in srgb, var(--color-warning, #d97706) 45%, var(--color-border));
+}
+
+.jxa-tile--warn .jxa-tile-label {
+  color: var(--color-warning, #b45309);
+}
+
+/* ---------- sections and cards ---------- */
+
+.jxa-section {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  min-width: 0;
+}
+
+.jxa-section > h3,
+.jxa-card h3,
+.jxa-list-head h3 {
+  margin: 0;
+  font-size: var(--ui-text-lg);
+  font-weight: 650;
+}
+
+.jxa-list-head h3 small {
+  color: var(--color-text-muted);
+  font-size: var(--ui-text-sm);
+  font-weight: 500;
+}
+
+.jxa-two {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.jxa-three {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.jxa-card {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  min-width: 0;
+  padding: 14px 16px;
+  border: 1px solid var(--color-border);
+  border-radius: var(--ui-radius-lg);
+  background: var(--color-surface);
+  box-shadow: var(--ui-shadow-xs);
+}
+
+.jxa-card .jxa-note:first-of-type {
+  margin: -8px 0 0;
+}
+
+/* ---------- findings ---------- */
+
+.jxa-insights {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(340px, 1fr));
+  gap: 10px;
+}
+
+.jxa-insight {
+  display: flex;
+  gap: 10px;
+  padding: 12px 14px;
+  border: 1px solid var(--color-border);
+  border-left-width: 3px;
+  border-radius: var(--ui-radius-md);
+  background: var(--color-surface);
+}
+
+.jxa-insight > svg {
+  flex: none;
+  margin-top: 1px;
+}
+
+.jxa-insight strong {
+  display: block;
+  margin-bottom: 3px;
+  font-size: var(--ui-text-md);
+}
+
+.jxa-insight p {
+  margin: 0;
+  color: var(--color-text-muted);
+  font-size: var(--ui-text-sm);
+  line-height: 1.5;
+}
+
+.jxa-insight--tip {
+  border-left-color: var(--color-primary);
+}
+
+.jxa-insight--tip > svg {
+  color: var(--color-primary);
+}
+
+.jxa-insight--info {
+  border-left-color: var(--color-text-muted);
+}
+
+.jxa-insight--info > svg {
+  color: var(--color-text-muted);
+}
+
+.jxa-insight--warn {
+  border-left-color: var(--color-warning, #d97706);
+}
+
+.jxa-insight--warn > svg {
+  color: var(--color-warning, #d97706);
+}
+
+/* ---------- bar lists ---------- */
+
+.jxa-bars {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+/* Label and amount on one line, the bar under them across the whole card:
+   reads the same in a wide card and in a narrow one. */
+.jxa-bars-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  grid-template-areas:
+    'label value'
+    'bar bar';
+  align-items: end;
+  gap: 4px 12px;
+  font-size: var(--ui-text-sm);
+}
+
+.jxa-bars-row > .jxa-bars-label {
+  grid-area: label;
+}
+
+.jxa-bars-row > .jxa-bars-value {
+  grid-area: value;
+}
+
+.jxa-bars-row > .jxa-bar {
+  grid-area: bar;
+}
+
+.jxa-bars-row--button {
+  width: 100%;
+  margin: -3px -6px;
+  padding: 3px 6px;
+  border: 0;
+  border-radius: var(--ui-radius-sm);
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  font-size: var(--ui-text-sm);
+  text-align: left;
+  cursor: pointer;
+  box-sizing: content-box;
+}
+
+.jxa-bars-row--button:hover {
+  background: var(--color-surface-hover, var(--color-surface-alt));
+}
+
+.jxa-bars-label {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  font-weight: 600;
+}
+
+.jxa-bars-label small {
+  color: var(--color-text-muted);
+  font-size: var(--ui-text-xs);
+  font-weight: 400;
+  line-height: 1.4;
+}
+
+.jxa-bars-value {
+  display: flex;
+  flex-direction: row;
+  align-items: baseline;
+  justify-content: flex-end;
+  gap: 6px;
+  min-width: 64px;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  text-align: right;
+}
+
+.jxa-bars-value small {
+  color: var(--color-text-muted);
+  font-size: var(--ui-text-xs);
+  font-weight: 500;
+}
+
+.jxa-bar {
+  display: block;
+  height: 6px;
+  border-radius: 4px;
+  background: color-mix(in srgb, var(--color-text-muted) 12%, transparent);
+  overflow: hidden;
+}
+
+.jxa-bar span {
+  display: block;
+  height: 100%;
+  border-radius: 4px;
+  background: var(--color-primary);
+}
+
+/* ---------- columns ---------- */
+
+.jxa-columns {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.jxa-columns-max {
+  height: 14px;
+  color: var(--color-text-muted);
+  font-size: 10.5px;
+  font-variant-numeric: tabular-nums;
+}
+
+.jxa-columns-plot {
+  display: grid;
+  align-items: end;
+  gap: 2px;
+  height: 140px;
+  border-top: 1px dashed color-mix(in srgb, var(--color-border) 80%, transparent);
+  border-bottom: 1px solid var(--color-border);
+}
+
+.jxa-column {
+  position: relative;
+  display: flex;
+  align-items: flex-end;
+  height: 100%;
+  outline: none;
+  cursor: default;
+}
+
+.jxa-column-fill {
+  display: block;
+  width: 100%;
+  min-height: 0;
+  border-radius: 4px 4px 0 0;
+  background: color-mix(in srgb, var(--color-primary) 80%, transparent);
+  transition: background-color var(--ui-transition);
+}
+
+.jxa-column.is-active .jxa-column-fill,
+.jxa-column:focus-visible .jxa-column-fill {
+  background: var(--color-primary);
+}
+
+.jxa-column:focus-visible {
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--color-primary) 40%, transparent);
+  border-radius: 4px;
+}
+
+.jxa-tip {
+  position: absolute;
+  bottom: calc(100% + 6px);
+  left: 50%;
+  z-index: 5;
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  min-width: 110px;
+  padding: 7px 10px;
+  border: 1px solid var(--color-border);
+  border-radius: var(--ui-radius-md);
+  background: var(--color-surface);
+  box-shadow: var(--ui-shadow-pop);
+  color: var(--color-text);
+  font-size: var(--ui-text-xs);
+  white-space: nowrap;
+  transform: translateX(-50%);
+  pointer-events: none;
+}
+
+.jxa-tip--left {
+  left: auto;
+  right: 0;
+  transform: none;
+}
+
+.jxa-tip strong {
+  font-size: var(--ui-text-sm);
+}
+
+.jxa-columns-axis {
+  display: grid;
+  gap: 2px;
+  color: var(--color-text-muted);
+  font-size: 10px;
+  font-variant-numeric: tabular-nums;
+}
+
+.jxa-columns-axis span {
+  overflow: visible;
+  white-space: nowrap;
+}
+
+/* ---------- question list ---------- */
+
+.jxa-list-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.jxa-filters {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.jxa-filters select,
+.jxa-search {
+  height: var(--ui-control-h);
+  box-sizing: border-box;
+  border: 1px solid var(--color-border);
+  border-radius: var(--ui-radius-md);
+  background: var(--color-surface);
+  color: var(--color-text);
+  font: inherit;
+  font-size: var(--ui-text-sm);
+}
+
+.jxa-filters select {
+  padding: 0 8px;
+  cursor: pointer;
+}
+
+.jxa-search {
+  display: flex;
+  flex: 1 1 160px;
+  align-items: center;
+  gap: 6px;
+  padding: 0 10px;
+  color: var(--color-text-muted);
+}
+
+.jxa-search:focus-within {
+  border-color: var(--color-primary);
+}
+
+.jxa-search input {
+  flex: 1;
+  min-width: 0;
+  border: 0;
+  outline: none;
+  background: transparent;
+  color: var(--color-text);
+  font: inherit;
+}
+
+.jxa-table-wrap {
+  overflow-x: auto;
+  border: 1px solid var(--color-border);
+  border-radius: var(--ui-radius-lg);
+  background: var(--color-surface);
+}
+
+.jxa-card .jxa-table-wrap {
+  border: 0;
+  border-radius: 0;
+}
+
+.jxa-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: var(--ui-text-sm);
+}
+
+.jxa-table th {
+  position: sticky;
+  top: 0;
+  padding: 8px 10px;
+  border-bottom: 1px solid var(--color-border);
+  background: var(--color-surface-alt, var(--color-surface));
+  color: var(--color-text-muted);
+  font-size: var(--ui-text-xs);
+  font-weight: 650;
+  text-align: left;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+  white-space: nowrap;
+}
+
+.jxa-table td {
+  padding: 8px 10px;
+  border-bottom: 1px solid color-mix(in srgb, var(--color-border) 70%, transparent);
+  vertical-align: top;
+}
+
+.jxa-table--compact th,
+.jxa-table--compact td {
+  padding: 6px 8px;
+}
+
+.jxa-num {
+  text-align: right !important;
+  font-variant-numeric: tabular-nums;
+}
+
+.jxa-nowrap {
+  white-space: nowrap;
+}
+
+.jxa-row {
+  cursor: pointer;
+  transition: background-color var(--ui-transition);
+}
+
+.jxa-row:hover,
+.jxa-row.is-open {
+  background: var(--color-surface-hover, var(--color-surface-alt));
+}
+
+.jxa-toggle {
+  width: 28px;
+  padding-right: 0 !important;
+}
+
+.jxa-toggle button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 22px;
+  height: 22px;
+  padding: 0;
+  border: 0;
+  border-radius: var(--ui-radius-sm);
+  background: transparent;
+  color: var(--color-text-muted);
+  cursor: pointer;
+}
+
+.jxa-sub {
+  margin-top: 2px;
+  color: var(--color-text-muted);
+  font-size: var(--ui-text-xs);
+}
+
+.jxa-bad {
+  color: var(--color-danger, #dc2626);
+}
+
+.jxa-question {
+  min-width: 260px;
+  max-width: 520px;
+}
+
+.jxa-question-text {
+  display: -webkit-box;
+  overflow: hidden;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  line-height: 1.4;
+}
+
+.jxa-tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  margin-top: 4px;
+}
+
+.jxa-tag {
+  display: inline-flex;
+  align-items: center;
+  height: 18px;
+  padding: 0 6px;
+  border-radius: 4px;
+  background: color-mix(in srgb, var(--color-text-muted) 12%, transparent);
+  color: var(--color-text-muted);
+  font-size: 10.5px;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.jxa-tag--tool {
+  background: color-mix(in srgb, var(--color-primary) 10%, transparent);
+  color: var(--color-primary-text, var(--color-primary));
+}
+
+.jxa-tag--bad {
+  background: color-mix(in srgb, var(--color-danger, #dc2626) 14%, transparent);
+  color: var(--color-danger, #dc2626);
+}
+
+.jxa-tag--warn {
+  background: color-mix(in srgb, var(--color-warning, #d97706) 16%, transparent);
+  color: var(--color-warning, #b45309);
+}
+
+.jxa-model {
+  font-weight: 600;
+}
+
+.jxa-detail-row > td {
+  padding: 0 !important;
+  background: var(--color-background);
+}
+
+.jxa-detail {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 14px 16px 16px 40px;
+}
+
+.jxa-detail h4 {
+  margin: 0 0 8px;
+  color: var(--color-text-muted);
+  font-size: var(--ui-text-xs);
+  font-weight: 650;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.jxa-detail-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  gap: 24px;
+}
+
+.jxa-detail-error {
+  padding: 8px 10px;
+  border-radius: var(--ui-radius-md);
+  background: color-mix(in srgb, var(--color-danger, #dc2626) 8%, transparent);
+  color: var(--color-danger, #dc2626);
+  font-size: var(--ui-text-sm);
+}
+
+.jxa-meta {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 6px 16px;
+  margin: 0;
+}
+
+.jxa-meta div {
+  min-width: 0;
+}
+
+.jxa-meta dt {
+  color: var(--color-text-muted);
+  font-size: var(--ui-text-xs);
+}
+
+.jxa-meta dd {
+  margin: 0;
+  font-size: var(--ui-text-sm);
+  overflow-wrap: anywhere;
+}
+
+.jxa-detail .jxa-table-wrap {
+  border-radius: var(--ui-radius-md);
+}
+
+.jxa-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+
+.jxa-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  height: 22px;
+  padding: 0 8px;
+  border: 1px solid var(--color-border);
+  border-radius: 999px;
+  background: var(--color-surface);
+  font-size: var(--ui-text-xs);
+}
+
+.jxa-chip--bad {
+  border-color: color-mix(in srgb, var(--color-danger, #dc2626) 45%, var(--color-border));
+  color: var(--color-danger, #dc2626);
+}
+
+.jxa-feedback {
+  padding-top: 8px;
+  border-top: 1px solid var(--color-border);
+  font-size: var(--ui-text-sm);
+}
+
+.jxa-feedback-comment {
+  margin-top: 3px;
+  color: var(--color-text-muted);
+}
+
+/* ---------- narrower screens ---------- */
+
+@media (max-width: 1200px) {
+  .jxa-tiles {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+
+  .jxa-three {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 900px) {
+  .jxa-two,
+  .jxa-three,
+  .jxa-detail-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+@media (max-width: 768px) {
+  .jxa {
+    padding: 16px 16px 32px;
+  }
+
+  .jxa-tiles {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .jxa-insights {
+    grid-template-columns: 1fr;
+  }
+
+  .jxa-detail {
+    padding: 12px;
+  }
+
+  .jxa-meta {
+    grid-template-columns: 1fr;
+  }
+}

@@ -21,7 +21,7 @@ import { BILLING_PROVIDERS, ProviderCostError, fetchProviderCosts, isProviderCon
 import { getRates } from './rates.js';
 import { PLAN, RAILWAY_PRICES, backupBreakdown, databaseBreakdown, fetchRailwayHosting, isRailwayConfigured, vatRate } from './hosting.js';
 import { createFileFinanceStore, createPgFinanceStore } from './store.js';
-import { USAGE_DAYS, summarizeJarvisUsage } from './jarvis-usage.js';
+import { QUESTION_SORT_KEYS, USAGE_DAYS, listJarvisQuestions, summarizeJarvisUsage } from './jarvis-usage.js';
 import { setFeedbackSink, setStateSink, setTurnSink, setUsageSink } from './usage.js';
 
 const HISTORY_MONTHS = 12;
@@ -298,10 +298,36 @@ export function registerFinanceRoutes(app, { authenticateToken, requireRole, poo
   }));
 
   // Jarvis usage over the last 7, 30 or 90 days (AI spotřeba › Jarvis).
+  const usageDays = (req) => (USAGE_DAYS.includes(Number(req.query.days)) ? Number(req.query.days) : 30);
   app.get('/api/finance/jarvis', ...guard, wrap('Využití Jarvise se nepodařilo načíst.', async (req, res) => {
-    const days = USAGE_DAYS.includes(Number(req.query.days)) ? Number(req.query.days) : 30;
+    const days = usageDays(req);
     const since = new Date(Date.now() - days * 86400 * 1000);
-    res.json(summarizeJarvisUsage(await store.aiActivity(since), days));
+    const [activity, rates] = await Promise.all([store.aiActivity(since), getRates()]);
+    res.json({ ...summarizeJarvisUsage(activity, days), usdCzk: rates.rates.USD });
+  }));
+
+  // Every question of the period with its breakdown (Jarvis › Analýza), a page
+  // at a time: filtered by person, model, state, tool or words, sorted by time,
+  // cost, duration, tokens or context size.
+  app.get('/api/finance/jarvis/questions', ...guard, wrap('Otázky se nepodařilo načíst.', async (req, res) => {
+    const days = usageDays(req);
+    const since = new Date(Date.now() - days * 86400 * 1000);
+    const { turns } = await store.aiActivity(since);
+    const word = (name, allowed) => (allowed.includes(req.query[name]) ? req.query[name] : null);
+    const userId = Number.isInteger(Number(req.query.user)) && req.query.user !== '' && req.query.user !== undefined ? Number(req.query.user) : null;
+    res.json(
+      listJarvisQuestions(turns, {
+        sort: word('sort', QUESTION_SORT_KEYS) ?? 'at',
+        dir: req.query.dir === 'asc' ? 'asc' : 'desc',
+        offset: Number(req.query.offset) || 0,
+        limit: Number(req.query.limit) || 50,
+        userId,
+        model: word('model', ['opus', 'sonnet', 'haiku', 'fable', 'other', 'unknown']),
+        status: word('status', ['ok', 'failed', 'stopped', 'empty', 'truncated', 'error', 'refusal', 'tool_limit']),
+        tool: typeof req.query.tool === 'string' && /^[a-z_]{1,40}$/.test(req.query.tool) ? req.query.tool : null,
+        q: typeof req.query.q === 'string' ? req.query.q.slice(0, 120) : '',
+      })
+    );
   }));
 
   app.post('/api/finance/sync', ...guard, wrap('Náklady od poskytovatelů se nepodařilo načíst.', async (_req, res) => {

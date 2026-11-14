@@ -5,6 +5,7 @@
 // the app runs installed (the Android app reports standalone too).
 
 import { useEffect, useState } from 'react';
+import { Download, Smartphone } from 'lucide-react';
 import { isAndroidApp } from '../nativeBridge';
 
 interface InstallPromptEvent extends Event {
@@ -62,7 +63,8 @@ export default function InstallAppButton() {
   if (isAndroid()) {
     return (
       <a className="sidebar-button install-app-button" href="/stahnout">
-        Stáhnout aplikaci
+        <Download size={16} strokeWidth={1.9} aria-hidden />
+        <span>Stáhnout aplikaci</span>
       </a>
     );
   }
@@ -76,7 +78,8 @@ export default function InstallAppButton() {
           aria-expanded={showIosHelp}
           onClick={() => setShowIosHelp((shown) => !shown)}
         >
-          Přidat na plochu
+          <Smartphone size={16} strokeWidth={1.9} aria-hidden />
+          <span>Přidat na plochu</span>
         </button>
         {showIosHelp && (
           <p className="install-app-help">
@@ -104,11 +107,13 @@ export default function InstallAppButton() {
             if (choice.outcome === 'accepted') setInstalled(true);
           }}
         >
-          Nainstalovat aplikaci
+          <Download size={16} strokeWidth={1.9} aria-hidden />
+          <span>Nainstalovat aplikaci</span>
         </button>
       )}
       <a className="sidebar-button install-app-button" href="/stahnout" target="_blank" rel="noopener">
-        Aplikace do telefonu
+        <Smartphone size={16} strokeWidth={1.9} aria-hidden />
+        <span>Aplikace do telefonu</span>
       </a>
     </>
   );

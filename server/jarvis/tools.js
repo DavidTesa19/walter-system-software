@@ -678,7 +678,7 @@ async function cachedDocumentText(doc, ctx) {
     return hit;
   }
   const file = await ctx.api.getFile(`/documents/${doc.id}/download`, MAX_DOCUMENT_BYTES);
-  const result = await documentText(file.buffer, { filename: doc.filename, mimeType: doc.mimeType || file.contentType, signal: ctx.signal });
+  const result = await documentText(file.buffer, { filename: doc.filename, mimeType: doc.mimeType || file.contentType, signal: ctx.signal, onUsage: ctx.onUsage });
   documentTextCache.set(key, result);
   while (documentTextCache.size > DOCUMENT_CACHE_SIZE) documentTextCache.delete(documentTextCache.keys().next().value);
   return result;

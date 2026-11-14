@@ -148,7 +148,7 @@ const anthropic = () => {
 };
 
 // A scan or a photo: Claude reads it once and writes the text out.
-async function transcribe(block, signal) {
+async function transcribe(block, signal, onUsage) {
   const stream = anthropic().beta.messages.stream(
     {
       model: OCR_MODEL,
@@ -176,7 +176,7 @@ async function transcribe(block, signal) {
     { signal }
   );
   const message = await stream.finalMessage();
-  recordAiUsage({
+  const ocrUsage = {
     provider: 'anthropic',
     model: message.model ?? OCR_MODEL,
     feature: 'jarvis_ocr',
@@ -184,7 +184,10 @@ async function transcribe(block, signal) {
     output: message.usage?.output_tokens,
     cacheRead: message.usage?.cache_read_input_tokens,
     cacheWrite: message.usage?.cache_creation_input_tokens,
-  });
+  };
+  recordAiUsage(ocrUsage);
+  // The question this transcription served counts it in its own cost.
+  onUsage?.(ocrUsage);
   if (message.stop_reason === 'refusal') throw new DocumentTextError('Dokument se nepodařilo přečíst.');
   const text = message.content.filter((item) => item.type === 'text').map((item) => item.text).join('');
   return { text, truncated: message.stop_reason === 'max_tokens' };
@@ -195,7 +198,7 @@ async function transcribe(block, signal) {
  * Returns { text, method, pages?, note? }; throws DocumentTextError for files
  * that cannot be read (old .doc, archives, …).
  */
-export async function documentText(buffer, { filename, mimeType, signal } = {}) {
+export async function documentText(buffer, { filename, mimeType, signal, onUsage } = {}) {
   if (buffer.length > MAX_DOCUMENT_BYTES) throw new DocumentTextError('Dokument je na přečtení příliš velký.');
   const extension = extensionOf(filename);
   const type = String(mimeType ?? '').toLowerCase();
@@ -209,7 +212,8 @@ export async function documentText(buffer, { filename, mimeType, signal } = {}) 
     }
     const scan = await transcribe(
       { type: 'document', source: { type: 'base64', media_type: 'application/pdf', data: buffer.toString('base64') } },
-      signal
+      signal,
+      onUsage
     );
     return {
       text: tidy(scan.text),
@@ -223,7 +227,7 @@ export async function documentText(buffer, { filename, mimeType, signal } = {}) 
     const mediaType = IMAGE_TYPES[extension] ?? type;
     if (!Object.values(IMAGE_TYPES).includes(mediaType)) throw new DocumentTextError('Tento formát obrázku neumím přečíst.');
     if (buffer.length > 5 * 1024 * 1024) throw new DocumentTextError('Obrázek je na přečtení příliš velký (víc než 5 MB).');
-    const scan = await transcribe({ type: 'image', source: { type: 'base64', media_type: mediaType, data: buffer.toString('base64') } }, signal);
+    const scan = await transcribe({ type: 'image', source: { type: 'base64', media_type: mediaType, data: buffer.toString('base64') } }, signal, onUsage);
     return { text: tidy(scan.text), method: 'ocr', note: 'Text přepsán z obrázku – čísla a jména ověř.' };
   }
 

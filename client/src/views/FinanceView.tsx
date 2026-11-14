@@ -5,7 +5,7 @@ import ConnectionsTab from '../finance/ConnectionsTab';
 import ExpenseModal from '../finance/ExpenseModal';
 import HistoryTab from '../finance/HistoryTab';
 import HostingTab from '../finance/HostingTab';
-import JarvisUsageTab from '../finance/JarvisUsageTab';
+import JarvisAnalytics from '../jarvis/analytics/JarvisAnalytics';
 import { AiCostChart, CategoryBars } from '../finance/FinanceCharts';
 import type { AiMonth } from '../finance/FinanceCharts';
 import {
@@ -302,7 +302,7 @@ export default function FinanceView() {
             )}
             {tab === 'connections' && <ConnectionsTab overview={overview} measured={model.measured} />}
             {tab === 'ai' && <AiTab overview={overview} model={model} />}
-            {tab === 'jarvis' && <JarvisUsageTab overview={overview} />}
+            {tab === 'jarvis' && <JarvisAnalytics />}
             {tab === 'keys' && <KeysTab overview={overview} />}
           </div>
 

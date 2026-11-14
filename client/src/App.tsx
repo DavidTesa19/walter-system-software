@@ -36,7 +36,6 @@ import './components/Sidebar.css';
 const PaletteManager = lazy(() => import('./theme/PaletteManager'));
 const GeneralSectionView = lazy(() => import('./views/GeneralSectionView'));
 const FutureFunctionsView = lazy(() => import('./views/FutureFunctionsView'));
-const ChatbotView = lazy(() => import('./views/ChatbotView'));
 const TeamChatView = lazy(() => import('./views/TeamChatView'));
 const HelpView = lazy(() => import('./views/HelpView'));
 const FullCalendarView = lazy(() => import('./views/FullCalendarView'));
@@ -99,7 +98,7 @@ const VIEW_LABELS: Record<AppView, string> = {
   archived: 'Archiv',
   future: 'Budoucí funkce',
   palettes: 'Motivy',
-  chatbot: 'AI Asistent',
+  jarvis: 'Jarvis',
   calendar: 'Kalendář',
   teamchat: 'Týmový chat',
   analytics: 'Ostatní',
@@ -286,18 +285,25 @@ const AppContent: React.FC = () => {
   const [viewMode, setViewMode] = useState<AppView>(() => getStoredAppView('active'));
   const [gridSearchTarget, setGridSearchTarget] = useState<GridSearchNavigationTarget | null>(null);
   const [jarvisOpen, setJarvisOpen] = useState(false);
+  // The Jarvis screen: the same panel (one conversation, one voice) drawn into
+  // this element instead of sliding in from the right.
+  const [jarvisPageHost, setJarvisPageHost] = useState<HTMLDivElement | null>(null);
+  const onJarvisPageRef = useRef(false);
   // Phones: the sidebar is a drawer behind the top bar's menu button.
   const [menuOpen, setMenuOpen] = useState(false);
-  const openJarvis = useCallback(() => setJarvisOpen(true), []);
+  const openJarvis = useCallback(() => {
+    if (!onJarvisPageRef.current) setJarvisOpen(true);
+  }, []);
   const closeJarvis = useCallback(() => setJarvisOpen(false), []);
 
-  // Alt+J opens and closes Jarvis from anywhere in the app.
+  // Alt+J opens and closes Jarvis from anywhere in the app (on the Jarvis
+  // screen it is already open).
   useEffect(() => {
     if (!isAuthenticated) return undefined;
     const onKey = (event: KeyboardEvent) => {
       if (event.altKey && !event.ctrlKey && !event.metaKey && event.code === 'KeyJ') {
         event.preventDefault();
-        setJarvisOpen((value) => !value);
+        if (!onJarvisPageRef.current) setJarvisOpen((value) => !value);
       }
     };
     window.addEventListener('keydown', onKey);
@@ -319,6 +325,12 @@ const AppContent: React.FC = () => {
   // that render used `viewMode`, the section would mount and fire requests the
   // server answers with 403, so a disallowed view is swapped out right here.
   const effectiveView = isViewAllowed(viewMode) ? viewMode : getDefaultViewForScope(accessScope);
+  onJarvisPageRef.current = effectiveView === 'jarvis';
+
+  // Opening the Jarvis screen takes the floating panel's conversation with it.
+  useEffect(() => {
+    if (effectiveView === 'jarvis') setJarvisOpen(false);
+  }, [effectiveView]);
 
   useEffect(() => {
     if (!isAuthenticated) {
@@ -696,7 +708,7 @@ const AppContent: React.FC = () => {
     return <Login />;
   }
 
-  const isFullscreenView = effectiveView === 'chatbot' || effectiveView === 'teamchat' || effectiveView === 'calendar';
+  const isFullscreenView = effectiveView === 'jarvis' || effectiveView === 'teamchat' || effectiveView === 'calendar';
   const isTableScrollView = [
     'active',
     'pending',
@@ -765,8 +777,9 @@ const AppContent: React.FC = () => {
                 return <FutureFunctionsView />;
               case 'palettes':
                 return <PaletteManager />;
-              case 'chatbot':
-                return <ChatbotView />;
+              case 'jarvis':
+                // JarvisPanel (below) draws the whole screen into this element.
+                return <div className="jarvis-page-host" ref={setJarvisPageHost} />;
               case 'teamchat':
                 return <TeamChatView />;
               case 'calendar':
@@ -832,10 +845,11 @@ const AppContent: React.FC = () => {
           onOpen={openJarvis}
           onClose={closeJarvis}
           viewLabel={VIEW_LABELS[effectiveView]}
-          launcherPlacement={
-            effectiveView === 'teamchat' || effectiveView === 'chatbot' ? 'composer' : isFullscreenView ? 'corner' : 'footer'
-          }
+          launcherPlacement={effectiveView === 'teamchat' ? 'composer' : isFullscreenView ? 'corner' : 'footer'}
           onOpenRecord={handleJarvisOpenRecord}
+          pageHost={effectiveView === 'jarvis' ? jarvisPageHost : null}
+          onOpenPage={isViewAllowed('jarvis') ? () => handleViewChange('jarvis') : undefined}
+          onOpenView={handleViewChange}
         />
       </div>
       </SubjectNavigationProvider>
