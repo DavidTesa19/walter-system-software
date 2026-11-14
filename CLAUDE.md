@@ -326,6 +326,17 @@ draft; the original changes only if the user saves over it. The screen
 mock of the app in its colours), a seven-colour strip, the font names and
 icon actions; the full colour list and font samples are in the edit form.
 
+**Who sees a palette** (2026-11-14, `server/palettes/sharing.js`, tested):
+every user's palettes (`user_palettes`) are public to colleagues by default;
+`is_private` hides one, `is_shared` also puts it in the "Tým" tab (private
+wins over team). Motivy has tabs Moje palety / Tým / one per colleague, from
+`GET /color-palettes/shared`. Everyone starts with copies of the same
+starters, so that list leaves out an untouched starter (`color_palettes` or
+the built-in Walter Light / Dark) and lists a look several people have once,
+under the earliest palette (Postgres: lowest `user_palettes.id`); a team
+palette always shows. Použít / Uložit k sobě copy into the user's own list,
+never a live link.
+
 ## Search from anywhere (Ctrl/⌘+K, `components/SearchPalette.tsx`)
 
 The "Hledat…" button in the top bar (FloatingTools; an icon in the phone's

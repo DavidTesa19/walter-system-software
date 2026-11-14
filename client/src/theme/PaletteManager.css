@@ -107,7 +107,81 @@
   color: var(--color-text);
 }
 
-/* ---- Sdílené od kolegů ---- */
+/* ---- Tabs: Moje palety · Tým · one per colleague ---- */
+
+/* A segmented control; with many colleagues it scrolls sideways. */
+.palette-tabs {
+  display: flex;
+  gap: 2px;
+  max-width: 100%;
+  width: fit-content;
+  padding: 3px;
+  border-radius: var(--ui-radius-md, 8px);
+  background: color-mix(in srgb, var(--color-text) 6%, var(--color-background));
+  border: 1px solid var(--color-border);
+  overflow-x: auto;
+  scrollbar-width: thin;
+  box-sizing: border-box;
+}
+
+.palette-tab {
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  height: var(--ui-control-h-sm, 28px);
+  padding: 0 0.7rem;
+  border: 1px solid transparent;
+  border-radius: var(--ui-radius-sm, 6px);
+  background: transparent;
+  color: var(--color-text-muted);
+  font: inherit;
+  font-size: var(--ui-text-sm, 12.5px);
+  font-weight: 600;
+  white-space: nowrap;
+  cursor: pointer;
+  transition: background-color var(--ui-transition, 120ms ease), color var(--ui-transition, 120ms ease);
+}
+
+.palette-tab:hover {
+  color: var(--color-text);
+}
+
+.palette-tab.is-active {
+  background: var(--color-surface);
+  border-color: var(--color-border);
+  color: var(--color-text);
+  box-shadow: var(--ui-shadow-xs, 0 1px 2px rgba(15, 23, 42, 0.06));
+}
+
+.palette-tab__count {
+  color: var(--color-text-muted);
+  font-size: var(--ui-text-xs, 11.5px);
+  font-weight: 500;
+}
+
+.palette-tab__avatar {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  background: color-mix(in srgb, var(--color-primary) 16%, transparent);
+  color: var(--color-primary);
+  font-size: 10px;
+  font-weight: 700;
+}
+
+.palette-tabs__hint {
+  margin: 0;
+  color: var(--color-text-muted);
+  font-size: var(--ui-text-sm, 12.5px);
+}
+
+.palette-tabs__hint svg {
+  vertical-align: -1px;
+}
 
 .palette-shared {
   display: flex;
@@ -116,54 +190,9 @@
   font-family: var(--font-body);
 }
 
-.palette-shared__header p {
-  margin: 0.2rem 0 0;
-  color: var(--color-text-muted);
-  font-size: var(--ui-text-sm, 12.5px);
-}
-
-.palette-shared__header p svg {
-  vertical-align: -1px;
-}
-
-.palette-shared__owner {
-  background: var(--color-surface);
-  border: 1px solid var(--color-border);
-  border-radius: var(--ui-radius-lg, 12px);
-  padding: 0.75rem;
-  box-shadow: var(--ui-shadow-xs, 0 1px 2px rgba(15, 23, 42, 0.06));
-  display: flex;
-  flex-direction: column;
-  gap: 0.5rem;
-}
-
-.palette-shared__owner-name {
-  display: flex;
-  align-items: center;
-  gap: 0.5rem;
-  padding: 0 0.25rem;
-  font-size: var(--ui-text-md, 13.5px);
-  font-weight: 650;
+.palette-card__owner {
   color: var(--color-text);
-}
-
-.palette-shared__avatar {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: 24px;
-  height: 24px;
-  border-radius: 50%;
-  background: color-mix(in srgb, var(--color-primary) 16%, transparent);
-  color: var(--color-primary);
-  font-size: var(--ui-text-xs, 11.5px);
-  font-weight: 700;
-}
-
-.palette-shared__count {
-  color: var(--color-text-muted);
-  font-size: var(--ui-text-xs, 11.5px);
-  font-weight: 500;
+  font-weight: 600;
 }
 
 .palette-shared__grid {
@@ -324,6 +353,9 @@
 
 .palette-card__mode {
   flex: none;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.2rem;
   padding: 0.1rem 0.45rem;
   border-radius: 999px;
   border: 1px solid var(--color-border);

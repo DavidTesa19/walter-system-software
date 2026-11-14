@@ -20,7 +20,7 @@ import { createLoginGuard, lockedMessage } from "./login-guard.js";
 import { activityListFields } from "./list-fields.js";
 import { registerAresRoutes } from "./ares.js";
 import { registerPaletteAiRoutes } from "./palettes/aiPalette.js";
-import { readShareFlag, sharedPalettesFromUsers } from "./palettes/sharing.js";
+import { readVisibility, sharedPalettesFromUsers } from "./palettes/sharing.js";
 import { registerFinanceRoutes } from "./finance/routes.js";
 import { registerDocumentOverviewRoutes } from "./documents/overview.js";
 import { registerTaskRoutes } from "./tasks/routes.js";
@@ -590,7 +590,7 @@ const sanitizePalettePayload = (body = {}, { partial = false, allowMode = true }
     payload.is_active = Boolean(source.is_active);
   }
 
-  Object.assign(payload, readShareFlag(source));
+  Object.assign(payload, readVisibility(source));
 
   return { payload, errors };
 };
@@ -2441,9 +2441,10 @@ app.get("/color-palettes", authenticateToken, (req, res) => {
   res.json(palettes);
 });
 
-// Other users' shared palettes (Motivy › Sdílené od kolegů), read only.
+// Other users' public palettes (Motivy › Tým and one tab per colleague), read only.
 app.get("/color-palettes/shared", authenticateToken, (req, res) => {
-  res.json(sharedPalettesFromUsers(readDb().users, req.user.id));
+  const db = readDb();
+  res.json(sharedPalettesFromUsers(db.users, req.user.id, [...DEFAULT_COLOR_PALETTES, ...(db.color_palettes ?? [])]));
 });
 
 app.get("/color-palettes/active", authenticateToken, (req, res) => {

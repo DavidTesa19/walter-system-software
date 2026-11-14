@@ -10,7 +10,7 @@ import {
   type SharedPalette,
   type Theme
 } from './ThemeContext';
-import { Check, Copy, Pencil, Plus, Share2, Trash2, Users } from 'lucide-react';
+import { Check, Copy, Lock, LockOpen, Pencil, Plus, Trash2, Users } from 'lucide-react';
 import AiPaletteBox, { type AiPaletteProposal } from './AiPaletteBox';
 import { TAB_ICON } from '../ui/icons';
 import { apiGet } from '../utils/api';
@@ -125,6 +125,13 @@ const createTemplateDraft = (
   is_active: false
 });
 
+type PaletteTab = 'mine' | 'team' | number;
+
+/** A palette in the Tým tab: one of the user's own, or a colleague's. */
+type TeamPalette = { palette: ColorPalette | SharedPalette; own: boolean };
+
+const plural = (count: number) => (count === 1 ? 'paleta' : count >= 2 && count <= 4 ? 'palety' : 'palet');
+
 // Same look as one of the user's own palettes: a copy already made.
 const sameLook = (a: { mode: Theme; colors: PaletteColors }, b: { mode: Theme; colors: PaletteColors }) =>
   a.mode === b.mode &&
@@ -153,23 +160,34 @@ const PaletteManager: React.FC = () => {
   const [shared, setShared] = useState<SharedPalette[] | null>(null);
   const [sharedError, setSharedError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
+  // Moje palety, Tým, or one colleague (by user id).
+  const [tab, setTab] = useState<PaletteTab>('mine');
 
-  // Colleagues' shared palettes, read again whenever this screen opens.
+  // Colleagues' public palettes: read when the screen opens and again on
+  // every switch to another tab, so a colleague's new palette shows up.
   useEffect(() => {
+    if (tab === 'mine' && shared !== null) return undefined;
     let cancelled = false;
     apiGet<SharedPalette[]>('/color-palettes/shared')
       .then(list => {
-        if (!cancelled) setShared(list);
+        if (!cancelled) {
+          setShared(list);
+          setSharedError(null);
+        }
       })
       .catch(() => {
-        if (!cancelled) setSharedError('Sdílené palety se nepodařilo načíst.');
+        if (!cancelled) setSharedError('Palety kolegů se nepodařilo načíst.');
       });
     return () => {
       cancelled = true;
     };
-  }, []);
+    // `shared` only decides the first load; a change of it must not re-fetch.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [tab]);
 
-  const sharedByOwner = useMemo(() => {
+  // One tab per colleague with something to show (the server leaves out the
+  // untouched starter palettes everyone has).
+  const colleagues = useMemo(() => {
     const groups = new Map<number, { name: string; palettes: SharedPalette[] }>();
     for (const palette of shared ?? []) {
       const group = groups.get(palette.owner_id) ?? { name: palette.owner_name, palettes: [] };
@@ -178,6 +196,30 @@ const PaletteManager: React.FC = () => {
     }
     return [...groups.entries()].map(([id, group]) => ({ id, ...group }));
   }, [shared]);
+
+  // The team's palettes: the user's own team ones first, then the colleagues'.
+  const teamPalettes = useMemo<TeamPalette[]>(() => [
+    ...palettes.filter(palette => palette.is_shared && !palette.is_private).map(palette => ({ palette, own: true })),
+    ...(shared ?? []).filter(palette => palette.is_shared).map(palette => ({ palette, own: false })),
+  ], [palettes, shared]);
+
+  // On a phone the tab bar scrolls sideways: keep the chosen tab in sight.
+  const tabsRef = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    const bar = tabsRef.current;
+    const active = bar?.querySelector<HTMLElement>('.palette-tab.is-active');
+    if (!bar || !active) return;
+    const left = active.offsetLeft - bar.offsetLeft;
+    if (left < bar.scrollLeft || left + active.offsetWidth > bar.scrollLeft + bar.clientWidth) {
+      bar.scrollLeft = Math.max(0, left - 8);
+    }
+  }, [tab]);
+
+  const colleague = typeof tab === 'number' ? colleagues.find(item => item.id === tab) ?? null : null;
+  // A colleague whose last palette went private leaves no tab to show.
+  useEffect(() => {
+    if (typeof tab === 'number' && shared !== null && !colleague) setTab('mine');
+  }, [tab, shared, colleague]);
 
   // An AI proposal opens as the new palette of its mode, ready to edit.
   const handleAiProposal = (proposal: AiPaletteProposal) => {
@@ -396,23 +438,43 @@ const PaletteManager: React.FC = () => {
     }
   };
 
-  const handleToggleShare = async (palette: ColorPalette) => {
+  // Who sees a palette: colleagues by default, only its owner when private,
+  // and everyone in the Tým tab when it is one of the team's.
+  const changeVisibility = async (
+    palette: ColorPalette,
+    change: { is_shared?: boolean; is_private?: boolean },
+    message: string
+  ) => {
     setIsSaving(true);
     setFormError(null);
     setNotice(null);
     try {
-      await updatePalette(palette.id, { is_shared: !palette.is_shared });
-      setNotice(
-        palette.is_shared
-          ? `Paleta „${palette.name}“ už není sdílená.`
-          : `Paleta „${palette.name}“ je sdílená: kolegové ji uvidí v části Sdílené od kolegů.`
-      );
+      await updatePalette(palette.id, change);
+      setNotice(message);
     } catch {
-      setFormError('Sdílení se nepodařilo změnit.');
+      setFormError('Viditelnost palety se nepodařilo změnit.');
     } finally {
       setIsSaving(false);
     }
   };
+
+  const handleToggleTeam = (palette: ColorPalette) =>
+    changeVisibility(
+      palette,
+      { is_shared: !palette.is_shared },
+      palette.is_shared
+        ? `Paleta „${palette.name}“ už není mezi týmovými.`
+        : `Paleta „${palette.name}“ je v záložce Tým pro všechny.`
+    );
+
+  const handleTogglePrivate = (palette: ColorPalette) =>
+    changeVisibility(
+      palette,
+      { is_private: !palette.is_private },
+      palette.is_private
+        ? `Paletu „${palette.name}“ teď vidí i kolegové.`
+        : `Paleta „${palette.name}“ je soukromá: vidíte ji jen vy.`
+    );
 
   // A colleague's palette always becomes the user's own copy, so the owner's
   // later edits or deletion never change anybody else's look. "Použít" also
@@ -475,9 +537,37 @@ const PaletteManager: React.FC = () => {
         </div>
       ) : null}
 
-      <AiPaletteBox defaultMode={theme} disabled={isSaving} palettes={palettes} onProposal={handleAiProposal} />
+      <div className="palette-tabs" role="tablist" aria-label="Čí palety" ref={tabsRef}>
+        <button type="button" role="tab" aria-selected={tab === 'mine'} className={`palette-tab${tab === 'mine' ? ' is-active' : ''}`} onClick={() => setTab('mine')}>
+          Moje palety <span className="palette-tab__count">{palettes.length}</span>
+        </button>
+        <button type="button" role="tab" aria-selected={tab === 'team'} className={`palette-tab${tab === 'team' ? ' is-active' : ''}`} onClick={() => setTab('team')}>
+          <Users {...TAB_ICON} aria-hidden="true" />
+          Tým <span className="palette-tab__count">{teamPalettes.length}</span>
+        </button>
+        {colleagues.map(item => (
+          <button
+            key={item.id}
+            type="button"
+            role="tab"
+            aria-selected={tab === item.id}
+            className={`palette-tab${tab === item.id ? ' is-active' : ''}`}
+            onClick={() => setTab(item.id)}
+          >
+            <span className="palette-tab__avatar" aria-hidden="true">{item.name.slice(0, 1).toUpperCase()}</span>
+            {item.name} <span className="palette-tab__count">{item.palettes.length}</span>
+          </button>
+        ))}
+      </div>
 
-      <h3 className="palette-manager__section-title">Moje palety</h3>
+      {tab === 'mine' ? (
+      <>
+      <p className="palette-tabs__hint">
+        Kolegové vaše palety vidí v záložce s vaším jménem; zámkem <Lock size={12} aria-label="zámek" /> paletu skryjete.
+        Ikonou týmu <Users size={12} aria-label="tým" /> ji dáte do záložky Tým.
+      </p>
+
+      <AiPaletteBox defaultMode={theme} disabled={isSaving} palettes={palettes} onProposal={handleAiProposal} />
 
       <div className="palette-manager__columns">
         {(['light', 'dark'] as Theme[]).map(mode => {
@@ -545,7 +635,8 @@ const PaletteManager: React.FC = () => {
                       onActivate={() => handleActivate(palette)}
                       onDelete={() => handleDelete(palette)}
                       onEdit={() => handleStartEdit(palette)}
-                      onToggleShare={() => handleToggleShare(palette)}
+                      onToggleTeam={() => handleToggleTeam(palette)}
+                      onTogglePrivate={() => handleTogglePrivate(palette)}
                     >
                       {isEditing ? (
                         <PaletteForm
@@ -568,51 +659,52 @@ const PaletteManager: React.FC = () => {
           );
         })}
       </div>
-
-      <section className="palette-shared" aria-labelledby="palette-shared-title">
-        <div className="palette-shared__header">
-          <h3 id="palette-shared-title" className="palette-manager__section-title">
-            <Users {...TAB_ICON} aria-hidden="true" />
-            Sdílené od kolegů
-          </h3>
-          <p>Palety, které kolegové sdílí. Použitím si vytvoříte vlastní kopii; svou paletu sdílíte ikonou <Share2 size={12} aria-label="sdílet" /> u ní.</p>
-        </div>
-        {sharedError ? (
-          <div className="palette-column__empty">{sharedError}</div>
-        ) : shared === null ? (
-          <div className="palette-column__empty">Načítání…</div>
-        ) : sharedByOwner.length === 0 ? (
-          <div className="palette-column__empty">Zatím žádný z kolegů nesdílí paletu.</div>
-        ) : (
-          sharedByOwner.map(owner => (
-            <div key={owner.id} className="palette-shared__owner">
-              <div className="palette-shared__owner-name">
-                <span className="palette-shared__avatar" aria-hidden="true">{owner.name.slice(0, 1).toUpperCase()}</span>
-                {owner.name}
-                <span className="palette-shared__count">
-                  {owner.palettes.length} {owner.palettes.length === 1 ? 'paleta' : owner.palettes.length <= 4 ? 'palety' : 'palet'}
-                </span>
-              </div>
+      </>
+      ) : (
+        <section className="palette-shared" role="tabpanel">
+          <p className="palette-tabs__hint">
+            {tab === 'team'
+              ? 'Palety, které tým vybral pro všechny. Použitím si vytvoříte vlastní kopii; pozdější změny autora se vás netýkají.'
+              : `Palety uživatele ${colleague?.name ?? ''} (${colleague ? `${colleague.palettes.length} ${plural(colleague.palettes.length)}` : ''}). Použitím si vytvoříte vlastní kopii.`}
+          </p>
+          {(() => {
+            const list: TeamPalette[] = tab === 'team'
+              ? teamPalettes
+              : (colleague?.palettes ?? []).map(palette => ({ palette, own: false }));
+            if (sharedError) return <div className="palette-column__empty">{sharedError}</div>;
+            if (shared === null) return <div className="palette-column__empty">Načítání…</div>;
+            if (list.length === 0) {
+              return (
+                <div className="palette-column__empty">
+                  Zatím tu nic není. Svou paletu sem dáte ikonou týmu <Users size={12} aria-label="tým" /> v záložce Moje palety.
+                </div>
+              );
+            }
+            return (
               <div className="palette-shared__grid">
-                {owner.palettes.map(palette => {
-                  const copy = palettes.find(own => sameLook(own, palette));
+                {list.map(({ palette, own }) => {
+                  const copy = own ? (palette as ColorPalette) : palettes.find(mine => sameLook(mine, palette));
+                  const owner = own ? 'Vy' : (palette as SharedPalette).owner_name;
                   return (
                     <SharedPaletteCard
-                      key={palette.id}
+                      key={`${own ? 'own' : (palette as SharedPalette).owner_id}-${palette.id}`}
                       palette={palette}
+                      owner={tab === 'team' ? owner : undefined}
+                      team={tab !== 'team' && Boolean(palette.is_shared)}
+                      own={own}
                       inUse={Boolean(copy?.is_active)}
                       saved={Boolean(copy)}
                       disabled={isSaving}
-                      onUse={() => handleUseShared(palette, true)}
-                      onSave={() => handleUseShared(palette, false)}
+                      onUse={() => (own ? handleActivate(palette as ColorPalette) : handleUseShared(palette as SharedPalette, true))}
+                      onSave={() => handleUseShared(palette as SharedPalette, false)}
                     />
                   );
                 })}
               </div>
-            </div>
-          ))
-        )}
-      </section>
+            );
+          })()}
+        </section>
+      )}
     </div>
   );
 };
@@ -667,7 +759,8 @@ interface PaletteCardProps {
   onEdit: () => void;
   onActivate: () => void;
   onDelete: () => void;
-  onToggleShare: () => void;
+  onToggleTeam: () => void;
+  onTogglePrivate: () => void;
   disabled?: boolean;
   children?: React.ReactNode;
 }
@@ -677,7 +770,8 @@ const PaletteCard: React.FC<PaletteCardProps> = ({
   onEdit,
   onActivate,
   onDelete,
-  onToggleShare,
+  onToggleTeam,
+  onTogglePrivate,
   disabled,
   children
 }) => (
@@ -693,10 +787,15 @@ const PaletteCard: React.FC<PaletteCardProps> = ({
               Používá se
             </span>
           ) : null}
-          {palette.is_shared ? (
-            <span className="palette-card__badge palette-card__badge--shared" title="Kolegové ji vidí v části Sdílené od kolegů">
+          {palette.is_shared && !palette.is_private ? (
+            <span className="palette-card__badge palette-card__badge--shared" title="Je v záložce Tým pro všechny">
               <Users size={12} strokeWidth={2.25} aria-hidden="true" />
-              Sdílená
+              Týmová
+            </span>
+          ) : null}
+          {palette.is_private ? (
+            <span className="palette-card__mode" title="Kolegové ji nevidí">
+              <Lock size={11} strokeWidth={2.25} aria-hidden="true" /> Soukromá
             </span>
           ) : null}
         </div>
@@ -711,14 +810,31 @@ const PaletteCard: React.FC<PaletteCardProps> = ({
         ) : null}
         <button
           type="button"
-          className={`palette-card__icon${palette.is_shared ? ' is-on' : ''}`}
-          onClick={onToggleShare}
-          disabled={disabled}
-          aria-pressed={Boolean(palette.is_shared)}
-          title={palette.is_shared ? 'Přestat sdílet s kolegy' : 'Sdílet s kolegy'}
-          aria-label={palette.is_shared ? `Přestat sdílet ${palette.name}` : `Sdílet ${palette.name} s kolegy`}
+          className={`palette-card__icon${palette.is_shared && !palette.is_private ? ' is-on' : ''}`}
+          onClick={onToggleTeam}
+          disabled={disabled || palette.is_private}
+          aria-pressed={Boolean(palette.is_shared && !palette.is_private)}
+          title={
+            palette.is_private
+              ? 'Soukromou paletu nelze dát do týmových'
+              : palette.is_shared
+                ? 'Odebrat z týmových palet'
+                : 'Dát do týmových palet (záložka Tým)'
+          }
+          aria-label={palette.is_shared ? `Odebrat ${palette.name} z týmových palet` : `Dát ${palette.name} do týmových palet`}
         >
-          <Share2 {...TAB_ICON} />
+          <Users {...TAB_ICON} />
+        </button>
+        <button
+          type="button"
+          className={`palette-card__icon${palette.is_private ? ' is-on' : ''}`}
+          onClick={onTogglePrivate}
+          disabled={disabled}
+          aria-pressed={Boolean(palette.is_private)}
+          title={palette.is_private ? 'Soukromá: zpřístupnit kolegům' : 'Veřejná: skrýt před kolegy'}
+          aria-label={palette.is_private ? `Zpřístupnit ${palette.name} kolegům` : `Skrýt ${palette.name} před kolegy`}
+        >
+          {palette.is_private ? <Lock {...TAB_ICON} /> : <LockOpen {...TAB_ICON} />}
         </button>
         <button type="button" className="palette-card__icon" onClick={onEdit} disabled={disabled} title="Upravit" aria-label={`Upravit ${palette.name}`}>
           <Pencil {...TAB_ICON} />
@@ -740,7 +856,13 @@ const PaletteCard: React.FC<PaletteCardProps> = ({
 );
 
 interface SharedPaletteCardProps {
-  palette: SharedPalette;
+  palette: ColorPalette | SharedPalette;
+  /** Who made it, shown in the Tým tab ("Vy" for the user's own). */
+  owner?: string;
+  /** Marked as one of the team's (in a colleague's tab). */
+  team?: boolean;
+  /** The user's own palette (Tým tab): "Použít" switches to it, no copy. */
+  own?: boolean;
   /** The user's own copy of it is the one in use. */
   inUse: boolean;
   /** The user already has a copy. */
@@ -750,7 +872,7 @@ interface SharedPaletteCardProps {
   onSave: () => void;
 }
 
-const SharedPaletteCard: React.FC<SharedPaletteCardProps> = ({ palette, inUse, saved, disabled, onUse, onSave }) => (
+const SharedPaletteCard: React.FC<SharedPaletteCardProps> = ({ palette, owner, team, own, inUse, saved, disabled, onUse, onSave }) => (
   <div className={`palette-card ${inUse ? 'palette-card--active' : ''}`}>
     <div className="palette-card__row">
       <PalettePreview colors={palette.colors} />
@@ -758,6 +880,12 @@ const SharedPaletteCard: React.FC<SharedPaletteCardProps> = ({ palette, inUse, s
         <div className="palette-card__title">
           <h4 title={palette.name}>{palette.name}</h4>
           <span className="palette-card__mode">{palette.mode === 'dark' ? 'Tmavá' : 'Světlá'}</span>
+          {team ? (
+            <span className="palette-card__badge palette-card__badge--shared">
+              <Users size={12} strokeWidth={2.25} aria-hidden="true" />
+              Týmová
+            </span>
+          ) : null}
           {inUse ? (
             <span className="palette-card__badge">
               <Check size={12} strokeWidth={2.5} aria-hidden="true" />
@@ -766,7 +894,11 @@ const SharedPaletteCard: React.FC<SharedPaletteCardProps> = ({ palette, inUse, s
           ) : null}
         </div>
         <PaletteStrip colors={palette.colors} />
-        {palette.typography ? <div className="palette-card__fonts">{fontSummary(palette.typography)}</div> : null}
+        <div className="palette-card__fonts">
+          {owner ? <span className="palette-card__owner">{owner}</span> : null}
+          {owner && palette.typography ? ' · ' : null}
+          {palette.typography ? fontSummary(palette.typography) : null}
+        </div>
       </div>
       <div className="palette-card__actions">
         {!inUse ? (
@@ -774,16 +906,18 @@ const SharedPaletteCard: React.FC<SharedPaletteCardProps> = ({ palette, inUse, s
             Použít
           </button>
         ) : null}
-        <button
-          type="button"
-          className="palette-card__icon"
-          onClick={onSave}
-          disabled={disabled || saved}
-          title={saved ? 'Už ji máte mezi svými paletami' : 'Uložit k mým paletám'}
-          aria-label={saved ? `${palette.name} už máte mezi svými paletami` : `Uložit ${palette.name} k mým paletám`}
-        >
-          {saved ? <Check {...TAB_ICON} /> : <Copy {...TAB_ICON} />}
-        </button>
+        {own ? null : (
+          <button
+            type="button"
+            className="palette-card__icon"
+            onClick={onSave}
+            disabled={disabled || saved}
+            title={saved ? 'Už ji máte mezi svými paletami' : 'Uložit k mým paletám'}
+            aria-label={saved ? `${palette.name} už máte mezi svými paletami` : `Uložit ${palette.name} k mým paletám`}
+          >
+            {saved ? <Check {...TAB_ICON} /> : <Copy {...TAB_ICON} />}
+          </button>
+        )}
       </div>
     </div>
   </div>
