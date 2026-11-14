@@ -5,7 +5,7 @@
 // words ("tmavší", "teplejší akcent"); the result is a new draft too, so the
 // original stays as it was until the user saves.
 
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { colord } from 'colord';
 import { apiUpload } from '../utils/api';
 import type { ColorPalette, PaletteColors, PaletteTypography, Theme } from './ThemeContext';
@@ -31,11 +31,35 @@ type Task = 'new' | 'edit';
 
 const MAX_SIDE = 800;
 
+const isSvg = (file: File) => file.type === 'image/svg+xml' || /\.svg$/i.test(file.name);
+
+// Hand-made SVGs often lack xmlns or width/height, and a browser refuses to
+// draw them as an <img>. Add what is missing (size from the viewBox).
+const repairSvg = async (file: File) => {
+  const text = await file.text();
+  const doc = new DOMParser().parseFromString(text, 'image/svg+xml');
+  const root = doc.documentElement;
+  if (!root || root.nodeName.toLowerCase() !== 'svg' || doc.querySelector('parsererror')) {
+    throw new Error('SVG soubor je poškozený.');
+  }
+  root.setAttribute('xmlns', 'http://www.w3.org/2000/svg');
+  const box = (root.getAttribute('viewBox') ?? '').trim().split(/[\s,]+/).map(Number);
+  const hasSize = (name: string) => /^\s*[\d.]+(px)?\s*$/.test(root.getAttribute(name) ?? '');
+  if (!hasSize('width') || !hasSize('height')) {
+    const [, , w, h] = box.length === 4 && box.every(Number.isFinite) && box[2] > 0 && box[3] > 0 ? box : [0, 0, 512, 512];
+    root.setAttribute('width', String(w));
+    root.setAttribute('height', String(h));
+  }
+  return new Blob([new XMLSerializer().serializeToString(root)], { type: 'image/svg+xml' });
+};
+
 // Any image the browser can show (SVG included) becomes a PNG of at most
-// 800 px: small to send, and a format Claude reads.
-const toPng = (file: File) =>
-  new Promise<Blob>((resolve, reject) => {
-    const url = URL.createObjectURL(file);
+// 800 px: small to send, and a format Claude reads. Done when the logo is
+// picked, so a file that cannot be read is reported at once.
+const toPng = async (file: File) => {
+  const source: Blob = isSvg(file) ? await repairSvg(file) : file;
+  return new Promise<Blob>((resolve, reject) => {
+    const url = URL.createObjectURL(source);
     const image = new Image();
     image.onload = () => {
       const scale = Math.min(1, MAX_SIDE / Math.max(image.naturalWidth || MAX_SIDE, image.naturalHeight || MAX_SIDE));
@@ -48,10 +72,11 @@ const toPng = (file: File) =>
     };
     image.onerror = () => {
       URL.revokeObjectURL(url);
-      reject(new Error('Soubor není obrázek, který prohlížeč umí otevřít.'));
+      reject(new Error('Soubor není obrázek, který prohlížeč umí otevřít (zkuste PNG, JPG, WebP nebo SVG).'));
     };
     image.src = url;
   });
+};
 
 export default function AiPaletteBox({ defaultMode, disabled, palettes, onProposal }: AiPaletteBoxProps) {
   const [open, setOpen] = useState(false);
@@ -66,7 +91,9 @@ export default function AiPaletteBox({ defaultMode, disabled, palettes, onPropos
   const [description, setDescription] = useState('');
   const [website, setWebsite] = useState('');
   const [mode, setMode] = useState<Theme>(defaultMode);
-  const [logo, setLogo] = useState<File | null>(null);
+  const [logo, setLogo] = useState<Blob | null>(null);
+  const [dragging, setDragging] = useState(false);
+  const fileInput = useRef<HTMLInputElement>(null);
   const [logoPreview, setLogoPreview] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -82,6 +109,29 @@ export default function AiPaletteBox({ defaultMode, disabled, palettes, onPropos
   }, [logo]);
 
   const editing = task === 'edit';
+
+  const pickLogo = useCallback(async (file: File | null | undefined) => {
+    if (!file) return;
+    setError(null);
+    try {
+      setLogo(await toPng(file));
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Logo se nepodařilo zpracovat.');
+    }
+  }, []);
+
+  // Ctrl+V of a copied image works anywhere in the box while a new theme is made.
+  useEffect(() => {
+    if (!open || task !== 'new') return undefined;
+    const onPaste = (event: ClipboardEvent) => {
+      const file = Array.from(event.clipboardData?.files ?? []).find((item) => item.type.startsWith('image/'));
+      if (!file) return;
+      event.preventDefault();
+      void pickLogo(file);
+    };
+    document.addEventListener('paste', onPaste);
+    return () => document.removeEventListener('paste', onPaste);
+  }, [open, task, pickLogo]);
   const canSubmit = (editing ? Boolean(base && description.trim()) : Boolean(description.trim() || website.trim() || logo)) && !busy && !disabled;
 
   const submit = async () => {
@@ -99,7 +149,7 @@ export default function AiPaletteBox({ defaultMode, disabled, palettes, onPropos
       } else {
         form.append('website', website.trim());
         form.append('mode', mode);
-        if (logo) form.append('logo', await toPng(logo), 'logo.png');
+        if (logo) form.append('logo', logo, 'logo.png');
       }
       const proposal = await apiUpload<AiPaletteProposal>('/api/palettes/ai', form);
       onProposal(proposal);
@@ -220,7 +270,32 @@ export default function AiPaletteBox({ defaultMode, disabled, palettes, onPropos
         </label>
       </div>
 
-      <div className="ai-palette__logo">
+      <div
+        className={`ai-palette__logo${dragging ? ' is-dragging' : ''}`}
+        onDragOver={(event) => {
+          if (busy) return;
+          event.preventDefault();
+          setDragging(true);
+        }}
+        onDragLeave={() => setDragging(false)}
+        onDrop={(event) => {
+          event.preventDefault();
+          setDragging(false);
+          if (!busy) void pickLogo(event.dataTransfer.files?.[0]);
+        }}
+      >
+        <input
+          ref={fileInput}
+          type="file"
+          className="ai-palette__file-input"
+          accept="image/*,.png,.jpg,.jpeg,.webp,.gif,.svg"
+          tabIndex={-1}
+          onChange={(event) => {
+            void pickLogo(event.target.files?.[0]);
+            event.target.value = '';
+          }}
+          disabled={busy}
+        />
         {logoPreview ? (
           <>
             <img src={logoPreview} alt="Vybrané logo" />
@@ -229,15 +304,10 @@ export default function AiPaletteBox({ defaultMode, disabled, palettes, onPropos
             </button>
           </>
         ) : (
-          <label className="ai-palette__file">
-            <input
-              type="file"
-              accept="image/*"
-              onChange={(event) => setLogo(event.target.files?.[0] ?? null)}
-              disabled={busy}
-            />
-            <span aria-hidden="true">🖼</span> Přidat logo <small>(nepovinné, PNG, JPG, SVG…)</small>
-          </label>
+          <button type="button" className="ai-palette__file" onClick={() => fileInput.current?.click()} disabled={busy}>
+            <span aria-hidden="true">🖼</span> Přidat logo{' '}
+            <small>(nepovinné; vyberte, přetáhněte nebo vložte Ctrl+V)</small>
+          </button>
         )}
       </div>
         </>

@@ -1011,13 +1011,20 @@
   padding: 4px;
 }
 
-/* The file input itself is hidden; its label is the button. */
-.ai-palette__file input {
-  position: absolute;
-  width: 1px;
-  height: 1px;
-  opacity: 0;
-  pointer-events: none;
+/* The file input itself is hidden; the button opens it. */
+.ai-palette__file-input {
+  display: none;
+}
+
+.ai-palette__logo {
+  padding: 4px;
+  border-radius: 12px;
+  border: 1px solid transparent;
+}
+
+.ai-palette__logo.is-dragging {
+  border: 1px dashed var(--color-primary, #2563eb);
+  background: var(--color-surface, #ffffff);
 }
 
 .ai-palette__file {
@@ -1029,9 +1036,15 @@
   border: 1px dashed var(--color-border, #cbd5e1);
   background: var(--color-surface, #ffffff);
   color: var(--color-text, #0f172a);
+  font-family: inherit;
   font-size: 0.85rem;
   font-weight: 600;
   cursor: pointer;
+}
+
+.ai-palette__file:disabled {
+  opacity: 0.6;
+  cursor: default;
 }
 
 .ai-palette__file:hover {
