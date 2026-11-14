@@ -39,8 +39,22 @@ export interface ColorPalette {
   colors: PaletteColors;
   typography?: PaletteTypography;
   is_active: boolean;
+  /** Listed to colleagues under "Sdílené od kolegů". */
+  is_shared?: boolean;
   created_at?: string;
   updated_at?: string;
+}
+
+/** A colleague's shared palette (GET /color-palettes/shared), read only. */
+export interface SharedPalette {
+  id: number;
+  name: string;
+  mode: Theme;
+  colors: PaletteColors;
+  typography?: PaletteTypography;
+  owner_id: number;
+  owner_name: string;
+  updated_at?: string | null;
 }
 
 export type PaletteInput = {
@@ -49,6 +63,7 @@ export type PaletteInput = {
   colors: PaletteColors;
   typography: PaletteTypography;
   is_active?: boolean;
+  is_shared?: boolean;
 };
 
 interface ThemeContextType {

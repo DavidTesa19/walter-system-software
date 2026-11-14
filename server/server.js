@@ -20,6 +20,7 @@ import { createLoginGuard, lockedMessage } from "./login-guard.js";
 import { activityListFields } from "./list-fields.js";
 import { registerAresRoutes } from "./ares.js";
 import { registerPaletteAiRoutes } from "./palettes/aiPalette.js";
+import { readShareFlag, sharedPalettesFromUsers } from "./palettes/sharing.js";
 import { registerFinanceRoutes } from "./finance/routes.js";
 import { registerDocumentOverviewRoutes } from "./documents/overview.js";
 import { registerTaskRoutes } from "./tasks/routes.js";
@@ -588,6 +589,8 @@ const sanitizePalettePayload = (body = {}, { partial = false, allowMode = true }
   if (source.is_active !== undefined) {
     payload.is_active = Boolean(source.is_active);
   }
+
+  Object.assign(payload, readShareFlag(source));
 
   return { payload, errors };
 };
@@ -2436,6 +2439,11 @@ app.get("/color-palettes", authenticateToken, (req, res) => {
     ? user.palettes.filter(palette => palette.mode === mode)
     : user.palettes;
   res.json(palettes);
+});
+
+// Other users' shared palettes (Motivy › Sdílené od kolegů), read only.
+app.get("/color-palettes/shared", authenticateToken, (req, res) => {
+  res.json(sharedPalettesFromUsers(readDb().users, req.user.id));
 });
 
 app.get("/color-palettes/active", authenticateToken, (req, res) => {

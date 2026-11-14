@@ -61,6 +61,7 @@ import { createLoginGuard, lockedMessage } from "./login-guard.js";
 import { activityListFields } from "./list-fields.js";
 import { registerAresRoutes } from "./ares.js";
 import { registerPaletteAiRoutes } from "./palettes/aiPalette.js";
+import { readShareFlag, sharedPalettesFromDb, sharedPalettesFromUsers } from "./palettes/sharing.js";
 import { registerFinanceRoutes } from "./finance/routes.js";
 import { registerDocumentOverviewRoutes } from "./documents/overview.js";
 import { registerTaskRoutes } from "./tasks/routes.js";
@@ -1671,6 +1672,8 @@ function sanitizePalettePayload(body, { partial = false, allowMode = true } = {}
     payload.is_active = Boolean(body.is_active);
   }
 
+  Object.assign(payload, readShareFlag(body));
+
   return { payload, errors };
 }
 
@@ -2352,6 +2355,19 @@ app.get("/color-palettes", authenticateToken, async (req, res) => {
   }
 });
 
+// Other users' shared palettes (Motivy › Sdílené od kolegů), read only.
+app.get("/color-palettes/shared", authenticateToken, async (req, res) => {
+  try {
+    if (db.isPostgres()) {
+      return res.json(await sharedPalettesFromDb((sql, params) => db.query(sql, params), req.user.id));
+    }
+    res.json(sharedPalettesFromUsers(readDb().users, req.user.id));
+  } catch (error) {
+    console.error("Error fetching shared color palettes:", error);
+    res.status(500).json({ error: "Failed to fetch shared color palettes" });
+  }
+});
+
 app.get("/color-palettes/active", authenticateToken, async (req, res) => {
   try {
     const mode = req.query.mode;
@@ -2457,10 +2473,10 @@ app.post("/color-palettes", authenticateToken, async (req, res) => {
       }
 
       const result = await db.query(
-        `INSERT INTO user_palettes (user_id, name, mode, colors, typography, is_active)
-         VALUES ($1, $2, $3, $4, $5, $6)
+        `INSERT INTO user_palettes (user_id, name, mode, colors, typography, is_active, is_shared)
+         VALUES ($1, $2, $3, $4, $5, $6, $7)
          RETURNING *`,
-        [userId, payload.name, payload.mode, JSON.stringify(payload.colors), JSON.stringify(payload.typography), payload.is_active]
+        [userId, payload.name, payload.mode, JSON.stringify(payload.colors), JSON.stringify(payload.typography), Boolean(payload.is_active), Boolean(payload.is_shared)]
       );
       
       return res.status(201).json(result.rows[0]);
@@ -2541,6 +2557,7 @@ app.put("/color-palettes/:id", authenticateToken, async (req, res) => {
       if (payload.colors) { updates.push(`colors = $${idx++}`); values.push(JSON.stringify(payload.colors)); }
       if (payload.typography) { updates.push(`typography = $${idx++}`); values.push(JSON.stringify(payload.typography)); }
       if (payload.is_active !== undefined) { updates.push(`is_active = $${idx++}`); values.push(payload.is_active); }
+      if (payload.is_shared !== undefined) { updates.push(`is_shared = $${idx++}`); values.push(payload.is_shared); }
       
       updates.push(`updated_at = CURRENT_TIMESTAMP`);
       values.push(id);
@@ -2567,6 +2584,7 @@ app.put("/color-palettes/:id", authenticateToken, async (req, res) => {
     if (payload.name) palette.name = payload.name;
     if (payload.colors) palette.colors = payload.colors;
     if (payload.typography) palette.typography = payload.typography;
+    if (payload.is_shared !== undefined) palette.is_shared = payload.is_shared;
     if (payload.is_active !== undefined) {
       palette.is_active = payload.is_active;
       if (payload.is_active) {

@@ -209,7 +209,11 @@ export const HELP_TOPICS: HelpTopic[] = [
     title: "Motivy",
     views: ["palettes"],
     summary: "Barvy a písma aplikace, zvlášť pro světlý a tmavý režim.",
-    points: [`Mezi světlým a tmavým režimem přepnete ${THEME_SHORTCUT_LABEL} nebo tlačítkem v menu.`],
+    points: [
+      `Mezi světlým a tmavým režimem přepnete ${THEME_SHORTCUT_LABEL} nebo tlačítkem v menu.`,
+      "Každý má své vlastní palety. Ikonou sdílení u palety ji ukážete kolegům; jejich sdílené palety jsou dole v části Sdílené od kolegů.",
+      "Použít nebo Uložit k sobě vytvoří vaši vlastní kopii: pozdější změny kolegy se vás netýkají.",
+    ],
   },
   {
     id: "admin_users",

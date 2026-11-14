@@ -7,11 +7,13 @@ import {
   type PaletteTypography,
   type ColorPalette,
   type PaletteInput,
+  type SharedPalette,
   type Theme
 } from './ThemeContext';
-import { Check, Pencil, Plus, Trash2 } from 'lucide-react';
+import { Check, Copy, Pencil, Plus, Share2, Trash2, Users } from 'lucide-react';
 import AiPaletteBox, { type AiPaletteProposal } from './AiPaletteBox';
 import { TAB_ICON } from '../ui/icons';
+import { apiGet } from '../utils/api';
 import { ensureFonts } from './fontLoader';
 import './PaletteManager.css';
 
@@ -123,9 +125,15 @@ const createTemplateDraft = (
   is_active: false
 });
 
+// Same look as one of the user's own palettes: a copy already made.
+const sameLook = (a: { mode: Theme; colors: PaletteColors }, b: { mode: Theme; colors: PaletteColors }) =>
+  a.mode === b.mode &&
+  COLOR_FIELDS.every(({ key }) => colord(a.colors[key]).toHex() === colord(b.colors[key]).toHex());
+
 const PaletteManager: React.FC = () => {
   const {
     theme,
+    setTheme,
     palettes,
     isLoadingPalettes,
     error,
@@ -142,6 +150,34 @@ const PaletteManager: React.FC = () => {
   const [colorHistory, setColorHistory] = useState<string[]>([]);
   const [aiNotes, setAiNotes] = useState<Record<Theme, { note: string; warnings: string[] } | null>>({ light: null, dark: null });
   const hasLoadedHistoryRef = useRef(false);
+  const [shared, setShared] = useState<SharedPalette[] | null>(null);
+  const [sharedError, setSharedError] = useState<string | null>(null);
+  const [notice, setNotice] = useState<string | null>(null);
+
+  // Colleagues' shared palettes, read again whenever this screen opens.
+  useEffect(() => {
+    let cancelled = false;
+    apiGet<SharedPalette[]>('/color-palettes/shared')
+      .then(list => {
+        if (!cancelled) setShared(list);
+      })
+      .catch(() => {
+        if (!cancelled) setSharedError('Sdílené palety se nepodařilo načíst.');
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  const sharedByOwner = useMemo(() => {
+    const groups = new Map<number, { name: string; palettes: SharedPalette[] }>();
+    for (const palette of shared ?? []) {
+      const group = groups.get(palette.owner_id) ?? { name: palette.owner_name, palettes: [] };
+      group.palettes.push(palette);
+      groups.set(palette.owner_id, group);
+    }
+    return [...groups.entries()].map(([id, group]) => ({ id, ...group }));
+  }, [shared]);
 
   // An AI proposal opens as the new palette of its mode, ready to edit.
   const handleAiProposal = (proposal: AiPaletteProposal) => {
@@ -360,6 +396,57 @@ const PaletteManager: React.FC = () => {
     }
   };
 
+  const handleToggleShare = async (palette: ColorPalette) => {
+    setIsSaving(true);
+    setFormError(null);
+    setNotice(null);
+    try {
+      await updatePalette(palette.id, { is_shared: !palette.is_shared });
+      setNotice(
+        palette.is_shared
+          ? `Paleta „${palette.name}“ už není sdílená.`
+          : `Paleta „${palette.name}“ je sdílená: kolegové ji uvidí v části Sdílené od kolegů.`
+      );
+    } catch {
+      setFormError('Sdílení se nepodařilo změnit.');
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
+  // A colleague's palette always becomes the user's own copy, so the owner's
+  // later edits or deletion never change anybody else's look. "Použít" also
+  // switches to it (and to its mode, so the change is visible at once).
+  const handleUseShared = async (palette: SharedPalette, activate: boolean) => {
+    setIsSaving(true);
+    setFormError(null);
+    setNotice(null);
+    try {
+      const existing = palettes.find(own => sameLook(own, palette));
+      if (existing) {
+        if (activate && !existing.is_active) await activatePalette(existing.id);
+      } else {
+        await createPalette({
+          name: palette.name,
+          mode: palette.mode,
+          colors: palette.colors,
+          typography: palette.typography ?? TEMPLATE_TYPOGRAPHY[palette.mode],
+          is_active: activate
+        });
+      }
+      if (activate) {
+        if (palette.mode !== theme) setTheme(palette.mode);
+        setNotice(`Používáte paletu „${palette.name}“ od ${palette.owner_name}.`);
+      } else {
+        setNotice(`Paleta „${palette.name}“ je mezi vašimi paletami.`);
+      }
+    } catch {
+      setFormError('Paletu se nepodařilo převzít.');
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
   return (
     <div className="palette-manager">
       <div className="palette-manager__header">
@@ -379,7 +466,18 @@ const PaletteManager: React.FC = () => {
         </div>
       )}
 
+      {notice && !formError ? (
+        <div className="palette-manager__notice" role="status">
+          <span>{notice}</span>
+          <button type="button" className="palette-manager__notice-close" onClick={() => setNotice(null)} aria-label="Zavřít">
+            ×
+          </button>
+        </div>
+      ) : null}
+
       <AiPaletteBox defaultMode={theme} disabled={isSaving} palettes={palettes} onProposal={handleAiProposal} />
+
+      <h3 className="palette-manager__section-title">Moje palety</h3>
 
       <div className="palette-manager__columns">
         {(['light', 'dark'] as Theme[]).map(mode => {
@@ -447,6 +545,7 @@ const PaletteManager: React.FC = () => {
                       onActivate={() => handleActivate(palette)}
                       onDelete={() => handleDelete(palette)}
                       onEdit={() => handleStartEdit(palette)}
+                      onToggleShare={() => handleToggleShare(palette)}
                     >
                       {isEditing ? (
                         <PaletteForm
@@ -469,6 +568,51 @@ const PaletteManager: React.FC = () => {
           );
         })}
       </div>
+
+      <section className="palette-shared" aria-labelledby="palette-shared-title">
+        <div className="palette-shared__header">
+          <h3 id="palette-shared-title" className="palette-manager__section-title">
+            <Users {...TAB_ICON} aria-hidden="true" />
+            Sdílené od kolegů
+          </h3>
+          <p>Palety, které kolegové sdílí. Použitím si vytvoříte vlastní kopii; svou paletu sdílíte ikonou <Share2 size={12} aria-label="sdílet" /> u ní.</p>
+        </div>
+        {sharedError ? (
+          <div className="palette-column__empty">{sharedError}</div>
+        ) : shared === null ? (
+          <div className="palette-column__empty">Načítání…</div>
+        ) : sharedByOwner.length === 0 ? (
+          <div className="palette-column__empty">Zatím žádný z kolegů nesdílí paletu.</div>
+        ) : (
+          sharedByOwner.map(owner => (
+            <div key={owner.id} className="palette-shared__owner">
+              <div className="palette-shared__owner-name">
+                <span className="palette-shared__avatar" aria-hidden="true">{owner.name.slice(0, 1).toUpperCase()}</span>
+                {owner.name}
+                <span className="palette-shared__count">
+                  {owner.palettes.length} {owner.palettes.length === 1 ? 'paleta' : owner.palettes.length <= 4 ? 'palety' : 'palet'}
+                </span>
+              </div>
+              <div className="palette-shared__grid">
+                {owner.palettes.map(palette => {
+                  const copy = palettes.find(own => sameLook(own, palette));
+                  return (
+                    <SharedPaletteCard
+                      key={palette.id}
+                      palette={palette}
+                      inUse={Boolean(copy?.is_active)}
+                      saved={Boolean(copy)}
+                      disabled={isSaving}
+                      onUse={() => handleUseShared(palette, true)}
+                      onSave={() => handleUseShared(palette, false)}
+                    />
+                  );
+                })}
+              </div>
+            </div>
+          ))
+        )}
+      </section>
     </div>
   );
 };
@@ -505,11 +649,25 @@ const fontName = (stack?: string) => (stack ?? '').split(',')[0].replace(/['"]/g
 const fontSummary = (typography: PaletteTypography) =>
   [...new Set([typography.heading, typography.subheading, typography.body].map(fontName).filter(Boolean))].join(' · ');
 
+const PaletteStrip: React.FC<{ colors: PaletteColors }> = ({ colors }) => (
+  <div className="palette-card__strip" role="img" aria-label="Barvy motivu">
+    {COLOR_GROUPS.map(group => (
+      <span key={group.title} className={`palette-card__strip-group${group.main ? ' is-main' : ''}`}>
+        {group.keys.map(key => {
+          const field = COLOR_FIELDS.find(item => item.key === key)!;
+          return <span key={key} style={{ background: colors[key] }} title={`${field.label}: ${colors[key]}`} />;
+        })}
+      </span>
+    ))}
+  </div>
+);
+
 interface PaletteCardProps {
   palette: ColorPalette;
   onEdit: () => void;
   onActivate: () => void;
   onDelete: () => void;
+  onToggleShare: () => void;
   disabled?: boolean;
   children?: React.ReactNode;
 }
@@ -519,6 +677,7 @@ const PaletteCard: React.FC<PaletteCardProps> = ({
   onEdit,
   onActivate,
   onDelete,
+  onToggleShare,
   disabled,
   children
 }) => (
@@ -534,17 +693,14 @@ const PaletteCard: React.FC<PaletteCardProps> = ({
               Používá se
             </span>
           ) : null}
-        </div>
-        <div className="palette-card__strip" role="img" aria-label="Barvy motivu">
-          {COLOR_GROUPS.map(group => (
-            <span key={group.title} className={`palette-card__strip-group${group.main ? ' is-main' : ''}`}>
-              {group.keys.map(key => {
-                const field = COLOR_FIELDS.find(item => item.key === key)!;
-                return <span key={key} style={{ background: palette.colors[key] }} title={`${field.label}: ${palette.colors[key]}`} />;
-              })}
+          {palette.is_shared ? (
+            <span className="palette-card__badge palette-card__badge--shared" title="Kolegové ji vidí v části Sdílené od kolegů">
+              <Users size={12} strokeWidth={2.25} aria-hidden="true" />
+              Sdílená
             </span>
-          ))}
+          ) : null}
         </div>
+        <PaletteStrip colors={palette.colors} />
         {palette.typography ? <div className="palette-card__fonts">{fontSummary(palette.typography)}</div> : null}
       </div>
       <div className="palette-card__actions">
@@ -553,6 +709,17 @@ const PaletteCard: React.FC<PaletteCardProps> = ({
             Použít
           </button>
         ) : null}
+        <button
+          type="button"
+          className={`palette-card__icon${palette.is_shared ? ' is-on' : ''}`}
+          onClick={onToggleShare}
+          disabled={disabled}
+          aria-pressed={Boolean(palette.is_shared)}
+          title={palette.is_shared ? 'Přestat sdílet s kolegy' : 'Sdílet s kolegy'}
+          aria-label={palette.is_shared ? `Přestat sdílet ${palette.name}` : `Sdílet ${palette.name} s kolegy`}
+        >
+          <Share2 {...TAB_ICON} />
+        </button>
         <button type="button" className="palette-card__icon" onClick={onEdit} disabled={disabled} title="Upravit" aria-label={`Upravit ${palette.name}`}>
           <Pencil {...TAB_ICON} />
         </button>
@@ -569,6 +736,56 @@ const PaletteCard: React.FC<PaletteCardProps> = ({
       </div>
     </div>
     {children ? <div className="palette-card__editor">{children}</div> : null}
+  </div>
+);
+
+interface SharedPaletteCardProps {
+  palette: SharedPalette;
+  /** The user's own copy of it is the one in use. */
+  inUse: boolean;
+  /** The user already has a copy. */
+  saved: boolean;
+  disabled?: boolean;
+  onUse: () => void;
+  onSave: () => void;
+}
+
+const SharedPaletteCard: React.FC<SharedPaletteCardProps> = ({ palette, inUse, saved, disabled, onUse, onSave }) => (
+  <div className={`palette-card ${inUse ? 'palette-card--active' : ''}`}>
+    <div className="palette-card__row">
+      <PalettePreview colors={palette.colors} />
+      <div className="palette-card__info">
+        <div className="palette-card__title">
+          <h4 title={palette.name}>{palette.name}</h4>
+          <span className="palette-card__mode">{palette.mode === 'dark' ? 'Tmavá' : 'Světlá'}</span>
+          {inUse ? (
+            <span className="palette-card__badge">
+              <Check size={12} strokeWidth={2.5} aria-hidden="true" />
+              Používáte
+            </span>
+          ) : null}
+        </div>
+        <PaletteStrip colors={palette.colors} />
+        {palette.typography ? <div className="palette-card__fonts">{fontSummary(palette.typography)}</div> : null}
+      </div>
+      <div className="palette-card__actions">
+        {!inUse ? (
+          <button type="button" className="palette-card__use" onClick={onUse} disabled={disabled}>
+            Použít
+          </button>
+        ) : null}
+        <button
+          type="button"
+          className="palette-card__icon"
+          onClick={onSave}
+          disabled={disabled || saved}
+          title={saved ? 'Už ji máte mezi svými paletami' : 'Uložit k mým paletám'}
+          aria-label={saved ? `${palette.name} už máte mezi svými paletami` : `Uložit ${palette.name} k mým paletám`}
+        >
+          {saved ? <Check {...TAB_ICON} /> : <Copy {...TAB_ICON} />}
+        </button>
+      </div>
+    </div>
   </div>
 );
 

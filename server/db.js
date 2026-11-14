@@ -556,6 +556,8 @@ export async function initDatabase() {
       "ALTER TABLE tipers ADD COLUMN IF NOT EXISTS status VARCHAR(50) DEFAULT 'pending'",
       "ALTER TABLE tipers ADD COLUMN IF NOT EXISTS stage VARCHAR(50) DEFAULT 'Not Started'",
       "ALTER TABLE color_palettes ADD COLUMN IF NOT EXISTS typography JSONB NOT NULL DEFAULT '{}'::jsonb",
+      // Motivy › sharing: a palette its owner lets colleagues see and copy.
+      "ALTER TABLE user_palettes ADD COLUMN IF NOT EXISTS is_shared BOOLEAN NOT NULL DEFAULT false",
       "ALTER TABLE field_options ADD COLUMN IF NOT EXISTS updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP",
       "ALTER TABLE future_functions ADD COLUMN IF NOT EXISTS priority VARCHAR(50)",
       "ALTER TABLE future_functions ADD COLUMN IF NOT EXISTS complexity VARCHAR(50)",
