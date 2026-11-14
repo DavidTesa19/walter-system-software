@@ -107,80 +107,102 @@
   color: var(--color-text);
 }
 
-/* ---- Tabs: Moje palety · Tým · one per colleague ---- */
+/* ---- Sections: Moje palety · Týmové palety · Palety kolegů ---- */
 
-/* A segmented control; with many colleagues it scrolls sideways. */
-.palette-tabs {
+/* Links that scroll to each section; nothing is hidden behind them. */
+.palette-jump {
   display: flex;
-  gap: 2px;
-  max-width: 100%;
-  width: fit-content;
-  padding: 3px;
-  border-radius: var(--ui-radius-md, 8px);
-  background: color-mix(in srgb, var(--color-text) 6%, var(--color-background));
-  border: 1px solid var(--color-border);
-  overflow-x: auto;
-  scrollbar-width: thin;
-  box-sizing: border-box;
+  flex-wrap: wrap;
+  gap: 0.4rem;
 }
 
-.palette-tab {
-  flex: none;
+.palette-jump__link {
   display: inline-flex;
   align-items: center;
-  gap: 0.4rem;
+  gap: 0.35rem;
   height: var(--ui-control-h-sm, 28px);
   padding: 0 0.7rem;
-  border: 1px solid transparent;
-  border-radius: var(--ui-radius-sm, 6px);
-  background: transparent;
-  color: var(--color-text-muted);
+  border: 1px solid var(--color-border);
+  border-radius: 999px;
+  background: var(--color-surface);
+  color: var(--color-text);
   font: inherit;
   font-size: var(--ui-text-sm, 12.5px);
   font-weight: 600;
   white-space: nowrap;
   cursor: pointer;
-  transition: background-color var(--ui-transition, 120ms ease), color var(--ui-transition, 120ms ease);
+  transition: border-color var(--ui-transition, 120ms ease), background-color var(--ui-transition, 120ms ease);
 }
 
-.palette-tab:hover {
-  color: var(--color-text);
+.palette-jump__link:hover {
+  border-color: color-mix(in srgb, var(--color-primary) 45%, var(--color-border));
+  background: color-mix(in srgb, var(--color-primary) 6%, var(--color-surface));
 }
 
-.palette-tab.is-active {
-  background: var(--color-surface);
-  border-color: var(--color-border);
-  color: var(--color-text);
-  box-shadow: var(--ui-shadow-xs, 0 1px 2px rgba(15, 23, 42, 0.06));
-}
-
-.palette-tab__count {
+.palette-jump__count,
+.palette-section__count {
   color: var(--color-text-muted);
   font-size: var(--ui-text-xs, 11.5px);
   font-weight: 500;
 }
 
-.palette-tab__avatar {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: 18px;
-  height: 18px;
-  border-radius: 50%;
-  background: color-mix(in srgb, var(--color-primary) 16%, transparent);
-  color: var(--color-primary);
-  font-size: 10px;
-  font-weight: 700;
+.palette-section {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+  font-family: var(--font-body);
+  /* Clear of the floating buttons when a jump link scrolls here. */
+  scroll-margin-top: 3rem;
 }
 
-.palette-tabs__hint {
-  margin: 0;
+.palette-section + .palette-section {
+  padding-top: 1rem;
+  border-top: 1px solid var(--color-border);
+}
+
+.palette-section__header p {
+  margin: 0.2rem 0 0;
   color: var(--color-text-muted);
   font-size: var(--ui-text-sm, 12.5px);
 }
 
-.palette-tabs__hint svg {
+.palette-section__header p svg {
   vertical-align: -1px;
+}
+
+/* One colleague's palettes. */
+.palette-shared__owner {
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--ui-radius-lg, 12px);
+  padding: 0.75rem;
+  box-shadow: var(--ui-shadow-xs, 0 1px 2px rgba(15, 23, 42, 0.06));
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.palette-shared__owner-name {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0 0.25rem;
+  font-size: var(--ui-text-md, 13.5px);
+  font-weight: 650;
+  color: var(--color-text);
+}
+
+.palette-shared__avatar {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  background: color-mix(in srgb, var(--color-primary) 16%, transparent);
+  color: var(--color-primary);
+  font-size: var(--ui-text-xs, 11.5px);
+  font-weight: 700;
 }
 
 .palette-shared {

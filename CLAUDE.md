@@ -328,8 +328,10 @@ icon actions; the full colour list and font samples are in the edit form.
 
 **Who sees a palette** (2026-11-14, `server/palettes/sharing.js`, tested):
 every user's palettes (`user_palettes`) are public to colleagues by default;
-`is_private` hides one, `is_shared` also puts it in the "Tým" tab (private
-wins over team). Motivy has tabs Moje palety / Tým / one per colleague, from
+`is_private` hides one, `is_shared` also lists it under Týmové palety
+(the team's pick of the best; private wins over team). Motivy is one page of
+sections, Moje palety / Týmové palety / Palety kolegů (one group per person),
+with jump links at the top; not tabs, which hid the rest. Data from
 `GET /color-palettes/shared`. Everyone starts with copies of the same
 starters, so that list leaves out an untouched starter (`color_palettes` or
 the built-in Walter Light / Dark) and lists a look several people have once,

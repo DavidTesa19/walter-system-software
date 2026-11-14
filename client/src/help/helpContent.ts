@@ -211,8 +211,8 @@ export const HELP_TOPICS: HelpTopic[] = [
     summary: "Barvy a písma aplikace, zvlášť pro světlý a tmavý režim.",
     points: [
       `Mezi světlým a tmavým režimem přepnete ${THEME_SHORTCUT_LABEL} nebo tlačítkem v menu.`,
-      "Záložky: Moje palety, Tým (palety vybrané pro všechny) a jedna záložka pro každého kolegu s jeho paletami.",
-      "Vaše palety kolegové vidí automaticky; zámkem u palety ji skryjete. Ikonou týmu ji dáte do záložky Tým.",
+      "Části: Moje palety, Týmové palety (výběr těch nejlepších pro všechny) a Palety kolegů, po jednotlivých lidech.",
+      "Vaše palety kolegové vidí automaticky; zámkem u palety ji skryjete. Ikonou týmu ji dáte mezi Týmové palety.",
       "Použít nebo Uložit k sobě vytvoří vaši vlastní kopii: pozdější změny kolegy se vás netýkají.",
     ],
   },
