@@ -169,10 +169,19 @@ const MIN_TEXT_CONTRAST = 4.5;
 const DARK_INK = '#0f172a';
 const LIGHT_INK = '#f8fafc';
 
-/** The ink that reads better on a fill, measured (isLight() alone picked
-    near-white on the light-mode red: 3.6:1). */
-const readableOn = (ground: Colord) =>
-  ground.contrast(DARK_INK) >= ground.contrast(LIGHT_INK) ? DARK_INK : LIGHT_INK;
+/** The ink for a full fill: near-white on a dark fill, dark on a light one
+    (isLight), which keeps white on saturated mid-tones such as a gold
+    primary. Only when that ink is truly unreadable (under 3:1) and the other
+    reads better does it switch. Picking the higher ratio outright put dark
+    digits on gold count bubbles over a 4.16 vs 4.10 difference. */
+const MIN_INK_CONTRAST = 3;
+const readableOn = (ground: Colord) => {
+  const preferred = ground.isLight() ? DARK_INK : LIGHT_INK;
+  const other = preferred === DARK_INK ? LIGHT_INK : DARK_INK;
+  return ground.contrast(preferred) < MIN_INK_CONTRAST && ground.contrast(other) > ground.contrast(preferred)
+    ? other
+    : preferred;
+};
 
 /** A colour used as text on a tint of itself (the active sidebar item on
     --color-primary-soft), nudged darker (light) or lighter (dark) until it
