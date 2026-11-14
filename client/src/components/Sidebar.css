@@ -298,7 +298,8 @@
 
 .sidebar-button.active {
   background: var(--color-primary-soft);
-  color: var(--color-primary);
+  /* The primary adjusted to read 4.5:1 on its own tint (ThemeContext). */
+  color: var(--color-primary-text, var(--color-primary));
   font-weight: 600;
 }
 

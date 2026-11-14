@@ -88,7 +88,7 @@
 
 .ec-id-badge.commission {
   background: var(--color-accent-soft, #d1fae5);
-  color: var(--color-accent-hover, #0f766e);
+  color: var(--color-accent-text, var(--color-accent-hover, #0f766e));
 }
 
 .ec-id-separator {
@@ -135,7 +135,7 @@
   border-radius: 999px;
   margin-left: 0.5rem;
   background: var(--color-accent-soft, rgba(16, 185, 129, 0.12));
-  color: var(--color-accent-hover, #047857);
+  color: var(--color-accent-text, var(--color-accent-hover, #047857));
 }
 
 .ec-profile-close {
@@ -1131,7 +1131,7 @@
   font-size: 0.74rem;
   font-weight: 700;
   font-family: 'JetBrains Mono', 'Consolas', monospace;
-  color: var(--color-accent-hover, #0f766e);
+  color: var(--color-accent-text, var(--color-accent-hover, #0f766e));
 }
 
 .ec-linked-commission-title {
@@ -2844,7 +2844,7 @@
 }
 
 .ec-deal-slot-value.self .ec-deal-slot-name {
-  color: var(--color-accent-hover, #0f766e);
+  color: var(--color-accent-text, var(--color-accent-hover, #0f766e));
 }
 
 .ec-deal-slot-tag {
@@ -2856,7 +2856,7 @@
   padding: 0.1rem 0.4rem;
   border-radius: 999px;
   background: var(--color-accent-soft, #d1fae5);
-  color: var(--color-accent-hover, #0f766e);
+  color: var(--color-accent-text, var(--color-accent-hover, #0f766e));
 }
 
 /* Marks a deal side that sits in a different section than the commission being
@@ -2903,7 +2903,7 @@
   border: 1px dashed var(--color-border-strong, #cbd5e1);
   border-radius: 0.5rem;
   background: transparent;
-  color: var(--color-accent-hover, #0f766e);
+  color: var(--color-accent-text, var(--color-accent-hover, #0f766e));
   font-size: 0.78rem;
   font-weight: 600;
   cursor: pointer;
@@ -3005,7 +3005,7 @@
   padding: 0.1rem 0.4rem;
   border-radius: 999px;
   background: var(--color-accent-soft, #d1fae5);
-  color: var(--color-accent-hover, #0f766e);
+  color: var(--color-accent-text, var(--color-accent-hover, #0f766e));
 }
 
 .ec-subject-role-identities {
@@ -3042,7 +3042,7 @@
 }
 
 .ec-subject-identity.self .ec-subject-identity-name {
-  color: var(--color-accent-hover, #0f766e);
+  color: var(--color-accent-text, var(--color-accent-hover, #0f766e));
 }
 
 .ec-subject-identity-tag,
@@ -3058,7 +3058,7 @@
 
 .ec-subject-identity-tag {
   background: var(--color-accent-soft, #d1fae5);
-  color: var(--color-accent-hover, #0f766e);
+  color: var(--color-accent-text, var(--color-accent-hover, #0f766e));
   text-transform: uppercase;
 }
 
@@ -3097,7 +3097,7 @@
   border: 1px dashed var(--color-border-strong, #cbd5e1);
   border-radius: 0.5rem;
   background: transparent;
-  color: var(--color-accent-hover, #0f766e);
+  color: var(--color-accent-text, var(--color-accent-hover, #0f766e));
   font-size: 0.75rem;
   font-weight: 600;
   cursor: pointer;
@@ -3186,7 +3186,7 @@
 .ec-subject-role-move:hover:not(:disabled) {
   background: var(--color-accent-soft, #d1fae5);
   border-color: var(--color-accent, #0f766e);
-  color: var(--color-accent-hover, #0f766e);
+  color: var(--color-accent-text, var(--color-accent-hover, #0f766e));
 }
 
 @media (max-width: 900px) {

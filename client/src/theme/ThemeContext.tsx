@@ -8,10 +8,11 @@ import React, {
 } from 'react';
 import { colord, extend, type Colord } from 'colord';
 import mixPlugin from 'colord/plugins/mix';
+import a11yPlugin from 'colord/plugins/a11y';
 import { useAuth } from '../auth/AuthContext';
 import { ensureFonts } from './fontLoader';
 
-extend([mixPlugin]);
+extend([mixPlugin, a11yPlugin]);
 
 export type Theme = 'light' | 'dark';
 
@@ -163,6 +164,27 @@ const mixColors = (color: string, target: string, ratio: number, fallback: strin
 const alpha = (color: string, value: number, fallback: string) =>
   toRgbString(ensureColord(color, fallback).alpha(clamp(value)));
 
+// WCAG AA for normal text.
+const MIN_TEXT_CONTRAST = 4.5;
+const DARK_INK = '#0f172a';
+const LIGHT_INK = '#f8fafc';
+
+/** The ink that reads better on a fill, measured (isLight() alone picked
+    near-white on the light-mode red: 3.6:1). */
+const readableOn = (ground: Colord) =>
+  ground.contrast(DARK_INK) >= ground.contrast(LIGHT_INK) ? DARK_INK : LIGHT_INK;
+
+/** A colour used as text on a tint of itself (the active sidebar item on
+    --color-primary-soft), nudged darker (light) or lighter (dark) until it
+    reaches 4.5:1, so any palette stays legible. */
+const readableTint = (color: Colord, ground: Colord, mode: Theme) => {
+  let text = color;
+  for (let step = 0; step < 25 && text.contrast(ground) < MIN_TEXT_CONTRAST; step++) {
+    text = mode === 'dark' ? text.lighten(0.02) : text.darken(0.02);
+  }
+  return text.toHslString();
+};
+
 const computeCssVariables = (
   colors: PaletteColors,
   mode: Theme,
@@ -179,8 +201,8 @@ const computeCssVariables = (
   const muted = ensureColord(colors.muted, fallback.muted);
   const border = ensureColord(colors.border, fallback.border);
 
-  const primaryContrast = primary.isLight() ? '#0f172a' : '#f8fafc';
-  const accentContrast = accent.isLight() ? '#0f172a' : '#f8fafc';
+  const primaryContrast = readableOn(primary);
+  const accentContrast = readableOn(accent);
   const inverseText = background.isLight() ? '#0b1120' : '#f8fafc';
 
   const surfaceAlt = mode === 'dark'
@@ -207,12 +229,16 @@ const computeCssVariables = (
     ? lighten(primary.toHslString(), 0.24, fallback.primary)
     : darken(primary.toHslString(), 0.2, fallback.primary);
 
+  // A soft colour is a tint near the page in both modes: 80% background in
+  // dark (it was 30%, a mid blue under which the active sidebar item read at
+  // 1.8:1), 85% in light.
   const primarySoft = mixColors(
     primary.toHslString(),
     background.toHslString(),
-    mode === 'dark' ? 0.3 : 0.85,
+    mode === 'dark' ? 0.8 : 0.85,
     fallback.primary
   );
+  const primaryText = readableTint(primary, colord(primarySoft), mode);
 
   const accentHover = mode === 'dark'
     ? lighten(accent.toHslString(), 0.1, fallback.accent)
@@ -221,9 +247,13 @@ const computeCssVariables = (
   const accentSoft = mixColors(
     accent.toHslString(),
     background.toHslString(),
-    mode === 'dark' ? 0.28 : 0.82,
+    mode === 'dark' ? 0.8 : 0.82,
     fallback.accent
   );
+  // Tags and picked options set accent-hover text on accent-soft: 3.1:1 in
+  // light. Same nudge as the primary, from the hover shade (dark is 8.8:1
+  // already and stays as it was).
+  const accentText = readableTint(colord(accentHover), colord(accentSoft), mode);
 
   const success = ensureColord(SUCCESS_BASE, SUCCESS_BASE);
   const warning = ensureColord(WARNING_BASE, WARNING_BASE);
@@ -231,7 +261,9 @@ const computeCssVariables = (
 
   const successTone = mode === 'dark' ? success.lighten(0.15) : success;
   const warningTone = mode === 'dark' ? warning.lighten(0.1) : warning;
-  const dangerTone = mode === 'dark' ? danger.lighten(0.1) : danger;
+  // Light mode takes a deeper red (hsl(0, 84%, 48%)): the base #ef4444 gave a
+  // white label 3.6:1 and red text on white 3.8:1; this gives 4.6 and 4.8.
+  const dangerTone = mode === 'dark' ? danger.lighten(0.1) : danger.darken(0.12);
 
   const successHover = mode === 'dark'
     ? success.lighten(0.25)
@@ -241,11 +273,11 @@ const computeCssVariables = (
     : warning.darken(0.05);
   const dangerHover = mode === 'dark'
     ? danger.lighten(0.2)
-    : danger.darken(0.05);
+    : danger.darken(0.17);
 
-  const successContrast = successTone.isLight() ? '#0f172a' : '#f8fafc';
-  const warningContrast = warningTone.isLight() ? '#0f172a' : '#f8fafc';
-  const dangerContrast = dangerTone.isLight() ? '#0f172a' : '#f8fafc';
+  const successContrast = readableOn(successTone);
+  const warningContrast = readableOn(warningTone);
+  const dangerContrast = readableOn(dangerTone);
 
   const shadowBase = mode === 'dark' ? '#000000' : '#0f172a';
   const shadowSm = `0 2px 6px ${alpha(shadowBase, mode === 'dark' ? 0.55 : 0.08, shadowBase)}`;
@@ -273,10 +305,12 @@ const computeCssVariables = (
     '--color-primary-hover': primaryHover,
     '--color-primary-active': primaryActive,
     '--color-primary-soft': primarySoft,
+    '--color-primary-text': primaryText,
     '--color-accent': accent.toHslString(),
     '--color-accent-contrast': accentContrast,
     '--color-accent-hover': accentHover,
     '--color-accent-soft': accentSoft,
+    '--color-accent-text': accentText,
     '--color-background': background.toHslString(),
     '--color-surface': surface.toHslString(),
     '--color-surface-alt': surfaceAlt,
