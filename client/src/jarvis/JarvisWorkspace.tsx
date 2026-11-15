@@ -11,11 +11,13 @@
 import { Suspense, lazy, useEffect, useMemo, useRef, useState } from 'react';
 import type { ReactNode } from 'react';
 import {
-  ArrowUpRight, Bell, Bookmark, ChartColumnBig, Check, CornerDownLeft, Keyboard, Lock, MessagesSquare, Pencil, Pin, PinOff, Plus,
+  ArrowUpRight, Bell, Bookmark, Brain, ChartColumnBig, Check, CornerDownLeft, Keyboard, Lock, MessagesSquare, Pencil, Pin, PinOff, Plus,
   Search, SendHorizontal, Settings2, Share2, ShieldCheck, Sparkles, Trash2, Users, X,
 } from 'lucide-react';
-import type { ConversationSummary, JarvisPrompt, JarvisPromptInput } from './jarvisApi';
+import type { ConversationSummary, JarvisMemory, JarvisPrompt, JarvisPromptInput } from './jarvisApi';
+import { jarvisApi } from './jarvisApi';
 import { apiGet } from '../utils/api';
+import { memoryEnabled, setMemoryEnabled } from './memorySettings';
 import { CAPABILITIES, QUICK_EXAMPLES } from './capabilities';
 import { MODEL_CHOICES } from './models';
 import type { ModelChoice } from './models';
@@ -23,7 +25,7 @@ import './JarvisWorkspace.css';
 
 const JarvisAnalytics = lazy(() => import('./analytics/JarvisAnalytics'));
 
-export type JarvisSection = 'chat' | 'capabilities' | 'prompts' | 'attention' | 'settings' | 'analysis';
+export type JarvisSection = 'chat' | 'capabilities' | 'prompts' | 'memory' | 'attention' | 'settings' | 'analysis';
 
 const ICON = { size: 16, strokeWidth: 1.9, 'aria-hidden': true } as const;
 const SMALL = { size: 14, strokeWidth: 2, 'aria-hidden': true } as const;
@@ -555,6 +557,167 @@ function PromptsSection({
 }
 
 // ---------------------------------------------------------------------------
+// Paměť
+// ---------------------------------------------------------------------------
+
+const MEMORY_LIMIT = 40;
+
+function MemoryRow({ memory, onSave, onDelete }: { memory: JarvisMemory; onSave: (text: string) => Promise<boolean>; onDelete: () => void }) {
+  const [editing, setEditing] = useState(false);
+  const [draft, setDraft] = useState(memory.text);
+  if (editing) {
+    return (
+      <form
+        className="jws-memory jws-memory--editing"
+        onSubmit={async (event) => {
+          event.preventDefault();
+          if (await onSave(draft)) setEditing(false);
+        }}
+      >
+        <input value={draft} onChange={(event) => setDraft(event.target.value)} maxLength={300} autoFocus aria-label="Text poznámky" />
+        <button type="submit" className="jws-btn jws-btn--sm jws-btn--primary" disabled={!draft.trim()}>
+          Uložit
+        </button>
+        <button type="button" className="jws-btn jws-btn--sm" onClick={() => setEditing(false)}>
+          Zrušit
+        </button>
+      </form>
+    );
+  }
+  return (
+    <div className="jws-memory">
+      <Brain {...SMALL} className="jws-memory-icon" />
+      <div className="jws-memory-main">
+        <div className="jws-memory-text">{memory.text}</div>
+        <div className="jws-memory-meta">
+          {memory.source === 'jarvis' ? 'Uložil Jarvis' : 'Přidali jste vy'} · {new Date(memory.updatedAt).toLocaleDateString('cs-CZ')}
+        </div>
+      </div>
+      <button type="button" className="jws-icon-btn" onClick={() => setEditing(true)} title="Upravit" aria-label="Upravit">
+        <Pencil {...SMALL} />
+      </button>
+      <button type="button" className="jws-icon-btn jws-icon-btn--danger" onClick={onDelete} title="Zapomenout" aria-label="Zapomenout">
+        <Trash2 {...SMALL} />
+      </button>
+    </div>
+  );
+}
+
+function MemorySection() {
+  const [memories, setMemories] = useState<JarvisMemory[] | null>(null);
+  const [enabled, setEnabled] = useState(memoryEnabled);
+  const [draft, setDraft] = useState('');
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    jarvisApi
+      .memories()
+      .then(setMemories)
+      .catch(() => setMemories([]));
+  }, []);
+
+  const run = async <T,>(work: () => Promise<T>) => {
+    setError(null);
+    try {
+      return await work();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Paměť se nepodařilo změnit.');
+      return null;
+    }
+  };
+
+  const add = async () => {
+    const text = draft.trim();
+    if (!text) return;
+    const created = await run(() => jarvisApi.createMemory(text));
+    if (created) {
+      setMemories((items) => [...(items ?? []).filter((item) => item.id !== created.id), created]);
+      setDraft('');
+    }
+  };
+
+  return (
+    <div className="jws-section">
+      <header className="jws-section-head jws-section-head--row">
+        <div>
+          <h2>Paměť</h2>
+          <p>
+            Krátké poznámky o vás, které Jarvis dostane v každé konverzaci: jak chcete odpovědi, čím se podepisujete, na co se zaměřujete.
+            Jarvis si je ukládá sám, když řeknete „pamatuj si…“; tady je můžete upravit nebo smazat.
+          </p>
+        </div>
+        <div className="jws-toggle-row jws-toggle-row--compact">
+          <span>{enabled ? 'Zapnutá' : 'Vypnutá'}</span>
+          <button
+            type="button"
+            role="switch"
+            aria-checked={enabled}
+            aria-label="Používat paměť"
+            className={`jws-switch${enabled ? ' is-on' : ''}`}
+            onClick={() => {
+              setMemoryEnabled(!enabled);
+              setEnabled(!enabled);
+            }}
+          >
+            <span />
+          </button>
+        </div>
+      </header>
+
+      {!enabled && <p className="jws-callout">Paměť je na tomto zařízení vypnutá: Jarvis poznámky nevidí a nové si neukládá.</p>}
+
+      <form
+        className="jws-memory-add"
+        onSubmit={(event) => {
+          event.preventDefault();
+          void add();
+        }}
+      >
+        <input
+          value={draft}
+          onChange={(event) => setDraft(event.target.value)}
+          maxLength={300}
+          placeholder="Např. Odpovídej stručně, bez tabulek. / Podepisuji se: Jan Novák, obchodní ředitel."
+          aria-label="Nová poznámka"
+        />
+        <button type="submit" className="jws-btn jws-btn--primary" disabled={!draft.trim() || (memories?.length ?? 0) >= MEMORY_LIMIT}>
+          <Plus {...SMALL} /> Přidat
+        </button>
+      </form>
+      {error && <p className="jws-callout jws-callout--error">{error}</p>}
+
+      {memories === null && <p className="jws-muted">Načítám…</p>}
+      {memories !== null && memories.length === 0 && (
+        <p className="jws-muted">Zatím nic. Řekněte Jarvisovi třeba „Pamatuj si, že chci odpovědi v bodech“.</p>
+      )}
+      <div className="jws-memory-list">
+        {memories?.map((memory) => (
+          <MemoryRow
+            key={memory.id}
+            memory={memory}
+            onSave={async (text) => {
+              const updated = await run(() => jarvisApi.updateMemory(memory.id, text));
+              if (updated) setMemories((items) => (items ?? []).map((item) => (item.id === memory.id ? updated : item)));
+              return Boolean(updated);
+            }}
+            onDelete={() =>
+              void run(() => jarvisApi.deleteMemory(memory.id)).then((removed) => {
+                if (removed) setMemories((items) => (items ?? []).filter((item) => item.id !== memory.id));
+              })
+            }
+          />
+        ))}
+      </div>
+      {memories && memories.length > 0 && (
+        <p className="jws-muted">
+          {memories.length} z {MEMORY_LIMIT} poznámek · soukromé, vidíte je jen vy.
+        </p>
+      )}
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
 // Nastavení
 // ---------------------------------------------------------------------------
 
@@ -724,6 +887,7 @@ export default function JarvisWorkspace(props: JarvisWorkspaceProps) {
     { id: 'chat', label: 'Konverzace', icon: <MessagesSquare {...ICON} /> },
     { id: 'capabilities', label: 'Schopnosti', icon: <Sparkles {...ICON} /> },
     { id: 'prompts', label: 'Šablony', icon: <Bookmark {...ICON} />, count: props.prompts?.filter((prompt) => prompt.mine).length },
+    { id: 'memory', label: 'Paměť', icon: <Brain {...ICON} /> },
     { id: 'attention', label: 'Upozornění', icon: <Bell {...ICON} />, count: props.urgent || undefined },
     { id: 'settings', label: 'Nastavení', icon: <Settings2 {...ICON} /> },
     ...(isAdmin ? [{ id: 'analysis' as const, label: 'Analýza nákladů', icon: <ChartColumnBig {...ICON} /> }] : []),
@@ -806,6 +970,11 @@ export default function JarvisWorkspace(props: JarvisWorkspaceProps) {
               onDelete={props.onDeletePrompt}
               authorName={(userId) => names.get(userId) ?? `Kolega ${userId}`}
             />
+          </div>
+        )}
+        {section === 'memory' && (
+          <div className="jws-scroll">
+            <MemorySection />
           </div>
         )}
         {section === 'attention' && (

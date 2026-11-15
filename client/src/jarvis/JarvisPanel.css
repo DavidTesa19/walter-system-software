@@ -1987,3 +1987,169 @@ button.jarvis-attention-item:hover {
   opacity: 0.45;
   cursor: default;
 }
+
+/* ---------- bulk change card (propose_bulk_update) ---------- */
+
+.jarvis-bulk {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.jarvis-bulk-list {
+  display: flex;
+  flex-direction: column;
+  max-height: 280px;
+  overflow-y: auto;
+  border: 1px solid var(--jarvis-border);
+  border-radius: 8px;
+  background: var(--jarvis-surface);
+}
+
+.jarvis-bulk-row {
+  display: grid;
+  grid-template-columns: minmax(110px, 0.9fr) minmax(0, 1.6fr);
+  gap: 8px;
+  padding: 6px 9px;
+  font-size: 0.8rem;
+  line-height: 1.4;
+}
+
+.jarvis-bulk-row + .jarvis-bulk-row {
+  border-top: 1px solid var(--jarvis-border);
+}
+
+.jarvis-bulk-label {
+  min-width: 0;
+  overflow: hidden;
+  font-weight: 600;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.jarvis-bulk-mark {
+  margin-right: 4px;
+  color: #15803d;
+}
+
+.jarvis-bulk-row--failed .jarvis-bulk-mark {
+  color: #b45309;
+}
+
+.jarvis-bulk-row--failed {
+  background: color-mix(in srgb, #d97706 8%, transparent);
+}
+
+.jarvis-bulk-changes {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  min-width: 0;
+}
+
+.jarvis-bulk-change small,
+.jarvis-bulk-error,
+.jarvis-bulk-note {
+  color: var(--jarvis-muted);
+  font-size: 0.74rem;
+}
+
+.jarvis-bulk-error {
+  color: #b45309;
+}
+
+.jarvis-bulk-note {
+  margin: 0;
+}
+
+/* ---------- memory card (remember / forget) ---------- */
+
+.jarvis-memory {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-top: 8px;
+  padding: 8px 10px;
+  border: 1px dashed color-mix(in srgb, var(--jarvis-accent) 45%, var(--jarvis-border));
+  border-radius: 10px;
+  background: color-mix(in srgb, var(--jarvis-accent) 6%, var(--jarvis-surface));
+  font-size: 0.82rem;
+}
+
+.jarvis-memory > svg {
+  flex: none;
+  color: var(--jarvis-accent);
+}
+
+.jarvis-memory-text {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-width: 0;
+}
+
+.jarvis-memory-text strong {
+  font-size: 0.74rem;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--jarvis-muted);
+}
+
+.jarvis-memory--undone {
+  opacity: 0.65;
+}
+
+.jarvis-memory small {
+  color: var(--jarvis-muted);
+}
+
+/* ---------- sending an e-mail draft ---------- */
+
+.jarvis-email-confirm {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 10px;
+  border-radius: 8px;
+  background: color-mix(in srgb, var(--jarvis-accent) 10%, var(--jarvis-surface));
+  font-size: 0.84rem;
+}
+
+.jarvis-email-confirm > span {
+  flex: 1 1 100%;
+  overflow-wrap: anywhere;
+}
+
+.jarvis-email-copy {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  margin-right: auto;
+  color: var(--jarvis-muted);
+}
+
+.jarvis-email-confirm .jarvis-proposal-apply,
+.jarvis-email .jarvis-proposal-buttons .jarvis-proposal-apply {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.jarvis-email-error {
+  padding: 6px 10px;
+  border-radius: 8px;
+  background: color-mix(in srgb, #dc2626 9%, transparent);
+  color: #b91c1c;
+  font-size: 0.82rem;
+}
+
+.jarvis-email--sent {
+  border-color: color-mix(in srgb, #16a34a 45%, var(--jarvis-border));
+  background: color-mix(in srgb, #16a34a 6%, var(--jarvis-surface));
+}
+
+.jarvis-email--sent .jarvis-proposal-badge {
+  background: color-mix(in srgb, #16a34a 16%, transparent);
+  color: #15803d;
+}

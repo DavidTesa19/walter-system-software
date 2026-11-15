@@ -795,6 +795,28 @@ names its own sans-serif font (`--jarvis-font`). Needs `ANTHROPIC_API_KEY`;
   shared with the team, 100 per user), also saved from a question's "Do
   šablon" action. A new capability or tool belongs in `capabilities.ts`
   too, or the Schopnosti section goes out of date.
+- **Memory** (2026-11-14, `server/jarvis/memory.js`, table `jarvis_memories`,
+  in `AUDIT_EXCLUDED_TABLES` as private like the conversations): up to 40
+  short notes per user (300 chars). The tools `remember` / `forget` call
+  `/api/jarvis/memories` with the agent token (source `jarvis`); every
+  question carries the notes in `<kontext>` (`memoryContextLines`), never in
+  the system prompt. A card under the answer offers Zapomenout / Vrátit;
+  Jarvis › Paměť lists, edits and deletes them and switches memory off per
+  device (`memorySettings.ts`, sent as `memory: false`; the tools then refuse).
+- **Bulk changes** (`propose_bulk_update`, `buildBulkProposal`): one card for
+  up to 50 records of one list (same section, role and kind), shared and/or
+  per-record field values plus an assignment for all. Records already as
+  asked are `skipped`, bad values `errors`. Confirming applies them one by
+  one in the card's one changeset, each with its own stale check; the
+  decision is `applied`, or `partial` with per-record `results`.
+- **Sending e-mails** (2026-11-14): a draft's card has "Odeslat" (with an
+  inline confirmation and "Kopie mně") when Brevo is configured
+  (`status.emailSend`). `POST /api/jarvis/conversations/:id/emails/:emailId/send`
+  sends only a draft of the user's own conversation, once, as edited, via
+  `sendPersonalEmail` (email.js): from `MAIL_FROM` under the user's name,
+  reply-to and optional bcc the user's notification e-mail, 20 per user and
+  hour (`JARVIS_EMAIL_HOURLY_LIMIT`). The `email_status` item reaches the next
+  turn (`emailOutcomes`). Jarvis itself still never sends.
 - **Tools never touch the database.** They call this server's own HTTP API
   (`api.js`) with a 15-minute token carrying the user's claims plus
   `actorType: 'ai_agent'`. Section access, role checks, business logic (deal
@@ -1154,8 +1176,9 @@ names its own sans-serif font (`--jarvis-font`). Needs `ANTHROPIC_API_KEY`;
   (`EmailCard` in JarvisPanel.tsx) that opens it via `mailto:`, Gmail's or
   Outlook's compose URL, or copies the text. A `mailto:` link over ~1 800
   characters goes out without the body, which is copied to the clipboard
-  instead (some mail programs cut long links). There is no sending from the
-  server, on purpose.
+  instead (some mail programs cut long links). Since 2026-11-14 the user can
+  also send it from the card through Brevo ("Sending e-mails" above); Jarvis
+  never sends on its own.
 - **Reminders and the morning briefing** (`server/jarvis/attention.js`,
   `GET /api/jarvis/attention`, cached 5 min per user, `?fresh=1` bypasses):
   plain rules, no AI — the user's assigned zakázky past their deadline, due

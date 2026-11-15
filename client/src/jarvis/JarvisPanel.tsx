@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
-import { Bookmark, Check, Copy, Download, Maximize2, Pencil, RotateCcw, Trash2 } from 'lucide-react';
+import { Bookmark, Brain, Check, Copy, Download, Maximize2, Pencil, RotateCcw, Send, Trash2 } from 'lucide-react';
 import { useAuth } from '../auth/AuthContext';
 import JarvisWorkspace, { JarvisHome } from './JarvisWorkspace';
 import type { JarvisSection } from './JarvisWorkspace';
@@ -27,6 +27,8 @@ import type {
   JarvisProposalChange,
   JarvisVoiceEngine,
   JarvisVoiceOption,
+  JarvisMemoryCard,
+  EmailSent,
   JarvisPrompt,
   JarvisPromptInput,
   ProposalDecision,
@@ -45,6 +47,7 @@ import { isConversationEnd, isLowQualityMicrophone, unlockAudio } from './voice'
 import { buildTranscriptionHints } from './transcriptionHints';
 import { VoiceAvatar } from './VoiceAvatar';
 import { MODEL_CHOICES, modelLabel, readModelChoice, writeModelChoice } from './models';
+import { memoryEnabled } from './memorySettings';
 import type { ModelChoice } from './models';
 import type { AnswerRouting, FeedbackRating } from './jarvisApi';
 import type { HintSource } from './transcriptionHints';
@@ -123,6 +126,7 @@ interface Turn {
   emails: JarvisEmailDraft[];
   documents: JarvisDocument[];
   sources: JarvisSource[];
+  memories: JarvisMemoryCard[];
 }
 
 // The flat transcript, grouped into one block per question.
@@ -131,7 +135,7 @@ function groupTurns(items: TranscriptItem[]): Turn[] {
   for (const item of items) {
     if (item.type === 'question') {
       turns.push({
-        question: item, steps: [], answer: null, answerModel: null, answerRouting: null, feedback: null, notices: [], actions: [], proposals: [], calendar: [], emails: [], documents: [], sources: [],
+        question: item, steps: [], answer: null, answerModel: null, answerRouting: null, feedback: null, notices: [], actions: [], proposals: [], calendar: [], emails: [], documents: [], sources: [], memories: [],
       });
       continue;
     }
@@ -156,6 +160,7 @@ function groupTurns(items: TranscriptItem[]): Turn[] {
     else if (item.type === 'email') turn.emails.push(item.draft);
     else if (item.type === 'document') turn.documents.push(item.document);
     else if (item.type === 'sources') turn.sources.push(...item.sources);
+    else if (item.type === 'memory') turn.memories.push(item.memory);
   }
   return turns;
 }
@@ -169,6 +174,7 @@ interface LiveTurn {
   emails: JarvisEmailDraft[];
   documents: JarvisDocument[];
   sources: JarvisSource[];
+  memories: JarvisMemoryCard[];
   steps: Array<{ id: string; label: string; done: boolean; ok: boolean }>;
   text: string;
   thinking: string;
@@ -193,6 +199,7 @@ const kindOfFile = (file: File): AttachmentKind =>
   file.type.startsWith('image/') ? 'image' : file.type === 'application/pdf' || /\.pdf$/i.test(file.name) ? 'pdf' : 'text';
 
 const DECISION_TEXT: Record<ProposalDecision['status'], string> = {
+  partial: 'Provedeno zčásti',
   applied: 'Provedeno',
   rejected: 'Zamítnuto',
   stale: 'Neprovedeno – záznam se mezitím změnil',
@@ -205,6 +212,7 @@ const PROPOSAL_BADGE: Record<JarvisProposal['type'], string> = {
   create_subject: 'Nový záznam',
   create_commission: 'Nová zakázka',
   task: 'Úkol',
+  bulk: 'Hromadná změna',
 };
 
 // Rows of a proposal card: "old → new" for a change, just the value for a
@@ -227,6 +235,80 @@ function ProposalRows({ rows }: { rows: JarvisProposalChange[] }) {
         </div>
       ))}
     </dl>
+  );
+}
+
+// A bulk card: one line per record with its changes, and after confirming
+// which records went through.
+function BulkRows({ proposal, decision }: { proposal: JarvisProposal; decision?: ProposalDecision }) {
+  const results = new Map((decision?.results ?? []).map((result) => [result.recordId, result]));
+  return (
+    <div className="jarvis-bulk">
+      <div className="jarvis-bulk-list">
+        {proposal.items?.map((item) => {
+          const result = results.get(item.recordId);
+          return (
+            <div key={item.recordId} className={`jarvis-bulk-row${result ? ` jarvis-bulk-row--${result.status}` : ''}`}>
+              <span className="jarvis-bulk-label" title={item.label}>
+                {result && <span className="jarvis-bulk-mark">{result.status === 'applied' ? '✓' : '!'}</span>}
+                {item.label}
+              </span>
+              <span className="jarvis-bulk-changes">
+                {item.changes.map((change) => (
+                  <span key={change.field} className="jarvis-bulk-change">
+                    <small>{change.label}</small> <span className="jarvis-proposal-from">{change.fromText}</span>
+                    <span className="jarvis-proposal-arrow" aria-label="změnit na"> → </span>
+                    <span className="jarvis-proposal-to">{change.toText}</span>
+                  </span>
+                ))}
+                {result?.error && <small className="jarvis-bulk-error">{result.error}</small>}
+              </span>
+            </div>
+          );
+        })}
+      </div>
+      {!decision && proposal.skipped && proposal.skipped.length > 0 && (
+        <p className="jarvis-bulk-note">Beze změny (už odpovídají): {proposal.skipped.join(', ')}</p>
+      )}
+      {!decision && proposal.errors && proposal.errors.length > 0 && (
+        <ul className="jarvis-proposal-warnings">
+          {proposal.errors.map((error) => <li key={error}>{error}</li>)}
+        </ul>
+      )}
+    </div>
+  );
+}
+
+// A note saved to (or dropped from) Jarvis's memory, with a way back.
+function MemoryCard({ card }: { card: JarvisMemoryCard }) {
+  const [state, setState] = useState<'shown' | 'busy' | 'undone' | 'missing'>('shown');
+  const forgotten = card.action === 'forgotten';
+  const undo = async () => {
+    setState('busy');
+    try {
+      if (forgotten) await jarvisApi.createMemory(card.text);
+      else await jarvisApi.deleteMemory(card.id);
+      setState('undone');
+    } catch {
+      setState('missing');
+    }
+  };
+  const title = forgotten ? 'Zapomenuto' : card.action === 'updated' ? 'Paměť upravena' : 'Zapamatováno';
+  return (
+    <div className={`jarvis-memory${state === 'undone' ? ' jarvis-memory--undone' : ''}`}>
+      <Brain size={15} strokeWidth={2} aria-hidden="true" />
+      <span className="jarvis-memory-text">
+        <strong>{state === 'undone' ? (forgotten ? 'Vráceno do paměti' : 'Zapomenuto') : title}</strong>
+        <span>{card.text}</span>
+      </span>
+      {state === 'shown' || state === 'busy' ? (
+        <button type="button" className="jarvis-chip-button" onClick={() => void undo()} disabled={state === 'busy'}>
+          {forgotten ? 'Vrátit' : 'Zapomenout'}
+        </button>
+      ) : state === 'missing' ? (
+        <small>Už není v paměti</small>
+      ) : null}
+    </div>
   );
 }
 
@@ -269,6 +351,7 @@ function ProposalCard({
         <small>{proposal.where}</small>
       </div>
       {proposal.changes && proposal.changes.length > 0 && <ProposalRows rows={proposal.changes} />}
+      {proposal.items && proposal.items.length > 0 && <BulkRows proposal={proposal} decision={decision} />}
       {proposal.commissionChanges && proposal.commissionChanges.length > 0 && (
         <>
           <div className="jarvis-proposal-subhead">První zakázka</div>
@@ -513,13 +596,52 @@ function Sources({ sources }: { sources: JarvisSource[] }) {
   );
 }
 
-function EmailCard({ draft, onOpenRecord }: { draft: JarvisEmailDraft; onOpenRecord: (action: JarvisOpenAction) => void }) {
+function EmailCard({
+  draft,
+  onOpenRecord,
+  conversationId,
+  canSend,
+  sent,
+  disabled,
+  onSent,
+}: {
+  draft: JarvisEmailDraft;
+  onOpenRecord: (action: JarvisOpenAction) => void;
+  conversationId?: string | null;
+  // The server can send through Brevo (status.emailSend).
+  canSend?: boolean;
+  sent?: EmailSent;
+  // While Jarvis still writes the answer.
+  disabled?: boolean;
+  onSent?: (item: EmailSent) => void;
+}) {
   const [to, setTo] = useState(draft.to.join(', '));
   const [subject, setSubject] = useState(draft.subject);
   const [body, setBody] = useState(draft.body);
   const [hint, setHint] = useState<string | null>(null);
+  // "Odeslat" opens a confirmation row first: the second click is the approval.
+  const [confirming, setConfirming] = useState(false);
+  const [copyToMe, setCopyToMe] = useState(true);
+  const [sending, setSending] = useState(false);
+  const [sendError, setSendError] = useState<string | null>(null);
   const cc = draft.cc.join(', ');
-  const recipients = to.split(/[,;]\s*/).map((item) => item.trim()).filter(Boolean).join(',');
+  const toList = to.split(/[,;]\s*/).map((item) => item.trim()).filter(Boolean);
+  const recipients = toList.join(',');
+  const sendable = Boolean(canSend && conversationId && onSent);
+  const send = async () => {
+    if (!conversationId || !onSent) return;
+    setSending(true);
+    setSendError(null);
+    try {
+      const item = await jarvisApi.sendEmail(conversationId, draft.id, { to: toList, cc: draft.cc, subject, body, copyToMe });
+      onSent(item);
+      setConfirming(false);
+    } catch (err) {
+      setSendError(err instanceof Error ? err.message : 'E-mail se nepodařilo odeslat.');
+    } finally {
+      setSending(false);
+    }
+  };
 
   const copy = async (text: string, done: string) => {
     try {
@@ -542,11 +664,34 @@ function EmailCard({ draft, onOpenRecord }: { draft: JarvisEmailDraft; onOpenRec
   };
   const openWeb = (url: string) => window.open(url, '_blank', 'noopener');
 
+  if (sent) {
+    return (
+      <div className="jarvis-email jarvis-email--sent">
+        <div className="jarvis-proposal-head">
+          <span className="jarvis-proposal-badge">E-mail odeslán</span>
+          <small>
+            {new Date(sent.at).toLocaleString('cs-CZ', { day: 'numeric', month: 'numeric', hour: '2-digit', minute: '2-digit' })}
+            {sent.copyToMe ? ' · kopie vám' : ''}
+          </small>
+        </div>
+        <div className="jarvis-email-field">
+          <span>Komu</span>
+          <span>{[...sent.to, ...sent.cc].join(', ')}</span>
+        </div>
+        <div className="jarvis-email-field">
+          <span>Předmět</span>
+          <span>{sent.subject}</span>
+        </div>
+        {sent.replyTo && <small className="jarvis-email-hint">Odpovědi přijdou na {sent.replyTo}.</small>}
+      </div>
+    );
+  }
+
   return (
     <div className="jarvis-email">
       <div className="jarvis-proposal-head">
         <span className="jarvis-proposal-badge">Koncept e-mailu</span>
-        <small>Jarvis nic neodesílá – odešlete ho sami ze své pošty.</small>
+        <small>{sendable ? 'Jarvis sám nic neodesílá – zkontrolujte text a odešlete ho tlačítkem Odeslat.' : 'Jarvis nic neodesílá – odešlete ho sami ze své pošty.'}</small>
       </div>
       <label className="jarvis-email-field">
         <span>Komu</span>
@@ -563,8 +708,31 @@ function EmailCard({ draft, onOpenRecord }: { draft: JarvisEmailDraft; onOpenRec
         <input value={subject} onChange={(event) => setSubject(event.target.value)} />
       </label>
       <textarea className="jarvis-email-body" value={body} onChange={(event) => setBody(event.target.value)} rows={Math.min(14, body.split('\n').length + 2)} />
+      {confirming && (
+        <div className="jarvis-email-confirm" role="group" aria-label="Potvrzení odeslání">
+          <span>
+            Odeslat na <strong>{[...toList, ...draft.cc].join(', ') || '—'}</strong>?
+          </span>
+          <label className="jarvis-email-copy">
+            <input type="checkbox" checked={copyToMe} onChange={(event) => setCopyToMe(event.target.checked)} />
+            Kopie mně
+          </label>
+          <button type="button" className="jarvis-proposal-apply" onClick={() => void send()} disabled={sending || toList.length === 0 || !subject.trim()}>
+            <Send size={14} strokeWidth={2} aria-hidden="true" /> {sending ? 'Odesílám…' : 'Odeslat teď'}
+          </button>
+          <button type="button" className="jarvis-proposal-reject" onClick={() => setConfirming(false)} disabled={sending}>
+            Zrušit
+          </button>
+        </div>
+      )}
+      {sendError && <div className="jarvis-email-error">{sendError}</div>}
       <div className="jarvis-proposal-buttons">
-        <button type="button" className="jarvis-proposal-apply" onClick={() => void openMailto()}>
+        {sendable && !confirming && (
+          <button type="button" className="jarvis-proposal-apply" onClick={() => setConfirming(true)} disabled={disabled || toList.length === 0} title="Odeslat přes aplikaci (ještě se zeptám)">
+            <Send size={14} strokeWidth={2} aria-hidden="true" /> Odeslat
+          </button>
+        )}
+        <button type="button" className={sendable ? 'jarvis-proposal-reject' : 'jarvis-proposal-apply'} onClick={() => void openMailto()}>
           Otevřít v e-mailu
         </button>
         <button
@@ -1731,6 +1899,7 @@ export default function JarvisPanel({
       emails: [],
       documents: [],
       sources: [],
+      memories: [],
       steps: [],
       text: '',
       thinking: '',
@@ -1789,6 +1958,9 @@ export default function JarvisPanel({
         case 'document':
           setLive((turn) => (turn ? { ...turn, documents: [...turn.documents, event.data] } : turn));
           break;
+        case 'memory':
+          setLive((turn) => (turn ? { ...turn, memories: [...turn.memories, event.data] } : turn));
+          break;
         case 'sources':
           setLive((turn) => (turn ? { ...turn, sources: [...turn.sources, ...event.data.sources] } : turn));
           break;
@@ -1809,6 +1981,7 @@ export default function JarvisPanel({
           message,
           conversationId,
           model: modelChoice,
+          ...(memoryEnabled() ? {} : { memory: false }),
           ...(sending.length ? { attachments: sending.map((attachment) => attachment.id as string) } : {}),
           context: {
             view: viewLabel,
@@ -1963,6 +2136,11 @@ export default function JarvisPanel({
       });
     }
   };
+
+  const emailsSent = useMemo(
+    () => new Map(transcript.flatMap((item) => (item.type === 'email_status' ? [[item.id, item] as const] : []))),
+    [transcript]
+  );
 
   const calendarDecisions = useMemo(() => {
     const map = new Map<string, CalendarDecision>();
@@ -2439,7 +2617,19 @@ export default function JarvisPanel({
             )}
             {renderProposals(turn.proposals, false)}
             {renderCalendar(turn.calendar, false)}
-            {turn.emails.map((draft) => <EmailCard key={draft.id} draft={draft} onOpenRecord={openRecord} />)}
+            {turn.emails.map((draft) => (
+              <EmailCard
+                key={draft.id}
+                draft={draft}
+                onOpenRecord={openRecord}
+                conversationId={conversationId}
+                canSend={status?.emailSend === true && user?.role !== 'viewer'}
+                sent={emailsSent.get(draft.id)}
+                disabled={busy}
+                onSent={(item) => setTranscript((items) => [...items, item])}
+              />
+            ))}
+            {turn.memories.map((card, memoryIndex) => <MemoryCard key={`${card.id}-${memoryIndex}`} card={card} />)}
             {turn.documents.map((file) => (
               <DocumentCard
                 key={file.id}
@@ -2494,7 +2684,8 @@ export default function JarvisPanel({
             )}
             {renderProposals(live.proposals, true)}
             {renderCalendar(live.calendar, true)}
-            {live.emails.map((draft) => <EmailCard key={draft.id} draft={draft} onOpenRecord={openRecord} />)}
+            {live.emails.map((draft) => <EmailCard key={draft.id} draft={draft} onOpenRecord={openRecord} disabled />)}
+            {live.memories.map((card, memoryIndex) => <MemoryCard key={`${card.id}-${memoryIndex}`} card={card} />)}
             {live.documents.map((file) => (
               <DocumentCard
                 key={file.id}

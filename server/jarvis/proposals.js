@@ -362,6 +362,70 @@ export function buildUpdateProposal({ kind, section, role, record, changes, reas
   };
 }
 
+export const BULK_LIMIT = 50;
+
+/**
+ * One card for many records of one list: the same fields (or each record's
+ * own values) and/or the same assignment. `entries` are the records read
+ * fresh, each with its label and its own `changes`; `assign` ({ names, mode,
+ * team }) applies to all. A record that would not change is left out and
+ * named in `skipped`; one that cannot take the change is named in `errors`.
+ */
+export function buildBulkProposal({ kind, section, role, entries, assign, reason }) {
+  if (!entries?.length) throw new ProposalError('Hromadná změna potřebuje aspoň jeden záznam.');
+  if (entries.length > BULK_LIMIT) throw new ProposalError(`Hromadně lze změnit nejvýš ${BULK_LIMIT} záznamů najednou; rozděl to na víc karet.`);
+  const items = [];
+  const skipped = [];
+  const errors = [];
+  for (const entry of entries) {
+    const rows = [];
+    try {
+      if (entry.changes && Object.values(entry.changes).some((value) => value !== undefined)) {
+        try {
+          rows.push(...buildUpdateProposal({ kind, section, role, record: entry.record, changes: entry.changes, label: entry.label }).changes);
+        } catch (error) {
+          if (!(error instanceof ProposalError) || !/není co měnit/.test(error.message)) throw error;
+        }
+      }
+      if (assign) {
+        try {
+          rows.push(...buildAssignProposal({ kind, section, role, record: entry.record, names: assign.names, mode: assign.mode, team: assign.team, label: entry.label }).changes);
+        } catch (error) {
+          if (!(error instanceof ProposalError) || !/není co měnit/.test(error.message)) throw error;
+        }
+      }
+    } catch (error) {
+      if (!(error instanceof ProposalError)) throw error;
+      errors.push(`${entry.label}: ${error.message}`);
+      continue;
+    }
+    if (rows.length === 0) skipped.push(entry.label);
+    else items.push({ recordId: Number(entry.record.id), label: entry.label, changes: rows });
+  }
+  if (items.length === 0) {
+    throw new ProposalError(
+      errors.length ? `Žádný záznam nejde změnit: ${errors.slice(0, 5).join('; ')}` : 'Navržené hodnoty už ve všech záznamech jsou – není co měnit.'
+    );
+  }
+  const fieldLabels = [...new Set(items.flatMap((item) => item.changes.map((change) => change.label)))];
+  const what = kind === 'commission' ? 'zakázek' : 'subjektů';
+  return {
+    id: crypto.randomUUID(),
+    type: 'bulk',
+    kind,
+    section,
+    role,
+    recordId: null,
+    label: `${fieldLabels.join(', ')} · ${items.length} ${items.length === 1 ? (kind === 'commission' ? 'zakázka' : 'subjekt') : items.length <= 4 ? (kind === 'commission' ? 'zakázky' : 'subjekty') : what}`,
+    where: `${kind === 'commission' ? 'Zakázky' : ROLE_LABELS[role]} · ${SECTION_LABELS[section]}`,
+    items,
+    ...(skipped.length ? { skipped } : {}),
+    ...(errors.length ? { errors } : {}),
+    reason: reason ? String(reason).slice(0, 300) : undefined,
+    createdAt: new Date().toISOString(),
+  };
+}
+
 export function buildNoteProposal({ section, role, record, content, reason, label }) {
   const note = String(content ?? '').trim();
   if (!note) throw new ProposalError('Poznámka je prázdná.');
@@ -484,6 +548,7 @@ export const describeProposal = (proposal) => {
     return `nový ${ROLE_LABELS[proposal.role].toLowerCase()} ${proposal.label} (${SECTION_LABELS[proposal.section]})${proposal.payload?.commission ? ` se zakázkou ${proposal.payload.commission.position}` : ''}`;
   }
   if (proposal.type === 'create_commission') return `${proposal.label} (${proposal.where})`;
+  if (proposal.type === 'bulk') return `hromadná změna ${proposal.label} (${proposal.where})`;
   return `${proposal.label}: ${proposal.changes.map((change) => `${change.label} ${change.fromText} → ${change.toText}`).join(', ')}`;
 };
 
@@ -542,6 +607,14 @@ export async function applyProposal(proposal, api) {
     await api.request('POST', `/${documentResource(proposal.section, proposal.role)}/${proposal.recordId}/notes`, { content: proposal.note });
     return;
   }
+  if (proposal.type === 'bulk') {
+    return applyBulk(proposal, api);
+  }
+  await applyUpdate(proposal, api);
+}
+
+// One record of a change: checked against what is stored now, then written.
+async function applyUpdate(proposal, api) {
   const current = await api.request('GET', recordPath(proposal));
   const moved = proposal.changes.filter((change) => !sameValue(change.field, current?.[change.field] ?? null, change.from));
   if (moved.length) {
@@ -551,4 +624,35 @@ export async function applyProposal(proposal, api) {
   }
   const payload = { ...Object.fromEntries(proposal.changes.map((change) => [change.field, change.to])), ...(proposal.alsoWrite ?? {}) };
   await api.request('PUT', recordPath(proposal), payload);
+}
+
+/**
+ * A bulk card: every record on its own, one after another (all in the
+ * card's one changeset). A record changed or deleted since the card was made
+ * is left alone and reported; the rest go through. Returns `{ results }`;
+ * throws ProposalError only when not one record could be changed.
+ */
+async function applyBulk(proposal, api) {
+  const results = [];
+  for (const item of proposal.items) {
+    const single = { type: 'update', kind: proposal.kind, section: proposal.section, role: proposal.role, recordId: item.recordId, changes: item.changes };
+    try {
+      await applyUpdate(single, api);
+      results.push({ recordId: item.recordId, label: item.label, status: 'applied' });
+    } catch (error) {
+      const message =
+        error instanceof ProposalError ? 'mezitím změněno'
+          : error?.status === 404 ? 'záznam už neexistuje'
+            : error?.status === 403 ? 'bez oprávnění'
+              : 'nepodařilo se';
+      if (!(error instanceof ProposalError) && error?.status !== 404 && error?.status !== 403) {
+        console.error('Jarvis: a bulk change failed for one record:', error?.message ?? error);
+      }
+      results.push({ recordId: item.recordId, label: item.label, status: 'failed', error: message });
+    }
+  }
+  if (!results.some((result) => result.status === 'applied')) {
+    throw new ProposalError(`Žádný záznam se nezměnil (${results.map((result) => `${result.label}: ${result.error}`).slice(0, 3).join('; ')}).`);
+  }
+  return { results };
 }

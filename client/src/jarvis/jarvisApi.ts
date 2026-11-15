@@ -27,7 +27,7 @@ export interface JarvisProposalChange {
 
 export interface JarvisProposal {
   id: string;
-  type: 'update' | 'note' | 'create_subject' | 'create_commission' | 'task';
+  type: 'update' | 'note' | 'create_subject' | 'create_commission' | 'task' | 'bulk';
   kind: JarvisKind;
   section: JarvisSection;
   role: JarvisRole;
@@ -43,9 +43,14 @@ export interface JarvisProposal {
   payload?: { status?: string; entity?: { status?: string } };
   note?: string;
   reason?: string;
+  /** A bulk card: every record with its own changes. */
+  items?: Array<{ recordId: number; label: string; changes: JarvisProposalChange[] }>;
+  /** Bulk: records already as asked, and ones that cannot take the change. */
+  skipped?: string[];
+  errors?: string[];
 }
 
-export type ProposalStatus = 'applied' | 'rejected' | 'stale' | 'failed';
+export type ProposalStatus = 'applied' | 'rejected' | 'stale' | 'failed' | 'partial';
 
 export interface ProposalDecision {
   type: 'proposal_status';
@@ -54,6 +59,37 @@ export interface ProposalDecision {
   error?: string;
   /** What a confirmed create made. */
   created?: { kind: JarvisKind; section: JarvisSection; role: JarvisRole; id: number; code: string };
+  /** A bulk card: what happened to each record. */
+  results?: Array<{ recordId: number; label: string; status: 'applied' | 'failed'; error?: string }>;
+  at: string;
+}
+
+// A note Jarvis saved to (or dropped from) the user's memory.
+export interface JarvisMemoryCard {
+  action: 'saved' | 'updated' | 'forgotten';
+  id: number;
+  text: string;
+}
+
+export interface JarvisMemory {
+  id: number;
+  text: string;
+  source: 'jarvis' | 'user';
+  conversationId: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+// An e-mail draft sent from its card ("Odeslat").
+export interface EmailSent {
+  type: 'email_status';
+  id: string;
+  status: 'sent';
+  to: string[];
+  cc: string[];
+  subject: string;
+  copyToMe: boolean;
+  replyTo: string | null;
   at: string;
 }
 
@@ -164,6 +200,8 @@ export type TranscriptItem =
   | { type: 'calendar'; card: JarvisCalendarCard }
   | CalendarDecision
   | { type: 'email'; draft: JarvisEmailDraft }
+  | EmailSent
+  | { type: 'memory'; memory: JarvisMemoryCard }
   | { type: 'document'; document: JarvisDocument }
   | JarvisDocumentSaved
   | JarvisFeedback
@@ -261,6 +299,8 @@ export interface JarvisVoiceProvider {
 export interface JarvisStatus {
   available: boolean;
   model: string;
+  // Drafts can be sent from their card through the app's Brevo account.
+  emailSend?: boolean;
   // The server can transcribe and speak (OpenAI); otherwise the browser's own
   // speech engines are used.
   voice?: boolean;
@@ -285,6 +325,7 @@ export type JarvisEvent =
   | { event: 'proposal'; data: JarvisProposal }
   | { event: 'calendar'; data: JarvisCalendarCard }
   | { event: 'email'; data: JarvisEmailDraft }
+  | { event: 'memory'; data: JarvisMemoryCard }
   | { event: 'document'; data: JarvisDocument }
   | { event: 'sources'; data: { sources: JarvisSource[] } }
   | { event: 'notice'; data: { text: string } }
@@ -378,6 +419,16 @@ export const jarvisApi = {
   updateConversation: (id: string, patch: { title?: string; pinned?: boolean }) =>
     apiPatch<ConversationSummary>(`/api/jarvis/conversations/${id}`, patch),
 
+  // Send a draft as edited on its card; the click is the user's approval.
+  sendEmail: (conversationId: string, emailId: string, mail: { to: string[]; cc: string[]; subject: string; body: string; copyToMe: boolean }) =>
+    apiPost<EmailSent>(`/api/jarvis/conversations/${conversationId}/emails/${emailId}/send`, mail),
+
+  // Jarvis's notes about the user (Nastavení › Paměť, memory cards).
+  memories: () => apiGet<JarvisMemory[]>('/api/jarvis/memories'),
+  createMemory: (text: string) => apiPost<JarvisMemory>('/api/jarvis/memories', { text }),
+  updateMemory: (id: number, text: string) => apiPut<JarvisMemory>(`/api/jarvis/memories/${id}`, { text }),
+  deleteMemory: (id: number) => apiDelete<JarvisMemory>(`/api/jarvis/memories/${id}`),
+
   // Saved questions ("Šablony"): the user's own and the team's shared ones.
   prompts: () => apiGet<JarvisPrompt[]>('/api/jarvis/prompts'),
   createPrompt: (input: JarvisPromptInput) => apiPost<JarvisPrompt>('/api/jarvis/prompts', input),
@@ -404,7 +455,7 @@ export const jarvisApi = {
   // reply. Resolves when the reply ends; rejects with the server's message on
   // an HTTP error. Abort the signal to stop Jarvis.
   async chat(
-    body: { message: string; conversationId?: string | null; context?: JarvisContext; attachments?: string[]; model?: ModelChoice },
+    body: { message: string; conversationId?: string | null; context?: JarvisContext; attachments?: string[]; model?: ModelChoice; memory?: boolean },
     onEvent: (event: JarvisEvent) => void,
     signal: AbortSignal
   ): Promise<void> {

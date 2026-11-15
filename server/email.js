@@ -1,6 +1,7 @@
 import axios from 'axios';
 
-const BREVO_API_URL = 'https://api.brevo.com/v3/smtp/email';
+// BREVO_API_URL exists only to point a local test at a mock.
+const BREVO_API_URL = process.env.BREVO_API_URL || 'https://api.brevo.com/v3/smtp/email';
 
 let configWarningLogged = false;
 
@@ -272,4 +273,34 @@ export const notifyAdmins = async ({ subject, text, users = [] }) => {
     textContent: text,
   });
   return true;
+};
+
+// An e-mail a user sends from a Jarvis draft (the card's "Odeslat"): from the
+// app's verified sender address under the user's name, replies going to the
+// user's own address, optionally a blind copy to them. Plain text in, a
+// simple HTML version alongside. Throws when Brevo refuses; returns its
+// message id.
+export const sendPersonalEmail = async ({ to, cc = [], bcc = [], replyTo = null, senderName, subject, text }) => {
+  const apiKey = process.env.BREVO_API_KEY;
+  if (!apiKey) throw new Error('BREVO_API_KEY is not set');
+  const sender = getSenderAddress();
+  const paragraphs = String(text)
+    .split(/\n{2,}/)
+    .map((block) => `<p style="margin:0 0 12px;">${escapeHtml(block).replace(/\n/g, '<br>')}</p>`)
+    .join('');
+  const response = await axios.post(
+    BREVO_API_URL,
+    {
+      sender: { name: senderName ? `${senderName} (${sender.name})` : sender.name, email: sender.email },
+      to: to.map((email) => ({ email })),
+      ...(cc.length ? { cc: cc.map((email) => ({ email })) } : {}),
+      ...(bcc.length ? { bcc: bcc.map((email) => ({ email })) } : {}),
+      ...(replyTo ? { replyTo: { email: replyTo, ...(senderName ? { name: senderName } : {}) } } : {}),
+      subject,
+      textContent: text,
+      htmlContent: `<div style="font-family:Arial,sans-serif;font-size:14px;line-height:1.5;color:#1f2937;">${paragraphs}</div>`,
+    },
+    { headers: { 'api-key': apiKey, 'Content-Type': 'application/json' }, timeout: 15000 },
+  );
+  return response.data?.messageId ?? null;
 };

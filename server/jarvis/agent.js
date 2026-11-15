@@ -63,7 +63,10 @@ const CLEAR_AT_LEAST = 10000;
 const COMPACT_AT = Math.max(50000, envNumber('JARVIS_COMPACT_AT', 120000));
 const KEEP_TOOL_RESULTS = [
   'propose_update',
+  'propose_bulk_update',
   'propose_note',
+  'remember',
+  'forget',
   'calendar_add_event',
   'calendar_update_event',
   'calendar_delete_event',

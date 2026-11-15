@@ -32,6 +32,10 @@ export const AUDIT_EXCLUDED_TABLES = new Set([
   // Jarvis chat history: private per user, and every turn rewrites a large
   // JSON document. It is in the backups.
   'jarvis_conversations',
+  // Jarvis's notes about each user (jarvis/memory.js): private to their owner
+  // like the conversations, so they stay out of the change log admins read.
+  // They are in the backups.
+  'jarvis_memories',
   // Finance telemetry: one row per AI call and per Jarvis question, the providers' bills copied from
   // their billing APIs (rewritten on every sync) and the connectors' cached
   // state. The cost list itself, finance_expenses, is logged.

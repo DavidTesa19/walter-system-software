@@ -5,7 +5,7 @@
 // as they are. Keep this in step with the tools when one is added.
 
 import type { LucideIcon } from 'lucide-react';
-import { CalendarDays, ClipboardCheck, FileText, Globe, IdCard, Mail, Mic, Search } from 'lucide-react';
+import { Brain, CalendarDays, ClipboardCheck, FileText, Globe, IdCard, Mail, Mic, Search } from 'lucide-react';
 
 export interface JarvisCapability {
   id: string;
@@ -42,13 +42,15 @@ export const CAPABILITIES: JarvisCapability[] = [
     points: [
       'Úprava polí, poznámka, Obor a Zaměření z katalogu, přiřazení lidí.',
       'Nový subjekt i s první zakázkou, upozorní na možné duplicity.',
+      'Hromadně jednou kartou: stav, termín, priorita nebo přiřazení až u 50 záznamů najednou.',
       'Každá potvrzená změna je v historii změn pod vaším jménem a značkou AI.',
     ],
     examples: [
       'Přidej poznámku k …',
       'Založ nového klienta …',
       'Přiřaď zakázku … kolegovi …',
-      'Změň stav zakázky … na Podepsáno',
+      'Všem mým zakázkám po termínu posuň termín na …',
+      'Přeřaď všechny zakázky kolegy … na …',
     ],
   },
   {
@@ -103,12 +105,25 @@ export const CAPABILITIES: JarvisCapability[] = [
     id: 'email',
     icon: Mail,
     title: 'E-maily a týmový chat',
-    summary: 'Napíše koncept e-mailu, který otevřete v Gmailu, Outlooku nebo pošťáku.',
+    summary: 'Napíše koncept e-mailu; po kontrole ho odešlete z karty, nebo otevřete ve své poště.',
     points: [
-      'Koncept upravíte přímo na kartě; Jarvis sám nic neodesílá.',
+      'Koncept upravíte přímo na kartě a odešlete tlačítkem Odeslat (s potvrzením); odpovědi přijdou vám.',
+      'Jarvis sám nikdy nic neodešle. Kopii si můžete poslat do své schránky.',
       'V Týmovém chatu odpoví na @Jarvis celé místnosti (jen veřejná sekce, nic nemění).',
     ],
     examples: ['Napiš e-mail klientovi … s připomenutím schůzky', 'Navrhni follow-up e-mail po schůzce s …'],
+  },
+  {
+    id: 'memory',
+    icon: Brain,
+    title: 'Paměť',
+    summary: 'Pamatuje si, jak s vámi pracovat: formu odpovědí, podpis, na co se zaměřujete.',
+    points: [
+      'Řekněte „pamatuj si…“ nebo „příště…“; poznámka platí ve všech dalších konverzacích.',
+      'Uložení vždy ukáže kartou s tlačítkem Zapomenout; vše je v sekci Paměť.',
+      'Soukromé: poznámky vidíte jen vy. Paměť jde vypnout.',
+    ],
+    examples: ['Pamatuj si, že chci odpovědi stručně a v bodech.', 'Co si o mně pamatuješ?', 'Pamatuj si, že se podepisuji …'],
   },
   {
     id: 'voice',

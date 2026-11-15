@@ -216,7 +216,7 @@ async function askJarvis(token, testCase) {
         if (event === 'conversation') turn.conversationId = data.id;
         else if (event === 'text' && turn.firstTextMs === null) turn.firstTextMs = Date.now() - started;
         else if (event === 'tool' && data?.name && data.name !== 'compaction') turn.tools.push(data.name);
-        else if (['proposal', 'email', 'document', 'calendar', 'action'].includes(event)) {
+        else if (['proposal', 'email', 'document', 'calendar', 'action', 'memory'].includes(event)) {
           (turn.cards[event] ??= []).push(data);
         } else if (event === 'error') turn.error = data?.message ?? 'error';
         else if (event === 'done') turn.stopReason = data?.stopReason ?? null;

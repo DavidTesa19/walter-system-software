@@ -53,6 +53,19 @@ export async function installJarvisSchema(client) {
     )
   `);
   await client.query(`CREATE INDEX IF NOT EXISTS idx_jarvis_prompts_user ON jarvis_prompts (user_id)`);
+  // Jarvis's notes about each user, carried into every conversation (memory.js).
+  await client.query(`
+    CREATE TABLE IF NOT EXISTS jarvis_memories (
+      id BIGSERIAL PRIMARY KEY,
+      user_id INTEGER NOT NULL,
+      text TEXT NOT NULL,
+      source TEXT NOT NULL DEFAULT 'user',
+      conversation_id TEXT,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+      updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
+    )
+  `);
+  await client.query(`CREATE INDEX IF NOT EXISTS idx_jarvis_memories_user ON jarvis_memories (user_id)`);
 }
 
 const summary = (row) => ({

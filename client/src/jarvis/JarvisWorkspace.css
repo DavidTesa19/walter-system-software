@@ -1286,3 +1286,103 @@
     font-size: 20px;
   }
 }
+
+/* ---------- Paměť ---------- */
+
+.jws-toggle-row--compact {
+  flex: none;
+  gap: 10px;
+  color: var(--color-text-muted);
+  font-size: var(--ui-text-sm);
+  font-weight: 600;
+}
+
+.jws-callout {
+  margin: 0 0 12px;
+  padding: 10px 12px;
+  border: 1px solid color-mix(in srgb, var(--color-warning, #d97706) 40%, var(--color-border));
+  border-radius: var(--ui-radius-md);
+  background: color-mix(in srgb, var(--color-warning, #d97706) 8%, var(--color-surface));
+  font-size: var(--ui-text-sm);
+}
+
+.jws-callout--error {
+  border-color: color-mix(in srgb, var(--color-danger, #dc2626) 40%, var(--color-border));
+  background: color-mix(in srgb, var(--color-danger, #dc2626) 8%, var(--color-surface));
+  color: var(--color-danger, #dc2626);
+}
+
+.jws-memory-add {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 14px;
+}
+
+.jws-memory-add input,
+.jws-memory--editing input {
+  flex: 1;
+  min-width: 0;
+  height: var(--ui-control-h);
+  box-sizing: border-box;
+  padding: 0 10px;
+  border: 1px solid var(--color-border);
+  border-radius: var(--ui-radius-md);
+  background: var(--color-surface);
+  color: var(--color-text);
+  font: inherit;
+  font-size: var(--ui-text-md);
+}
+
+.jws-memory-add input:focus,
+.jws-memory--editing input:focus {
+  outline: none;
+  border-color: var(--color-primary);
+}
+
+.jws-memory-list {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin-bottom: 10px;
+}
+
+.jws-memory {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 12px;
+  border: 1px solid var(--color-border);
+  border-radius: var(--ui-radius-lg);
+  background: var(--color-surface);
+}
+
+.jws-memory--editing {
+  padding: 6px;
+}
+
+.jws-memory-icon {
+  flex: none;
+  color: var(--color-primary);
+}
+
+.jws-memory-main {
+  flex: 1;
+  min-width: 0;
+}
+
+.jws-memory-text {
+  font-size: var(--ui-text-md);
+  overflow-wrap: anywhere;
+}
+
+.jws-memory-meta {
+  margin-top: 2px;
+  color: var(--color-text-muted);
+  font-size: var(--ui-text-xs);
+}
+
+@media (max-width: 768px) {
+  .jws-memory-add {
+    flex-direction: column;
+  }
+}

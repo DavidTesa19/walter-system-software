@@ -22,6 +22,10 @@ import {
 } from './catalog.js';
 import { createFileConversationStore, createPgConversationStore } from './store.js';
 import { registerPromptRoutes } from './prompts.js';
+import { createFileMemoryStore, createPgMemoryStore, memoryContextLines, registerMemoryRoutes } from './memory.js';
+import fs from 'node:fs';
+import path from 'node:path';
+import { isEmailConfigured, sendPersonalEmail } from '../email.js';
 import {
   MAX_AUDIO_BYTES,
   MAX_SPEECH_CHARS,
@@ -58,6 +62,9 @@ const MAX_MESSAGE_LENGTH = 8000;
 const HOURLY_LIMIT = Number(process.env.JARVIS_HOURLY_LIMIT) > 0 ? Number(process.env.JARVIS_HOURLY_LIMIT) : 60;
 // Transcriptions plus read-aloud requests; a long answer is read in a few pieces.
 const VOICE_HOURLY_LIMIT = Number(process.env.JARVIS_VOICE_HOURLY_LIMIT) > 0 ? Number(process.env.JARVIS_VOICE_HOURLY_LIMIT) : 300;
+// E-mails sent from Jarvis's drafts (the card's "Odeslat"), per user and hour.
+const EMAIL_HOURLY_LIMIT = Number(process.env.JARVIS_EMAIL_HOURLY_LIMIT) > 0 ? Number(process.env.JARVIS_EMAIL_HOURLY_LIMIT) : 20;
+const SEND_EMAIL_PATTERN = /^[^\s@<>(),;:"]+@[^\s@<>(),;:"]+\.[^\s@<>(),;:"]{2,}$/;
 const ATTACHMENT_HOURLY_LIMIT = Number(process.env.JARVIS_ATTACHMENT_HOURLY_LIMIT) > 0 ? Number(process.env.JARVIS_ATTACHMENT_HOURLY_LIMIT) : 100;
 
 // Busboy hands multer the filename as latin1; browsers send UTF-8, so "Smlouva
@@ -78,6 +85,7 @@ const PROPOSAL_STATUS_TEXT = {
   rejected: 'uživatel zamítl, neprovedeno',
   stale: 'neprovedeno – záznam se mezitím změnil',
   failed: 'provedení selhalo',
+  partial: 'uživatel potvrdil, provedeno jen zčásti',
 };
 
 // The question, answer and model of the `turn`-th question in a transcript
@@ -131,6 +139,15 @@ export function proposalOutcomes(transcript = []) {
   return lines;
 }
 
+// E-mails the user sent from Jarvis's drafts since their last message, so the
+// next answer knows (and does not offer to send them again).
+export function emailOutcomes(transcript = []) {
+  const lastQuestion = transcript.map((item) => item.type).lastIndexOf('question');
+  return transcript
+    .filter((item, index) => index > lastQuestion && item.type === 'email_status' && item.status === 'sent')
+    .map((item) => `E-mail „${item.subject}“ uživatel odeslal z karty (komu: ${(item.to ?? []).join(', ')}).`);
+}
+
 const isReplayable = (message) => !(message.role === 'assistant' && Array.isArray(message.content) && message.content.length === 0);
 
 // Text from the browser that goes into the <kontext> block: kept short and
@@ -139,7 +156,7 @@ const cleanContextText = (value, max = 160) => String(value ?? '').replace(/[<>]
 
 // What the app tells Jarvis at the start of every user message. It changes
 // every turn, so it lives here rather than in the cached system prompt.
-export function buildContextBlock(user, context, attachmentNames = [], proposalLines = []) {
+export function buildContextBlock(user, context, attachmentNames = [], proposalLines = [], memoryLines = []) {
   const now = new Date().toLocaleString('cs-CZ', {
     timeZone: 'Europe/Prague',
     weekday: 'long',
@@ -161,6 +178,7 @@ export function buildContextBlock(user, context, attachmentNames = [], proposalL
   }
   if (attachmentNames.length) lines.push(`Přílohy této zprávy: ${attachmentNames.map((name) => cleanContextText(name, 120)).join(', ')}`);
   for (const line of proposalLines) lines.push(cleanContextText(line, 400));
+  for (const line of memoryLines) lines.push(cleanContextText(line, 420));
   // The profile open in a grid, and the zakázka selected in it.
   const describeOpen = (record, title) => {
     if (
@@ -185,6 +203,24 @@ export function buildContextBlock(user, context, attachmentNames = [], proposalL
 export function registerJarvisRoutes(app, { authenticateToken, pool, dataDir, port, signAgentToken }) {
   const store = pool ? createPgConversationStore(pool) : createFileConversationStore(dataDir);
   registerPromptRoutes(app, { authenticateToken, pool, dataDir });
+  const memoryStore = pool ? createPgMemoryStore(pool) : createFileMemoryStore(dataDir);
+  registerMemoryRoutes(app, { authenticateToken, store: memoryStore });
+
+  // The address replies to a sent e-mail go to: the user's notification
+  // e-mail (Správa uživatelů), read on demand.
+  const userEmail = async (userId) => {
+    try {
+      if (pool) {
+        const { rows } = await pool.query('SELECT notification_email FROM users WHERE id = $1', [userId]);
+        return rows[0]?.notification_email || null;
+      }
+      const db = JSON.parse(fs.readFileSync(path.join(dataDir, 'db.json'), 'utf8'));
+      const user = (db.users ?? []).find((item) => Number(item.id) === userId);
+      return user?.notificationEmail ?? user?.notification_email ?? null;
+    } catch {
+      return null;
+    }
+  };
   const baseUrl = `http://127.0.0.1:${port}`;
   const running = new Set();
 
@@ -259,6 +295,8 @@ export function registerJarvisRoutes(app, { authenticateToken, pool, dataDir, po
     res.json({
       available: isJarvisConfigured(),
       model: JARVIS_MODEL,
+      // Drafts can be sent from their card through the app's Brevo account.
+      emailSend: isEmailConfigured(),
       voice,
       ...(voice
         ? {
@@ -530,6 +568,7 @@ export function registerJarvisRoutes(app, { authenticateToken, pool, dataDir, po
       let status = 'rejected';
       let error;
       let created;
+      let results;
       if (decision === 'apply') {
         if (req.user.role === 'viewer') {
           status = 'failed';
@@ -542,8 +581,13 @@ export function registerJarvisRoutes(app, { authenticateToken, pool, dataDir, po
             note: `Jarvis, potvrzeno uživatelem: ${truncate(describeProposal(proposal), 300)}`,
           });
           try {
-            created = (await applyProposal(proposal, api))?.created;
-            status = 'applied';
+            const outcome = await applyProposal(proposal, api);
+            created = outcome?.created;
+            results = outcome?.results;
+            // A bulk card where some records were changed meanwhile: the rest went through.
+            const failed = results?.filter((result) => result.status !== 'applied') ?? [];
+            status = failed.length ? 'partial' : 'applied';
+            if (failed.length) error = `${failed.length} z ${results.length} nezměněno (${failed.map((result) => `${result.label}: ${result.error}`).slice(0, 3).join('; ')})`;
           } catch (applyError) {
             if (applyError instanceof ProposalError) {
               status = 'stale';
@@ -562,6 +606,7 @@ export function registerJarvisRoutes(app, { authenticateToken, pool, dataDir, po
         status,
         ...(error ? { error } : {}),
         ...(created ? { created } : {}),
+        ...(results ? { results } : {}),
         at: new Date().toISOString(),
       };
       await store.append(conversation.id, userId, { messages: [], transcript: [item], usage: zeroUsage() });
@@ -628,6 +673,77 @@ export function registerJarvisRoutes(app, { authenticateToken, pool, dataDir, po
   // from 0). Kept twice: as a transcript item, so the panel shows the choice
   // again, and in the usage log (Finance › Jarvis) with the question, the
   // answer and the model that gave it. 'none' takes a rating back.
+  // "Odeslat" on an e-mail card: the user sends Jarvis's draft (as they edited
+  // it) through the app's Brevo account. Only a draft of this user's own
+  // conversation, once, and the click is the approval: Jarvis never sends.
+  const withinEmailLimit = createHourlyLimiter(EMAIL_HOURLY_LIMIT);
+  app.post('/api/jarvis/conversations/:id/emails/:emailId/send', authenticateToken, async (req, res) => {
+    const userId = Number(req.user.id);
+    if (!isEmailConfigured()) return res.status(503).json({ error: 'Odesílání e-mailů není nastavené (chybí BREVO_API_KEY).' });
+    if (req.user.role === 'viewer') return res.status(403).json({ error: 'Máte jen přístup ke čtení.' });
+    if (!UUID_PATTERN.test(req.params.id)) return res.status(404).json({ error: 'Konverzace nenalezena.' });
+    const addresses = (value) => (Array.isArray(value) ? value : []).map((item) => String(item).trim()).filter(Boolean);
+    const to = addresses(req.body?.to);
+    const cc = addresses(req.body?.cc);
+    const subject = String(req.body?.subject ?? '').replace(/[\r\n]+/g, ' ').trim();
+    const body = String(req.body?.body ?? '').trim();
+    const invalid = [...to, ...cc].filter((address) => !SEND_EMAIL_PATTERN.test(address));
+    if (to.length === 0) return res.status(400).json({ error: 'Vyplňte adresu příjemce.' });
+    if (invalid.length) return res.status(400).json({ error: `Neplatná adresa: ${invalid.join(', ')}` });
+    if (to.length + cc.length > 10) return res.status(400).json({ error: 'Najednou lze poslat nejvýš 10 příjemcům.' });
+    if (!subject || subject.length > 300) return res.status(400).json({ error: 'Vyplňte předmět (nejvýš 300 znaků).' });
+    if (!body || body.length > 20000) return res.status(400).json({ error: 'Text e-mailu je prázdný nebo příliš dlouhý.' });
+
+    let conversation;
+    try {
+      conversation = await store.get(req.params.id, userId);
+    } catch (error) {
+      console.error('Jarvis: loading a conversation failed:', error);
+      return res.status(500).json({ error: 'Nepodařilo se načíst konverzaci.' });
+    }
+    if (!conversation) return res.status(404).json({ error: 'Konverzace nenalezena.' });
+    const transcript = conversation.transcript ?? [];
+    const draft = transcript.find((item) => item.type === 'email' && item.draft?.id === req.params.emailId)?.draft;
+    if (!draft) return res.status(404).json({ error: 'Koncept nenalezen.' });
+    if (transcript.some((item) => item.type === 'email_status' && item.id === draft.id && item.status === 'sent')) {
+      return res.status(409).json({ error: 'Tento e-mail už byl odeslán.' });
+    }
+    if (!withinEmailLimit(userId)) return res.status(429).json({ error: `Limit ${EMAIL_HOURLY_LIMIT} e-mailů za hodinu je vyčerpaný.` });
+
+    const own = await userEmail(userId);
+    const copyToMe = req.body?.copyToMe !== false && Boolean(own);
+    try {
+      const messageId = await sendPersonalEmail({
+        to,
+        cc,
+        bcc: copyToMe && !to.includes(own) && !cc.includes(own) ? [own] : [],
+        replyTo: own,
+        senderName: req.user.username,
+        subject,
+        text: body,
+      });
+      const item = {
+        type: 'email_status',
+        id: draft.id,
+        status: 'sent',
+        to,
+        cc,
+        subject,
+        copyToMe,
+        replyTo: own,
+        ...(messageId ? { messageId } : {}),
+        at: new Date().toISOString(),
+      };
+      await store.append(conversation.id, userId, { messages: [], transcript: [item], usage: zeroUsage() });
+      console.log(`Jarvis e-mail sent: user ${userId}, ${to.length + cc.length} recipient(s)`);
+      res.json(item);
+    } catch (error) {
+      const detail = error?.response?.data ? JSON.stringify(error.response.data) : error?.message ?? String(error);
+      console.error('Jarvis: sending an e-mail failed:', detail);
+      res.status(502).json({ error: 'E-mail se nepodařilo odeslat. Zkuste to znovu, nebo ho otevřete ve své poště.' });
+    }
+  });
+
   app.post('/api/jarvis/conversations/:id/feedback', authenticateToken, async (req, res) => {
     const userId = Number(req.user.id);
     const turn = Number(req.body?.turn);
@@ -739,6 +855,8 @@ export function registerJarvisRoutes(app, { authenticateToken, pool, dataDir, po
       running.add(conversationId);
       emit('conversation', { id: conversationId, isNew: !conversation });
 
+      const memoryEnabled = req.body?.memory !== false;
+      const memories = memoryEnabled ? await memoryStore.list(userId).catch(() => []) : [];
       const userMessage = {
         role: 'user',
         content: [
@@ -748,7 +866,12 @@ export function registerJarvisRoutes(app, { authenticateToken, pool, dataDir, po
               user,
               req.body?.context,
               attachments.map((attachment) => attachment.name),
-              [...proposalOutcomes(conversation?.transcript), ...calendarOutcomes(conversation?.transcript)]
+              [
+                ...proposalOutcomes(conversation?.transcript),
+                ...calendarOutcomes(conversation?.transcript),
+                ...emailOutcomes(conversation?.transcript),
+              ],
+              memoryContextLines(memories, { enabled: memoryEnabled })
             ),
           },
           ...attachments.map(attachmentBlock),
@@ -784,6 +907,13 @@ export function registerJarvisRoutes(app, { authenticateToken, pool, dataDir, po
         signal: abort.signal,
         // A scan read by read_document counts in this question's cost.
         onUsage: (entry) => turnLog.ocr.push(entry),
+        conversationId,
+        memoryDisabled: !memoryEnabled,
+        // A note saved to or dropped from the user's memory: a small card.
+        emitMemory: (memory) => {
+          pendingActions.push({ type: 'memory', memory });
+          emit('memory', memory);
+        },
         emitAction: (action) => {
           pendingActions.push({ type: 'action', action });
           emit('action', action);
@@ -928,6 +1058,8 @@ export function registerJarvisRoutes(app, { authenticateToken, pool, dataDir, po
       emitEmail: noop,
       emitCalendar: noop,
       emitDocument: noop,
+      emitMemory: noop,
+      memoryDisabled: true,
     };
     let answer = '';
     try {

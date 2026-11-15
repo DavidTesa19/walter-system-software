@@ -36,8 +36,10 @@ import { getFixedFieldOptionValues } from '../field-options.js';
 import { DocumentTextError, MAX_DOCUMENT_BYTES, documentText } from './documents.js';
 import { AresError, isValidIco, lookupByIco, normalizeIco, searchByName } from '../ares.js';
 import {
+  BULK_LIMIT,
   PROPOSAL_LIMITS,
   ProposalError,
+  buildBulkProposal,
   buildCreateCommissionProposal,
   buildCreateSubjectProposal,
   buildNoteProposal,
@@ -420,6 +422,47 @@ const proposeInput = z.object({
     .strict()
     .describe('Jen pole, která se mají změnit, s novou hodnotou; null pole vyprázdní.'),
   reason: z.string().max(300).optional().describe('Krátce proč – uživatel to uvidí na kartě (např. „IČO podle ARES“).'),
+}).strict();
+
+const bulkInput = z.object({
+  section,
+  role,
+  kind: kind.describe('subject = subjekty (klienti/partneři/tipaři), commission = zakázky. Všechny záznamy karty jsou stejného druhu, role a sekce.'),
+  changes: proposeInput.shape.changes
+    .optional()
+    .describe('Pole a hodnoty, které dostanou VŠECHNY záznamy (např. { state: "Odloženo" }). Vynech, když má každý záznam jiné hodnoty.'),
+  items: z
+    .array(
+      z.object({
+        id: z.number().int().positive().describe('Interní id záznamu (poslední část ref).'),
+        changes: proposeInput.shape.changes.optional().describe('Hodnoty jen pro tento záznam (přepíšou společné changes).'),
+      }).strict()
+    )
+    .min(1)
+    .max(BULK_LIMIT)
+    .describe(`Záznamy, kterých se změna týká (nejvýš ${BULK_LIMIT}).`),
+  assign: z
+    .object({
+      users: z.array(z.string().min(1).max(80)).max(10).describe('Uživatelská jména kolegů.'),
+      mode: z.enum(['replace', 'add', 'remove']).default('replace'),
+    })
+    .strict()
+    .optional()
+    .describe('Přiřazení pro všechny záznamy (replace = jen tito lidé, add = přidat, remove = odebrat).'),
+  reason: z.string().max(300).optional().describe('Krátce proč – uživatel to uvidí na kartě.'),
+}).strict();
+
+const rememberInput = z.object({
+  text: z
+    .string()
+    .min(1)
+    .max(300)
+    .describe('Jedna krátká věta v 3. osobě o uživateli, např. „Chce stručné odpovědi bez tabulek.“ nebo „Podepisuje se: Martin Walter, obchodní ředitel.“'),
+  replaces: z.number().int().positive().optional().describe('Id poznámky z <kontext>, kterou tahle nahrazuje (aktualizace); jinak vynech.'),
+}).strict();
+
+const forgetInput = z.object({
+  id: z.number().int().positive().describe('Id poznámky z <kontext> (Paměť).'),
 }).strict();
 
 const noteInput = z.object({
@@ -1170,6 +1213,98 @@ export const TOOLS = [
     },
   },
   {
+    name: 'propose_bulk_update',
+    description:
+      'Navrhne JEDNOU KARTOU stejnou nebo podobnou změnu mnoha záznamů jednoho seznamu (2–50 subjektů nebo zakázek stejné ' +
+      'role a sekce): např. „všem zakázkám Petra po termínu dej stav Odloženo“, „posuň termín těchto 8 zakázek na 30. 11.“, ' +
+      '„přeřaď všechny Pavlovy zakázky na Janu“, „doplň IČO těmto firmám“ (každý záznam vlastní hodnotou v items[].changes). ' +
+      'NIC NEZAPISUJE: uživatel uvidí kartu se všemi záznamy a změnami a potvrdí ji najednou. Pole jako u propose_update; ' +
+      'assign mění přiřazené lidi. Záznamy si nejdřív najdi (list_records / search) a ověř, že jsou ty správné; id ber z ref. ' +
+      'Pro jeden záznam použij propose_update.',
+    input: bulkInput,
+    label: (input) => `Připravuji hromadnou změnu (${(input.items ?? []).length} záznamů)`,
+    async run(input, ctx) {
+      if (ctx.user.role === 'viewer') throw new ToolError('Uživatel má jen přístup ke čtení – změny navrhovat nelze.');
+      assertSection(ctx, input.section);
+      ctx.proposalCount = (ctx.proposalCount ?? 0) + 1;
+      if (ctx.proposalCount > 10) throw new ToolError('V jedné odpovědi lze navrhnout nejvýš 10 změn. Navrhni zbytek v další odpovědi.');
+      const ids = [...new Set(input.items.map((item) => item.id))];
+      const path = input.kind === 'commission' ? commissionsPath(input.section, input.role) : entitiesPath(input.section, input.role);
+      // Read fresh, a few at a time: the card compares against what is stored now.
+      const entries = [];
+      const missing = [];
+      for (let start = 0; start < ids.length; start += 6) {
+        const batch = ids.slice(start, start + 6);
+        const records = await Promise.all(batch.map((id) => ctx.api.request('GET', `${path}/${id}`).catch(() => null)));
+        records.forEach((record, index) => {
+          const id = batch[index];
+          if (!record) {
+            missing.push(id);
+            return;
+          }
+          const own = input.items.find((item) => item.id === id)?.changes ?? {};
+          const label = truncate(
+            input.kind === 'commission' ? `${record.commission_id} · ${commissionName(record)}` : `${record.entity_id ?? ''} · ${subjectName(record)}`,
+            120
+          );
+          entries.push({ record, label, changes: { ...(input.changes ?? {}), ...own } });
+        });
+      }
+      if (entries.length === 0) throw new ToolError(`Žádný ze záznamů jsem nenašel (id ${missing.join(', ')}). Ověř id přes list_records nebo search.`);
+      const assign = input.assign ? { names: input.assign.users, mode: input.assign.mode, team: [...(await loadTeam(ctx)).values()] } : undefined;
+      let proposal;
+      try {
+        proposal = buildBulkProposal({ kind: input.kind, section: input.section, role: input.role, entries, assign, reason: input.reason });
+      } catch (error) {
+        if (error instanceof ProposalError) throw new ToolError(error.message);
+        throw error;
+      }
+      ctx.emitProposal(proposal);
+      return {
+        navrh: proposal.id,
+        zaznamu: proposal.items.length,
+        zmeny: proposal.items.slice(0, 8).map((item) => `${item.label}: ${item.changes.map((change) => `${change.label} ${change.fromText} → ${change.toText}`).join(', ')}`),
+        ...(proposal.items.length > 8 ? { dalsich: proposal.items.length - 8 } : {}),
+        ...(proposal.skipped ? { beze_zmeny: proposal.skipped } : {}),
+        ...(proposal.errors ? { nelze: proposal.errors } : {}),
+        ...(missing.length ? { nenalezeno: missing } : {}),
+        stav: PENDING_NOTE,
+      };
+    },
+  },
+  {
+    name: 'remember',
+    description:
+      'Uloží si krátkou poznámku o uživateli do paměti, kterou dostaneš v <kontext> každé další konverzace. Použij, když ' +
+      'uživatel řekne „pamatuj si…“, „příště…“, „vždycky…“, nebo když opakovaně projeví trvalou preferenci (forma a délka ' +
+      'odpovědí, podpis do e-mailů, na co se zaměřuje, jak oslovovat klienty). Neukládej jednorázové věci, údaje, které patří ' +
+      'do záznamů v aplikaci, ani citlivé údaje (hesla, rodná čísla, zdraví). Uloží se hned; uživatel uvidí kartu s možností ' +
+      'Zapomenout. Když poznámka mění starší, vyplň replaces.',
+    input: rememberInput,
+    label: (input) => `Ukládám si do paměti: „${truncate(input.text, 50)}“`,
+    async run(input, ctx) {
+      if (ctx.memoryDisabled) throw new ToolError('Uživatel má paměť vypnutou (Jarvis › Nastavení). Nic jsem neuložil – řekni mu to.');
+      const memory = input.replaces
+        ? await ctx.api.request('PUT', `/api/jarvis/memories/${input.replaces}`, { text: input.text })
+        : await ctx.api.request('POST', '/api/jarvis/memories', { text: input.text, ...(ctx.conversationId ? { conversationId: ctx.conversationId } : {}) });
+      ctx.emitMemory({ action: input.replaces ? 'updated' : 'saved', id: memory.id, text: memory.text });
+      return { ulozeno: memory.id, text: memory.text, stav: 'Uloženo. Uživatel to vidí na kartě a může to jedním kliknutím zapomenout.' };
+    },
+  },
+  {
+    name: 'forget',
+    description:
+      'Smaže poznámku z paměti (id z <kontext>). Použij, když uživatel řekne „zapomeň…“, „to už neplatí“, nebo když ' +
+      'poznámka odporuje tomu, co teď chce. Smaže se hned; karta nabídne Vrátit.',
+    input: forgetInput,
+    label: () => 'Mažu poznámku z paměti',
+    async run(input, ctx) {
+      const memory = await ctx.api.request('DELETE', `/api/jarvis/memories/${input.id}`);
+      ctx.emitMemory({ action: 'forgotten', id: memory.id, text: memory.text });
+      return { smazano: memory.id, text: memory.text };
+    },
+  },
+  {
     name: 'propose_task',
     description:
       'Přidá úkol do Úkolů (moje nebo týmové) nebo označí úkol jako hotový. NIC NEZAPISUJE: uživatel uvidí kartu a ' +
@@ -1782,6 +1917,9 @@ export const toolLabel = (name, input) => {
 // read by everyone in the room, so Jarvis answers there with these left out.
 const TEAM_CHAT_BLOCKED_TOOLS = new Set([
   'propose_update',
+  'propose_bulk_update',
+  'remember',
+  'forget',
   'propose_task',
   'propose_assign',
   'propose_obor',

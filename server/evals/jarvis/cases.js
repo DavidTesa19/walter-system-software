@@ -206,6 +206,21 @@ export const CASES = [
     expect: { tools: ['propose_update'], cards: { proposal: true } },
   },
   {
+    id: 'propose-bulk',
+    tags: ['změny', 'hromadně'],
+    question: 'Všem zakázkám ve stavu Probíhá nastav prioritu Urgentní.',
+    // Zakázky of two roles need two cards; a lone one may go on propose_update.
+    expect: { tools: ['propose_bulk_update'], cards: { proposal: true } },
+    rubric: 'Odpověď navrhne změnu priority hromadnou kartou (ne zvlášť pro každou zakázku stejné role), řekne, kolik zakázek se změní, a že změna čeká na potvrzení. Netvrdí, že je už provedená.',
+  },
+  {
+    id: 'remember-preference',
+    tags: ['paměť'],
+    question: 'Pamatuj si prosím, že odpovědi chci vždycky stručně a v bodech.',
+    expect: { tools: ['remember'], cards: { memory: true } },
+    rubric: 'Odpověď krátce potvrdí, že si to Jarvis zapamatoval (případně zmíní, že jde zapomenout). Nic dalšího nevymýšlí.',
+  },
+  {
     id: 'propose-invalid-ico',
     tags: ['změny', 'kontrola'],
     question: 'Nastav Kovárně Procházka IČO 12345678.',
