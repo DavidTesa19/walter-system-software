@@ -1,8 +1,8 @@
-// The Jarvis screen (view id `jarvis`): Jarvis with room to work. A rail on
-// the left with the screen's sections and the user's conversations (search,
-// pin, rename, delete), and the section itself on the right: the chat, what
-// Jarvis can do, saved questions, reminders, settings and, for admins, the
-// cost analysis.
+// The Jarvis screen (view id `jarvis`). A top bar with Jarvis's state, the
+// sections (Velín, Konverzace, Schopnosti, Šablony, Paměť, Upozornění,
+// Nastavení, Analýza for admins) and the time; below it the section. Velín is
+// the command center: the chat with Jarvis's orb in the middle and widgets
+// around it (JarvisCommandCenter.tsx), each foldable and hideable.
 //
 // JarvisPanel renders this (through a portal into App's page host) and owns
 // all the state: the conversation running here is the same one the floating
@@ -11,21 +11,26 @@
 import { Suspense, lazy, useEffect, useMemo, useRef, useState } from 'react';
 import type { ReactNode } from 'react';
 import {
-  ArrowUpRight, Bell, Bookmark, Brain, ChartColumnBig, Check, CornerDownLeft, Keyboard, Lock, MessagesSquare, Pencil, Pin, PinOff, Plus,
-  Search, SendHorizontal, Settings2, Share2, ShieldCheck, Sparkles, Trash2, Users, X,
+  ArrowUpRight, Bookmark, Brain, Check, CornerDownLeft, Keyboard, Lock, PanelLeft, PanelRight, Pencil, Pin, PinOff, Plus,
+  Search, SendHorizontal, Share2, ShieldCheck, SlidersHorizontal, Sun, Trash2, Users, X,
 } from 'lucide-react';
-import type { ConversationSummary, JarvisMemory, JarvisPrompt, JarvisPromptInput } from './jarvisApi';
+import type { ConversationSummary, JarvisAttention, JarvisMemory, JarvisOpenAction, JarvisPrompt, JarvisPromptInput, JarvisStatus } from './jarvisApi';
 import { jarvisApi } from './jarvisApi';
 import { apiGet } from '../utils/api';
 import { memoryEnabled, setMemoryEnabled } from './memorySettings';
 import { CAPABILITIES, QUICK_EXAMPLES } from './capabilities';
 import { MODEL_CHOICES } from './models';
 import type { ModelChoice } from './models';
+import JarvisOrb from './JarvisOrb';
+import type { OrbState } from './JarvisOrb';
+import { CommandWidgets, CustomizePanel, useCommandLayout, useVelinWidth } from './JarvisCommandCenter';
+import type { CommandCenterData } from './JarvisCommandCenter';
 import './JarvisWorkspace.css';
+import './JarvisCommandCenter.css';
 
 const JarvisAnalytics = lazy(() => import('./analytics/JarvisAnalytics'));
 
-export type JarvisSection = 'chat' | 'capabilities' | 'prompts' | 'memory' | 'attention' | 'settings' | 'analysis';
+export type JarvisSection = 'chat' | 'conversations' | 'capabilities' | 'prompts' | 'memory' | 'attention' | 'settings' | 'analysis';
 
 const ICON = { size: 16, strokeWidth: 1.9, 'aria-hidden': true } as const;
 const SMALL = { size: 14, strokeWidth: 2, 'aria-hidden': true } as const;
@@ -250,102 +255,65 @@ function ConversationList({
 
 export function JarvisHome({
   userName,
-  prompts,
-  urgent,
   unavailable,
   onUse,
   onSection,
   onBriefing,
-  onCard,
-  voiceHint,
+  onTalk,
+  canListen,
+  orbState,
 }: {
   userName: string | null;
-  prompts: JarvisPrompt[] | null;
-  urgent: number;
   unavailable: boolean;
   onUse: (text: string, send: boolean) => void;
   onSection: (section: JarvisSection) => void;
   onBriefing: () => void;
-  onCard: () => void;
-  voiceHint: boolean;
+  onTalk: () => void;
+  canListen: boolean;
+  orbState: OrbState;
 }) {
   const hour = new Date().getHours();
   const greeting = hour < 10 ? 'Dobré ráno' : hour < 18 ? 'Dobrý den' : 'Dobrý večer';
-  const mine = (prompts ?? []).slice(0, 6);
   return (
-    <div className="jws-home">
-      <div className="jws-home-hero">
-        <span className="jws-home-mark" aria-hidden="true">
-          <Sparkles size={26} strokeWidth={1.8} />
-        </span>
-        <h1>
-          {greeting}
-          {userName ? `, ${userName}` : ''}
-        </h1>
-        <p>
-          Hledám v datech, kam máte přístup, v kalendáři, dokumentech, ARES i na webu. Změny jen navrhuji – provedou se, až je potvrdíte.
-          {voiceHint && ' Ptát se můžete i hlasem (Alt+M).'}
-        </p>
-      </div>
-
-      <div className="jws-home-actions">
-        <button type="button" className="jws-home-action jws-home-action--primary" onClick={onBriefing} disabled={unavailable}>
-          <Sparkles {...ICON} />
-          <span>
-            <strong>Ranní přehled</strong>
-            <small>Co je po termínu, co dnes a co stojí</small>
+    <div className="jws-hero">
+      <JarvisOrb size="hero" state={orbState} />
+      <h1>
+        {greeting}
+        {userName ? `, ${userName}` : ''}
+      </h1>
+      <p>
+        {unavailable
+          ? 'Jarvis teď není dostupný: na serveru chybí klíč k Claude API.'
+          : 'Zeptejte se na klienty, zakázky, kalendář nebo dokumenty, nebo mi dejte úkol. Změny dat jen navrhuji – provedou se, až je potvrdíte.'}
+      </p>
+      {canListen && (
+        <button type="button" className="jws-talk" onClick={onTalk} disabled={unavailable} title="Mluvit s Jarvisem (Alt+M)">
+          <span className="jws-talk-wave" aria-hidden="true">
+            <i />
+            <i />
+            <i />
+            <i />
+            <i />
+          </span>
+          <span className="jws-talk-text">
+            <strong>Mluvit s Jarvisem</strong>
+            <small>Alt+M · podržením mluvíte, puštěním odešlete</small>
           </span>
         </button>
-        <button type="button" className="jws-home-action" onClick={() => onSection('attention')}>
-          <Bell {...ICON} />
-          <span>
-            <strong>Upozornění{urgent > 0 ? ` (${urgent})` : ''}</strong>
-            <small>{urgent > 0 ? 'Po termínu nebo na dnes' : 'Nic nehoří'}</small>
-          </span>
+      )}
+      <div className="jws-hero-examples">
+        <button type="button" className="jws-hero-example" onClick={onBriefing} disabled={unavailable}>
+          <Sun {...SMALL} /> Ranní přehled
         </button>
-        <button type="button" className="jws-home-action" onClick={onCard} disabled={unavailable}>
-          <Plus {...ICON} />
-          <span>
-            <strong>Vizitka → kontakt</strong>
-            <small>Vyfoťte nebo nahrajte vizitku</small>
-          </span>
-        </button>
-      </div>
-
-      <div className="jws-home-grid">
         {QUICK_EXAMPLES.map(({ capability, example }) => {
           const Icon = capability.icon;
           return (
-            <button key={example} type="button" className="jws-home-card" onClick={() => onUse(example, true)} disabled={unavailable}>
-              <span className="jws-home-card-icon">
-                <Icon {...ICON} />
-              </span>
-              <span className="jws-home-card-text">
-                <small>{capability.title}</small>
-                <span>{example}</span>
-              </span>
-              <SendHorizontal {...SMALL} className="jws-home-card-go" />
+            <button key={example} type="button" className="jws-hero-example" onClick={() => onUse(example, true)} disabled={unavailable}>
+              <Icon {...SMALL} /> {example}
             </button>
           );
         })}
       </div>
-
-      {mine.length > 0 && (
-        <div className="jws-home-prompts">
-          <div className="jws-rail-heading">Šablony</div>
-          <div className="jws-chips">
-            {mine.map((prompt) => (
-              <button key={prompt.id} type="button" className="jws-chip" onClick={() => onUse(prompt.text, false)} title={prompt.text}>
-                <Bookmark {...SMALL} />
-                {prompt.title}
-              </button>
-            ))}
-            <button type="button" className="jws-chip jws-chip--ghost" onClick={() => onSection('prompts')}>
-              Všechny šablony
-            </button>
-          </div>
-        </div>
-      )}
       <button type="button" className="jws-link" onClick={() => onSection('capabilities')}>
         Co všechno Jarvis umí <ArrowUpRight {...SMALL} />
       </button>
@@ -836,19 +804,16 @@ function SettingsSection({
 // The screen
 // ---------------------------------------------------------------------------
 
-interface NavItem {
-  id: JarvisSection;
-  label: string;
-  icon: ReactNode;
-  count?: number;
-}
-
 export interface JarvisWorkspaceProps {
   section: JarvisSection;
   onSection: (section: JarvisSection) => void;
   chat: ReactNode;
   busy: boolean;
   subtitle: string;
+  orbState: OrbState;
+  status: JarvisStatus | null;
+  activeTools: string[];
+  pendingCount: number;
   conversations: ConversationSummary[] | null;
   activeId: string | null;
   onNewConversation: () => void;
@@ -857,6 +822,13 @@ export interface JarvisWorkspaceProps {
   onUpdateConversation: (id: string, patch: { title?: string; pinned?: boolean }) => void;
   urgent: number;
   attention: ReactNode;
+  attentionData: JarvisAttention | null;
+  onOpenRecord: (action: JarvisOpenAction) => void;
+  onBriefing: () => void;
+  onCard: () => void;
+  onTalk: () => void;
+  canListen: boolean;
+  voiceLabel: string | null;
   prompts: JarvisPrompt[] | null;
   onCreatePrompt: (input: JarvisPromptInput) => Promise<boolean>;
   onUpdatePrompt: (id: number, input: JarvisPromptInput) => Promise<boolean>;
@@ -869,12 +841,32 @@ export interface JarvisWorkspaceProps {
   canSpeak: boolean;
   voiceSettings: ReactNode;
   isAdmin: boolean;
+  userId: number | null;
   onOpenHelp?: () => void;
+  onOpenView?: (view: 'tasks' | 'calendar') => void;
 }
+
+// The top bar's date and time, to the minute.
+function useClock() {
+  const [now, setNow] = useState(() => new Date());
+  useEffect(() => {
+    const timer = window.setInterval(() => setNow(new Date()), 20_000);
+    return () => window.clearInterval(timer);
+  }, []);
+  return now;
+}
+
+const STATUS_TONE: Record<OrbState, string> = { idle: 'idle', busy: 'busy', listening: 'listening', speaking: 'busy', offline: 'offline' };
 
 export default function JarvisWorkspace(props: JarvisWorkspaceProps) {
   const { section, onSection, isAdmin } = props;
   const [names, setNames] = useState<Map<number, string>>(new Map());
+  const layout = useCommandLayout();
+  const velin = useVelinWidth();
+  const wide = velin.mode === 'wide';
+  const [customizing, setCustomizing] = useState(false);
+  const [phoneView, setPhoneView] = useState<'chat' | 'widgets'>('chat');
+  const now = useClock();
 
   useEffect(() => {
     if (section !== 'prompts' || names.size) return;
@@ -883,78 +875,202 @@ export default function JarvisWorkspace(props: JarvisWorkspaceProps) {
       .catch(() => undefined);
   }, [section, names.size]);
 
-  const nav: NavItem[] = [
-    { id: 'chat', label: 'Konverzace', icon: <MessagesSquare {...ICON} /> },
-    { id: 'capabilities', label: 'Schopnosti', icon: <Sparkles {...ICON} /> },
-    { id: 'prompts', label: 'Šablony', icon: <Bookmark {...ICON} />, count: props.prompts?.filter((prompt) => prompt.mine).length },
-    { id: 'memory', label: 'Paměť', icon: <Brain {...ICON} /> },
-    { id: 'attention', label: 'Upozornění', icon: <Bell {...ICON} />, count: props.urgent || undefined },
-    { id: 'settings', label: 'Nastavení', icon: <Settings2 {...ICON} /> },
-    ...(isAdmin ? [{ id: 'analysis' as const, label: 'Analýza nákladů', icon: <ChartColumnBig {...ICON} /> }] : []),
+  const tabs: Array<{ id: JarvisSection; label: string; count?: number }> = [
+    { id: 'chat', label: 'Velín' },
+    { id: 'conversations', label: 'Konverzace' },
+    { id: 'capabilities', label: 'Schopnosti' },
+    { id: 'prompts', label: 'Šablony' },
+    { id: 'memory', label: 'Paměť' },
+    { id: 'attention', label: 'Upozornění', count: props.urgent || undefined },
+    { id: 'settings', label: 'Nastavení' },
+    ...(isAdmin ? [{ id: 'analysis' as const, label: 'Analýza' }] : []),
   ];
 
   const openConversation = (id: string) => {
     props.onOpenConversation(id);
     onSection('chat');
+    setPhoneView('chat');
   };
 
+  const data: CommandCenterData = {
+    status: props.status,
+    busy: props.busy,
+    activeTools: props.activeTools,
+    modelChoice: props.modelChoice,
+    onModelChoice: props.onModelChoice,
+    readAloud: props.readAloud,
+    onToggleReadAloud: props.onToggleReadAloud,
+    canSpeak: props.canSpeak,
+    canListen: props.canListen,
+    voiceLabel: props.voiceLabel,
+    prompts: props.prompts,
+    onUsePrompt: (text, send) => {
+      setPhoneView('chat');
+      props.onUsePrompt(text, send);
+    },
+    conversations: props.conversations,
+    activeId: props.activeId,
+    onOpenConversation: openConversation,
+    onNewConversation: () => {
+      props.onNewConversation();
+      setPhoneView('chat');
+    },
+    attention: props.attentionData,
+    onOpenRecord: props.onOpenRecord,
+    onBriefing: () => {
+      setPhoneView('chat');
+      props.onBriefing();
+    },
+    pendingCount: props.pendingCount,
+    onCard: props.onCard,
+    onTalk: () => {
+      setPhoneView('chat');
+      props.onTalk();
+    },
+    onSection,
+    onOpenView: props.onOpenView,
+    isAdmin,
+    userId: props.userId,
+  };
+
+  // Wide: widgets left and right. Narrower: one side column holding the
+  // widgets of every column switched on (and on a phone, behind "Přehled").
+  const { left, right } = layout.layout;
+  const sideColumns: Array<'left' | 'right'> = wide ? (right ? ['right'] : []) : [...(left ? (['left'] as const) : []), ...(right ? (['right'] as const) : [])];
+  const showLeft = wide && left;
+  const showSide = sideColumns.length > 0;
+
   return (
-    <div className="jws">
-      <aside className="jws-rail" aria-label="Jarvis">
-        <div className="jws-brand">
-          <span className="jws-brand-mark" aria-hidden="true">
-            <Sparkles size={17} strokeWidth={2} />
-          </span>
-          <span className="jws-brand-text">
-            <strong>Jarvis</strong>
-            <small>{props.subtitle}</small>
-          </span>
+    <div className="jws jws--cc">
+      <header className="jcc-top">
+        <div className="jcc-brand">
+          <JarvisOrb size="mini" state={props.orbState} />
+          <strong>Jarvis</strong>
+          <span className={`jcc-status jcc-status--${STATUS_TONE[props.orbState]}`}>{props.subtitle}</span>
         </div>
-        <button
-          type="button"
-          className="jws-new"
-          onClick={() => {
-            props.onNewConversation();
-            onSection('chat');
-          }}
-          disabled={props.busy}
-          title="Nová konverzace (Alt+N)"
-        >
-          <Plus size={16} strokeWidth={2.2} aria-hidden />
-          <span>Nová konverzace</span>
-          <kbd>Alt+N</kbd>
-        </button>
-        <nav className="jws-nav">
-          {nav.map((item) => (
+        <nav className="jcc-tabs" aria-label="Části Jarvise">
+          {tabs.map((tab) => (
             <button
-              key={item.id}
+              key={tab.id}
               type="button"
-              className={`jws-nav-item${section === item.id ? ' is-active' : ''}`}
-              onClick={() => onSection(item.id)}
-              aria-current={section === item.id ? 'page' : undefined}
+              className={`jcc-tab${section === tab.id ? ' is-on' : ''}`}
+              onClick={() => onSection(tab.id)}
+              aria-current={section === tab.id ? 'page' : undefined}
             >
-              {item.icon}
-              <span>{item.label}</span>
-              {item.count ? <span className={`jws-count${item.id === 'attention' ? ' jws-count--alert' : ''}`}>{item.count}</span> : null}
+              {tab.label}
+              {tab.count ? <span className="jcc-tab-count">{tab.count}</span> : null}
             </button>
           ))}
         </nav>
-        <ConversationList
-          conversations={props.conversations}
-          activeId={props.activeId}
-          busy={props.busy}
-          onOpen={openConversation}
-          onDelete={props.onDeleteConversation}
-          onUpdate={props.onUpdateConversation}
-        />
-      </aside>
+        <div className="jcc-top-right">
+          {wide && (
+            <span className="jcc-clock" aria-label="Datum a čas">
+              <span>{now.toLocaleDateString('cs-CZ', { weekday: 'short', day: 'numeric', month: 'numeric' })}</span>
+              <strong>{now.toLocaleTimeString('cs-CZ', { hour: '2-digit', minute: '2-digit' })}</strong>
+            </span>
+          )}
+          {section === 'chat' && (
+            <>
+              <button
+                type="button"
+                className={`jcc-tool-btn${left ? ' is-on' : ''}`}
+                onClick={() => layout.toggleColumn('left')}
+                aria-pressed={left}
+                title={left ? 'Skrýt levý sloupec' : 'Ukázat levý sloupec'}
+                aria-label="Levý sloupec"
+              >
+                <PanelLeft size={16} strokeWidth={2} aria-hidden />
+              </button>
+              <button
+                type="button"
+                className={`jcc-tool-btn${right ? ' is-on' : ''}`}
+                onClick={() => layout.toggleColumn('right')}
+                aria-pressed={right}
+                title={right ? 'Skrýt pravý sloupec' : 'Ukázat pravý sloupec'}
+                aria-label="Pravý sloupec"
+              >
+                <PanelRight size={16} strokeWidth={2} aria-hidden />
+              </button>
+              <button
+                type="button"
+                className="jcc-btn jcc-btn--customize"
+                onClick={() => setCustomizing((value) => !value)}
+                aria-expanded={customizing}
+                title="Přizpůsobit: které widgety a sloupce zobrazit"
+                aria-label="Přizpůsobit"
+              >
+                <SlidersHorizontal size={15} strokeWidth={2} aria-hidden /> <span className="jcc-btn-label">Přizpůsobit</span>
+              </button>
+            </>
+          )}
+        </div>
+      </header>
 
       <div className="jws-main">
-        {/* The chat stays mounted behind the other sections, so a running
-            answer and the scroll position survive a look at the settings. */}
-        <div className="jws-chat" hidden={section !== 'chat'}>
-          {props.chat}
+        {/* Velín stays mounted behind the other sections: the chat inside it
+            keeps a running answer and its scroll position. */}
+        <div
+          ref={velin.ref}
+          className={`jcc jcc--${velin.mode}${showLeft ? ' jcc--left' : ''}${showSide ? ' jcc--right' : ''}`}
+          hidden={section !== 'chat'}
+          data-phone-view={phoneView}
+        >
+          <div className="jcc-phone-switch" role="group" aria-label="Zobrazit">
+            <button type="button" className={phoneView === 'chat' ? 'is-on' : undefined} onClick={() => setPhoneView('chat')} aria-pressed={phoneView === 'chat'}>
+              Chat
+            </button>
+            <button type="button" className={phoneView === 'widgets' ? 'is-on' : undefined} onClick={() => setPhoneView('widgets')} aria-pressed={phoneView === 'widgets'}>
+              Přehled{props.urgent ? ` (${props.urgent})` : ''}
+            </button>
+          </div>
+          {customizing && <CustomizePanel layout={layout} isAdmin={isAdmin} onClose={() => setCustomizing(false)} />}
+          {showLeft && (
+            <aside className="jcc-col" aria-label="Widgety vlevo">
+              <CommandWidgets data={data} layout={layout} columns={['left']} />
+            </aside>
+          )}
+          <div className="jcc-center">
+            <div className="jws-chat">{props.chat}</div>
+          </div>
+          {showSide && (
+            <aside className="jcc-col" aria-label="Widgety">
+              <CommandWidgets data={data} layout={layout} columns={sideColumns} />
+            </aside>
+          )}
         </div>
+        {section === 'conversations' && (
+          <div className="jws-scroll">
+            <div className="jws-section jws-section--convs">
+              <header className="jws-section-head jws-section-head--row">
+                <div>
+                  <h2>Konverzace</h2>
+                  <p>Všechny vaše konverzace s Jarvisem: hledání v názvech, připnutí nahoru, přejmenování a smazání.</p>
+                </div>
+                <button
+                  type="button"
+                  className="jws-btn jws-btn--primary"
+                  onClick={() => {
+                    props.onNewConversation();
+                    onSection('chat');
+                  }}
+                  disabled={props.busy}
+                >
+                  <Plus {...SMALL} /> Nová konverzace
+                </button>
+              </header>
+              <div className="jws-card jws-card--flush jws-conv-page">
+                <ConversationList
+                  conversations={props.conversations}
+                  activeId={props.activeId}
+                  busy={props.busy}
+                  onOpen={openConversation}
+                  onDelete={props.onDeleteConversation}
+                  onUpdate={props.onUpdateConversation}
+                />
+              </div>
+            </div>
+          </div>
+        )}
         {section === 'capabilities' && (
           <div className="jws-scroll">
             <CapabilitiesSection onUse={props.onUsePrompt} onSave={(input) => void props.onCreatePrompt(input)} />

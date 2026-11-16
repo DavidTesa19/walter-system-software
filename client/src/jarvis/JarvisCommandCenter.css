@@ -1,0 +1,1562 @@
+/* Velín, the Jarvis screen's home (JarvisCommandCenter.tsx, JarvisOrb.tsx,
+   the top bar in JarvisWorkspace.tsx). A command center in the app's own
+   identity: palette colours only (so it follows light/dark and every custom
+   palette), the redesign's scale tokens, the page font. The glow and the orb
+   are built from --color-primary and --color-accent. */
+
+/* ---------- the orb ---------- */
+
+.jorb {
+  --orb: 220px;
+  position: relative;
+  display: inline-flex;
+  flex: none;
+  width: var(--orb);
+  height: var(--orb);
+  align-items: center;
+  justify-content: center;
+}
+
+.jorb--compact {
+  --orb: 44px;
+}
+
+.jorb--mini {
+  --orb: 28px;
+}
+
+.jorb-halo {
+  position: absolute;
+  inset: 4%;
+  border-radius: 50%;
+  background: radial-gradient(circle, color-mix(in srgb, var(--color-primary) 38%, transparent) 0%, transparent 68%);
+  filter: blur(calc(var(--orb) * 0.06));
+  opacity: 0.85;
+}
+
+.jorb-ring {
+  position: absolute;
+  border-radius: 50%;
+  pointer-events: none;
+}
+
+.jorb-ring--outer {
+  inset: 0;
+  border: 1px dashed color-mix(in srgb, var(--color-primary) 45%, transparent);
+  animation: jorb-spin 48s linear infinite;
+}
+
+.jorb-ring--inner {
+  inset: 9%;
+  border: 2px solid transparent;
+  border-top-color: color-mix(in srgb, var(--color-accent) 70%, transparent);
+  border-bottom-color: color-mix(in srgb, var(--color-primary) 55%, transparent);
+  animation: jorb-spin 70s linear infinite reverse;
+}
+
+.jorb--compact .jorb-ring--inner {
+  border-width: 1.5px;
+}
+
+.jorb-core {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: calc(var(--orb) * 0.09);
+  width: 70%;
+  height: 70%;
+  border-radius: 50%;
+  background:
+    radial-gradient(circle at 34% 26%, color-mix(in srgb, #ffffff 92%, var(--color-primary)) 0%, color-mix(in srgb, #ffffff 55%, var(--color-primary)) 24%, var(--color-primary) 62%, color-mix(in srgb, var(--color-primary) 62%, #0b1020) 100%);
+  box-shadow:
+    0 calc(var(--orb) * 0.08) calc(var(--orb) * 0.2) calc(var(--orb) * -0.06) color-mix(in srgb, var(--color-primary) 60%, transparent),
+    inset 0 calc(var(--orb) * -0.06) calc(var(--orb) * 0.14) color-mix(in srgb, var(--color-primary) 55%, #0b1020),
+    inset 0 0 0 1px color-mix(in srgb, #ffffff 25%, transparent);
+  animation: jorb-float 5s ease-in-out infinite;
+}
+
+.jorb--mini .jorb-core,
+.jorb--compact .jorb-core {
+  width: 100%;
+  height: 100%;
+  animation: none;
+}
+
+.jorb-eye {
+  width: calc(var(--orb) * 0.11);
+  height: calc(var(--orb) * 0.032);
+  min-width: 3px;
+  min-height: 2px;
+  border-radius: 999px;
+  background: #ffffff;
+  box-shadow: 0 0 calc(var(--orb) * 0.05) rgba(255, 255, 255, 0.9);
+  animation: jorb-blink 6s ease-in-out infinite;
+}
+
+/* Thinking: the rings turn quickly and the halo breathes. */
+.jorb--busy .jorb-ring--outer {
+  animation-duration: 6s;
+}
+
+.jorb--busy .jorb-ring--inner {
+  animation-duration: 3.5s;
+}
+
+.jorb--busy .jorb-halo {
+  animation: jorb-breathe 1.6s ease-in-out infinite;
+}
+
+/* Listening: an accent halo, eyes wide open. */
+.jorb--listening .jorb-halo {
+  background: radial-gradient(circle, color-mix(in srgb, var(--color-accent) 55%, transparent) 0%, transparent 70%);
+  animation: jorb-breathe 1.2s ease-in-out infinite;
+}
+
+.jorb--listening .jorb-eye {
+  height: calc(var(--orb) * 0.07);
+  animation: none;
+}
+
+/* Speaking: the eyes move with the voice. */
+.jorb--speaking .jorb-eye {
+  animation: jorb-talk 0.45s ease-in-out infinite alternate;
+}
+
+.jorb--speaking .jorb-halo {
+  animation: jorb-breathe 0.9s ease-in-out infinite;
+}
+
+.jorb--offline {
+  filter: grayscale(1);
+  opacity: 0.6;
+}
+
+.jorb--offline .jorb-ring,
+.jorb--offline .jorb-core,
+.jorb--offline .jorb-eye {
+  animation: none;
+}
+
+@keyframes jorb-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+@keyframes jorb-float {
+  0%,
+  100% {
+    transform: translateY(0);
+  }
+  50% {
+    transform: translateY(calc(var(--orb) * -0.02));
+  }
+}
+
+@keyframes jorb-blink {
+  0%,
+  92%,
+  100% {
+    transform: scaleY(1);
+  }
+  95% {
+    transform: scaleY(0.15);
+  }
+}
+
+@keyframes jorb-breathe {
+  0%,
+  100% {
+    transform: scale(1);
+    opacity: 0.7;
+  }
+  50% {
+    transform: scale(1.12);
+    opacity: 1;
+  }
+}
+
+@keyframes jorb-talk {
+  from {
+    transform: scaleY(0.6);
+  }
+  to {
+    transform: scaleY(2.2);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .jorb-ring,
+  .jorb-core,
+  .jorb-eye,
+  .jorb-halo {
+    animation: none !important;
+  }
+}
+
+/* ---------- the top bar (every section) ---------- */
+
+.jcc-top {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px 16px;
+  padding: 10px 20px;
+  border-bottom: 1px solid var(--color-border);
+  background: var(--color-surface);
+}
+
+.jcc-brand {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.jcc-brand strong {
+  font-family: var(--font-heading, var(--font-body));
+  font-size: var(--ui-text-lg);
+  font-weight: 700;
+  letter-spacing: -0.01em;
+}
+
+.jcc-status {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 22px;
+  padding: 0 9px;
+  border-radius: 999px;
+  border: 1px solid color-mix(in srgb, var(--color-success, #10b981) 40%, var(--color-border));
+  background: color-mix(in srgb, var(--color-success, #10b981) 8%, var(--color-surface));
+  color: var(--color-text);
+  font-family: var(--font-subheading, var(--font-body));
+  font-size: 11px;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.jcc-status::before {
+  content: '';
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--color-success, #10b981);
+  box-shadow: 0 0 6px var(--color-success, #10b981);
+}
+
+.jcc-status--busy {
+  border-color: color-mix(in srgb, var(--color-primary) 45%, var(--color-border));
+  background: color-mix(in srgb, var(--color-primary) 8%, var(--color-surface));
+}
+
+.jcc-status--busy::before {
+  background: var(--color-primary);
+  box-shadow: 0 0 6px var(--color-primary);
+  animation: jorb-breathe 1.2s ease-in-out infinite;
+}
+
+.jcc-status--listening::before {
+  background: var(--color-accent);
+  box-shadow: 0 0 6px var(--color-accent);
+}
+
+.jcc-status--offline {
+  border-color: color-mix(in srgb, var(--color-danger, #dc2626) 45%, var(--color-border));
+  background: color-mix(in srgb, var(--color-danger, #dc2626) 8%, var(--color-surface));
+}
+
+.jcc-status--offline::before {
+  background: var(--color-danger, #dc2626);
+  box-shadow: none;
+}
+
+.jcc-tabs {
+  display: inline-flex;
+  max-width: 100%;
+  overflow-x: auto;
+  padding: 2px;
+  border: 1px solid var(--color-border);
+  border-radius: var(--ui-radius-md);
+  background: var(--color-surface-alt);
+  scrollbar-width: none;
+}
+
+.jcc-tabs::-webkit-scrollbar {
+  display: none;
+}
+
+.jcc-tab {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  flex: none;
+  height: 28px;
+  padding: 0 9px;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--color-text-muted);
+  font: inherit;
+  font-size: var(--ui-text-sm);
+  font-weight: 600;
+  white-space: nowrap;
+  cursor: pointer;
+  transition: background-color var(--ui-transition), color var(--ui-transition);
+}
+
+.jcc-tab:hover {
+  color: var(--color-text);
+}
+
+.jcc-tab.is-on {
+  background: var(--color-surface);
+  color: var(--color-text);
+  box-shadow: var(--ui-shadow-xs);
+}
+
+.jcc-tab-count {
+  min-width: 16px;
+  height: 16px;
+  padding: 0 4px;
+  box-sizing: border-box;
+  border-radius: 8px;
+  background: var(--color-danger, #dc2626);
+  color: var(--color-danger-contrast, #fff);
+  font-size: 10px;
+  font-weight: 700;
+  line-height: 16px;
+  text-align: center;
+}
+
+.jcc-top-right {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-left: auto;
+}
+
+.jcc-clock {
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+  padding-right: 4px;
+  color: var(--color-text-muted);
+  font-size: 11.5px;
+  white-space: nowrap;
+}
+
+.jcc-clock strong {
+  color: var(--color-text);
+  font-size: var(--ui-text-lg);
+  font-weight: 650;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: 0.02em;
+}
+
+.jcc-btn,
+.jcc-tool-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  height: var(--ui-control-h);
+  padding: 0 11px;
+  box-sizing: border-box;
+  border: 1px solid var(--color-border);
+  border-radius: var(--ui-radius-md);
+  background: var(--color-surface);
+  color: var(--color-text);
+  font: inherit;
+  font-size: var(--ui-text-sm);
+  font-weight: 600;
+  white-space: nowrap;
+  cursor: pointer;
+  transition: border-color var(--ui-transition), background-color var(--ui-transition);
+}
+
+.jcc-btn:hover:not(:disabled),
+.jcc-tool-btn:hover:not(:disabled) {
+  border-color: color-mix(in srgb, var(--color-primary) 45%, var(--color-border));
+}
+
+.jcc-tool-btn {
+  width: var(--ui-control-h);
+  padding: 0;
+  color: var(--color-text-muted);
+}
+
+.jcc-tool-btn.is-on {
+  background: var(--color-primary-soft, color-mix(in srgb, var(--color-primary) 12%, transparent));
+  color: var(--color-primary-text, var(--color-primary));
+}
+
+.jcc-btn--primary {
+  border-color: var(--color-primary);
+  background: var(--color-primary);
+  color: var(--color-primary-contrast, #fff);
+}
+
+.jcc-btn--primary:hover:not(:disabled) {
+  background: var(--color-primary-hover, var(--color-primary));
+}
+
+.jcc-btn:disabled,
+.jcc-tool-btn:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+/* ---------- Velín: three columns ---------- */
+
+.jcc {
+  position: relative;
+  flex: 1 1 auto;
+  min-height: 0;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 14px;
+  padding: 14px;
+  box-sizing: border-box;
+  background:
+    radial-gradient(900px 480px at 50% -10%, color-mix(in srgb, var(--color-primary) 10%, transparent), transparent 70%),
+    radial-gradient(700px 420px at 100% 100%, color-mix(in srgb, var(--color-accent) 6%, transparent), transparent 70%),
+    var(--color-background);
+}
+
+.jcc[hidden] {
+  display: none !important;
+}
+
+/* Columns follow Velín's own width (useVelinWidth): wide, mid, narrow. */
+.jcc--wide.jcc--left.jcc--right {
+  grid-template-columns: 256px minmax(0, 1fr) 296px;
+}
+
+.jcc--wide.jcc--left:not(.jcc--right) {
+  grid-template-columns: 256px minmax(0, 1fr);
+}
+
+.jcc--wide.jcc--right:not(.jcc--left) {
+  grid-template-columns: minmax(0, 1fr) 296px;
+}
+
+.jcc--mid.jcc--right {
+  grid-template-columns: minmax(0, 1fr) 300px;
+}
+
+/* Narrow: one column and the Chat / Přehled switch. */
+.jcc--narrow {
+  grid-template-columns: minmax(0, 1fr);
+  grid-template-rows: auto minmax(0, 1fr);
+  padding: 8px;
+  gap: 8px;
+}
+
+.jcc--narrow .jcc-phone-switch {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  padding: 2px;
+  border: 1px solid var(--color-border);
+  border-radius: var(--ui-radius-md);
+  background: var(--color-surface-alt);
+}
+
+.jcc--narrow .jcc-phone-switch button {
+  height: 30px;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--color-text-muted);
+  font: inherit;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.jcc--narrow .jcc-phone-switch button.is-on {
+  background: var(--color-surface);
+  color: var(--color-text);
+  box-shadow: var(--ui-shadow-xs);
+}
+
+.jcc--narrow[data-phone-view='chat'] .jcc-col {
+  display: none;
+}
+
+.jcc--narrow[data-phone-view='widgets'] .jcc-center {
+  display: none;
+}
+
+.jcc--narrow .jcc-icon-btn {
+  opacity: 1;
+}
+
+/* In Velín the model is switched in AI jádro; the chat header keeps a
+   compact select instead of the four-button switch. */
+.jcc-center .jarvis-model-segmented {
+  display: none;
+}
+
+.jcc-center .jarvis-model-select.jarvis-only-phone {
+  display: inline-flex !important;
+}
+
+/* Přizpůsobit keeps only its icon until the window is wide enough. */
+@media (max-width: 1599px) {
+  .jcc-btn--customize {
+    width: var(--ui-control-h);
+    padding: 0;
+  }
+
+  .jcc-btn--customize .jcc-btn-label {
+    display: none;
+  }
+}
+
+/* The clock gives way first when the top bar runs out of room. */
+@media (max-width: 1365px) {
+  .jcc-clock {
+    display: none;
+  }
+}
+
+/* A lower window: a smaller orb, so the examples stay in view. */
+@media (max-height: 820px) {
+  .jws-hero .jorb--hero {
+    --orb: 168px;
+  }
+
+  .jws-hero {
+    gap: 10px;
+  }
+}
+
+.jcc-col {
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  overflow-y: auto;
+  padding: 2px;
+  margin: -2px;
+  scrollbar-width: thin;
+}
+
+.jcc-center {
+  min-width: 0;
+  min-height: 0;
+  display: flex;
+  border: 1px solid var(--color-border);
+  border-radius: var(--ui-radius-lg);
+  background: var(--color-surface);
+  box-shadow: var(--ui-shadow-xs);
+  overflow: hidden;
+}
+
+.jcc-center > .jws-chat,
+.jcc-center > .jws-chat > .jarvis-panel--page {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+/* The chat column is the panel's page variant; inside Velín it sits on a card. */
+.jcc-center .jarvis-panel.jarvis-panel--page {
+  background: transparent;
+}
+
+.jcc-center .jarvis-panel--page .jarvis-body {
+  padding-left: max(20px, calc((100% - 760px) / 2));
+  padding-right: max(20px, calc((100% - 760px) / 2));
+}
+
+.jcc-center .jarvis-panel--page .jarvis-composer {
+  padding-left: max(16px, calc((100% - 760px) / 2));
+  padding-right: max(16px, calc((100% - 760px) / 2));
+  background: transparent;
+}
+
+.jcc-center .jarvis-panel--page .jarvis-header--page {
+  background: transparent;
+}
+
+/* ---------- widgets ---------- */
+
+.jcc-widget {
+  flex: none;
+  border: 1px solid var(--color-border);
+  border-radius: var(--ui-radius-lg);
+  background: var(--color-surface);
+  box-shadow: var(--ui-shadow-xs);
+}
+
+.jcc-widget-head {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  padding: 4px 6px 4px 4px;
+}
+
+.jcc-widget-toggle {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  height: 30px;
+  padding: 0 6px;
+  border: 0;
+  border-radius: var(--ui-radius-sm);
+  background: transparent;
+  color: var(--color-text);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.jcc-widget-toggle:hover {
+  background: var(--color-surface-hover, var(--color-surface-alt));
+}
+
+.jcc-widget-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex: none;
+  width: 22px;
+  height: 22px;
+  border-radius: 7px;
+  background: color-mix(in srgb, var(--color-primary) 12%, transparent);
+  color: var(--color-primary-text, var(--color-primary));
+}
+
+.jcc-widget-title {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  font-family: var(--font-subheading, var(--font-body));
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-overflow: ellipsis;
+  text-transform: uppercase;
+  white-space: nowrap;
+  color: var(--color-text-muted);
+}
+
+.jcc-widget-chevron {
+  display: inline-flex;
+  color: var(--color-text-muted);
+}
+
+.jcc-widget-body {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 2px 12px 12px;
+}
+
+.jcc-icon-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  padding: 0;
+  border: 0;
+  border-radius: var(--ui-radius-sm);
+  background: transparent;
+  color: var(--color-text-muted);
+  cursor: pointer;
+  opacity: 0;
+  transition: opacity var(--ui-transition), background-color var(--ui-transition);
+}
+
+.jcc-widget:hover .jcc-icon-btn,
+.jcc-icon-btn:focus-visible {
+  opacity: 1;
+}
+
+.jcc-icon-btn:hover {
+  background: var(--color-surface-hover, var(--color-surface-alt));
+  color: var(--color-text);
+}
+
+.jcc-badge {
+  flex: none;
+  min-width: 18px;
+  height: 18px;
+  padding: 0 6px;
+  box-sizing: border-box;
+  border-radius: 999px;
+  font-size: 10.5px;
+  font-weight: 700;
+  line-height: 18px;
+  text-align: center;
+  white-space: nowrap;
+  background: var(--color-surface-alt);
+  color: var(--color-text-muted);
+}
+
+.jcc-badge--primary {
+  background: var(--color-primary-soft, color-mix(in srgb, var(--color-primary) 12%, transparent));
+  color: var(--color-primary-text, var(--color-primary));
+}
+
+.jcc-badge--danger {
+  background: var(--color-danger, #dc2626);
+  color: var(--color-danger-contrast, #fff);
+}
+
+.jcc-badge--warning {
+  background: color-mix(in srgb, var(--color-warning, #f59e0b) 22%, var(--color-surface));
+  color: var(--color-text);
+}
+
+.jcc-muted {
+  margin: 0;
+  color: var(--color-text-muted);
+  font-size: var(--ui-text-sm);
+  line-height: 1.45;
+}
+
+.jcc-link {
+  align-self: flex-start;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--color-primary-text, var(--color-primary));
+  font: inherit;
+  font-size: var(--ui-text-sm);
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.jcc-link:hover {
+  text-decoration: underline;
+}
+
+.jcc-ellipsis {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.jcc-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 14px;
+}
+
+/* AI jádro */
+.jcc-seg {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  padding: 2px;
+  border: 1px solid var(--color-border);
+  border-radius: var(--ui-radius-md);
+  background: var(--color-surface-alt);
+}
+
+.jcc-seg button {
+  height: 26px;
+  padding: 0;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--color-text-muted);
+  font: inherit;
+  font-size: var(--ui-text-sm);
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.jcc-seg button.is-on {
+  background: var(--color-surface);
+  color: var(--color-text);
+  box-shadow: var(--ui-shadow-xs);
+}
+
+.jcc-rows {
+  display: flex;
+  flex-direction: column;
+}
+
+.jcc-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 30px;
+  padding: 0 6px;
+  margin: 0 -6px;
+  border: 0;
+  border-radius: var(--ui-radius-sm);
+  background: transparent;
+  color: var(--color-text);
+  font: inherit;
+  font-size: var(--ui-text-sm);
+  text-align: left;
+  cursor: pointer;
+}
+
+.jcc-row:hover {
+  background: var(--color-surface-hover, var(--color-surface-alt));
+}
+
+.jcc-row > svg {
+  flex: none;
+  color: var(--color-text-muted);
+}
+
+.jcc-row > span {
+  flex: 1;
+}
+
+.jcc-row small {
+  color: var(--color-text-muted);
+  font-size: var(--ui-text-xs);
+  white-space: nowrap;
+}
+
+.jcc-row--switch input {
+  accent-color: var(--color-primary);
+  width: 16px;
+  height: 16px;
+}
+
+/* Konverzace */
+.jcc-new {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  height: 32px;
+  padding: 0 10px;
+  border: 1px solid color-mix(in srgb, var(--color-primary) 35%, var(--color-border));
+  border-radius: var(--ui-radius-md);
+  background: color-mix(in srgb, var(--color-primary) 8%, var(--color-surface));
+  color: var(--color-primary-text, var(--color-primary));
+  font: inherit;
+  font-size: var(--ui-text-sm);
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.jcc-new kbd {
+  margin-left: auto;
+  padding: 0 5px;
+  border: 1px solid var(--color-border);
+  border-radius: 4px;
+  color: var(--color-text-muted);
+  font: inherit;
+  font-size: 10.5px;
+}
+
+.jcc-new:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.jcc-list {
+  display: flex;
+  flex-direction: column;
+}
+
+.jcc-list-item {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  height: 30px;
+  padding: 0 8px;
+  margin: 0 -6px;
+  border: 0;
+  border-radius: var(--ui-radius-sm);
+  background: transparent;
+  color: var(--color-text);
+  font: inherit;
+  font-size: var(--ui-text-sm);
+  text-align: left;
+  cursor: pointer;
+}
+
+.jcc-list-item > .jcc-ellipsis {
+  flex: 1;
+}
+
+.jcc-list-item small {
+  flex: none;
+  color: var(--color-text-muted);
+  font-size: var(--ui-text-xs);
+}
+
+.jcc-list-item:hover {
+  background: var(--color-surface-hover, var(--color-surface-alt));
+}
+
+.jcc-list-item.is-active {
+  background: var(--color-primary-soft, color-mix(in srgb, var(--color-primary) 12%, transparent));
+  color: var(--color-primary-text, var(--color-primary));
+  font-weight: 600;
+}
+
+.jcc-list-item:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
+.jcc-pin {
+  flex: none;
+  color: var(--color-primary);
+}
+
+/* Schopnosti */
+.jcc-skills {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 6px;
+}
+
+.jcc-skill {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  grid-template-areas: 'icon title' 'icon state';
+  align-items: center;
+  column-gap: 8px;
+  padding: 8px 9px;
+  border: 1px solid var(--color-border);
+  border-radius: var(--ui-radius-md);
+  background: var(--color-background);
+  color: var(--color-text);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+  transition: border-color var(--ui-transition), background-color var(--ui-transition);
+}
+
+.jcc-skill > svg {
+  grid-area: icon;
+  color: var(--color-primary-text, var(--color-primary));
+}
+
+.jcc-skill > span {
+  grid-area: title;
+  overflow: hidden;
+  font-size: var(--ui-text-sm);
+  font-weight: 600;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.jcc-skill > small {
+  grid-area: state;
+  color: var(--color-text-muted);
+  font-size: 11px;
+}
+
+.jcc-skill:hover {
+  border-color: color-mix(in srgb, var(--color-primary) 45%, var(--color-border));
+}
+
+.jcc-skill.is-busy {
+  border-color: color-mix(in srgb, var(--color-accent) 60%, var(--color-border));
+  background: color-mix(in srgb, var(--color-accent) 10%, var(--color-surface));
+}
+
+.jcc-skill.is-busy > small {
+  color: var(--color-accent-text, var(--color-text));
+  font-weight: 600;
+}
+
+/* Služby */
+.jcc-services {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.jcc-service {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 24px;
+  font-size: var(--ui-text-sm);
+}
+
+.jcc-service > .jcc-ellipsis {
+  flex: 1;
+}
+
+.jcc-service small {
+  color: var(--color-text-muted);
+  font-size: var(--ui-text-xs);
+  white-space: nowrap;
+}
+
+.jcc-dot {
+  flex: none;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--color-text-muted);
+}
+
+.jcc-dot--ok {
+  background: var(--color-success, #10b981);
+  box-shadow: 0 0 6px color-mix(in srgb, var(--color-success, #10b981) 60%, transparent);
+}
+
+.jcc-dot--warn {
+  background: var(--color-warning, #f59e0b);
+}
+
+/* Živý přehled */
+.jcc-feed-item {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  padding: 7px 8px;
+  margin: 0 -4px;
+  border: 0;
+  border-radius: var(--ui-radius-md);
+  background: transparent;
+  color: var(--color-text);
+  font: inherit;
+  font-size: var(--ui-text-sm);
+  text-align: left;
+}
+
+button.jcc-feed-item {
+  cursor: pointer;
+}
+
+button.jcc-feed-item:hover {
+  background: var(--color-surface-hover, var(--color-surface-alt));
+}
+
+.jcc-feed-item > span:last-child {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.jcc-feed-item small {
+  color: var(--color-text-muted);
+  font-size: var(--ui-text-xs);
+}
+
+.jcc-feed-item--warning {
+  background: color-mix(in srgb, var(--color-warning, #f59e0b) 10%, var(--color-surface));
+}
+
+.jcc-tag {
+  flex: none;
+  margin-top: 1px;
+  padding: 1px 6px;
+  border-radius: 999px;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
+  white-space: nowrap;
+  background: var(--color-surface-alt);
+  color: var(--color-text-muted);
+}
+
+.jcc-tag--danger {
+  background: color-mix(in srgb, var(--color-danger, #dc2626) 14%, var(--color-surface));
+  color: var(--color-danger, #dc2626);
+}
+
+.jcc-tag--warning {
+  background: color-mix(in srgb, var(--color-warning, #f59e0b) 24%, var(--color-surface));
+  color: var(--color-text);
+}
+
+.jcc-tag--primary {
+  background: var(--color-primary-soft, color-mix(in srgb, var(--color-primary) 12%, transparent));
+  color: var(--color-primary-text, var(--color-primary));
+}
+
+/* Dnes */
+.jcc-timeline {
+  display: flex;
+  flex-direction: column;
+  border-left: 2px solid var(--color-border);
+  margin-left: 3px;
+}
+
+.jcc-time-row {
+  position: relative;
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+  min-height: 26px;
+  padding: 3px 0 3px 12px;
+  border: 0;
+  background: transparent;
+  color: var(--color-text);
+  font: inherit;
+  font-size: var(--ui-text-sm);
+  text-align: left;
+}
+
+.jcc-time-row::before {
+  content: '';
+  position: absolute;
+  left: -5px;
+  top: 9px;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--color-surface);
+  border: 2px solid var(--color-border-strong, var(--color-border));
+  box-sizing: border-box;
+}
+
+.jcc-time-row > .jcc-ellipsis {
+  flex: 1;
+}
+
+.jcc-time {
+  flex: none;
+  min-width: 48px;
+  color: var(--color-text-muted);
+  font-size: var(--ui-text-xs);
+  font-variant-numeric: tabular-nums;
+}
+
+.jcc-time-row small {
+  flex: none;
+  color: var(--color-primary-text, var(--color-primary));
+  font-size: var(--ui-text-xs);
+  font-weight: 600;
+}
+
+.jcc-time-row.is-past {
+  color: var(--color-text-muted);
+}
+
+.jcc-time-row.is-next::before {
+  border-color: var(--color-primary);
+  background: var(--color-primary);
+}
+
+.jcc-time-row.is-next {
+  font-weight: 600;
+}
+
+.jcc-time-row--deadline::before {
+  border-color: var(--color-warning, #f59e0b);
+}
+
+button.jcc-time-row--deadline {
+  cursor: pointer;
+}
+
+button.jcc-time-row--deadline:hover > .jcc-ellipsis {
+  text-decoration: underline;
+}
+
+/* Úkoly */
+.jcc-tasks {
+  display: flex;
+  flex-direction: column;
+}
+
+.jcc-task {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 28px;
+  font-size: var(--ui-text-sm);
+  cursor: pointer;
+}
+
+.jcc-task input {
+  flex: none;
+  width: 15px;
+  height: 15px;
+  accent-color: var(--color-primary);
+}
+
+.jcc-task > .jcc-ellipsis {
+  flex: 1;
+}
+
+.jcc-task small {
+  flex: none;
+  color: var(--color-text-muted);
+  font-size: var(--ui-text-xs);
+}
+
+.jcc-task small.is-late {
+  color: var(--color-danger, #dc2626);
+  font-weight: 600;
+}
+
+.jcc-star {
+  flex: none;
+  color: var(--color-warning, #f59e0b);
+}
+
+/* Rychlé příkazy */
+.jcc-quick {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.jcc-quick-btn {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  min-height: 32px;
+  padding: 0 9px;
+  border: 1px solid var(--color-border);
+  border-radius: var(--ui-radius-md);
+  background: var(--color-background);
+  color: var(--color-text);
+  font: inherit;
+  font-size: var(--ui-text-sm);
+  font-weight: 500;
+  text-align: left;
+  cursor: pointer;
+  transition: border-color var(--ui-transition), background-color var(--ui-transition);
+}
+
+.jcc-quick-btn > svg {
+  flex: none;
+  color: var(--color-primary-text, var(--color-primary));
+}
+
+.jcc-quick-btn kbd {
+  margin-left: auto;
+  color: var(--color-text-muted);
+  font: inherit;
+  font-size: 10.5px;
+}
+
+.jcc-quick-btn:hover:not(:disabled) {
+  border-color: color-mix(in srgb, var(--color-primary) 45%, var(--color-border));
+  background: color-mix(in srgb, var(--color-primary) 5%, var(--color-surface));
+}
+
+.jcc-quick-btn:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+.jcc-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 5px;
+}
+
+.jcc-chip {
+  height: 26px;
+  padding: 0 10px;
+  border: 1px solid var(--color-border);
+  border-radius: 999px;
+  background: var(--color-surface);
+  color: var(--color-text);
+  font: inherit;
+  font-size: var(--ui-text-xs);
+  cursor: pointer;
+}
+
+.jcc-chip:hover {
+  border-color: color-mix(in srgb, var(--color-primary) 45%, var(--color-border));
+}
+
+/* Paměť */
+.jcc-memory {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin: 0;
+  padding-left: 16px;
+  font-size: var(--ui-text-sm);
+  line-height: 1.4;
+}
+
+/* Využití */
+.jcc-stats {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 6px;
+}
+
+.jcc-stats span {
+  display: flex;
+  flex-direction: column;
+  padding: 8px;
+  border-radius: var(--ui-radius-md);
+  background: var(--color-background);
+}
+
+.jcc-stats strong {
+  font-size: var(--ui-text-lg);
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.jcc-stats small {
+  color: var(--color-text-muted);
+  font-size: var(--ui-text-xs);
+}
+
+/* ---------- Přizpůsobit ---------- */
+
+.jcc-customize {
+  position: absolute;
+  top: 8px;
+  right: 14px;
+  z-index: 20;
+  width: min(360px, calc(100% - 28px));
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 14px;
+  border: 1px solid var(--color-border);
+  border-radius: var(--ui-radius-lg);
+  background: var(--color-surface);
+  box-shadow: var(--ui-shadow-pop);
+}
+
+.jcc-customize-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.jcc-customize-cols {
+  display: flex;
+  gap: 16px;
+  padding-bottom: 8px;
+  border-bottom: 1px solid var(--color-border);
+}
+
+.jcc-customize-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 6px 12px;
+}
+
+.jcc-check {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  font-size: var(--ui-text-sm);
+  cursor: pointer;
+}
+
+.jcc-check input {
+  accent-color: var(--color-primary);
+}
+
+.jcc-customize .jcc-btn {
+  align-self: flex-end;
+}
+
+/* ---------- the hero (the empty chat) ---------- */
+
+.jws-hero {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 12px;
+  margin: auto 0;
+  padding: 8px 0;
+  text-align: center;
+}
+
+.jws-hero h1 {
+  margin: 4px 0 0;
+  font-family: var(--font-heading, var(--font-body));
+  font-size: 24px;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+}
+
+.jws-hero p {
+  max-width: 560px;
+  margin: 0;
+  color: var(--color-text-muted);
+  font-size: var(--ui-text-md);
+  line-height: 1.55;
+}
+
+.jws-talk {
+  display: inline-flex;
+  align-items: center;
+  gap: 12px;
+  height: 46px;
+  padding: 0 22px 0 16px;
+  border: 1px solid color-mix(in srgb, var(--color-accent) 55%, var(--color-border));
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--color-accent) 9%, var(--color-surface));
+  color: var(--color-text);
+  font: inherit;
+  cursor: pointer;
+  box-shadow: 0 8px 24px -14px color-mix(in srgb, var(--color-accent) 80%, transparent);
+  transition: transform var(--ui-transition), box-shadow var(--ui-transition);
+}
+
+.jws-talk:hover:not(:disabled) {
+  transform: translateY(-1px);
+  box-shadow: 0 12px 28px -14px color-mix(in srgb, var(--color-accent) 90%, transparent);
+}
+
+.jws-talk:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.jws-talk-text {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  line-height: 1.2;
+}
+
+.jws-talk strong {
+  font-size: var(--ui-text-md);
+}
+
+.jws-talk small {
+  color: var(--color-text-muted);
+  font-size: var(--ui-text-xs);
+}
+
+.jws-talk-wave {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  height: 20px;
+}
+
+.jws-talk-wave i {
+  display: block;
+  width: 3px;
+  border-radius: 2px;
+  background: var(--color-accent);
+  animation: jcc-wave 1.1s ease-in-out infinite;
+}
+
+.jws-talk-wave i:nth-child(1) { height: 8px; }
+.jws-talk-wave i:nth-child(2) { height: 16px; animation-delay: 0.15s; }
+.jws-talk-wave i:nth-child(3) { height: 12px; animation-delay: 0.3s; }
+.jws-talk-wave i:nth-child(4) { height: 20px; animation-delay: 0.45s; }
+.jws-talk-wave i:nth-child(5) { height: 10px; animation-delay: 0.6s; }
+
+@keyframes jcc-wave {
+  0%,
+  100% {
+    transform: scaleY(0.4);
+  }
+  50% {
+    transform: scaleY(1);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .jws-talk-wave i,
+  .jcc-status--busy::before {
+    animation: none;
+  }
+}
+
+.jws-hero-examples {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 6px;
+  max-width: 640px;
+}
+
+.jws-hero-example {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 32px;
+  padding: 0 12px;
+  border: 1px solid var(--color-border);
+  border-radius: 999px;
+  background: var(--color-surface);
+  color: var(--color-text);
+  font: inherit;
+  font-size: var(--ui-text-sm);
+  cursor: pointer;
+  transition: border-color var(--ui-transition), transform var(--ui-transition);
+}
+
+.jws-hero-example > svg {
+  color: var(--color-primary-text, var(--color-primary));
+}
+
+.jws-hero-example:hover:not(:disabled) {
+  border-color: color-mix(in srgb, var(--color-primary) 50%, var(--color-border));
+  transform: translateY(-1px);
+}
+
+.jws-hero-example:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+/* ---------- narrower screens and phones ---------- */
+
+/* The Chat / Přehled switch, phones only. */
+.jcc-phone-switch {
+  display: none;
+}
+
+@media (max-width: 768px) {
+  .jcc-top {
+    padding: 8px 10px;
+    gap: 8px;
+  }
+
+  /* The phone's top bar already says Jarvis; the columns are the Chat /
+     Přehled switch here. */
+  .jcc-brand strong,
+  .jcc-tool-btn {
+    display: none;
+  }
+
+  .jcc-btn--customize {
+    width: auto;
+    padding: 0 11px;
+  }
+
+  .jcc-btn--customize .jcc-btn-label {
+    display: inline;
+  }
+
+  .jcc-clock {
+    display: none;
+  }
+
+  .jcc-tabs {
+    order: 3;
+    flex: 1 1 100%;
+  }
+
+  .jws-hero h1 {
+    font-size: 20px;
+  }
+
+  .jws-hero .jorb--hero {
+    --orb: 150px;
+  }
+
+  .jcc-customize {
+    position: fixed;
+    top: auto;
+    bottom: 12px;
+    right: 12px;
+    left: 12px;
+    width: auto;
+  }
+}

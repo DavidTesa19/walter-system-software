@@ -3,6 +3,7 @@ import { createPortal } from 'react-dom';
 import { Bookmark, Brain, Check, Copy, Download, Maximize2, Pencil, RotateCcw, Send, Trash2 } from 'lucide-react';
 import { useAuth } from '../auth/AuthContext';
 import JarvisWorkspace, { JarvisHome } from './JarvisWorkspace';
+import type { OrbState } from './JarvisOrb';
 import type { JarvisSection } from './JarvisWorkspace';
 import MarkdownMessage from '../components/MarkdownMessage';
 import { jarvisApi } from './jarvisApi';
@@ -175,7 +176,7 @@ interface LiveTurn {
   documents: JarvisDocument[];
   sources: JarvisSource[];
   memories: JarvisMemoryCard[];
-  steps: Array<{ id: string; label: string; done: boolean; ok: boolean }>;
+  steps: Array<{ id: string; label: string; done: boolean; ok: boolean; name?: string }>;
   text: string;
   thinking: string;
   actions: JarvisOpenAction[];
@@ -1323,7 +1324,7 @@ interface JarvisPanelProps {
   pageHost?: HTMLElement | null;
   // Opens the Jarvis screen (the panel header's "full screen" button).
   onOpenPage?: () => void;
-  onOpenView?: (view: 'help') => void;
+  onOpenView?: (view: 'help' | 'tasks' | 'calendar') => void;
 }
 
 // A conversation as Markdown, for "Exportovat".
@@ -1725,8 +1726,11 @@ export default function JarvisPanel({
     void loadPrompts();
   }, [page, refreshConversations, loadPrompts]);
 
+  // Follow the conversation to its end; the empty screen (the orb) starts at the top.
   useEffect(() => {
-    scrollRef.current?.scrollTo({ top: scrollRef.current.scrollHeight });
+    const box = scrollRef.current;
+    if (!box) return;
+    box.scrollTo({ top: transcript.length === 0 && !live ? 0 : box.scrollHeight });
   }, [transcript, live]);
 
   // Escape closes the panel, but first drops a recording, stops reading
@@ -1933,7 +1937,7 @@ export default function JarvisPanel({
           // Text written before a tool call is a progress note, not the answer.
           dropReading();
           setLive((turn) =>
-            turn ? { ...turn, text: '', thinking: '', steps: [...turn.steps, { id: event.data.id, label: event.data.label, done: false, ok: true }] } : turn
+            turn ? { ...turn, text: '', thinking: '', steps: [...turn.steps, { id: event.data.id, label: event.data.label, name: event.data.name, done: false, ok: true }] } : turn
           );
           break;
         case 'tool_done':
@@ -2224,6 +2228,13 @@ export default function JarvisPanel({
         : speaking
           ? 'Mluvím…'
           : 'AI asistent';
+
+  // What Jarvis is doing, for the orb and the status pill on the Jarvis screen.
+  const orbState: OrbState = unavailable ? 'offline' : listening ? 'listening' : speaking ? 'speaking' : busy ? 'busy' : 'idle';
+  const activeTools = live ? live.steps.filter((step) => !step.done && step.name).map((step) => step.name as string) : [];
+  const pendingCount = turns.reduce((sum, turn) => sum + turn.proposals.filter((proposal) => !decisions.has(proposal.id)).length, 0);
+  const voiceChoice = chosenVoice(voiceSettings, status);
+  const voiceLabel = voiceChoice.voices.find((option) => option.id === voiceChoice.selected)?.label ?? null;
 
   const currentTitle =
     (conversationId && (pageConversations ?? conversations).find((item) => item.id === conversationId)?.title) ||
@@ -2516,14 +2527,13 @@ export default function JarvisPanel({
         {page && turns.length === 0 && !live && (
           <JarvisHome
             userName={user?.username ?? null}
-            prompts={prompts}
-            urgent={urgent}
             unavailable={Boolean(unavailable)}
             onUse={usePrompt}
             onSection={setPageSection}
             onBriefing={() => void send(BRIEFING_PROMPT)}
-            onCard={() => cardInputRef.current?.click()}
-            voiceHint={voice.canListen}
+            onTalk={() => void voice.startListening()}
+            canListen={voice.canListen}
+            orbState={orbState}
           />
         )}
 
@@ -2938,7 +2948,23 @@ export default function JarvisPanel({
         onSection={setPageSection}
         chat={aside}
         busy={busy}
-        subtitle={unavailable ? 'Není nastavený' : subtitle}
+        subtitle={unavailable ? 'Není nastavený' : busy ? 'Pracuji…' : subtitle === 'AI asistent' ? 'Připraven' : subtitle}
+        orbState={orbState}
+        status={status}
+        activeTools={activeTools}
+        pendingCount={pendingCount}
+        attentionData={attention}
+        onOpenRecord={openRecord}
+        onBriefing={() => {
+          setPageSection('chat');
+          void send(BRIEFING_PROMPT);
+        }}
+        onCard={() => cardInputRef.current?.click()}
+        onTalk={() => void voice.startListening()}
+        canListen={voice.canListen}
+        voiceLabel={voiceLabel}
+        userId={user?.id ?? null}
+        onOpenView={onOpenView ? (view) => onOpenView(view) : undefined}
         conversations={pageConversations}
         activeId={conversationId}
         onNewConversation={() => void loadConversation(null)}

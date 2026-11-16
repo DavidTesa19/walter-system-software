@@ -1386,3 +1386,39 @@
     flex-direction: column;
   }
 }
+
+/* ---------- the command-center layout (2026-11-16) ---------- */
+
+.jws.jws--cc {
+  flex-direction: column;
+  border-top: 0;
+}
+
+.jws--cc .jws-main {
+  flex: 1 1 auto;
+  min-height: 0;
+}
+
+.jws-conv-page {
+  padding: 12px;
+}
+
+.jws-conv-page .jws-convs {
+  display: flex;
+  border-top: 0;
+  padding-top: 0;
+}
+
+.jws-conv-page .jws-rail-heading {
+  display: none;
+}
+
+@media (max-width: 768px) {
+  .jws.jws--cc {
+    flex-direction: column;
+  }
+
+  .jws-conv-page .jws-convs {
+    display: flex;
+  }
+}

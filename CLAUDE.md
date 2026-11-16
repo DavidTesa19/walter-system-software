@@ -783,12 +783,27 @@ names its own sans-serif font (`--jarvis-font`). Needs `ANTHROPIC_API_KEY`;
   OpenAI "AI Asistent" screen on 2026-11-14, whose `/api/chat` routes are
   still in both servers but unused): the same `JarvisPanel` (one state, one
   conversation, one voice) drawn into App's `.jarvis-page-host` through a
-  portal as `JarvisWorkspace.tsx` instead of sliding in. A rail with the
-  sections (Konverzace, Schopnosti = `capabilities.ts`, Šablony, Upozornění,
-  Nastavení, Analýza nákladů for admins) and the user's conversations
-  (search, pin, rename: `PATCH /api/jarvis/conversations/:id`, column
-  `pinned`), a page header with the model as a segmented control, export
-  to Markdown and delete. The launcher is hidden there; the floating
+  portal as `JarvisWorkspace.tsx` instead of sliding in. Since 2026-11-16 it
+  is a command center (the user's pick from three prototypes: "like the
+  sci-fi Velín, but in the app's own fonts and palette, following the
+  light/dark theme"): a top bar (mini orb, status pill, section tabs Velín /
+  Konverzace / Schopnosti (`capabilities.ts`) / Šablony / Paměť / Upozornění /
+  Nastavení / Analýza for admins, clock, column toggles, Přizpůsobit) and
+  **Velín** (`JarvisCommandCenter.tsx` + `.css`): the chat in the middle,
+  whose empty state is `JarvisOrb` (pure CSS from `--color-primary` /
+  `--color-accent`; states idle, busy, listening, speaking, offline) with
+  "Mluvit s Jarvisem" and example questions, and widgets around it: left AI
+  jádro (model, memory, voice, templates, read-aloud), Konverzace, Schopnosti
+  (tiles light up while their tools run, from the live steps' `name`),
+  Služby; right Živý přehled (attention + proposals waiting), Dnes (today's
+  own non-repeating events + deadlines), Úkoly (personal list, tick off),
+  Rychlé příkazy, Paměť, Využití (admins, `/api/finance/jarvis?days=7`).
+  Every widget folds and hides; `walterJarvis.layout` in localStorage
+  remembers it per device. Three columns from 1280 px, one side column
+  below, a Chat / Přehled switch on phones. The Konverzace tab lists every
+  conversation (search, pin, rename: `PATCH /api/jarvis/conversations/:id`,
+  column `pinned`); the chat header keeps export to Markdown and delete
+  (in Velín the model switch is a compact select). The launcher is hidden there; the floating
   panel's ⤢ button opens the screen and Alt+J does nothing on it. Alt+N
   starts a new conversation wherever Jarvis shows. **Šablony** are saved
   questions (`server/jarvis/prompts.js`, table `jarvis_prompts`, own +

@@ -202,9 +202,11 @@ export const HELP_TOPICS: HelpTopic[] = [
     id: "jarvis",
     title: "Jarvis",
     views: ["jarvis"],
-    summary: "Jarvis na celé obrazovce: konverzace, šablony, upozornění, nastavení a (pro adminy) rozbor nákladů.",
+    summary: "Jarvis na celé obrazovce. Velín: Jarvis uprostřed a kolem něj widgety (AI jádro, konverzace, schopnosti, služby, živý přehled, dnešní program, úkoly, rychlé příkazy, paměť, využití).",
     points: [
-      "Vlevo jsou vaše konverzace: hledání, připnutí (špendlík) a přejmenování. Tlačítko Nová konverzace nebo Alt+N začne novou.",
+      "Widgety sbalíte kliknutím na nadpis, skryjete ikonou oka; tlačítko Přizpůsobit vrátí skryté a zapne nebo vypne celý levý či pravý sloupec. Pamatuje si to každé zařízení.",
+      "Záložka Konverzace: všechny konverzace s hledáním, připnutím (špendlík), přejmenováním a smazáním. Nová konverzace: Alt+N.",
+      "Na telefonu přepínáte Chat a Přehled (widgety).",
       "Schopnosti: co Jarvis umí, po oblastech, s ukázkovými otázkami – kliknutím se otázka vloží do pole.",
       "Šablony: otázky, které kladete často, uložené pod krátkým názvem. Sdílenou šablonu uvidí celý tým.",
       "Paměť: co si o vás Jarvis pamatuje napříč konverzacemi (řekněte „pamatuj si…“). Poznámky upravíte, smažete nebo paměť vypnete.",
