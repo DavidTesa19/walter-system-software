@@ -783,26 +783,30 @@ names its own sans-serif font (`--jarvis-font`). Needs `ANTHROPIC_API_KEY`;
   OpenAI "AI Asistent" screen on 2026-11-14, whose `/api/chat` routes are
   still in both servers but unused): the same `JarvisPanel` (one state, one
   conversation, one voice) drawn into App's `.jarvis-page-host` through a
-  portal as `JarvisWorkspace.tsx` instead of sliding in. Since 2026-11-16 it
-  is a command center (the user's pick from three prototypes: "like the
-  sci-fi Velín, but in the app's own fonts and palette, following the
-  light/dark theme"): a top bar (mini orb, status pill, section tabs Velín /
-  Konverzace / Schopnosti (`capabilities.ts`) / Šablony / Paměť / Upozornění /
-  Nastavení / Analýza for admins, clock, column toggles, Přizpůsobit) and
-  **Velín** (`JarvisCommandCenter.tsx` + `.css`): the chat in the middle,
-  whose empty state is `JarvisOrb` (pure CSS from `--color-primary` /
-  `--color-accent`; states idle, busy, listening, speaking, offline) with
-  "Mluvit s Jarvisem" and example questions, and widgets around it: left AI
-  jádro (model, memory, voice, templates, read-aloud), Konverzace, Schopnosti
-  (tiles light up while their tools run, from the live steps' `name`),
-  Služby; right Živý přehled (attention + proposals waiting), Dnes (today's
-  own non-repeating events + deadlines), Úkoly (personal list, tick off),
-  Rychlé příkazy, Paměť, Využití (admins, `/api/finance/jarvis?days=7`).
-  Every widget folds and hides; `walterJarvis.layout` in localStorage
-  remembers it per device. Three columns from 1280 px, one side column
-  below, a Chat / Přehled switch on phones. The Konverzace tab lists every
+  portal as `JarvisWorkspace.tsx` instead of sliding in. Since 2026-11-17
+  it is calm and ordered by importance (the 2026-11-16 ten-widget command
+  center was "confusing, packed too close"; the user wanted the first,
+  cleaner style with the important things first and the rest on demand):
+  a slim top bar (mini orb, status pill, tabs Velín / Konverzace / Šablony /
+  Paměť and a "Více" menu with Co Jarvis umí (`capabilities.ts`) /
+  Upozornění / Nastavení / Analýza for admins; on Velín the "Přehled"
+  switch) and **Velín** (`JarvisCommandCenter.tsx` + `.css`): the chat on a
+  card in the middle, whose empty state is `JarvisOrb` (pure CSS from
+  `--color-primary` / `--color-accent`; states idle, busy, listening,
+  speaking, offline) with "Mluvit s Jarvisem" and example questions, and
+  one panel on the right, **Přehled** (`JarvisOverview`: big clock, Ranní
+  přehled, tabs Teď = next event + what is late or due today + proposals
+  waiting (click scrolls to the card), Úkoly = personal list, Jarvis =
+  model, settings rows, services, usage for admins). Open/closed and the tab
+  are remembered per device (`walterJarvis.panel`, `walterJarvis.panelTab`).
+  The panel sits beside the chat when Velín is at least 860 px wide
+  (measured on the element, `useVelinWidth`, because of app zoom); narrower,
+  a Konverzace / Přehled switch shows one at a time. Keep it that way: new
+  things go into a panel tab or "Více", not as more boxes around the chat.
+  The Konverzace tab lists every
   conversation (search, pin, rename: `PATCH /api/jarvis/conversations/:id`,
-  column `pinned`); the chat header keeps export to Markdown and delete
+  column `pinned`); the chat header keeps history, new, export to Markdown
+  and delete
   (in Velín the model switch is a compact select). The launcher is hidden there; the floating
   panel's ⤢ button opens the screen and Alt+J does nothing on it. Alt+N
   starts a new conversation wherever Jarvis shows. **Šablony** are saved

@@ -2231,7 +2231,6 @@ export default function JarvisPanel({
 
   // What Jarvis is doing, for the orb and the status pill on the Jarvis screen.
   const orbState: OrbState = unavailable ? 'offline' : listening ? 'listening' : speaking ? 'speaking' : busy ? 'busy' : 'idle';
-  const activeTools = live ? live.steps.filter((step) => !step.done && step.name).map((step) => step.name as string) : [];
   const pendingCount = turns.reduce((sum, turn) => sum + turn.proposals.filter((proposal) => !decisions.has(proposal.id)).length, 0);
   const voiceChoice = chosenVoice(voiceSettings, status);
   const voiceLabel = voiceChoice.voices.find((option) => option.id === voiceChoice.selected)?.label ?? null;
@@ -2360,12 +2359,12 @@ export default function JarvisPanel({
             <Trash2 size={17} strokeWidth={2} aria-hidden="true" />
           </button>
         )}
-        <button type="button" className="jarvis-icon-button jarvis-only-phone" onClick={openHistory} title="Historie konverzací" aria-label="Historie konverzací" aria-expanded={showHistory}>
+        <button type="button" className="jarvis-icon-button" onClick={openHistory} title="Historie konverzací" aria-label="Historie konverzací" aria-expanded={showHistory}>
           {Icon.history}
         </button>
         <button
           type="button"
-          className="jarvis-icon-button jarvis-only-phone"
+          className="jarvis-icon-button"
           onClick={() => void loadConversation(null)}
           disabled={busy}
           title="Nová konverzace (Alt+N)"
@@ -2951,16 +2950,18 @@ export default function JarvisPanel({
         subtitle={unavailable ? 'Není nastavený' : busy ? 'Pracuji…' : subtitle === 'AI asistent' ? 'Připraven' : subtitle}
         orbState={orbState}
         status={status}
-        activeTools={activeTools}
         pendingCount={pendingCount}
+        onShowPending={() => {
+          // The first card still waiting for a decision, in the middle of the chat.
+          const card = scrollRef.current?.querySelector('.jarvis-proposal-buttons')?.closest('.jarvis-proposal');
+          card?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        }}
         attentionData={attention}
         onOpenRecord={openRecord}
         onBriefing={() => {
           setPageSection('chat');
           void send(BRIEFING_PROMPT);
         }}
-        onCard={() => cardInputRef.current?.click()}
-        onTalk={() => void voice.startListening()}
         canListen={voice.canListen}
         voiceLabel={voiceLabel}
         userId={user?.id ?? null}

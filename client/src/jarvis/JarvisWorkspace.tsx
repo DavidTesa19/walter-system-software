@@ -1,8 +1,8 @@
-// The Jarvis screen (view id `jarvis`). A top bar with Jarvis's state, the
-// sections (Velín, Konverzace, Schopnosti, Šablony, Paměť, Upozornění,
-// Nastavení, Analýza for admins) and the time; below it the section. Velín is
-// the command center: the chat with Jarvis's orb in the middle and widgets
-// around it (JarvisCommandCenter.tsx), each foldable and hideable.
+// The Jarvis screen (view id `jarvis`). A slim top bar (Jarvis's state; the
+// sections Velín, Konverzace, Šablony, Paměť and "Více" for the rest; the
+// Přehled switch) and below it the section. Velín is Jarvis itself: the
+// conversation in the middle, its orb while it is empty, and one quiet
+// panel on the right with what needs the user now (JarvisCommandCenter.tsx).
 //
 // JarvisPanel renders this (through a portal into App's page host) and owns
 // all the state: the conversation running here is the same one the floating
@@ -11,8 +11,8 @@
 import { Suspense, lazy, useEffect, useMemo, useRef, useState } from 'react';
 import type { ReactNode } from 'react';
 import {
-  ArrowUpRight, Bookmark, Brain, Check, CornerDownLeft, Keyboard, Lock, PanelLeft, PanelRight, Pencil, Pin, PinOff, Plus,
-  Search, SendHorizontal, Share2, ShieldCheck, SlidersHorizontal, Sun, Trash2, Users, X,
+  ArrowUpRight, Bell, Blocks, Bookmark, Brain, ChartColumn, Check, ChevronDown, CornerDownLeft, Keyboard, Lock, PanelRightClose,
+  PanelRightOpen, Pencil, Pin, PinOff, Plus, Search, SendHorizontal, Settings, Share2, ShieldCheck, Sun, Trash2, Users, X,
 } from 'lucide-react';
 import type { ConversationSummary, JarvisAttention, JarvisMemory, JarvisOpenAction, JarvisPrompt, JarvisPromptInput, JarvisStatus } from './jarvisApi';
 import { jarvisApi } from './jarvisApi';
@@ -23,7 +23,7 @@ import { MODEL_CHOICES } from './models';
 import type { ModelChoice } from './models';
 import JarvisOrb from './JarvisOrb';
 import type { OrbState } from './JarvisOrb';
-import { CommandWidgets, CustomizePanel, useCommandLayout, useVelinWidth } from './JarvisCommandCenter';
+import { JarvisOverview, useOverviewPanel, useVelinWidth } from './JarvisCommandCenter';
 import type { CommandCenterData } from './JarvisCommandCenter';
 import './JarvisWorkspace.css';
 import './JarvisCommandCenter.css';
@@ -812,8 +812,8 @@ export interface JarvisWorkspaceProps {
   subtitle: string;
   orbState: OrbState;
   status: JarvisStatus | null;
-  activeTools: string[];
   pendingCount: number;
+  onShowPending: () => void;
   conversations: ConversationSummary[] | null;
   activeId: string | null;
   onNewConversation: () => void;
@@ -825,8 +825,6 @@ export interface JarvisWorkspaceProps {
   attentionData: JarvisAttention | null;
   onOpenRecord: (action: JarvisOpenAction) => void;
   onBriefing: () => void;
-  onCard: () => void;
-  onTalk: () => void;
   canListen: boolean;
   voiceLabel: string | null;
   prompts: JarvisPrompt[] | null;
@@ -846,27 +844,99 @@ export interface JarvisWorkspaceProps {
   onOpenView?: (view: 'tasks' | 'calendar') => void;
 }
 
-// The top bar's date and time, to the minute.
-function useClock() {
-  const [now, setNow] = useState(() => new Date());
-  useEffect(() => {
-    const timer = window.setInterval(() => setNow(new Date()), 20_000);
-    return () => window.clearInterval(timer);
-  }, []);
-  return now;
-}
-
 const STATUS_TONE: Record<OrbState, string> = { idle: 'idle', busy: 'busy', listening: 'listening', speaking: 'busy', offline: 'offline' };
+
+type MoreSection = 'capabilities' | 'attention' | 'settings' | 'analysis';
+
+// "Více": the sections used now and then, out of the top bar.
+function MoreMenu({
+  section,
+  onSection,
+  urgent,
+  isAdmin,
+}: {
+  section: JarvisSection;
+  onSection: (section: JarvisSection) => void;
+  urgent: number;
+  isAdmin: boolean;
+}) {
+  const [open, setOpen] = useState(false);
+  const ref = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    if (!open) return undefined;
+    const onDown = (event: MouseEvent) => {
+      if (!ref.current?.contains(event.target as Node)) setOpen(false);
+    };
+    const onKey = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') {
+        event.stopPropagation();
+        setOpen(false);
+      }
+    };
+    document.addEventListener('mousedown', onDown);
+    document.addEventListener('keydown', onKey, true);
+    return () => {
+      document.removeEventListener('mousedown', onDown);
+      document.removeEventListener('keydown', onKey, true);
+    };
+  }, [open]);
+
+  const items: Array<{ id: MoreSection; label: string; icon: typeof Bell; count?: number }> = [
+    { id: 'capabilities', label: 'Co Jarvis umí', icon: Blocks },
+    { id: 'attention', label: 'Upozornění', icon: Bell, count: urgent || undefined },
+    { id: 'settings', label: 'Nastavení', icon: Settings },
+    ...(isAdmin ? [{ id: 'analysis' as const, label: 'Analýza nákladů', icon: ChartColumn }] : []),
+  ];
+  const current = items.find((item) => item.id === section);
+
+  return (
+    <div className="jcc-more" ref={ref}>
+      <button
+        type="button"
+        className={`jcc-tab${current ? ' is-on' : ''}`}
+        onClick={() => setOpen((value) => !value)}
+        aria-haspopup="menu"
+        aria-expanded={open}
+      >
+        {current ? current.label : 'Více'}
+        {!current && urgent > 0 ? <span className="jcc-tab-dot" aria-label={`Upozornění: ${urgent}`} /> : null}
+        <ChevronDown size={13} strokeWidth={2.2} aria-hidden />
+      </button>
+      {open && (
+        <div className="jcc-menu" role="menu">
+          {items.map((item) => {
+            const Icon = item.icon;
+            return (
+              <button
+                key={item.id}
+                type="button"
+                role="menuitem"
+                className={section === item.id ? 'is-on' : undefined}
+                onClick={() => {
+                  setOpen(false);
+                  onSection(item.id);
+                }}
+              >
+                <Icon {...SMALL} />
+                <span>{item.label}</span>
+                {item.count ? <span className="jcc-tab-count">{item.count}</span> : null}
+              </button>
+            );
+          })}
+        </div>
+      )}
+    </div>
+  );
+}
 
 export default function JarvisWorkspace(props: JarvisWorkspaceProps) {
   const { section, onSection, isAdmin } = props;
   const [names, setNames] = useState<Map<number, string>>(new Map());
-  const layout = useCommandLayout();
+  const panel = useOverviewPanel();
   const velin = useVelinWidth();
   const wide = velin.mode === 'wide';
-  const [customizing, setCustomizing] = useState(false);
-  const [phoneView, setPhoneView] = useState<'chat' | 'widgets'>('chat');
-  const now = useClock();
+  // On a narrow screen the conversation and the overview take turns.
+  const [narrowView, setNarrowView] = useState<'chat' | 'overview'>('chat');
 
   useEffect(() => {
     if (section !== 'prompts' || names.size) return;
@@ -875,27 +945,26 @@ export default function JarvisWorkspace(props: JarvisWorkspaceProps) {
       .catch(() => undefined);
   }, [section, names.size]);
 
-  const tabs: Array<{ id: JarvisSection; label: string; count?: number }> = [
+  const tabs: Array<{ id: JarvisSection; label: string }> = [
     { id: 'chat', label: 'Velín' },
     { id: 'conversations', label: 'Konverzace' },
-    { id: 'capabilities', label: 'Schopnosti' },
     { id: 'prompts', label: 'Šablony' },
     { id: 'memory', label: 'Paměť' },
-    { id: 'attention', label: 'Upozornění', count: props.urgent || undefined },
-    { id: 'settings', label: 'Nastavení' },
-    ...(isAdmin ? [{ id: 'analysis' as const, label: 'Analýza' }] : []),
   ];
+
+  const toChat = () => {
+    onSection('chat');
+    setNarrowView('chat');
+  };
 
   const openConversation = (id: string) => {
     props.onOpenConversation(id);
-    onSection('chat');
-    setPhoneView('chat');
+    toChat();
   };
 
   const data: CommandCenterData = {
     status: props.status,
     busy: props.busy,
-    activeTools: props.activeTools,
     modelChoice: props.modelChoice,
     onModelChoice: props.onModelChoice,
     readAloud: props.readAloud,
@@ -905,27 +974,20 @@ export default function JarvisWorkspace(props: JarvisWorkspaceProps) {
     voiceLabel: props.voiceLabel,
     prompts: props.prompts,
     onUsePrompt: (text, send) => {
-      setPhoneView('chat');
+      setNarrowView('chat');
       props.onUsePrompt(text, send);
     },
     conversations: props.conversations,
-    activeId: props.activeId,
-    onOpenConversation: openConversation,
-    onNewConversation: () => {
-      props.onNewConversation();
-      setPhoneView('chat');
-    },
     attention: props.attentionData,
     onOpenRecord: props.onOpenRecord,
     onBriefing: () => {
-      setPhoneView('chat');
+      setNarrowView('chat');
       props.onBriefing();
     },
     pendingCount: props.pendingCount,
-    onCard: props.onCard,
-    onTalk: () => {
-      setPhoneView('chat');
-      props.onTalk();
+    onShowPending: () => {
+      setNarrowView('chat');
+      props.onShowPending();
     },
     onSection,
     onOpenView: props.onOpenView,
@@ -933,12 +995,8 @@ export default function JarvisWorkspace(props: JarvisWorkspaceProps) {
     userId: props.userId,
   };
 
-  // Wide: widgets left and right. Narrower: one side column holding the
-  // widgets of every column switched on (and on a phone, behind "Přehled").
-  const { left, right } = layout.layout;
-  const sideColumns: Array<'left' | 'right'> = wide ? (right ? ['right'] : []) : [...(left ? (['left'] as const) : []), ...(right ? (['right'] as const) : [])];
-  const showLeft = wide && left;
-  const showSide = sideColumns.length > 0;
+  const alerts = (props.attentionData?.urgent ?? 0) + props.pendingCount;
+  const showPanel = wide ? panel.open : narrowView === 'overview';
 
   return (
     <div className="jws jws--cc">
@@ -954,56 +1012,27 @@ export default function JarvisWorkspace(props: JarvisWorkspaceProps) {
               key={tab.id}
               type="button"
               className={`jcc-tab${section === tab.id ? ' is-on' : ''}`}
-              onClick={() => onSection(tab.id)}
+              onClick={() => (tab.id === 'chat' ? toChat() : onSection(tab.id))}
               aria-current={section === tab.id ? 'page' : undefined}
             >
               {tab.label}
-              {tab.count ? <span className="jcc-tab-count">{tab.count}</span> : null}
             </button>
           ))}
+          <MoreMenu section={section} onSection={onSection} urgent={props.urgent} isAdmin={isAdmin} />
         </nav>
-        <div className="jcc-top-right">
-          {wide && (
-            <span className="jcc-clock" aria-label="Datum a čas">
-              <span>{now.toLocaleDateString('cs-CZ', { weekday: 'short', day: 'numeric', month: 'numeric' })}</span>
-              <strong>{now.toLocaleTimeString('cs-CZ', { hour: '2-digit', minute: '2-digit' })}</strong>
-            </span>
-          )}
-          {section === 'chat' && (
-            <>
-              <button
-                type="button"
-                className={`jcc-tool-btn${left ? ' is-on' : ''}`}
-                onClick={() => layout.toggleColumn('left')}
-                aria-pressed={left}
-                title={left ? 'Skrýt levý sloupec' : 'Ukázat levý sloupec'}
-                aria-label="Levý sloupec"
-              >
-                <PanelLeft size={16} strokeWidth={2} aria-hidden />
-              </button>
-              <button
-                type="button"
-                className={`jcc-tool-btn${right ? ' is-on' : ''}`}
-                onClick={() => layout.toggleColumn('right')}
-                aria-pressed={right}
-                title={right ? 'Skrýt pravý sloupec' : 'Ukázat pravý sloupec'}
-                aria-label="Pravý sloupec"
-              >
-                <PanelRight size={16} strokeWidth={2} aria-hidden />
-              </button>
-              <button
-                type="button"
-                className="jcc-btn jcc-btn--customize"
-                onClick={() => setCustomizing((value) => !value)}
-                aria-expanded={customizing}
-                title="Přizpůsobit: které widgety a sloupce zobrazit"
-                aria-label="Přizpůsobit"
-              >
-                <SlidersHorizontal size={15} strokeWidth={2} aria-hidden /> <span className="jcc-btn-label">Přizpůsobit</span>
-              </button>
-            </>
-          )}
-        </div>
+        {section === 'chat' && wide && (
+          <button
+            type="button"
+            className={`jcc-panel-btn${panel.open ? ' is-on' : ''}`}
+            onClick={panel.toggle}
+            aria-pressed={panel.open}
+            title={panel.open ? 'Skrýt přehled' : 'Ukázat přehled: kalendář, upozornění, úkoly'}
+          >
+            {panel.open ? <PanelRightClose size={16} strokeWidth={2} aria-hidden /> : <PanelRightOpen size={16} strokeWidth={2} aria-hidden />}
+            <span className="jcc-panel-btn-label">Přehled</span>
+            {!panel.open && alerts > 0 && <span className="jcc-tab-count">{alerts}</span>}
+          </button>
+        )}
       </header>
 
       <div className="jws-main">
@@ -1011,32 +1040,30 @@ export default function JarvisWorkspace(props: JarvisWorkspaceProps) {
             keeps a running answer and its scroll position. */}
         <div
           ref={velin.ref}
-          className={`jcc jcc--${velin.mode}${showLeft ? ' jcc--left' : ''}${showSide ? ' jcc--right' : ''}`}
+          className={`jcc jcc--${velin.mode}${showPanel ? ' jcc--panel' : ''}`}
           hidden={section !== 'chat'}
-          data-phone-view={phoneView}
+          data-view={wide ? undefined : narrowView}
         >
-          <div className="jcc-phone-switch" role="group" aria-label="Zobrazit">
-            <button type="button" className={phoneView === 'chat' ? 'is-on' : undefined} onClick={() => setPhoneView('chat')} aria-pressed={phoneView === 'chat'}>
-              Chat
-            </button>
-            <button type="button" className={phoneView === 'widgets' ? 'is-on' : undefined} onClick={() => setPhoneView('widgets')} aria-pressed={phoneView === 'widgets'}>
-              Přehled{props.urgent ? ` (${props.urgent})` : ''}
-            </button>
-          </div>
-          {customizing && <CustomizePanel layout={layout} isAdmin={isAdmin} onClose={() => setCustomizing(false)} />}
-          {showLeft && (
-            <aside className="jcc-col" aria-label="Widgety vlevo">
-              <CommandWidgets data={data} layout={layout} columns={['left']} />
-            </aside>
+          {!wide && (
+            <div className="jcc-switch" role="group" aria-label="Zobrazit">
+              <button type="button" className={narrowView === 'chat' ? 'is-on' : undefined} onClick={() => setNarrowView('chat')} aria-pressed={narrowView === 'chat'}>
+                Chat
+              </button>
+              <button
+                type="button"
+                className={narrowView === 'overview' ? 'is-on' : undefined}
+                onClick={() => setNarrowView('overview')}
+                aria-pressed={narrowView === 'overview'}
+              >
+                Přehled
+                {alerts > 0 && <span className="jcc-tab-count">{alerts}</span>}
+              </button>
+            </div>
           )}
           <div className="jcc-center">
             <div className="jws-chat">{props.chat}</div>
           </div>
-          {showSide && (
-            <aside className="jcc-col" aria-label="Widgety">
-              <CommandWidgets data={data} layout={layout} columns={sideColumns} />
-            </aside>
-          )}
+          {showPanel && <JarvisOverview data={data} tab={panel.tab} onTab={panel.setTab} onClose={wide ? panel.toggle : undefined} />}
         </div>
         {section === 'conversations' && (
           <div className="jws-scroll">
@@ -1051,7 +1078,7 @@ export default function JarvisWorkspace(props: JarvisWorkspaceProps) {
                   className="jws-btn jws-btn--primary"
                   onClick={() => {
                     props.onNewConversation();
-                    onSection('chat');
+                    toChat();
                   }}
                   disabled={props.busy}
                 >
@@ -1073,14 +1100,23 @@ export default function JarvisWorkspace(props: JarvisWorkspaceProps) {
         )}
         {section === 'capabilities' && (
           <div className="jws-scroll">
-            <CapabilitiesSection onUse={props.onUsePrompt} onSave={(input) => void props.onCreatePrompt(input)} />
+            <CapabilitiesSection
+              onUse={(text, send) => {
+                toChat();
+                props.onUsePrompt(text, send);
+              }}
+              onSave={(input) => void props.onCreatePrompt(input)}
+            />
           </div>
         )}
         {section === 'prompts' && (
           <div className="jws-scroll">
             <PromptsSection
               prompts={props.prompts}
-              onUse={props.onUsePrompt}
+              onUse={(text, send) => {
+                toChat();
+                props.onUsePrompt(text, send);
+              }}
               onCreate={props.onCreatePrompt}
               onUpdate={props.onUpdatePrompt}
               onDelete={props.onDeletePrompt}
