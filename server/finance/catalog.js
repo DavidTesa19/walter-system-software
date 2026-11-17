@@ -17,6 +17,8 @@ export const CATEGORY_LABELS = {
   storage: 'Úložiště a zálohy',
   dev: 'Vývoj',
   software: 'Software a licence',
+  web: 'Web',
+  design: 'Design',
   other: 'Ostatní',
 };
 

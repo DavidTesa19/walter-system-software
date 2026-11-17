@@ -44,6 +44,8 @@
   --finance-series-6: #008300;
   --finance-series-7: #6250d6;
   --finance-series-8: #e34948;
+  --finance-series-9: #0f9fb5;
+  --finance-series-10: #9a7236;
   --finance-series-rest: color-mix(in srgb, var(--color-text, #0f172a) 32%, var(--color-surface, #ffffff));
 }
 
@@ -56,6 +58,8 @@
 .finance-slot-6 { fill: var(--finance-series-6); background: var(--finance-series-6); }
 .finance-slot-7 { fill: var(--finance-series-7); background: var(--finance-series-7); }
 .finance-slot-8 { fill: var(--finance-series-8); background: var(--finance-series-8); }
+.finance-slot-9 { fill: var(--finance-series-9); background: var(--finance-series-9); }
+.finance-slot-10 { fill: var(--finance-series-10); background: var(--finance-series-10); }
 
 .finance-header {
   display: flex;

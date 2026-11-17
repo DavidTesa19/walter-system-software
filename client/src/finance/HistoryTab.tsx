@@ -351,7 +351,7 @@ function buildModel(history: FinanceHistory, groupBy: GroupBy, categoryFilter: s
 
   // Fixed colour slots: categories in catalog order ("other" grey); services
   // by their all-time total, the smaller ones folded into "Ostatní".
-  const categorySlot = (key: string) => (key === 'other' ? 0 : (categoryKeys.filter((item) => item !== 'other').indexOf(key) % 8) + 1);
+  const categorySlot = (key: string) => (key === 'other' ? 0 : (categoryKeys.filter((item) => item !== 'other').indexOf(key) % 10) + 1);
   const serviceTotals = new Map<string, number>();
   for (const entry of history.entries) serviceTotals.set(entry.service, (serviceTotals.get(entry.service) ?? 0) + entry.czk);
   const rankedServices = [...serviceTotals.entries()].sort((a, b) => b[1] - a[1]).map(([name]) => name);
