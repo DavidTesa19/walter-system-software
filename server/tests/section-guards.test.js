@@ -63,4 +63,16 @@ for (const file of ['server.js', 'server-postgres.js']) {
       server.close();
     }
   });
+
+  // Documents and notes reached by id sit outside every section prefix, so they
+  // carry their own guard; until 2026-11-11 viewers could change documents and
+  // anyone could delete any note this way.
+  test(`${file}: documents and notes by id are guarded and refuse viewer writes`, () => {
+    const lines = fs.readFileSync(path.join(serverDir, file), 'utf8').split('\n');
+    for (const prefix of ['documents', 'notes']) {
+      const guard = lines.find((line) => line.startsWith(`app.use(/^\\/${prefix}\\/\\d+(?=\\/|$)/,`));
+      assert.ok(guard, `no guard for /${prefix}/:id`);
+      assert.match(guard, /\brejectViewerWrites\b/, `/${prefix}/:id guard lets viewers write`);
+    }
+  });
 }
