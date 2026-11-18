@@ -1,8 +1,10 @@
-// Jarvis's face on the Jarvis screen: a glowing orb in the palette's primary
-// and accent colours, with two eyes. It shows what Jarvis is doing: resting,
-// thinking (rings turn faster), listening (accent halo, eyes open), speaking
-// (eyes move) or unavailable (grey). Pure CSS (JarvisCommandCenter.css), no
-// canvas or WebGL, so it costs nothing and follows the light/dark theme.
+// Jarvis's orb on the Jarvis screen: a glass sphere with light swirling
+// inside, in the palette's primary and accent colours. It shows what Jarvis
+// is doing: resting (a slow swirl), thinking (the swirl speeds up, the glow
+// breathes), listening (an accent glow that pulses), speaking (the sphere
+// pulses with the voice) or unavailable (grey and still). Pure CSS
+// (JarvisCommandCenter.css), no canvas or WebGL, so it costs nothing and
+// follows the light/dark theme and every palette.
 
 export type OrbState = 'idle' | 'busy' | 'listening' | 'speaking' | 'offline';
 
@@ -18,15 +20,11 @@ export default function JarvisOrb({ state = 'idle', size = 'hero' }: { state?: O
   return (
     <span className={`jorb jorb--${size} jorb--${state}`} role="img" aria-label={LABELS[state]}>
       <span className="jorb-halo" />
-      {size !== 'mini' && (
-        <>
-          <span className="jorb-ring jorb-ring--outer" />
-          <span className="jorb-ring jorb-ring--inner" />
-        </>
-      )}
-      <span className="jorb-core">
-        <span className="jorb-eye" />
-        <span className="jorb-eye" />
+      <span className="jorb-sphere">
+        <span className="jorb-swirl" />
+        <span className="jorb-swirl jorb-swirl--back" />
+        <span className="jorb-core" />
+        <span className="jorb-gloss" />
       </span>
     </span>
   );

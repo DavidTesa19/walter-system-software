@@ -12,7 +12,7 @@ import { Suspense, lazy, useEffect, useMemo, useRef, useState } from 'react';
 import type { ReactNode } from 'react';
 import {
   ArrowUpRight, Bell, Blocks, Bookmark, Brain, ChartColumn, Check, ChevronDown, CornerDownLeft, Keyboard, Lock, PanelRightClose,
-  PanelRightOpen, Pencil, Pin, PinOff, Plus, Search, SendHorizontal, Settings, Share2, ShieldCheck, Sun, Trash2, Users, X,
+  PanelRightOpen, Pencil, Pin, PinOff, Plus, Search, SendHorizontal, Settings, Share2, ShieldCheck, Sparkles, Sun, Trash2, Users, X,
 } from 'lucide-react';
 import type { ConversationSummary, JarvisAttention, JarvisMemory, JarvisOpenAction, JarvisPrompt, JarvisPromptInput, JarvisStatus } from './jarvisApi';
 import { jarvisApi } from './jarvisApi';
@@ -27,6 +27,12 @@ import { JarvisOverview, useOverviewPanel, useVelinWidth } from './JarvisCommand
 import type { CommandCenterData } from './JarvisCommandCenter';
 import './JarvisWorkspace.css';
 import './JarvisCommandCenter.css';
+// The Jarvis screen's display face (headline, clock); the text stays in the
+// palette's font. The files download only when the screen shows them.
+import '@fontsource/dm-sans/300.css';
+import '@fontsource/dm-sans/400.css';
+import '@fontsource/dm-sans/500.css';
+import '@fontsource/dm-sans/600.css';
 
 const JarvisAnalytics = lazy(() => import('./analytics/JarvisAnalytics'));
 
@@ -257,19 +263,13 @@ export function JarvisHome({
   userName,
   unavailable,
   onUse,
-  onSection,
   onBriefing,
-  onTalk,
-  canListen,
   orbState,
 }: {
   userName: string | null;
   unavailable: boolean;
   onUse: (text: string, send: boolean) => void;
-  onSection: (section: JarvisSection) => void;
   onBriefing: () => void;
-  onTalk: () => void;
-  canListen: boolean;
   orbState: OrbState;
 }) {
   const hour = new Date().getHours();
@@ -277,46 +277,30 @@ export function JarvisHome({
   return (
     <div className="jws-hero">
       <JarvisOrb size="hero" state={orbState} />
-      <h1>
+      <p className="jws-hero-eyebrow">
+        <Sparkles size={13} strokeWidth={2} aria-hidden />
         {greeting}
         {userName ? `, ${userName}` : ''}
-      </h1>
-      <p>
-        {unavailable
-          ? 'Jarvis teď není dostupný: na serveru chybí klíč k Claude API.'
-          : 'Zeptejte se na klienty, zakázky, kalendář nebo dokumenty, nebo mi dejte úkol. Změny dat jen navrhuji – provedou se, až je potvrdíte.'}
       </p>
-      {canListen && (
-        <button type="button" className="jws-talk" onClick={onTalk} disabled={unavailable} title="Mluvit s Jarvisem (Alt+M)">
-          <span className="jws-talk-wave" aria-hidden="true">
-            <i />
-            <i />
-            <i />
-            <i />
-            <i />
-          </span>
-          <span className="jws-talk-text">
-            <strong>Mluvit s Jarvisem</strong>
-            <small>Alt+M · podržením mluvíte, puštěním odešlete</small>
-          </span>
-        </button>
-      )}
-      <div className="jws-hero-examples">
-        <button type="button" className="jws-hero-example" onClick={onBriefing} disabled={unavailable}>
+      <h1>
+        Jsem Jarvis, váš <span className="jws-hero-accent">AI asistent</span>.
+        <br />
+        S čím vám dnes pomohu?
+      </h1>
+      {unavailable && <p className="jws-hero-note">Jarvis teď není dostupný: na serveru chybí klíč k Claude API.</p>}
+      <div className="jws-hero-chips">
+        <button type="button" className="jws-hero-chip" onClick={onBriefing} disabled={unavailable}>
           <Sun {...SMALL} /> Ranní přehled
         </button>
-        {QUICK_EXAMPLES.map(({ capability, example }) => {
+        {QUICK_EXAMPLES.map(({ capability, example, short }) => {
           const Icon = capability.icon;
           return (
-            <button key={example} type="button" className="jws-hero-example" onClick={() => onUse(example, true)} disabled={unavailable}>
-              <Icon {...SMALL} /> {example}
+            <button key={example} type="button" className="jws-hero-chip" onClick={() => onUse(example, true)} disabled={unavailable} title={example}>
+              <Icon {...SMALL} /> {short}
             </button>
           );
         })}
       </div>
-      <button type="button" className="jws-link" onClick={() => onSection('capabilities')}>
-        Co všechno Jarvis umí <ArrowUpRight {...SMALL} />
-      </button>
     </div>
   );
 }

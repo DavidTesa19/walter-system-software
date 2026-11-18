@@ -148,14 +148,14 @@ export const CAPABILITIES: JarvisCapability[] = [
 ];
 
 // Four questions for the welcome screen that work as they are (the morning
-// overview has its own button there).
-const QUICK: Array<[string, string]> = [
-  ['search', 'Které moje zakázky jsou po termínu?'],
-  ['calendar', 'Co mám tento týden v kalendáři?'],
-  ['search', 'Co se v datech změnilo od včerejška?'],
-  ['documents', 'Exportuj aktivní zakázky do Excelu.'],
+// overview has its own button there), each with a short chip label.
+const QUICK: Array<[string, string, string]> = [
+  ['search', 'Které moje zakázky jsou po termínu?', 'Zakázky po termínu'],
+  ['calendar', 'Co mám tento týden v kalendáři?', 'Můj týden'],
+  ['search', 'Co se v datech změnilo od včerejška?', 'Co je nového'],
+  ['documents', 'Exportuj aktivní zakázky do Excelu.', 'Export do Excelu'],
 ];
-export const QUICK_EXAMPLES = QUICK.flatMap(([id, example]) => {
+export const QUICK_EXAMPLES = QUICK.flatMap(([id, example, short]) => {
   const capability = CAPABILITIES.find((item) => item.id === id);
-  return capability ? [{ capability, example }] : [];
+  return capability ? [{ capability, example, short }] : [];
 });

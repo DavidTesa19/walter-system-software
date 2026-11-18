@@ -1,21 +1,91 @@
-/* Velín, the Jarvis screen's home (JarvisCommandCenter.tsx, JarvisOrb.tsx,
-   the top bar in JarvisWorkspace.tsx): Jarvis in the middle and one quiet
-   overview panel. The app's own identity: palette colours only (so it
-   follows light/dark and every custom palette), the redesign's scale tokens,
-   the page font. The glow and the orb are built from --color-primary and
-   --color-accent. */
+/* The Jarvis screen (JarvisWorkspace.tsx, JarvisCommandCenter.tsx,
+   JarvisOrb.tsx), 2026-11-17: a calm, futuristic stage. Jarvis's glass orb,
+   a large headline and the message box in the middle; one glass overview
+   panel at the side. Everything is built from the palette (--color-primary,
+   --color-accent, --color-surface, --color-text…), so it follows light/dark
+   and every custom palette; white and near-black only mix in for light and
+   depth. DM Sans is the display face (headline, clock, brand); the text
+   stays in the palette's font. */
+
+/* ---------- the stage ---------- */
+
+.main-content.main-content--jarvis {
+  --stage: var(--color-background);
+  --glass: color-mix(in srgb, var(--color-surface) 66%, transparent);
+  --glass-strong: color-mix(in srgb, var(--color-surface) 84%, transparent);
+  --glass-border: color-mix(in srgb, var(--color-text) 9%, transparent);
+  --glass-border-strong: color-mix(in srgb, var(--color-text) 13%, transparent);
+  --glass-highlight: color-mix(in srgb, #ffffff 70%, transparent);
+  --stage-glow: color-mix(in srgb, var(--color-primary) 15%, transparent);
+  --stage-glow-2: color-mix(in srgb, var(--color-accent) 10%, transparent);
+  --grid-line: color-mix(in srgb, var(--color-text) 5%, transparent);
+  --lift: 0 18px 48px -28px color-mix(in srgb, var(--color-text) 30%, transparent);
+  --display-font: 'DM Sans', var(--font-heading, var(--font-body)), system-ui, sans-serif;
+  position: relative;
+  isolation: isolate;
+  padding-bottom: 0;
+  background:
+    radial-gradient(55% 60% at 8% 100%, var(--stage-glow), transparent 72%),
+    radial-gradient(40% 45% at 96% 12%, var(--stage-glow-2), transparent 70%),
+    radial-gradient(50% 35% at 50% 0%, color-mix(in srgb, var(--color-primary) 8%, transparent), transparent 75%),
+    var(--stage);
+}
+
+:root[data-theme='dark'] .main-content.main-content--jarvis {
+  --stage: color-mix(in srgb, var(--color-background) 42%, #02040a);
+  --glass: color-mix(in srgb, var(--color-surface) 38%, transparent);
+  --glass-strong: color-mix(in srgb, var(--color-surface) 58%, transparent);
+  --glass-border: color-mix(in srgb, #ffffff 8%, transparent);
+  --glass-border-strong: color-mix(in srgb, #ffffff 13%, transparent);
+  --glass-highlight: color-mix(in srgb, #ffffff 10%, transparent);
+  --stage-glow: color-mix(in srgb, var(--color-primary) 30%, transparent);
+  --stage-glow-2: color-mix(in srgb, var(--color-primary) 16%, transparent);
+  --grid-line: color-mix(in srgb, #ffffff 3.5%, transparent);
+  --lift: 0 24px 60px -30px #000000;
+}
+
+/* A faint grid, fading out from the middle. */
+.main-content.main-content--jarvis::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  pointer-events: none;
+  background-image:
+    linear-gradient(var(--grid-line) 1px, transparent 1px),
+    linear-gradient(90deg, var(--grid-line) 1px, transparent 1px);
+  background-size: 56px 56px;
+  background-position: center top;
+  -webkit-mask-image: radial-gradient(ellipse 65% 55% at 50% 38%, #000 10%, transparent 78%);
+  mask-image: radial-gradient(ellipse 65% 55% at 50% 38%, #000 10%, transparent 78%);
+}
+
+.jws.jws--cc {
+  flex-direction: column;
+  border-top: 0;
+  background: transparent;
+}
+
+.jws--cc .jws-main,
+.jws--cc .jws-scroll {
+  background: transparent;
+}
 
 /* ---------- the orb ---------- */
 
 .jorb {
-  --orb: 220px;
+  --orb: 132px;
+  --orb-deep: color-mix(in srgb, var(--color-primary) 50%, #020617);
+  --orb-mid: var(--color-primary);
+  --orb-light: color-mix(in srgb, var(--color-primary) 25%, #ffffff);
+  --orb-swirl: color-mix(in srgb, var(--color-accent) 85%, #ffffff);
+  --orb-flash: #ffffff;
+  --orb-halo: color-mix(in srgb, var(--color-primary) 55%, transparent);
   position: relative;
   display: inline-flex;
   flex: none;
   width: var(--orb);
   height: var(--orb);
-  align-items: center;
-  justify-content: center;
 }
 
 .jorb--compact {
@@ -23,119 +93,178 @@
 }
 
 .jorb--mini {
-  --orb: 28px;
+  --orb: 26px;
 }
 
 .jorb-halo {
   position: absolute;
+  inset: -40%;
+  border-radius: 50%;
+  background: radial-gradient(
+    circle,
+    var(--orb-halo) 0%,
+    color-mix(in srgb, var(--color-accent) 16%, transparent) 36%,
+    transparent 64%
+  );
+  filter: blur(calc(var(--orb) * 0.1));
+  opacity: 0.7;
+  pointer-events: none;
+  animation: jorb-breathe 6s ease-in-out infinite;
+}
+
+.jorb--mini .jorb-halo {
+  inset: -28%;
+  opacity: 0.5;
+}
+
+.jorb-sphere {
+  position: relative;
+  width: 100%;
+  height: 100%;
+  overflow: hidden;
+  border-radius: 50%;
+  background:
+    radial-gradient(circle at 50% 118%, color-mix(in srgb, var(--color-accent) 75%, #ffffff) 0%, transparent 52%),
+    radial-gradient(circle at 28% 22%, var(--orb-light) 0%, transparent 46%),
+    radial-gradient(circle at 50% 50%, var(--orb-mid) 0%, var(--orb-deep) 100%);
+  box-shadow:
+    inset 0 0 calc(var(--orb) * 0.1) color-mix(in srgb, #ffffff 45%, transparent),
+    inset 0 calc(var(--orb) * -0.08) calc(var(--orb) * 0.2) color-mix(in srgb, #020617 35%, transparent),
+    0 calc(var(--orb) * 0.12) calc(var(--orb) * 0.4) calc(var(--orb) * -0.12) color-mix(in srgb, var(--color-primary) 80%, transparent);
+}
+
+/* Dark mode: the dark palettes' primary is a light tint, so the sphere is
+   built deeper and the light inside it brighter, like a lamp in the dark. */
+:root[data-theme='dark'] .jorb {
+  --orb-deep: color-mix(in srgb, var(--color-primary) 30%, #020617);
+  --orb-mid: color-mix(in srgb, var(--color-primary) 75%, #0b1020);
+  --orb-light: color-mix(in srgb, var(--color-primary) 70%, #ffffff);
+  --orb-swirl: color-mix(in srgb, var(--color-accent) 70%, var(--color-primary));
+  --orb-flash: color-mix(in srgb, var(--color-primary) 35%, #ffffff);
+  --orb-halo: color-mix(in srgb, var(--color-primary) 75%, transparent);
+}
+
+:root[data-theme='dark'] .jorb-halo {
+  opacity: 0.95;
+}
+
+/* Where the browser can (relative colours), the sphere takes the palette's
+   hue at a fixed depth and a higher saturation: an electric glass in any
+   palette and either theme, never a washed-out tint. */
+@supports (color: oklch(from red l c h)) {
+  .jorb,
+  :root[data-theme='dark'] .jorb {
+    --orb-deep: oklch(from var(--color-primary) 0.3 min(calc(c * 1.3 + 0.04), 0.2) h);
+    --orb-mid: oklch(from var(--color-primary) 0.56 min(calc(c * 1.5 + 0.06), 0.26) h);
+    --orb-light: oklch(from var(--color-primary) 0.86 min(calc(c * 0.9 + 0.04), 0.14) h);
+    --orb-swirl: oklch(from var(--color-accent) 0.82 min(calc(c * 1.3 + 0.04), 0.2) h);
+    --orb-flash: oklch(from var(--color-primary) 0.95 0.05 h);
+    --orb-halo: oklch(from var(--color-primary) 0.62 min(calc(c * 1.5 + 0.06), 0.26) h / 0.6);
+  }
+
+  :root[data-theme='dark'] .jorb {
+    --orb-halo: oklch(from var(--color-primary) 0.6 min(calc(c * 1.6 + 0.08), 0.26) h / 0.8);
+  }
+}
+
+/* Light turning inside the glass. */
+.jorb-swirl {
+  position: absolute;
   inset: 4%;
   border-radius: 50%;
-  background: radial-gradient(circle, color-mix(in srgb, var(--color-primary) 38%, transparent) 0%, transparent 68%);
-  filter: blur(calc(var(--orb) * 0.06));
+  background: conic-gradient(
+    from 200deg,
+    transparent 0deg,
+    var(--orb-swirl) 60deg,
+    var(--orb-flash) 100deg,
+    transparent 150deg,
+    transparent 210deg,
+    color-mix(in srgb, var(--color-primary) 35%, #ffffff) 280deg,
+    transparent 335deg
+  );
+  filter: blur(calc(var(--orb) * 0.07));
+  mix-blend-mode: screen;
   opacity: 0.85;
+  animation: jorb-spin 10s linear infinite;
 }
 
-.jorb-ring {
-  position: absolute;
-  border-radius: 50%;
-  pointer-events: none;
-}
-
-.jorb-ring--outer {
-  inset: 0;
-  border: 1px dashed color-mix(in srgb, var(--color-primary) 45%, transparent);
-  animation: jorb-spin 48s linear infinite;
-}
-
-.jorb-ring--inner {
-  inset: 9%;
-  border: 2px solid transparent;
-  border-top-color: color-mix(in srgb, var(--color-accent) 70%, transparent);
-  border-bottom-color: color-mix(in srgb, var(--color-primary) 55%, transparent);
-  animation: jorb-spin 70s linear infinite reverse;
-}
-
-.jorb--compact .jorb-ring--inner {
-  border-width: 1.5px;
+.jorb-swirl--back {
+  inset: 20%;
+  opacity: 0.5;
+  filter: blur(calc(var(--orb) * 0.05));
+  animation-duration: 7s;
+  animation-direction: reverse;
 }
 
 .jorb-core {
-  position: relative;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  gap: calc(var(--orb) * 0.09);
-  width: 70%;
-  height: 70%;
+  position: absolute;
+  inset: 34%;
+  border-radius: 50%;
+  background: radial-gradient(circle, #ffffff 0%, color-mix(in srgb, var(--color-accent) 55%, #ffffff) 38%, transparent 72%);
+  filter: blur(calc(var(--orb) * 0.035));
+  mix-blend-mode: screen;
+  opacity: 0.7;
+  animation: jorb-core 5s ease-in-out infinite;
+}
+
+.jorb-gloss {
+  position: absolute;
+  inset: 0;
   border-radius: 50%;
   background:
-    radial-gradient(circle at 34% 26%, color-mix(in srgb, #ffffff 92%, var(--color-primary)) 0%, color-mix(in srgb, #ffffff 55%, var(--color-primary)) 24%, var(--color-primary) 62%, color-mix(in srgb, var(--color-primary) 62%, #0b1020) 100%);
-  box-shadow:
-    0 calc(var(--orb) * 0.08) calc(var(--orb) * 0.2) calc(var(--orb) * -0.06) color-mix(in srgb, var(--color-primary) 60%, transparent),
-    inset 0 calc(var(--orb) * -0.06) calc(var(--orb) * 0.14) color-mix(in srgb, var(--color-primary) 55%, #0b1020),
-    inset 0 0 0 1px color-mix(in srgb, #ffffff 25%, transparent);
-  animation: jorb-float 5s ease-in-out infinite;
+    radial-gradient(ellipse 36% 24% at 34% 20%, color-mix(in srgb, #ffffff 70%, transparent), transparent 70%),
+    radial-gradient(ellipse 55% 18% at 50% 96%, color-mix(in srgb, #ffffff 28%, transparent), transparent 70%);
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, #ffffff 30%, transparent);
 }
 
-.jorb--mini .jorb-core,
-.jorb--compact .jorb-core {
-  width: 100%;
-  height: 100%;
-  animation: none;
+.jorb--mini .jorb-swirl--back,
+.jorb--mini .jorb-core {
+  display: none;
 }
 
-.jorb-eye {
-  width: calc(var(--orb) * 0.11);
-  height: calc(var(--orb) * 0.032);
-  min-width: 3px;
-  min-height: 2px;
-  border-radius: 999px;
-  background: #ffffff;
-  box-shadow: 0 0 calc(var(--orb) * 0.05) rgba(255, 255, 255, 0.9);
-  animation: jorb-blink 6s ease-in-out infinite;
+/* Thinking: the light turns faster and the glow breathes. */
+.jorb--busy .jorb-swirl {
+  animation-duration: 1.8s;
 }
 
-/* Thinking: the rings turn quickly and the halo breathes. */
-.jorb--busy .jorb-ring--outer {
-  animation-duration: 6s;
-}
-
-.jorb--busy .jorb-ring--inner {
-  animation-duration: 3.5s;
+.jorb--busy .jorb-swirl--back {
+  animation-duration: 1.3s;
 }
 
 .jorb--busy .jorb-halo {
-  animation: jorb-breathe 1.6s ease-in-out infinite;
+  opacity: 0.95;
+  animation-duration: 1.6s;
 }
 
-/* Listening: an accent halo, eyes wide open. */
+/* Listening: an accent glow, the sphere pulses. */
 .jorb--listening .jorb-halo {
-  background: radial-gradient(circle, color-mix(in srgb, var(--color-accent) 55%, transparent) 0%, transparent 70%);
-  animation: jorb-breathe 1.2s ease-in-out infinite;
+  background: radial-gradient(circle, color-mix(in srgb, var(--color-accent) 60%, transparent) 0%, transparent 64%);
+  opacity: 0.95;
+  animation-duration: 1.2s;
 }
 
-.jorb--listening .jorb-eye {
-  height: calc(var(--orb) * 0.07);
-  animation: none;
+.jorb--listening .jorb-sphere {
+  animation: jorb-pulse 1.2s ease-in-out infinite;
 }
 
-/* Speaking: the eyes move with the voice. */
-.jorb--speaking .jorb-eye {
+/* Speaking: quick pulses, like a voice. */
+.jorb--speaking .jorb-sphere {
   animation: jorb-talk 0.45s ease-in-out infinite alternate;
 }
 
-.jorb--speaking .jorb-halo {
-  animation: jorb-breathe 0.9s ease-in-out infinite;
+.jorb--speaking .jorb-core {
+  animation-duration: 0.9s;
 }
 
 .jorb--offline {
   filter: grayscale(1);
-  opacity: 0.6;
+  opacity: 0.55;
 }
 
-.jorb--offline .jorb-ring,
+.jorb--offline .jorb-halo,
+.jorb--offline .jorb-swirl,
 .jorb--offline .jorb-core,
-.jorb--offline .jorb-eye {
+.jorb--offline .jorb-sphere {
   animation: none;
 }
 
@@ -145,53 +274,52 @@
   }
 }
 
-@keyframes jorb-float {
-  0%,
-  100% {
-    transform: translateY(0);
-  }
-  50% {
-    transform: translateY(calc(var(--orb) * -0.02));
-  }
-}
-
-@keyframes jorb-blink {
-  0%,
-  92%,
-  100% {
-    transform: scaleY(1);
-  }
-  95% {
-    transform: scaleY(0.15);
-  }
-}
-
 @keyframes jorb-breathe {
   0%,
   100% {
-    transform: scale(1);
-    opacity: 0.7;
+    transform: scale(0.94);
+    opacity: 0.6;
   }
   50% {
-    transform: scale(1.12);
-    opacity: 1;
+    transform: scale(1.05);
+    opacity: 0.9;
+  }
+}
+
+@keyframes jorb-core {
+  0%,
+  100% {
+    transform: scale(0.9);
+  }
+  50% {
+    transform: scale(1.1);
+  }
+}
+
+@keyframes jorb-pulse {
+  0%,
+  100% {
+    transform: scale(1);
+  }
+  50% {
+    transform: scale(1.05);
   }
 }
 
 @keyframes jorb-talk {
   from {
-    transform: scaleY(0.6);
+    transform: scale(0.98);
   }
   to {
-    transform: scaleY(2.2);
+    transform: scale(1.04);
   }
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .jorb-ring,
+  .jorb-halo,
+  .jorb-swirl,
   .jorb-core,
-  .jorb-eye,
-  .jorb-halo {
+  .jorb-sphere {
     animation: none !important;
   }
 }
@@ -201,12 +329,10 @@
 .jcc-top {
   display: flex;
   align-items: center;
-  gap: 10px 18px;
+  gap: 10px 16px;
   min-height: 52px;
-  padding: 8px 20px;
+  padding: 6px 24px;
   box-sizing: border-box;
-  border-bottom: 1px solid var(--color-border);
-  background: var(--color-surface);
 }
 
 .jcc-brand {
@@ -217,56 +343,47 @@
 }
 
 .jcc-brand strong {
-  font-family: var(--font-heading, var(--font-body));
-  font-size: var(--ui-text-lg);
-  font-weight: 700;
-  letter-spacing: -0.01em;
+  font-family: var(--display-font);
+  font-size: 18px;
+  font-weight: 600;
+  letter-spacing: -0.02em;
 }
 
 .jcc-status {
   display: inline-flex;
   align-items: center;
   gap: 6px;
-  height: 22px;
-  padding: 0 9px;
+  height: 24px;
+  padding: 0 10px;
+  border: 1px solid var(--glass-border);
   border-radius: 999px;
-  border: 1px solid color-mix(in srgb, var(--color-success, #10b981) 40%, var(--color-border));
-  background: color-mix(in srgb, var(--color-success, #10b981) 8%, var(--color-surface));
-  color: var(--color-text);
-  font-family: var(--font-subheading, var(--font-body));
-  font-size: 11px;
+  background: var(--glass);
+  -webkit-backdrop-filter: blur(12px);
+  backdrop-filter: blur(12px);
+  color: var(--color-text-muted);
+  font-size: 11.5px;
   font-weight: 600;
   white-space: nowrap;
 }
 
 .jcc-status::before {
   content: '';
-  width: 7px;
-  height: 7px;
+  width: 6px;
+  height: 6px;
   border-radius: 50%;
   background: var(--color-success, #10b981);
-  box-shadow: 0 0 6px var(--color-success, #10b981);
-}
-
-.jcc-status--busy {
-  border-color: color-mix(in srgb, var(--color-primary) 45%, var(--color-border));
-  background: color-mix(in srgb, var(--color-primary) 8%, var(--color-surface));
+  box-shadow: 0 0 8px var(--color-success, #10b981);
 }
 
 .jcc-status--busy::before {
   background: var(--color-primary);
-  box-shadow: 0 0 6px var(--color-primary);
+  box-shadow: 0 0 8px var(--color-primary);
   animation: jorb-breathe 1.2s ease-in-out infinite;
 }
 
 .jcc-status--listening::before {
   background: var(--color-accent);
-  box-shadow: 0 0 6px var(--color-accent);
-}
-
-.jcc-status--offline {
-  border-color: color-mix(in srgb, var(--color-danger, #dc2626) 45%, var(--color-border));
-  background: color-mix(in srgb, var(--color-danger, #dc2626) 8%, var(--color-surface));
+  box-shadow: 0 0 8px var(--color-accent);
 }
 
 .jcc-status--offline::before {
@@ -274,15 +391,18 @@
   box-shadow: none;
 }
 
-/* Four sections and "Více": a segmented control, the app's tabs. */
+/* Velín, Konverzace, Šablony, Paměť and "Více": a glass segmented control. */
 .jcc-tabs {
   display: inline-flex;
   align-items: center;
+  gap: 2px;
   min-width: 0;
-  padding: 2px;
-  border: 1px solid var(--color-border);
-  border-radius: var(--ui-radius-md);
-  background: var(--color-surface-alt);
+  padding: 3px;
+  border: 1px solid var(--glass-border);
+  border-radius: 12px;
+  background: var(--glass);
+  -webkit-backdrop-filter: blur(14px);
+  backdrop-filter: blur(14px);
 }
 
 .jcc-tab {
@@ -290,10 +410,10 @@
   align-items: center;
   gap: 5px;
   flex: none;
-  height: 28px;
-  padding: 0 11px;
+  height: 30px;
+  padding: 0 12px;
   border: 0;
-  border-radius: 6px;
+  border-radius: 9px;
   background: transparent;
   color: var(--color-text-muted);
   font: inherit;
@@ -301,7 +421,7 @@
   font-weight: 600;
   white-space: nowrap;
   cursor: pointer;
-  transition: background-color var(--ui-transition), color var(--ui-transition);
+  transition: background-color var(--ui-transition), color var(--ui-transition), box-shadow var(--ui-transition);
 }
 
 .jcc-tab:hover {
@@ -311,7 +431,7 @@
 .jcc-tab.is-on {
   background: var(--color-surface);
   color: var(--color-text);
-  box-shadow: var(--ui-shadow-xs);
+  box-shadow: 0 1px 2px color-mix(in srgb, #000000 12%, transparent), inset 0 1px 0 var(--glass-highlight);
 }
 
 .jcc-tab > svg {
@@ -345,15 +465,17 @@
 
 .jcc-menu {
   position: absolute;
-  top: calc(100% + 6px);
+  top: calc(100% + 8px);
   left: 0;
   z-index: 40;
-  min-width: 210px;
-  padding: 4px;
-  border: 1px solid var(--color-border);
-  border-radius: var(--ui-radius-md);
-  background: var(--color-surface);
-  box-shadow: var(--ui-shadow-pop);
+  min-width: 220px;
+  padding: 5px;
+  border: 1px solid var(--glass-border-strong);
+  border-radius: 14px;
+  background: var(--glass-strong);
+  -webkit-backdrop-filter: blur(22px) saturate(150%);
+  backdrop-filter: blur(22px) saturate(150%);
+  box-shadow: var(--ui-shadow-pop), var(--lift);
 }
 
 .jcc-menu button {
@@ -361,10 +483,10 @@
   align-items: center;
   gap: 10px;
   width: 100%;
-  height: 34px;
+  height: 36px;
   padding: 0 10px;
   border: 0;
-  border-radius: 6px;
+  border-radius: 9px;
   background: transparent;
   color: var(--color-text);
   font: inherit;
@@ -383,7 +505,7 @@
 
 .jcc-menu button:hover,
 .jcc-menu button.is-on {
-  background: var(--color-surface-alt);
+  background: color-mix(in srgb, var(--color-primary) 10%, transparent);
 }
 
 /* The Přehled switch, Velín only. */
@@ -392,30 +514,32 @@
   align-items: center;
   gap: 7px;
   flex: none;
-  height: var(--ui-control-h);
+  height: 34px;
   margin-left: auto;
-  padding: 0 12px;
+  padding: 0 13px;
   box-sizing: border-box;
-  border: 1px solid var(--color-border);
-  border-radius: var(--ui-radius-md);
-  background: var(--color-surface);
+  border: 1px solid var(--glass-border);
+  border-radius: 11px;
+  background: var(--glass);
+  -webkit-backdrop-filter: blur(14px);
+  backdrop-filter: blur(14px);
   color: var(--color-text-muted);
   font: inherit;
   font-size: var(--ui-text-sm);
   font-weight: 600;
   white-space: nowrap;
   cursor: pointer;
-  transition: border-color var(--ui-transition), background-color var(--ui-transition), color var(--ui-transition);
+  transition: border-color var(--ui-transition), color var(--ui-transition), background-color var(--ui-transition);
 }
 
 .jcc-panel-btn:hover {
-  border-color: color-mix(in srgb, var(--color-primary) 45%, var(--color-border));
+  border-color: color-mix(in srgb, var(--color-primary) 45%, var(--glass-border));
   color: var(--color-text);
 }
 
 .jcc-panel-btn.is-on {
-  background: var(--color-primary-soft, color-mix(in srgb, var(--color-primary) 12%, transparent));
-  border-color: color-mix(in srgb, var(--color-primary) 35%, var(--color-border));
+  border-color: color-mix(in srgb, var(--color-primary) 40%, var(--glass-border));
+  background: color-mix(in srgb, var(--color-primary) 12%, var(--glass));
   color: var(--color-primary-text, var(--color-primary));
 }
 
@@ -427,29 +551,25 @@
   min-height: 0;
   display: grid;
   grid-template-columns: minmax(0, 1fr);
-  gap: 16px;
-  padding: 16px;
+  gap: 20px;
+  padding: 0 24px 18px;
   box-sizing: border-box;
-  background:
-    radial-gradient(900px 480px at 50% -10%, color-mix(in srgb, var(--color-primary) 9%, transparent), transparent 70%),
-    var(--color-background);
 }
 
 .jcc[hidden] {
   display: none !important;
 }
 
-/* Wide (measured on Velín itself, useVelinWidth): the panel at the side,
-   a little narrower when Velín is. */
+/* Wide (measured on Velín itself, useVelinWidth): the panel at the side. */
 .jcc--wide.jcc--panel {
-  grid-template-columns: minmax(0, 1fr) clamp(290px, 30%, 340px);
+  grid-template-columns: minmax(0, 1fr) clamp(290px, 28%, 340px);
 }
 
-/* Narrow: Konverzace / Přehled take turns. */
+/* Narrow: Chat / Přehled take turns. */
 .jcc--narrow {
   grid-template-rows: auto minmax(0, 1fr);
   gap: 10px;
-  padding: 10px;
+  padding: 0 12px 12px;
 }
 
 .jcc--narrow[data-view='overview'] .jcc-center {
@@ -459,10 +579,13 @@
 .jcc-switch {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
-  padding: 2px;
-  border: 1px solid var(--color-border);
-  border-radius: var(--ui-radius-md);
-  background: var(--color-surface-alt);
+  gap: 2px;
+  padding: 3px;
+  border: 1px solid var(--glass-border);
+  border-radius: 12px;
+  background: var(--glass);
+  -webkit-backdrop-filter: blur(14px);
+  backdrop-filter: blur(14px);
 }
 
 .jcc-switch button {
@@ -472,7 +595,7 @@
   gap: 6px;
   height: 30px;
   border: 0;
-  border-radius: 6px;
+  border-radius: 9px;
   background: transparent;
   color: var(--color-text-muted);
   font: inherit;
@@ -484,39 +607,15 @@
 .jcc-switch button.is-on {
   background: var(--color-surface);
   color: var(--color-text);
-  box-shadow: var(--ui-shadow-xs);
+  box-shadow: 0 1px 2px color-mix(in srgb, #000000 12%, transparent);
 }
 
-/* In Velín the chat header keeps a compact model select (the panel's Jarvis
-   tab has the full switch). */
-.jcc-center .jarvis-model-segmented {
-  display: none;
-}
-
-.jcc-center .jarvis-model-select.jarvis-only-phone {
-  display: inline-flex !important;
-}
-
-/* A lower window: a smaller orb, so the examples stay in view. */
-@media (max-height: 820px) {
-  .jws-hero .jorb--hero {
-    --orb: 168px;
-  }
-
-  .jws-hero {
-    gap: 10px;
-  }
-}
+/* ---------- the conversation (JarvisPanel's page variant, in Velín) ---------- */
 
 .jcc-center {
   min-width: 0;
   min-height: 0;
   display: flex;
-  border: 1px solid var(--color-border);
-  border-radius: var(--ui-radius-lg);
-  background: var(--color-surface);
-  box-shadow: var(--ui-shadow-xs);
-  overflow: hidden;
 }
 
 .jcc-center > .jws-chat,
@@ -525,64 +624,432 @@
   min-width: 0;
 }
 
-/* The chat column is the panel's page variant; inside Velín it sits on a card. */
 .jcc-center .jarvis-panel.jarvis-panel--page {
   background: transparent;
-}
-
-.jcc-center .jarvis-panel--page .jarvis-body {
-  padding-left: max(20px, calc((100% - 760px) / 2));
-  padding-right: max(20px, calc((100% - 760px) / 2));
-}
-
-.jcc-center .jarvis-panel--page .jarvis-composer {
-  padding-left: max(16px, calc((100% - 760px) / 2));
-  padding-right: max(16px, calc((100% - 760px) / 2));
-  background: transparent;
+  color: var(--color-text);
 }
 
 .jcc-center .jarvis-panel--page .jarvis-header--page {
+  min-height: 46px;
+  padding: 0 max(8px, calc((100% - 800px) / 2));
+  border-bottom: 0;
   background: transparent;
 }
 
-/* ---------- Přehled, the panel (JarvisOverview) ---------- */
+.jcc-center .jarvis-panel--page .jarvis-title strong {
+  font-family: var(--display-font);
+  font-weight: 600;
+  letter-spacing: -0.01em;
+}
+
+/* The header's buttons as quiet glass icons. */
+.jcc-center .jarvis-panel--page .jarvis-header-actions .jarvis-icon-button {
+  border-radius: 10px;
+}
+
+.jcc-center .jarvis-panel--page .jarvis-header-actions .jarvis-icon-button:hover:not(:disabled) {
+  background: var(--glass);
+}
+
+.jcc-center .jarvis-model-segmented {
+  display: none;
+}
+
+.jcc-center .jarvis-model-select.jarvis-only-phone {
+  display: inline-flex !important;
+  height: 32px;
+  border: 1px solid var(--glass-border);
+  border-radius: 10px;
+  background-color: var(--glass);
+}
+
+.jcc-center .jarvis-panel--page .jarvis-body {
+  padding: 8px max(20px, calc((100% - 780px) / 2)) 18px;
+}
+
+/* History drops down over the conversation, a glass card. */
+.jcc-center .jarvis-panel--page .jarvis-history {
+  position: absolute;
+  top: 46px;
+  right: max(8px, calc((100% - 800px) / 2));
+  z-index: 6;
+  width: min(380px, calc(100% - 16px));
+  max-height: 60%;
+  border: 1px solid var(--glass-border-strong);
+  border-radius: 14px;
+  background: var(--glass-strong);
+  -webkit-backdrop-filter: blur(22px) saturate(150%);
+  backdrop-filter: blur(22px) saturate(150%);
+  box-shadow: var(--ui-shadow-pop), var(--lift);
+}
+
+/* An empty conversation: the welcome and the message box, together in the
+   middle, and nothing else (history is under Konverzace, the model and
+   read-aloud under Přehled › Jarvis). */
+.jcc-center .jarvis-panel--empty {
+  justify-content: center;
+}
+
+.jcc-center .jarvis-panel--empty .jarvis-header--page {
+  display: none;
+}
+
+.jcc-center .jarvis-panel--empty .jarvis-body {
+  flex: 0 1 auto;
+  padding-top: 16px;
+  padding-bottom: 26px;
+}
+
+.jcc-center .jarvis-panel--empty .jarvis-composer {
+  flex: none;
+  padding-bottom: 28px;
+}
+
+/* Questions as lit glass, answers as plain text on the stage. */
+.jcc-center .jarvis-question {
+  padding: 11px 16px;
+  border: 1px solid color-mix(in srgb, var(--color-primary) 30%, var(--glass-border));
+  border-radius: 18px 18px 6px 18px;
+  background: linear-gradient(
+    135deg,
+    color-mix(in srgb, var(--color-primary) 16%, var(--glass-strong)),
+    color-mix(in srgb, var(--color-accent) 9%, var(--glass-strong))
+  );
+  -webkit-backdrop-filter: blur(16px);
+  backdrop-filter: blur(16px);
+  color: var(--color-text);
+  font-size: 14.5px;
+  box-shadow: 0 12px 30px -24px color-mix(in srgb, var(--color-primary) 90%, transparent);
+}
+
+.jcc-center .jarvis-answer {
+  font-size: 15px;
+  line-height: 1.65;
+}
+
+/* ---------- the message box ---------- */
+
+.jcc-center .jarvis-panel--page .jarvis-composer {
+  gap: 8px;
+  padding: 4px max(20px, calc((100% - 780px) / 2)) 4px;
+  border-top: 0;
+  background: transparent;
+}
+
+.jcc-center .jarvis-panel--page .jarvis-input-row {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto auto;
+  grid-template-areas:
+    'input input input input'
+    'attach hint mic send';
+  align-items: center;
+  gap: 4px 8px;
+  padding: 14px 12px 12px 14px;
+  border: 1px solid var(--glass-border-strong);
+  border-radius: 22px;
+  background:
+    radial-gradient(90% 160% at 0% 100%, color-mix(in srgb, var(--color-primary) 14%, transparent), transparent 60%),
+    var(--glass-strong);
+  -webkit-backdrop-filter: blur(24px) saturate(150%);
+  backdrop-filter: blur(24px) saturate(150%);
+  box-shadow: inset 0 1px 0 var(--glass-highlight), var(--lift);
+  transition: border-color var(--ui-transition), box-shadow var(--ui-transition);
+}
+
+.jcc-center .jarvis-panel--page .jarvis-input-row:focus-within {
+  border-color: color-mix(in srgb, var(--color-primary) 50%, var(--glass-border-strong));
+  box-shadow:
+    inset 0 1px 0 var(--glass-highlight),
+    0 0 0 4px color-mix(in srgb, var(--color-primary) 12%, transparent),
+    0 18px 50px -24px color-mix(in srgb, var(--color-primary) 55%, transparent);
+}
+
+.jcc-center .jarvis-panel--page .jarvis-input-row textarea {
+  grid-area: input;
+  min-height: 52px;
+  padding: 2px 4px 8px;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  font-size: 15px;
+  line-height: 1.5;
+  box-shadow: none;
+}
+
+.jcc-center .jarvis-panel--page .jarvis-input-row textarea:focus {
+  border: 0;
+  box-shadow: none;
+}
+
+.jcc-center .jarvis-panel--page .jarvis-input-row textarea::placeholder {
+  color: color-mix(in srgb, var(--color-text-muted) 85%, transparent);
+}
+
+.jcc-center .jarvis-panel--page .jarvis-listening {
+  grid-area: input;
+}
+
+.jcc-center .jarvis-panel--page .jarvis-attach,
+.jcc-center .jarvis-panel--page .jarvis-mic {
+  width: 36px;
+  height: 36px;
+  border: 1px solid var(--glass-border-strong);
+  border-radius: 50%;
+  background: color-mix(in srgb, var(--color-surface) 50%, transparent);
+  color: var(--color-text-muted);
+  transition: border-color var(--ui-transition), color var(--ui-transition), background-color var(--ui-transition);
+}
+
+.jcc-center .jarvis-panel--page .jarvis-attach {
+  grid-area: attach;
+}
+
+.jcc-center .jarvis-panel--page .jarvis-mic {
+  grid-area: mic;
+}
+
+.jcc-center .jarvis-panel--page .jarvis-attach:hover:not(:disabled),
+.jcc-center .jarvis-panel--page .jarvis-mic:hover:not(:disabled) {
+  border-color: color-mix(in srgb, var(--color-primary) 50%, transparent);
+  background: color-mix(in srgb, var(--color-primary) 10%, transparent);
+  color: var(--color-primary-text, var(--color-primary));
+}
+
+.jcc-center .jarvis-panel--page .jarvis-mic--stop {
+  color: var(--color-danger, #dc2626);
+}
+
+.jarvis-composer-hint {
+  display: none;
+}
+
+.jcc-center .jarvis-composer-hint {
+  grid-area: hint;
+  display: block;
+  min-width: 0;
+  overflow: hidden;
+  padding-left: 4px;
+  color: var(--color-text-muted);
+  font-size: 11.5px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  opacity: 0.8;
+}
+
+.jcc-center .jarvis-panel--page .jarvis-send {
+  grid-area: send;
+  width: auto;
+  min-width: 36px;
+  height: 36px;
+  gap: 7px;
+  padding: 0 15px 0 13px;
+  border-radius: 999px;
+  background: linear-gradient(135deg, var(--color-primary), color-mix(in srgb, var(--color-primary) 70%, var(--color-accent)));
+  color: var(--color-primary-contrast, #ffffff);
+  font-size: var(--ui-text-sm);
+  font-weight: 650;
+  box-shadow: 0 8px 22px -10px color-mix(in srgb, var(--color-primary) 90%, transparent), inset 0 1px 0 color-mix(in srgb, #ffffff 25%, transparent);
+  transition: transform var(--ui-transition), box-shadow var(--ui-transition), opacity var(--ui-transition);
+}
+
+.jcc-center .jarvis-panel--page .jarvis-send:hover:not(:disabled) {
+  transform: translateY(-1px);
+}
+
+.jcc-center .jarvis-panel--page .jarvis-send:disabled {
+  opacity: 0.4;
+  box-shadow: none;
+}
+
+.jcc-center .jarvis-panel--page .jarvis-send--stop {
+  padding: 0;
+  width: 36px;
+  background: var(--color-danger, #dc2626);
+}
+
+.jarvis-send-label {
+  display: none;
+}
+
+.jcc-center .jarvis-send-label {
+  display: inline;
+}
+
+/* ---------- the welcome (the empty conversation) ---------- */
+
+.jws-hero {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+}
+
+.jws-hero .jorb--hero {
+  margin: 10px 0 26px;
+}
+
+.jws-hero-eyebrow {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  margin: 0 0 16px;
+  padding: 5px 12px 5px 10px;
+  border: 1px solid var(--glass-border-strong);
+  border-radius: 999px;
+  background: var(--glass);
+  -webkit-backdrop-filter: blur(12px);
+  backdrop-filter: blur(12px);
+  color: var(--color-text-muted);
+  font-size: var(--ui-text-sm);
+  font-weight: 500;
+}
+
+.jws-hero-eyebrow > svg {
+  color: var(--color-primary-text, var(--color-primary));
+}
+
+.jws-hero h1 {
+  margin: 0;
+  font-family: var(--display-font);
+  font-size: 40px;
+  font-weight: 500;
+  line-height: 1.16;
+  letter-spacing: -0.035em;
+  color: var(--color-text);
+}
+
+.jws-hero-accent {
+  background: linear-gradient(100deg, var(--color-primary) 10%, var(--color-accent) 95%);
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+}
+
+.jws-hero-note {
+  max-width: 520px;
+  margin: 14px 0 0;
+  color: var(--color-danger, #dc2626);
+  font-size: var(--ui-text-sm);
+}
+
+.jws-hero-chips {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 8px;
+  max-width: 780px;
+  margin-top: 34px;
+}
+
+.jws-hero-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  height: 34px;
+  padding: 0 13px;
+  border: 1px solid var(--glass-border-strong);
+  border-radius: 11px;
+  background: var(--glass);
+  -webkit-backdrop-filter: blur(12px);
+  backdrop-filter: blur(12px);
+  color: var(--color-text);
+  font: inherit;
+  font-size: var(--ui-text-sm);
+  font-weight: 500;
+  cursor: pointer;
+  transition: border-color var(--ui-transition), transform var(--ui-transition), box-shadow var(--ui-transition);
+}
+
+.jws-hero-chip > svg {
+  color: var(--color-primary-text, var(--color-primary));
+}
+
+.jws-hero-chip:hover:not(:disabled) {
+  border-color: color-mix(in srgb, var(--color-primary) 50%, var(--glass-border-strong));
+  box-shadow: 0 10px 24px -16px color-mix(in srgb, var(--color-primary) 90%, transparent);
+  transform: translateY(-1px);
+}
+
+.jws-hero-chip:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+/* A lower window: a smaller orb and less air. */
+@media (max-height: 820px) {
+  .jws-hero .jorb--hero {
+    --orb: 104px;
+    margin: 4px 0 20px;
+  }
+
+  .jws-hero h1 {
+    font-size: 34px;
+  }
+
+  .jws-hero-chips {
+    margin-top: 24px;
+  }
+}
+
+/* ---------- Přehled, the glass panel (JarvisOverview) ---------- */
 
 .jov {
   min-width: 0;
   min-height: 0;
   display: flex;
   flex-direction: column;
-  border: 1px solid var(--color-border);
-  border-radius: var(--ui-radius-lg);
-  background: var(--color-surface);
-  box-shadow: var(--ui-shadow-xs);
+  margin-top: 4px;
   overflow: hidden;
+  border: 1px solid var(--glass-border);
+  border-radius: 20px;
+  background: var(--glass);
+  -webkit-backdrop-filter: blur(24px) saturate(150%);
+  backdrop-filter: blur(24px) saturate(150%);
+  box-shadow: inset 0 1px 0 var(--glass-highlight), var(--lift);
 }
 
 .jov-head {
-  display: flex;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto auto;
+  grid-template-areas:
+    'time brief close'
+    'date date date';
   align-items: center;
-  gap: 10px;
-  padding: 16px 16px 12px;
+  gap: 0 8px;
+  padding: 18px 14px 14px 20px;
 }
 
 .jov-clock {
-  display: flex;
-  flex-direction: column;
-  min-width: 0;
-  margin-right: auto;
-  line-height: 1.15;
+  display: contents;
 }
 
 .jov-clock strong {
-  font-family: var(--font-heading, var(--font-body));
-  font-size: 26px;
-  font-weight: 650;
-  font-variant-numeric: tabular-nums;
-  letter-spacing: -0.01em;
+  grid-area: time;
 }
 
 .jov-clock span {
+  grid-area: date;
+}
+
+.jov-briefing {
+  grid-area: brief;
+}
+
+.jov-close {
+  grid-area: close;
+}
+
+.jov-clock strong {
+  font-family: var(--display-font);
+  font-size: 38px;
+  font-weight: 300;
+  line-height: 1;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: -0.04em;
+}
+
+.jov-clock span {
+  margin-top: 8px;
   color: var(--color-text-muted);
   font-size: var(--ui-text-sm);
 }
@@ -596,21 +1063,22 @@
   align-items: center;
   gap: 6px;
   flex: none;
-  height: var(--ui-control-h-sm, 28px);
-  padding: 0 10px;
-  border: 1px solid color-mix(in srgb, var(--color-primary) 35%, var(--color-border));
+  height: 30px;
+  padding: 0 11px;
+  border: 1px solid color-mix(in srgb, var(--color-primary) 35%, var(--glass-border));
   border-radius: 999px;
-  background: var(--color-primary-soft, color-mix(in srgb, var(--color-primary) 10%, transparent));
+  background: color-mix(in srgb, var(--color-primary) 10%, transparent);
   color: var(--color-primary-text, var(--color-primary));
   font: inherit;
   font-size: var(--ui-text-xs);
   font-weight: 650;
   cursor: pointer;
-  transition: border-color var(--ui-transition);
+  transition: border-color var(--ui-transition), box-shadow var(--ui-transition);
 }
 
 .jov-briefing:hover:not(:disabled) {
   border-color: var(--color-primary);
+  box-shadow: 0 6px 18px -10px var(--color-primary);
 }
 
 .jov-briefing:disabled {
@@ -623,44 +1091,47 @@
   align-items: center;
   justify-content: center;
   flex: none;
-  width: 28px;
-  height: 28px;
+  width: 30px;
+  height: 30px;
   border: 0;
-  border-radius: 6px;
+  border-radius: 9px;
   background: transparent;
   color: var(--color-text-muted);
   cursor: pointer;
 }
 
 .jov-close:hover {
-  background: var(--color-surface-alt);
+  background: color-mix(in srgb, var(--color-text) 7%, transparent);
   color: var(--color-text);
 }
 
-/* The panel's tabs: underlined, quieter than the top bar's. */
+/* The panel's tabs: a segmented control. */
 .jov-tabs {
-  display: flex;
-  gap: 4px;
-  padding: 0 12px;
-  border-bottom: 1px solid var(--color-border);
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 2px;
+  margin: 0 14px;
+  padding: 3px;
+  border: 1px solid var(--glass-border);
+  border-radius: 12px;
+  background: color-mix(in srgb, var(--color-text) 4%, transparent);
 }
 
 .jov-tabs button {
   display: inline-flex;
   align-items: center;
+  justify-content: center;
   gap: 6px;
-  height: 36px;
-  margin-bottom: -1px;
-  padding: 0 8px;
+  height: 30px;
   border: 0;
-  border-bottom: 2px solid transparent;
+  border-radius: 9px;
   background: transparent;
   color: var(--color-text-muted);
   font: inherit;
   font-size: var(--ui-text-sm);
   font-weight: 600;
   cursor: pointer;
-  transition: color var(--ui-transition), border-color var(--ui-transition);
+  transition: color var(--ui-transition), background-color var(--ui-transition);
 }
 
 .jov-tabs button:hover {
@@ -668,8 +1139,9 @@
 }
 
 .jov-tabs button.is-on {
-  border-bottom-color: var(--color-primary);
+  background: var(--color-surface);
   color: var(--color-text);
+  box-shadow: 0 1px 2px color-mix(in srgb, #000000 12%, transparent), inset 0 1px 0 var(--glass-highlight);
 }
 
 .jov-body {
@@ -678,7 +1150,7 @@
   display: flex;
   flex-direction: column;
   gap: 22px;
-  padding: 16px;
+  padding: 18px 16px 18px 18px;
   overflow-y: auto;
   scrollbar-width: thin;
 }
@@ -699,10 +1171,9 @@
 .jov-block-head h3 {
   margin: 0;
   color: var(--color-text-muted);
-  font-family: var(--font-subheading, var(--font-body));
-  font-size: var(--ui-text-xs);
+  font-size: 11px;
   font-weight: 650;
-  letter-spacing: 0.06em;
+  letter-spacing: 0.08em;
   text-transform: uppercase;
 }
 
@@ -717,9 +1188,10 @@
   align-items: center;
   gap: 8px;
   margin: 0;
-  padding: 10px 12px;
-  border-radius: var(--ui-radius-md);
-  background: color-mix(in srgb, var(--color-success, #10b981) 8%, var(--color-surface));
+  padding: 11px 12px;
+  border: 1px solid color-mix(in srgb, var(--color-success, #10b981) 25%, transparent);
+  border-radius: 12px;
+  background: color-mix(in srgb, var(--color-success, #10b981) 8%, transparent);
   color: var(--color-text);
   font-size: var(--ui-text-sm);
 }
@@ -751,7 +1223,7 @@
   padding: 0 5px;
   box-sizing: border-box;
   border-radius: 9px;
-  background: var(--color-surface-alt);
+  background: color-mix(in srgb, var(--color-text) 8%, transparent);
   color: var(--color-text-muted);
   font-size: 10.5px;
   font-weight: 700;
@@ -764,23 +1236,25 @@
   color: var(--color-danger-contrast, #fff);
 }
 
-/* Teď: the next event, large. */
+/* Teď: the next event, lit. */
 .jov-next {
   display: flex;
   align-items: center;
-  gap: 12px;
-  padding: 12px;
-  border: 1px solid color-mix(in srgb, var(--color-primary) 30%, var(--color-border));
-  border-radius: var(--ui-radius-md);
-  background: color-mix(in srgb, var(--color-primary) 6%, var(--color-surface));
+  gap: 14px;
+  padding: 13px 14px;
+  border: 1px solid color-mix(in srgb, var(--color-primary) 35%, transparent);
+  border-radius: 14px;
+  background: linear-gradient(135deg, color-mix(in srgb, var(--color-primary) 14%, transparent), color-mix(in srgb, var(--color-accent) 7%, transparent));
+  box-shadow: 0 12px 30px -20px color-mix(in srgb, var(--color-primary) 80%, transparent);
 }
 
 .jov-next-time {
   flex: none;
-  font-family: var(--font-heading, var(--font-body));
-  font-size: var(--ui-text-xl);
-  font-weight: 700;
+  font-family: var(--display-font);
+  font-size: 22px;
+  font-weight: 500;
   font-variant-numeric: tabular-nums;
+  letter-spacing: -0.02em;
   color: var(--color-primary-text, var(--color-primary));
 }
 
@@ -836,21 +1310,22 @@
   align-items: center;
   gap: 10px;
   width: 100%;
-  padding: 9px 10px;
+  padding: 10px 10px 10px 12px;
   box-sizing: border-box;
-  border: 1px solid var(--color-border);
-  border-radius: var(--ui-radius-md);
-  background: var(--color-surface);
+  border: 1px solid var(--glass-border);
+  border-radius: 12px;
+  background: color-mix(in srgb, var(--color-surface) 45%, transparent);
   color: var(--color-text);
   font: inherit;
   text-align: left;
   cursor: pointer;
-  transition: border-color var(--ui-transition), background-color var(--ui-transition);
+  transition: border-color var(--ui-transition), background-color var(--ui-transition), transform var(--ui-transition);
 }
 
 .jov-item:hover:not(:disabled) {
-  border-color: color-mix(in srgb, var(--color-primary) 45%, var(--color-border));
-  background: var(--color-surface-alt);
+  border-color: color-mix(in srgb, var(--color-primary) 45%, var(--glass-border));
+  background: color-mix(in srgb, var(--color-surface) 75%, transparent);
+  transform: translateX(2px);
 }
 
 .jov-item:disabled {
@@ -863,8 +1338,8 @@
 }
 
 .jov-item--pending {
-  border-color: color-mix(in srgb, var(--color-warning, #f59e0b) 45%, var(--color-border));
-  background: color-mix(in srgb, var(--color-warning, #f59e0b) 7%, var(--color-surface));
+  border-color: color-mix(in srgb, var(--color-warning, #f59e0b) 45%, var(--glass-border));
+  background: color-mix(in srgb, var(--color-warning, #f59e0b) 9%, transparent);
 }
 
 .jov-item-text {
@@ -895,7 +1370,7 @@
 .jov-tag {
   flex: none;
   min-width: 72px;
-  padding: 2px 7px;
+  padding: 3px 7px;
   box-sizing: border-box;
   border-radius: 999px;
   font-size: 10.5px;
@@ -905,8 +1380,8 @@
 }
 
 .jov-tag--danger {
-  background: color-mix(in srgb, var(--color-danger, #dc2626) 14%, transparent);
-  color: var(--color-danger, #dc2626);
+  background: color-mix(in srgb, var(--color-danger, #dc2626) 15%, transparent);
+  color: color-mix(in srgb, var(--color-danger, #dc2626) 85%, var(--color-text));
 }
 
 .jov-tag--warning {
@@ -915,12 +1390,12 @@
 }
 
 .jov-tag--primary {
-  background: var(--color-primary-soft, color-mix(in srgb, var(--color-primary) 12%, transparent));
+  background: color-mix(in srgb, var(--color-primary) 14%, transparent);
   color: var(--color-primary-text, var(--color-primary));
 }
 
 .jov-tag--neutral {
-  background: var(--color-surface-alt);
+  background: color-mix(in srgb, var(--color-text) 8%, transparent);
   color: var(--color-text-muted);
 }
 
@@ -935,8 +1410,8 @@
   align-items: center;
   gap: 10px;
   min-width: 0;
-  padding: 8px 2px;
-  border-bottom: 1px solid color-mix(in srgb, var(--color-border) 60%, transparent);
+  padding: 9px 2px;
+  border-bottom: 1px solid var(--glass-border);
   font-size: var(--ui-text-sm);
   cursor: pointer;
 }
@@ -982,16 +1457,17 @@
 .jov-seg {
   display: grid;
   grid-template-columns: repeat(4, minmax(0, 1fr));
-  padding: 2px;
-  border: 1px solid var(--color-border);
-  border-radius: var(--ui-radius-md);
-  background: var(--color-surface-alt);
+  gap: 2px;
+  padding: 3px;
+  border: 1px solid var(--glass-border);
+  border-radius: 12px;
+  background: color-mix(in srgb, var(--color-text) 4%, transparent);
 }
 
 .jov-seg button {
-  height: 28px;
+  height: 30px;
   border: 0;
-  border-radius: 6px;
+  border-radius: 9px;
   background: transparent;
   color: var(--color-text-muted);
   font: inherit;
@@ -1003,15 +1479,16 @@
 .jov-seg button.is-on {
   background: var(--color-surface);
   color: var(--color-text);
-  box-shadow: var(--ui-shadow-xs);
+  box-shadow: 0 1px 2px color-mix(in srgb, #000000 12%, transparent);
 }
 
 .jov-rows {
   display: flex;
   flex-direction: column;
-  border: 1px solid var(--color-border);
-  border-radius: var(--ui-radius-md);
   overflow: hidden;
+  border: 1px solid var(--glass-border);
+  border-radius: 14px;
+  background: color-mix(in srgb, var(--color-surface) 40%, transparent);
 }
 
 .jov-row {
@@ -1019,11 +1496,11 @@
   align-items: center;
   gap: 10px;
   width: 100%;
-  min-height: 40px;
+  min-height: 42px;
   padding: 0 12px;
   box-sizing: border-box;
   border: 0;
-  border-bottom: 1px solid var(--color-border);
+  border-bottom: 1px solid var(--glass-border);
   background: transparent;
   color: var(--color-text);
   font: inherit;
@@ -1037,7 +1514,7 @@
 }
 
 .jov-row:hover {
-  background: var(--color-surface-alt);
+  background: color-mix(in srgb, var(--color-primary) 7%, transparent);
 }
 
 .jov-row > svg {
@@ -1076,20 +1553,22 @@
   gap: 6px;
   height: 26px;
   padding: 0 10px;
-  border: 1px solid var(--color-border);
+  border: 1px solid var(--glass-border);
   border-radius: 999px;
+  background: color-mix(in srgb, var(--color-surface) 40%, transparent);
   font-size: var(--ui-text-xs);
   font-weight: 600;
 }
 
 .jov-dot {
-  width: 7px;
-  height: 7px;
+  width: 6px;
+  height: 6px;
   border-radius: 50%;
 }
 
 .jov-dot--ok {
   background: var(--color-success, #10b981);
+  box-shadow: 0 0 6px var(--color-success, #10b981);
 }
 
 .jov-dot--off {
@@ -1098,7 +1577,7 @@
 }
 
 .jov-dot--neutral {
-  background: var(--color-border);
+  background: var(--glass-border-strong);
 }
 
 .jov-stats {
@@ -1112,14 +1591,17 @@
   flex-direction: column;
   gap: 2px;
   padding: 10px;
-  border-radius: var(--ui-radius-md);
-  background: var(--color-surface-alt);
+  border: 1px solid var(--glass-border);
+  border-radius: 12px;
+  background: color-mix(in srgb, var(--color-surface) 40%, transparent);
 }
 
 .jov-stats strong {
+  font-family: var(--display-font);
   font-size: var(--ui-text-lg);
-  font-weight: 700;
+  font-weight: 600;
   font-variant-numeric: tabular-nums;
+  letter-spacing: -0.01em;
   white-space: nowrap;
 }
 
@@ -1128,169 +1610,19 @@
   font-size: var(--ui-text-xs);
 }
 
-/* ---------- the hero (the empty chat) ---------- */
-
-.jws-hero {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 12px;
-  margin: auto 0;
-  padding: 8px 0;
-  text-align: center;
-}
-
-.jws-hero h1 {
-  margin: 4px 0 0;
-  font-family: var(--font-heading, var(--font-body));
-  font-size: 24px;
-  font-weight: 700;
-  letter-spacing: -0.02em;
-}
-
-.jws-hero p {
-  max-width: 560px;
-  margin: 0;
-  color: var(--color-text-muted);
-  font-size: var(--ui-text-md);
-  line-height: 1.55;
-}
-
-.jws-talk {
-  display: inline-flex;
-  align-items: center;
-  gap: 12px;
-  height: 46px;
-  padding: 0 22px 0 16px;
-  border: 1px solid color-mix(in srgb, var(--color-accent) 55%, var(--color-border));
-  border-radius: 999px;
-  background: color-mix(in srgb, var(--color-accent) 9%, var(--color-surface));
-  color: var(--color-text);
-  font: inherit;
-  cursor: pointer;
-  box-shadow: 0 8px 24px -14px color-mix(in srgb, var(--color-accent) 80%, transparent);
-  transition: transform var(--ui-transition), box-shadow var(--ui-transition);
-}
-
-.jws-talk:hover:not(:disabled) {
-  transform: translateY(-1px);
-  box-shadow: 0 12px 28px -14px color-mix(in srgb, var(--color-accent) 90%, transparent);
-}
-
-.jws-talk:disabled {
-  opacity: 0.5;
-  cursor: not-allowed;
-}
-
-.jws-talk-text {
-  display: flex;
-  flex-direction: column;
-  align-items: flex-start;
-  line-height: 1.2;
-}
-
-.jws-talk strong {
-  font-size: var(--ui-text-md);
-}
-
-.jws-talk small {
-  color: var(--color-text-muted);
-  font-size: var(--ui-text-xs);
-}
-
-.jws-talk-wave {
-  display: inline-flex;
-  align-items: center;
-  gap: 3px;
-  height: 20px;
-}
-
-.jws-talk-wave i {
-  display: block;
-  width: 3px;
-  border-radius: 2px;
-  background: var(--color-accent);
-  animation: jcc-wave 1.1s ease-in-out infinite;
-}
-
-.jws-talk-wave i:nth-child(1) { height: 8px; }
-.jws-talk-wave i:nth-child(2) { height: 16px; animation-delay: 0.15s; }
-.jws-talk-wave i:nth-child(3) { height: 12px; animation-delay: 0.3s; }
-.jws-talk-wave i:nth-child(4) { height: 20px; animation-delay: 0.45s; }
-.jws-talk-wave i:nth-child(5) { height: 10px; animation-delay: 0.6s; }
-
-@keyframes jcc-wave {
-  0%,
-  100% {
-    transform: scaleY(0.4);
-  }
-  50% {
-    transform: scaleY(1);
-  }
-}
-
-@media (prefers-reduced-motion: reduce) {
-  .jws-talk-wave i,
-  .jcc-status--busy::before {
-    animation: none;
-  }
-}
-
-.jws-hero-examples {
-  display: flex;
-  flex-wrap: wrap;
-  justify-content: center;
-  gap: 6px;
-  max-width: 640px;
-}
-
-.jws-hero-example {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  height: 32px;
-  padding: 0 12px;
-  border: 1px solid var(--color-border);
-  border-radius: 999px;
-  background: var(--color-surface);
-  color: var(--color-text);
-  font: inherit;
-  font-size: var(--ui-text-sm);
-  cursor: pointer;
-  transition: border-color var(--ui-transition), transform var(--ui-transition);
-}
-
-.jws-hero-example > svg {
-  color: var(--color-primary-text, var(--color-primary));
-}
-
-.jws-hero-example:hover:not(:disabled) {
-  border-color: color-mix(in srgb, var(--color-primary) 50%, var(--color-border));
-  transform: translateY(-1px);
-}
-
-.jws-hero-example:disabled {
-  opacity: 0.5;
-  cursor: not-allowed;
-}
-
 /* ---------- phones ---------- */
 
 @media (max-width: 768px) {
   .jcc-top {
     flex-wrap: wrap;
     min-height: 0;
-    padding: 8px 10px;
+    padding: 8px 12px 6px;
     gap: 8px;
   }
 
-  /* The phone's top bar already says Jarvis, and the chat header says what
-     it is doing. */
+  /* The phone's top bar already says Jarvis; the conversation says what it
+     is doing. */
   .jcc-brand {
-    display: none;
-  }
-
-  .jws-talk small {
     display: none;
   }
 
@@ -1310,11 +1642,25 @@
     right: 0;
   }
 
-  .jws-hero h1 {
-    font-size: 20px;
+  .jws-hero .jorb--hero {
+    --orb: 92px;
+    margin: 0 0 18px;
   }
 
-  .jws-hero .jorb--hero {
-    --orb: 150px;
+  .jws-hero h1 {
+    font-size: 27px;
+  }
+
+  .jws-hero-chips {
+    margin-top: 22px;
+    gap: 6px;
+  }
+
+  .jcc-center .jarvis-composer-hint {
+    visibility: hidden;
+  }
+
+  .jcc-center .jarvis-panel--empty .jarvis-composer {
+    padding-bottom: 12px;
   }
 }

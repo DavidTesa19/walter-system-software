@@ -790,19 +790,44 @@ names its own sans-serif font (`--jarvis-font`). Needs `ANTHROPIC_API_KEY`;
   a slim top bar (mini orb, status pill, tabs Velín / Konverzace / Šablony /
   Paměť and a "Více" menu with Co Jarvis umí (`capabilities.ts`) /
   Upozornění / Nastavení / Analýza for admins; on Velín the "Přehled"
-  switch) and **Velín** (`JarvisCommandCenter.tsx` + `.css`): the chat on a
-  card in the middle, whose empty state is `JarvisOrb` (pure CSS from
-  `--color-primary` / `--color-accent`; states idle, busy, listening,
-  speaking, offline) with "Mluvit s Jarvisem" and example questions, and
-  one panel on the right, **Přehled** (`JarvisOverview`: big clock, Ranní
-  přehled, tabs Teď = next event + what is late or due today + proposals
-  waiting (click scrolls to the card), Úkoly = personal list, Jarvis =
-  model, settings rows, services, usage for admins). Open/closed and the tab
-  are remembered per device (`walterJarvis.panel`, `walterJarvis.panelTab`).
-  The panel sits beside the chat when Velín is at least 860 px wide
-  (measured on the element, `useVelinWidth`, because of app zoom); narrower,
-  a Konverzace / Přehled switch shows one at a time. Keep it that way: new
-  things go into a panel tab or "Více", not as more boxes around the chat.
+  switch) and **Velín** (`JarvisCommandCenter.tsx` + `.css`). Later the same
+  day the user asked for it "pretty, clean, modern, futuristic" after a
+  dark AI-assistant reference (glowing orb, big headline, chips, a large
+  glass message box) and Hostinger's style (DM Sans, neon on a faint grid):
+  - **The stage**: `.main-content--jarvis` (App.tsx) paints palette glows
+    and a faint masked grid behind the whole screen, the floating buttons'
+    band included; every surface on it is glass (`--glass`,
+    `--glass-border`, `backdrop-filter`), defined there for light and for
+    dark (`:root[data-theme='dark']`, a near-black stage). Palette colours
+    only; white/near-black just mix in for light and depth.
+  - **An empty conversation** (`.jarvis-panel--empty`) has no header: the
+    `JarvisOrb` (a glass sphere with light swirling inside; states idle,
+    busy, listening, speaking, offline; in browsers with relative colours
+    it takes the palette's hue at a fixed depth and saturation, so a pale
+    dark-mode primary still glows), a greeting pill, the headline "Jsem
+    Jarvis, váš AI asistent. S čím vám dnes pomohu?" (DM Sans, the accent
+    words in a primary→accent gradient), short chips (`QUICK_EXAMPLES`'
+    `short` labels) and the message box sit together in the middle.
+  - **The message box** in page mode: text on top, a row below with attach,
+    a key hint, mic and an "Odeslat" pill (`.jarvis-composer-hint`,
+    `.jarvis-send-label`, rendered only in page mode; the floating panel
+    keeps its own compact composer). Questions show as lit glass bubbles.
+  - **DM Sans** (`@fontsource/dm-sans`, pinned, imported in
+    JarvisWorkspace.tsx) is the screen's display face only (`--display-font`:
+    headline, brand, clock, figures); text and controls stay in the
+    palette's font.
+  - **Přehled** (`JarvisOverview`, a glass panel: big light clock, Ranní
+    přehled, segmented tabs Teď = next event + what is late or due today +
+    proposals waiting (click scrolls to the card), Úkoly = personal list,
+    Jarvis = model, settings rows, services, usage for admins).
+    Open/closed and the tab are remembered per device
+    (`walterJarvis.panel`, `walterJarvis.panelTab`). The panel sits beside
+    the chat when Velín is at least 840 px wide (measured on the element,
+    `useVelinWidth`, because of app zoom); narrower, a Chat / Přehled
+    switch shows one at a time.
+  Keep it that way: new things go into a panel tab or "Více", not as more
+  boxes around the chat, and new surfaces on the stage use the glass
+  variables.
   The Konverzace tab lists every
   conversation (search, pin, rename: `PATCH /api/jarvis/conversations/:id`,
   column `pinned`); the chat header keeps history, new, export to Markdown

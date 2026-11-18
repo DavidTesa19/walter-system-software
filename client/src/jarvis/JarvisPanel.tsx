@@ -2378,7 +2378,7 @@ export default function JarvisPanel({
 
   const aside = (
     <aside
-      className={`jarvis-panel${page ? ' jarvis-panel--page' : open ? ' jarvis-panel--open' : ''}`}
+      className={`jarvis-panel${page ? ' jarvis-panel--page' : open ? ' jarvis-panel--open' : ''}${page && turns.length === 0 && !live ? ' jarvis-panel--empty' : ''}`}
       aria-hidden={!visible}
       aria-label="Jarvis"
       onDragOver={(event) => {
@@ -2528,10 +2528,7 @@ export default function JarvisPanel({
             userName={user?.username ?? null}
             unavailable={Boolean(unavailable)}
             onUse={usePrompt}
-            onSection={setPageSection}
             onBriefing={() => void send(BRIEFING_PROMPT)}
-            onTalk={() => void voice.startListening()}
-            canListen={voice.canListen}
             orbState={orbState}
           />
         )}
@@ -2886,6 +2883,11 @@ export default function JarvisPanel({
               disabled={Boolean(unavailable)}
             />
           )}
+          {page && !listening && (
+            <span className="jarvis-composer-hint" aria-hidden="true">
+              Enter odešle · Shift+Enter nový řádek{voice.canListen ? ' · Alt+M mluvit' : ''}
+            </span>
+          )}
           {speaking && !listening && (
             <button
               type="button"
@@ -2933,6 +2935,7 @@ export default function JarvisPanel({
               aria-label="Odeslat"
             >
               {Icon.send}
+              {page && <span className="jarvis-send-label">Odeslat</span>}
             </button>
           )}
         </div>

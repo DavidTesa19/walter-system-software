@@ -733,7 +733,9 @@ const AppContent: React.FC = () => {
   const mainContentClassName = [
     'main-content',
     isFullscreenView ? 'main-content--fullscreen' : '',
-    isTableScrollView ? 'main-content--table-scroll' : ''
+    isTableScrollView ? 'main-content--table-scroll' : '',
+    // The Jarvis screen paints its stage under the floating buttons' band too.
+    effectiveView === 'jarvis' ? 'main-content--jarvis' : ''
   ].filter(Boolean).join(' ');
 
   return (
